@@ -4,6 +4,7 @@
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { Spinner, renderToolOutput, renderSectionHeader } from './tui';
 
 const API_URL = 'http://localhost:3001';
 const AUTH_TOKEN = 'dev-token';
@@ -111,6 +112,7 @@ Be helpful, concise, and use tools to accomplish tasks.`;
 // ============ Agent Loop ============
 
 let inputBuffer = '';
+let spinner: Spinner | null = null;
 
 async function sendMessage(userMessage: string): Promise<void> {
     // Handle slash commands
@@ -121,6 +123,10 @@ async function sendMessage(userMessage: string): Promise<void> {
 
     setStatus('Thinking...', '#d29922');
     terminal.write('\r\n');
+
+    // Start spinner
+    spinner = new Spinner(terminal);
+    spinner.start('Thinking...');
 
     messages.push({ role: 'user', content: userMessage });
     await runAgentLoop();
@@ -177,25 +183,25 @@ async function runAgentLoop(): Promise<void> {
         }
 
         if (toolCalls.length > 0) {
+            if (spinner) spinner.stop();
+            spinner = null;
+
             setStatus('Executing...', '#bc8cff');
             const toolResults: any[] = [];
 
             for (const tool of toolCalls) {
-                terminal.write(`\r\n\x1b[36m⚡ ${tool.name}\x1b[0m`);
-                if (tool.input.path) terminal.write(` \x1b[90m${tool.input.path}\x1b[0m`);
-                if (tool.input.command) terminal.write(` \x1b[90m${tool.input.command}\x1b[0m`);
-                terminal.write('\r\n');
+                const args = tool.input.path || tool.input.command || tool.input.code || '';
+
+                // Show tool execution
+                const toolSpinner = new Spinner(terminal);
+                toolSpinner.start(`Running ${tool.name}...`);
 
                 const result = await callTool(tool.name, tool.input);
 
-                const output = result.success ? result.output : `Error: ${result.error}`;
-                const color = result.success ? '32' : '31';
+                toolSpinner.stop();
 
-                // Show truncated output
-                const displayOutput = output.length > 200
-                    ? output.substring(0, 200) + '...'
-                    : output;
-                terminal.write(`\x1b[${color}m${displayOutput}\x1b[0m\r\n`);
+                const output = result.success ? result.output : `Error: ${result.error}`;
+                renderToolOutput(terminal, tool.name, args, output, result.success);
 
                 toolResults.push({
                     type: 'tool_result',
@@ -205,10 +211,17 @@ async function runAgentLoop(): Promise<void> {
             }
 
             messages.push({ role: 'user', content: toolResults });
+
+            // Continue with another thinking spinner
+            spinner = new Spinner(terminal);
+            spinner.start('Thinking...');
+
             await runAgentLoop();
             return;
         }
 
+        if (spinner) spinner.stop();
+        spinner = null;
         showPrompt();
         setStatus('Ready', '#3fb950');
     } catch (error: any) {
