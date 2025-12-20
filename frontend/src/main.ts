@@ -269,6 +269,7 @@ async function handleSSEResponse(response: Response): Promise<{ content: any[]; 
     const content: any[] = [];
     const toolCalls: any[] = [];
     let currentText = '';
+    let firstTextReceived = false;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -287,6 +288,14 @@ async function handleSSEResponse(response: Response): Promise<{ content: any[]; 
                 const event = JSON.parse(data);
 
                 if (event.type === 'text') {
+                    // Stop spinner on first text chunk
+                    if (!firstTextReceived) {
+                        firstTextReceived = true;
+                        if (spinner) {
+                            spinner.stop();
+                            spinner = null;
+                        }
+                    }
                     currentText += event.text;
                     terminal.write(event.text.replace(/\n/g, '\r\n'));
                 } else if (event.type === 'tool_use') {
