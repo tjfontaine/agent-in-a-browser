@@ -1,11 +1,18 @@
 // Sandbox Worker with OPFS + MCP Tools
 // All file operations use OPFS for consistency across views
+// Uses QuickJS for sandboxed JavaScript execution
 
 export { }; // Make this a module
+
+import { newQuickJSAsyncWASMModuleFromVariant, QuickJSAsyncContext } from 'quickjs-emscripten-core';
+import singlefileVariant from '@jitl/quickjs-singlefile-browser-release-asyncify';
 
 // We'll dynamically import esbuild-wasm from esm.sh at runtime
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let esbuild: any = null;
+
+// QuickJS context for sandboxed execution
+let quickJSContext: QuickJSAsyncContext | null = null;
 
 // Extend FileSystemDirectoryHandle for entries() support
 declare global {
@@ -17,6 +24,7 @@ declare global {
 // OPFS root handle
 let opfsRoot: FileSystemDirectoryHandle | null = null;
 let esbuildInitialized = false;
+
 
 // ============ OPFS Helpers ============
 
@@ -653,6 +661,299 @@ async function executeCode(code: string, _loader: 'js' | 'ts' | 'tsx' = 'ts'): P
     return await executeTypeScript(code);
 }
 
+// ============ QuickJS Sandbox ============
+
+// Host-side logs array for capturing QuickJS console output
+let capturedLogs: string[] = [];
+
+async function initQuickJS(): Promise<QuickJSAsyncContext> {
+    if (quickJSContext) return quickJSContext;
+
+    console.log('[QuickJS] Initializing async context with singlefile variant...');
+    // Use singlefile variant - embeds WASM as base64, no separate file loading
+    const module = await newQuickJSAsyncWASMModuleFromVariant(singlefileVariant);
+    const ctx = module.newContext();
+
+    // ===== Host function to capture logs =====
+    // This captures logs to the host-side array (much simpler than QuickJS array manipulation)
+    const captureLogFn = ctx.newFunction('__captureLog', (...args) => {
+        const nativeArgs = args.map(arg => ctx.dump(arg));
+        const logStr = nativeArgs.map(a =>
+            typeof a === 'object' ? JSON.stringify(a) : String(a)
+        ).join(' ');
+        console.log('[QuickJS stdout]:', logStr);
+        capturedLogs.push(logStr);
+    });
+    ctx.setProp(ctx.global, '__captureLog', captureLogFn);
+    captureLogFn.dispose();
+
+    // ===== console object =====
+    // Console methods push to host-side capturedLogs array (via closure)
+    const consoleObj = ctx.newObject();
+
+    // console.log
+    const logFn = ctx.newFunction('log', (...args) => {
+        const nativeArgs = args.map(arg => ctx.dump(arg));
+        const logStr = nativeArgs.map(a =>
+            typeof a === 'object' ? JSON.stringify(a) : String(a)
+        ).join(' ');
+        console.log('[QuickJS stdout]:', logStr);
+        capturedLogs.push(logStr);
+    });
+    ctx.setProp(consoleObj, 'log', logFn);
+    logFn.dispose();
+
+    // console.error, console.warn, console.info 
+    for (const method of ['error', 'warn', 'info'] as const) {
+        const fn = ctx.newFunction(method, (...args) => {
+            const nativeArgs = args.map(arg => ctx.dump(arg));
+            const prefix = method.toUpperCase() + ': ';
+            const logStr = prefix + nativeArgs.map(a =>
+                typeof a === 'object' ? JSON.stringify(a) : String(a)
+            ).join(' ');
+            console.log('[QuickJS stdout]:', logStr);
+            capturedLogs.push(logStr);
+        });
+        ctx.setProp(consoleObj, method, fn);
+        fn.dispose();
+    }
+
+    ctx.setProp(ctx.global, 'console', consoleObj);
+    consoleObj.dispose();
+
+    // ===== fetch function (async via asyncify) =====
+    const fetchFn = ctx.newAsyncifiedFunction('fetch', async (urlHandle, optionsHandle) => {
+        const url = ctx.getString(urlHandle);
+        const options = optionsHandle ? ctx.dump(optionsHandle) : undefined;
+
+        console.log('[QuickJS] fetch:', url, options?.method || 'GET');
+
+        try {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            console.log('[QuickJS] fetch response:', response.status, text.length, 'chars');
+
+            // Return a response-like object
+            const respObj = ctx.newObject();
+            ctx.setProp(respObj, 'ok', ctx.newNumber(response.ok ? 1 : 0));
+            ctx.setProp(respObj, 'status', ctx.newNumber(response.status));
+            ctx.setProp(respObj, 'statusText', ctx.newString(response.statusText));
+            ctx.setProp(respObj, '_body', ctx.newString(text));
+
+            // text() method
+            const textMethod = ctx.newFunction('text', () => {
+                return ctx.getProp(respObj, '_body');
+            });
+            ctx.setProp(respObj, 'text', textMethod);
+            textMethod.dispose();
+
+            // json() method
+            const jsonMethod = ctx.newFunction('json', () => {
+                const bodyHandle = ctx.getProp(respObj, '_body');
+                const bodyStr = ctx.getString(bodyHandle);
+                bodyHandle.dispose();
+                const parseResult = ctx.evalCode(`(${bodyStr})`);
+                if (parseResult.error) {
+                    parseResult.error.dispose();
+                    throw ctx.newError('Invalid JSON');
+                }
+                return parseResult.value;
+            });
+            ctx.setProp(respObj, 'json', jsonMethod);
+            jsonMethod.dispose();
+
+            return respObj;
+        } catch (e: any) {
+            console.error('[QuickJS] fetch error:', e.message);
+            throw ctx.newError(e.message);
+        }
+    });
+    ctx.setProp(ctx.global, 'fetch', fetchFn);
+    fetchFn.dispose();
+
+    // ===== fs.promises object (async via asyncify) =====
+    const fsObj = ctx.newObject();
+    const promisesObj = ctx.newObject();
+
+    // fs.promises.readFile
+    const readFileFn = ctx.newAsyncifiedFunction('readFile', async (pathHandle) => {
+        const p = ctx.getString(pathHandle);
+        console.log('[QuickJS] fs.readFile:', p);
+        const content = await readFile(p);
+        return ctx.newString(content);
+    });
+    ctx.setProp(promisesObj, 'readFile', readFileFn);
+    readFileFn.dispose();
+
+    // fs.promises.writeFile
+    const writeFileFn = ctx.newAsyncifiedFunction('writeFile', async (pathHandle, dataHandle) => {
+        const p = ctx.getString(pathHandle);
+        const data = ctx.getString(dataHandle);
+        console.log('[QuickJS] fs.writeFile:', p, `(${data.length} chars)`);
+        await writeFile(p, data);
+        return ctx.undefined;
+    });
+    ctx.setProp(promisesObj, 'writeFile', writeFileFn);
+    writeFileFn.dispose();
+
+    // fs.promises.readdir
+    const readdirFn = ctx.newAsyncifiedFunction('readdir', async (pathHandle) => {
+        const p = ctx.getString(pathHandle);
+        console.log('[QuickJS] fs.readdir:', p);
+        const entries = await listDir(p);
+        const arr = ctx.newArray();
+        entries.forEach((entry, i) => {
+            ctx.setProp(arr, i, ctx.newString(entry));
+        });
+        return arr;
+    });
+    ctx.setProp(promisesObj, 'readdir', readdirFn);
+    readdirFn.dispose();
+
+    ctx.setProp(fsObj, 'promises', promisesObj);
+    promisesObj.dispose();
+    ctx.setProp(ctx.global, 'fs', fsObj);
+    fsObj.dispose();
+
+    // ===== path object (pure JS, no async needed) =====
+    ctx.evalCode(`
+        globalThis.path = {
+            join: (...p) => p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/'),
+            resolve: (...p) => '/' + p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/').replace(/^\\/+/, ''),
+            dirname: (p) => p.split('/').slice(0, -1).join('/') || '/',
+            basename: (p, ext) => { const b = p.split('/').pop() || ''; return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b; },
+            extname: (p) => { const b = p.split('/').pop() || ''; const i = b.lastIndexOf('.'); return i > 0 ? b.slice(i) : ''; },
+            sep: '/',
+            delimiter: ':',
+        };
+    `);
+
+    // ===== Module loader for ES module imports =====
+    // Async module loader can return promises - execution suspends until resolved
+    ctx.runtime.setModuleLoader(async (moduleName: string) => {
+        console.log('[QuickJS] Loading module:', moduleName);
+
+        try {
+            // Handle npm packages - fetch from esm.sh
+            if (!moduleName.startsWith('.') && !moduleName.startsWith('/')) {
+                const esmUrl = `https://esm.sh/${moduleName}`;
+                console.log('[QuickJS] Fetching from esm.sh:', esmUrl);
+                const response = await fetch(esmUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${esmUrl}: ${response.status}`);
+                }
+                const code = await response.text();
+                console.log('[QuickJS] Loaded module:', moduleName, `(${code.length} chars)`);
+                return code;
+            }
+
+            // Handle local file imports
+            const normalizedPath = moduleName.startsWith('/') ? moduleName : `/${moduleName}`;
+            console.log('[QuickJS] Loading local module:', normalizedPath);
+            const content = await readFile(normalizedPath);
+            return content;
+        } catch (e: any) {
+            console.error('[QuickJS] Module load error:', moduleName, e.message);
+            throw e;
+        }
+    });
+
+    console.log('[QuickJS] Context initialized with console, fetch, fs, path, module loader');
+    quickJSContext = ctx;
+    return ctx;
+}
+
+async function runInQuickJS(jsCode: string, options?: { type?: 'module' | 'global' }): Promise<string> {
+    const ctx = await initQuickJS();
+
+    // Clear the host-side logs array before execution
+    capturedLogs = [];
+
+    // Default timeout: 30 seconds
+    const timeoutMs = 30000;
+    const deadline = Date.now() + timeoutMs;
+
+    // Set interrupt handler to catch infinite CPU loops
+    ctx.runtime.setInterruptHandler(() => {
+        return Date.now() > deadline;
+    });
+
+    try {
+        // Run code with timeout race for async hangs
+        const resultPromise = ctx.evalCodeAsync(jsCode, 'user-code.js', options);
+
+        const timeoutPromise = new Promise<{ error: any }>((_, reject) => {
+            setTimeout(() => reject(new Error(`Execution timed out after ${timeoutMs}ms`)), timeoutMs);
+        });
+
+        const result = await Promise.race([resultPromise, timeoutPromise]) as any;
+
+        if (result.error) {
+            const errorVal = ctx.dump(result.error);
+            result.error.dispose();
+            const errorMsg = typeof errorVal === 'object' && errorVal !== null
+                ? (errorVal.message || errorVal.stack || JSON.stringify(errorVal))
+                : String(errorVal);
+            return `Error: ${errorMsg}`;
+        }
+
+        // Handle module exports or direct result
+        const valueHandle = result.value;
+
+        // If the result is a promise, we need to await it
+        if (ctx.typeof(valueHandle) === 'object') {
+            try {
+                // Also race the promise resolution
+                const resolvedResult = await Promise.race([
+                    ctx.resolvePromise(valueHandle),
+                    timeoutPromise
+                ]) as any;
+
+                if (resolvedResult.error) {
+                    const errorVal = ctx.dump(resolvedResult.error);
+                    resolvedResult.error.dispose();
+                    const errorMsg = typeof errorVal === 'object' && errorVal !== null
+                        ? (errorVal.message || errorVal.stack || JSON.stringify(errorVal))
+                        : String(errorVal);
+                    return `Error: ${errorMsg}`;
+                }
+                resolvedResult.value.dispose();
+            } catch (e: any) {
+                // If resolvePromise fails or times out
+                if (e.message?.includes('timed out')) {
+                    throw e;
+                }
+            }
+        }
+
+        valueHandle.dispose();
+
+        // Execute any pending jobs
+        ctx.runtime.executePendingJobs();
+
+        // Return captured logs from host-side array
+        return capturedLogs.length > 0 ? capturedLogs.join('\n') : '(no output)';
+
+    } catch (e: any) {
+        // Clear interrupt handler
+        ctx.runtime.setInterruptHandler(() => false);
+
+        // Critical error or timeout - dispose context to ensure next run is clean
+        console.error('[QuickJS] Critical error or timeout, disposing context:', e);
+        if (quickJSContext) {
+            try { quickJSContext.dispose(); } catch (disposeError) {
+                console.error('[QuickJS] Error disposing context:', disposeError);
+            }
+            quickJSContext = null;
+        }
+
+        return `Error: ${e.message}`;
+    } finally {
+        // Always clear interrupt handler
+        ctx.runtime.setInterruptHandler(() => false);
+    }
+}
+
 // ============ TypeScript Execution ============
 
 async function initEsbuild(): Promise<void> {
@@ -677,248 +978,43 @@ async function initEsbuild(): Promise<void> {
 async function executeTypeScript(code: string): Promise<string> {
     await initEsbuild();
 
-    // Transform npm imports to esm.sh URLs
-    const transformedCode = transformImports(code);
-
-    // Compile TypeScript to JavaScript
-    const result = await esbuild.transform(transformedCode, {
+    // Compile TypeScript to JavaScript, keeping imports
+    // Our module loader will handle fetching npm packages from esm.sh
+    const result = await esbuild.transform(code, {
         loader: 'tsx',
         format: 'esm',
-        target: 'es2022',
+        target: 'es2020',
     });
 
-    // Extract imports from compiled code (they must be at top level)
-    const importRegex = /^import\s+.+;?\s*$/gm;
-    const imports: string[] = [];
-    const codeWithoutImports = result.code.replace(importRegex, (match: string) => {
-        imports.push(match);
+    // Wrap code to capture output and auto-run entry functions
+    const wrappedCode = `
+${result.code}
+
+// Auto-detect and call common async entry point functions
+const __entryPoints = ['main', 'run', 'start', 'fetchData', 'fetchUser', 'execute', 'init'];
+for (const name of __entryPoints) {
+    if (typeof globalThis[name] === 'function') {
+        const result = globalThis[name]();
+        if (result instanceof Promise) {
+            await result;
+        }
+        break;
+    }
+}
+`;
+
+    // Execute as ES module in QuickJS sandbox
+    return await runInQuickJS(wrappedCode, { type: 'module' });
+}
+
+// No longer needed - module loader handles imports
+function stripImports(code: string): string {
+    // Remove all import statements
+    return code.replace(/import\s+.*?from\s+['"](.*?)['"];?\s*\n?/g, (match, pkg) => {
+        // Log what we're stripping for debugging
+        console.log('[esbuild] Stripped import:', pkg);
         return '';
     });
-
-    // Create ESM module with imports at top, execution in async IIFE
-    const wrappedCode = `
-// ===== Node.js fs/path Shims for Sandbox (using OPFS via globalThis) =====
-const fs = {
-    promises: {
-        readFile: async (p, options) => {
-            if (typeof globalThis.__opfs?.readFile === 'function') {
-                return globalThis.__opfs.readFile(p);
-            }
-            throw new Error('fs.readFile not available');
-        },
-        writeFile: async (p, data, options) => {
-            if (typeof globalThis.__opfs?.writeFile === 'function') {
-                const content = typeof data === 'string' ? data : new TextDecoder().decode(data);
-                return globalThis.__opfs.writeFile(p, content);
-            }
-            throw new Error('fs.writeFile not available');
-        },
-        readdir: async (p, options) => {
-            if (typeof globalThis.__opfs?.readdir === 'function') {
-                return globalThis.__opfs.readdir(p);
-            }
-            throw new Error('fs.readdir not available');
-        },
-        mkdir: async (p, options) => {
-            if (typeof globalThis.__opfs?.mkdir === 'function') {
-                return globalThis.__opfs.mkdir(p);
-            }
-            throw new Error('fs.mkdir not available');
-        },
-        rm: async (p, options) => {
-            if (typeof globalThis.__opfs?.rm === 'function') {
-                return globalThis.__opfs.rm(p, options?.recursive || false);
-            }
-            throw new Error('fs.rm not available');
-        },
-        stat: async (p) => {
-            if (typeof globalThis.__opfs?.stat === 'function') {
-                return globalThis.__opfs.stat(p);
-            }
-            throw new Error('fs.stat not available');
-        },
-        access: async (p) => {
-            if (typeof globalThis.__opfs?.exists === 'function') {
-                const exists = await globalThis.__opfs.exists(p);
-                if (!exists) throw new Error('ENOENT: no such file or directory');
-            }
-        },
-    },
-    readFileSync: (p) => { throw new Error('Sync fs not available. Use fs.promises.readFile.'); },
-    writeFileSync: (p, d) => { throw new Error('Sync fs not available. Use fs.promises.writeFile.'); },
-    existsSync: (p) => {
-        console.warn('fs.existsSync is not reliable in sandbox, use fs.promises.access instead');
-        return false;
-    },
-};
-
-const path = {
-    join: (...p) => p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/'),
-    resolve: (...p) => '/' + p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/').replace(/^\\/+/, ''),
-    dirname: (p) => p.split('/').slice(0, -1).join('/') || '/',
-    basename: (p, ext) => { const b = p.split('/').pop() || ''; return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b; },
-    extname: (p) => { const b = p.split('/').pop() || ''; const i = b.lastIndexOf('.'); return i > 0 ? b.slice(i) : ''; },
-    sep: '/',
-    delimiter: ':',
-    isAbsolute: (p) => p.startsWith('/'),
-    normalize: (p) => p.replace(/\\/\\/+/g, '/'),
-};
-
-// ===== Network fetch shim (proxied through worker) =====
-const fetch = async (url, options) => {
-    if (typeof globalThis.__opfs?.fetch === 'function') {
-        return globalThis.__opfs.fetch(url, options);
-    }
-    throw new Error('fetch not available in sandbox');
-};
-
-// ===== External imports =====
-${imports.join('\n')}
-
-// ===== Execution environment =====
-const __logs = [];
-const console = {
-    log: (...args) => __logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
-    error: (...args) => __logs.push('ERROR: ' + args.map(a => String(a)).join(' ')),
-    warn: (...args) => __logs.push('WARN: ' + args.map(a => String(a)).join(' ')),
-    info: (...args) => __logs.push('INFO: ' + args.map(a => String(a)).join(' ')),
-};
-
-// Wrap user code in async IIFE so top-level await works
-const __run = async () => {
-    try {
-        ${codeWithoutImports}
-        
-        // Auto-detect and call common async entry point functions
-        // This makes code "just work" like npx tsx
-        const __entryPoints = ['main', 'run', 'start', 'fetchData', 'fetchUser', 'execute', 'init'];
-        for (const name of __entryPoints) {
-            if (typeof globalThis[name] === 'function') {
-                const result = globalThis[name]();
-                if (result instanceof Promise) {
-                    await result;
-                }
-                break; // Only call the first found entry point
-            }
-        }
-    } catch (e) {
-        __logs.push('Error: ' + e.message);
-    }
-};
-
-// Execute and wait for completion before exporting logs
-await __run();
-
-export { __logs };
-    `;
-
-    // Expose OPFS functions on globalThis so blob URL module can access them
-    // These functions include console.log for easier debugging in browser DevTools
-    (globalThis as any).__opfs = {
-        readFile: async (p: string) => {
-            console.log('[OPFS] readFile:', p);
-            const content = await readFile(p);
-            console.log('[OPFS] readFile result:', content.length, 'chars');
-            return content;
-        },
-        writeFile: async (p: string, content: string) => {
-            console.log('[OPFS] writeFile:', p, `(${content.length} chars)`);
-            const bytes = await writeFile(p, content);
-            console.log('[OPFS] writeFile done:', bytes, 'bytes');
-            return bytes;
-        },
-        readdir: async (p: string) => {
-            console.log('[OPFS] readdir:', p);
-            const result = await listDir(p);
-            console.log('[OPFS] readdir result:', result);
-            return result;
-        },
-        mkdir: async (p: string) => {
-            console.log('[OPFS] mkdir:', p);
-            await getDirHandle(p, true);
-            console.log('[OPFS] mkdir done');
-        },
-        rm: async (p: string, recursive: boolean) => {
-            console.log('[OPFS] rm:', p, { recursive });
-            const parts = p.split('/').filter((x: string) => x);
-            const name = parts.pop()!;
-            const parentPath = '/' + parts.join('/');
-            const parent = await getDirHandle(parentPath);
-            await parent.removeEntry(name, { recursive });
-            console.log('[OPFS] rm done');
-        },
-        exists: async (p: string) => {
-            console.log('[OPFS] exists:', p);
-            try {
-                await getFileHandle(p);
-                console.log('[OPFS] exists: true (file)');
-                return true;
-            } catch {
-                try {
-                    await getDirHandle(p);
-                    console.log('[OPFS] exists: true (dir)');
-                    return true;
-                } catch {
-                    console.log('[OPFS] exists: false');
-                    return false;
-                }
-            }
-        },
-        stat: async (p: string) => {
-            console.log('[OPFS] stat:', p);
-            try {
-                const file = await getFileHandle(p);
-                const f = await file.getFile();
-                const result = { size: f.size, isFile: () => true, isDirectory: () => false };
-                console.log('[OPFS] stat result:', result);
-                return result;
-            } catch {
-                await getDirHandle(p);
-                const result = { size: 0, isFile: () => false, isDirectory: () => true };
-                console.log('[OPFS] stat result:', result);
-                return result;
-            }
-        },
-        // Network fetch - proxied through the worker
-        fetch: async (url: string, options?: RequestInit) => {
-            console.log('[SANDBOX] fetch:', url, options?.method || 'GET');
-            try {
-                const response = await fetch(url, options);
-                const text = await response.text();
-                console.log('[SANDBOX] fetch response:', response.status, text.length, 'chars');
-                // Return an object that mimics Response but with already-resolved body
-                return {
-                    ok: response.ok,
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: Object.fromEntries(response.headers.entries()),
-                    text: async () => text,
-                    json: async () => JSON.parse(text),
-                };
-            } catch (e: any) {
-                console.error('[SANDBOX] fetch error:', e.message);
-                throw e;
-            }
-        },
-    };
-
-    const blob = new Blob([wrappedCode], { type: 'application/javascript' });
-    const url = URL.createObjectURL(blob);
-
-    try {
-        const module = await import(/* @vite-ignore */ url);
-        URL.revokeObjectURL(url);
-
-        // Clean up globalThis.__opfs
-        delete (globalThis as any).__opfs;
-
-        const logs = module.__logs || [];
-        return logs.join('\n') || '(no output)';
-    } catch (e: any) {
-        URL.revokeObjectURL(url);
-        delete (globalThis as any).__opfs;
-        throw new Error(`Execution error: ${e.message}`);
-    }
 }
 
 function transformImports(code: string): string {
@@ -962,14 +1058,9 @@ function transformImports(code: string): string {
 }
 
 // Simple JS execution (for backward compatibility)
-function executeJs(code: string): string {
-    try {
-        const fn = new Function('return (' + code + ')');
-        const result = fn();
-        return String(result);
-    } catch (e: any) {
-        return `Error: ${e.message}`;
-    }
+async function executeJs(code: string): Promise<string> {
+    // Use QuickJS sandbox for all JavaScript execution
+    return await runInQuickJS(code);
 }
 
 // ============ Tool Dispatcher ============
@@ -1024,7 +1115,7 @@ async function callTool(tool: ToolCall): Promise<ToolResult> {
                 break;
 
             case 'execute':
-                output = executeJs(tool.input.code as string);
+                output = await executeJs(tool.input.code as string);
                 break;
 
             case 'execute_typescript':
