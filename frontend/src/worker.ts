@@ -1,28 +1,28 @@
-// Wasmer SDK Bash Shell Worker
-// Runs real Bash shell in browser via WASI/WASIX
+// Wasmer SDK Shell Worker
+// Load bash and python packages separately from registry
 
 import { init, Wasmer, Directory } from "@wasmer/sdk";
-// Use inline wasm to avoid loading issues
 import wasmerModule from "@wasmer/sdk/wasm?url";
 
 let bashPkg: Awaited<ReturnType<typeof Wasmer.fromRegistry>> | null = null;
+let pythonPkg: Awaited<ReturnType<typeof Wasmer.fromRegistry>> | null = null;
 let workDir: Directory | null = null;
 
-// Initialize Wasmer SDK and load Bash
+// Initialize Wasmer SDK and load packages
 async function initialize() {
     self.postMessage({ type: 'status', message: 'Initializing Wasmer SDK...' });
 
     try {
-        // Initialize with explicit module URL
         await init({ module: wasmerModule });
-
-        self.postMessage({ type: 'status', message: 'Loading Bash from registry...' });
-
-        // Load Bash package from Wasmer registry
-        bashPkg = await Wasmer.fromRegistry("sharrattj/bash");
 
         // Create a persistent working directory for the session
         workDir = new Directory();
+
+        self.postMessage({ type: 'status', message: 'Loading Bash...' });
+        bashPkg = await Wasmer.fromRegistry("sharrattj/bash");
+
+        self.postMessage({ type: 'status', message: 'Loading Python...' });
+        pythonPkg = await Wasmer.fromRegistry("python/python");
 
         self.postMessage({ type: 'ready' });
     } catch (error: any) {
@@ -31,10 +31,10 @@ async function initialize() {
     }
 }
 
-// Execute a shell command
-async function executeCommand(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+// Execute a shell command using bash
+async function executeShellCommand(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     if (!bashPkg || !workDir) {
-        throw new Error('Shell not initialized');
+        throw new Error('Bash not initialized');
     }
 
     try {
@@ -60,13 +60,47 @@ async function executeCommand(command: string): Promise<{ stdout: string; stderr
     }
 }
 
+// Execute Python code
+async function executePythonCommand(code: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    if (!pythonPkg || !workDir) {
+        throw new Error('Python not initialized');
+    }
+
+    try {
+        const instance = await pythonPkg.entrypoint!.run({
+            args: ["-c", code],
+            mount: { "/workspace": workDir },
+            cwd: "/workspace",
+        });
+
+        const result = await instance.wait();
+
+        return {
+            stdout: result.stdout || '',
+            stderr: result.stderr || '',
+            exitCode: result.code,
+        };
+    } catch (error: any) {
+        return {
+            stdout: '',
+            stderr: error.message || 'Unknown error',
+            exitCode: 1,
+        };
+    }
+}
+
 // Worker message handler
 self.onmessage = async (event: MessageEvent) => {
-    const { type, id, command } = event.data;
+    const { type, id, command, tool } = event.data;
 
     if (type === 'execute') {
         try {
-            const result = await executeCommand(command);
+            let result;
+            if (tool === 'python') {
+                result = await executePythonCommand(command);
+            } else {
+                result = await executeShellCommand(command);
+            }
             const output = result.stdout + (result.stderr ? `\n${result.stderr}` : '');
             self.postMessage({ type: 'result', id, output: output.trim(), exitCode: result.exitCode });
         } catch (error: any) {

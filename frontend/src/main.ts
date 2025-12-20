@@ -1,3 +1,6 @@
+// Claude Code TUI - Browser Edition
+// Uses OPFS sandbox via WebWorker + Anthropic API
+
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -5,34 +8,23 @@ import { FitAddon } from '@xterm/addon-fit';
 const API_URL = 'http://localhost:3001';
 const AUTH_TOKEN = 'dev-token';
 
-// Tool definitions - exposed to Claude from the browser
-const TOOLS = [
-    {
-        name: 'shell',
-        description: 'Execute a shell command using Bash in a browser sandbox. Has full Unix coreutils: ls, cat, grep, head, tail, sed, awk, etc. The /workspace directory persists during the session.',
-        input_schema: {
-            type: 'object' as const,
-            properties: {
-                command: {
-                    type: 'string',
-                    description: 'The shell command to execute',
-                },
-            },
-            required: ['command'],
-        },
-    },
-];
+// ============ Terminal Setup ============
 
-const SYSTEM_PROMPT = `You are an AI assistant running in a browser sandbox. You have access to a shell tool that executes commands in an ephemeral filesystem. Use it to help users with file operations. Be concise.`;
-
-// Initialize terminal
 const terminal = new Terminal({
     theme: {
-        background: '#1a1a2e',
-        foreground: '#e0e0e0',
-        cursor: '#9d4edd',
-        cursorAccent: '#1a1a2e',
-        selectionBackground: '#9d4edd44',
+        background: '#0d1117',
+        foreground: '#c9d1d9',
+        cursor: '#58a6ff',
+        cursorAccent: '#0d1117',
+        selectionBackground: '#264f7866',
+        black: '#484f58',
+        red: '#ff7b72',
+        green: '#3fb950',
+        yellow: '#d29922',
+        blue: '#58a6ff',
+        magenta: '#bc8cff',
+        cyan: '#39c5cf',
+        white: '#b1bac4',
     },
     fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace",
     fontSize: 14,
@@ -43,67 +35,127 @@ const fitAddon = new FitAddon();
 terminal.loadAddon(fitAddon);
 terminal.open(document.getElementById('terminal')!);
 fitAddon.fit();
-
 window.addEventListener('resize', () => fitAddon.fit());
 
-// Initialize shell worker
-const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+// ============ Sandbox Worker ============
 
-const pendingCommands = new Map<string, (output: string) => void>();
+const sandbox = new Worker(new URL('./sandbox-worker.ts', import.meta.url), { type: 'module' });
 
-worker.onmessage = (event) => {
-    const { type, id, output, message } = event.data;
-    if (type === 'ready') {
-        console.log('Bash shell ready');
-        setStatus('Ready', '#4ade80');
-    } else if (type === 'status') {
-        console.log('Worker status:', message);
-        setStatus(message, '#facc15');
-    } else if (type === 'result') {
-        const resolve = pendingCommands.get(id);
-        if (resolve) {
-            resolve(output);
-            pendingCommands.delete(id);
+// Tool definitions from worker
+let tools: any[] = [];
+
+// Pending tool calls
+const pendingToolCalls = new Map<string, (result: any) => void>();
+
+sandbox.onmessage = (event) => {
+    const { type, message, tools: workerTools, id, result } = event.data;
+
+    if (type === 'status') {
+        setStatus(message, '#d29922');
+    } else if (type === 'ready') {
+        setStatus('Ready', '#3fb950');
+        sandbox.postMessage({ type: 'get_tools' });
+    } else if (type === 'tools') {
+        tools = workerTools;
+        console.log('Loaded tools:', tools.map((t: any) => t.name));
+    } else if (type === 'tool_result') {
+        const resolver = pendingToolCalls.get(id);
+        if (resolver) {
+            resolver(result);
+            pendingToolCalls.delete(id);
         }
+    } else if (type === 'console') {
+        // Console output from QuickJS
+        terminal.write(`\x1b[90m[js] ${message}\x1b[0m\r\n`);
     } else if (type === 'error') {
-        console.error('Worker error:', message);
-        setStatus('Error', '#ef4444');
+        setStatus('Error', '#ff7b72');
+        terminal.write(`\x1b[31mError: ${message}\x1b[0m\r\n`);
     }
 };
 
-async function executeShellCommand(command: string): Promise<string> {
+async function callTool(name: string, input: Record<string, unknown>): Promise<any> {
     return new Promise((resolve) => {
         const id = crypto.randomUUID();
-        pendingCommands.set(id, resolve);
-        worker.postMessage({ type: 'execute', id, command });
+        pendingToolCalls.set(id, resolve);
+        sandbox.postMessage({ type: 'call_tool', id, tool: { name, input } });
     });
 }
 
-// Status display
-function setStatus(status: string, color = '#4ade80') {
+// ============ Status Display ============
+
+function setStatus(status: string, color = '#3fb950') {
     const el = document.getElementById('status')!;
     el.textContent = status;
     el.style.color = color;
 }
 
-// Conversation state (managed in browser)
+// ============ Conversation State ============
+
 type Message = { role: 'user' | 'assistant'; content: any };
 const messages: Message[] = [];
 
-// Agent loop
+const SYSTEM_PROMPT = `You are Claude Code, an AI assistant running in a browser WASM sandbox.
+
+Available tools:
+- read_file: Read file contents
+- write_file: Create/overwrite files  
+- edit_file: Find and replace text in files
+- list: List directory contents
+- grep: Search files for patterns
+- shell: Run basic commands (echo, pwd, date)
+- execute: Run JavaScript code
+
+Files persist in the browser's Origin Private File System (OPFS).
+Be helpful, concise, and use tools to accomplish tasks.`;
+
+// ============ Agent Loop ============
+
 let inputBuffer = '';
 
-async function sendMessage(userMessage: string) {
-    setStatus('Thinking...', '#facc15');
+async function sendMessage(userMessage: string): Promise<void> {
+    // Handle slash commands
+    if (userMessage.startsWith('/')) {
+        handleSlashCommand(userMessage);
+        return;
+    }
+
+    setStatus('Thinking...', '#d29922');
     terminal.write('\r\n');
 
-    // Add user message
     messages.push({ role: 'user', content: userMessage });
-
     await runAgentLoop();
 }
 
-async function runAgentLoop() {
+function handleSlashCommand(command: string): void {
+    const cmd = command.slice(1).toLowerCase();
+
+    switch (cmd) {
+        case 'clear':
+            terminal.clear();
+            messages.length = 0;
+            terminal.write('\x1b[90mConversation cleared.\x1b[0m\r\n');
+            break;
+        case 'files':
+            callTool('list', { path: '/' }).then((result) => {
+                terminal.write('\r\n\x1b[36mFiles:\x1b[0m\r\n');
+                terminal.write(result.output || result.error || '(empty)');
+                terminal.write('\r\n');
+                showPrompt();
+            });
+            return;
+        case 'help':
+            terminal.write('\r\n\x1b[36mCommands:\x1b[0m\r\n');
+            terminal.write('  /clear - Clear conversation\r\n');
+            terminal.write('  /files - List files in sandbox\r\n');
+            terminal.write('  /help  - Show this help\r\n');
+            break;
+        default:
+            terminal.write(`\r\n\x1b[31mUnknown command: ${command}\x1b[0m\r\n`);
+    }
+    showPrompt();
+}
+
+async function runAgentLoop(): Promise<void> {
     try {
         const response = await fetch(`${API_URL}/api/messages`, {
             method: 'POST',
@@ -113,47 +165,55 @@ async function runAgentLoop() {
             },
             body: JSON.stringify({
                 messages,
-                tools: TOOLS,
+                tools,
                 system: SYSTEM_PROMPT,
             }),
         });
 
         const { content, toolCalls } = await handleSSEResponse(response);
 
-        // Save assistant message
         if (content.length > 0) {
             messages.push({ role: 'assistant', content });
         }
 
-        // Handle tool calls
         if (toolCalls.length > 0) {
-            setStatus('Executing...', '#9d4edd');
+            setStatus('Executing...', '#bc8cff');
             const toolResults: any[] = [];
 
             for (const tool of toolCalls) {
-                if (tool.name === 'shell') {
-                    const output = await executeShellCommand(tool.input.command);
-                    terminal.write(`\x1b[32m${output || '(no output)'}\x1b[0m\r\n`);
-                    toolResults.push({
-                        type: 'tool_result',
-                        tool_use_id: tool.id,
-                        content: output || '(command completed with no output)',
-                    });
-                }
+                terminal.write(`\r\n\x1b[36m⚡ ${tool.name}\x1b[0m`);
+                if (tool.input.path) terminal.write(` \x1b[90m${tool.input.path}\x1b[0m`);
+                if (tool.input.command) terminal.write(` \x1b[90m${tool.input.command}\x1b[0m`);
+                terminal.write('\r\n');
+
+                const result = await callTool(tool.name, tool.input);
+
+                const output = result.success ? result.output : `Error: ${result.error}`;
+                const color = result.success ? '32' : '31';
+
+                // Show truncated output
+                const displayOutput = output.length > 200
+                    ? output.substring(0, 200) + '...'
+                    : output;
+                terminal.write(`\x1b[${color}m${displayOutput}\x1b[0m\r\n`);
+
+                toolResults.push({
+                    type: 'tool_result',
+                    tool_use_id: tool.id,
+                    content: output,
+                });
             }
 
-            // Add tool results to conversation and continue
             messages.push({ role: 'user', content: toolResults });
             await runAgentLoop();
             return;
         }
 
-        // Done - show prompt
         showPrompt();
-        setStatus('Ready', '#4ade80');
+        setStatus('Ready', '#3fb950');
     } catch (error: any) {
         terminal.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
-        setStatus('Error', '#ef4444');
+        setStatus('Error', '#ff7b72');
         showPrompt();
     }
 }
@@ -184,27 +244,20 @@ async function handleSSEResponse(response: Response): Promise<{ content: any[]; 
 
                 if (event.type === 'text') {
                     currentText += event.text;
-                    const text = event.text.replace(/\n/g, '\r\n');
-                    terminal.write(text);
+                    terminal.write(event.text.replace(/\n/g, '\r\n'));
                 } else if (event.type === 'tool_use') {
                     toolCalls.push({ id: event.id, name: event.name, input: event.input });
-                    terminal.write(`\r\n\x1b[36m⚡ Tool: ${event.name}\x1b[0m\r\n`);
-                    terminal.write(`\x1b[90m$ ${event.input.command}\x1b[0m\r\n`);
-                } else if (event.type === 'message_end') {
-                    // Use the full content from the message
-                    if (event.content) {
-                        content.push(...event.content);
-                    }
+                } else if (event.type === 'message_end' && event.content) {
+                    content.push(...event.content);
                 } else if (event.type === 'error') {
                     terminal.write(`\r\n\x1b[31mAPI Error: ${event.error}\x1b[0m\r\n`);
                 }
-            } catch (e) {
-                // Skip parse errors for partial data
+            } catch {
+                // Skip parse errors
             }
         }
     }
 
-    // If we collected text but didn't get content from message_end, add it
     if (currentText && content.length === 0) {
         content.push({ type: 'text', text: currentText });
     }
@@ -212,16 +265,16 @@ async function handleSSEResponse(response: Response): Promise<{ content: any[]; 
     return { content, toolCalls };
 }
 
-function showPrompt() {
-    terminal.write('\r\n\x1b[35m❯\x1b[0m ');
+// ============ Input Handling ============
+
+function showPrompt(): void {
+    terminal.write('\r\n\x1b[36m❯\x1b[0m ');
 }
 
-// Handle terminal input
 terminal.onData((data) => {
     const code = data.charCodeAt(0);
 
     if (code === 13) {
-        // Enter
         if (inputBuffer.trim()) {
             sendMessage(inputBuffer.trim());
         } else {
@@ -229,23 +282,22 @@ terminal.onData((data) => {
         }
         inputBuffer = '';
     } else if (code === 127) {
-        // Backspace
         if (inputBuffer.length > 0) {
             inputBuffer = inputBuffer.slice(0, -1);
             terminal.write('\b \b');
         }
     } else if (code >= 32) {
-        // Printable characters
         inputBuffer += data;
         terminal.write(data);
     }
 });
 
-// Welcome message
-terminal.write('\x1b[35m╭─────────────────────────────────────────╮\x1b[0m\r\n');
-terminal.write('\x1b[35m│\x1b[0m  \x1b[1mWeb Agent\x1b[0m - Browser-based Claude       \x1b[35m│\x1b[0m\r\n');
-terminal.write('\x1b[35m│\x1b[0m  Bash shell runs in WASM sandbox        \x1b[35m│\x1b[0m\r\n');
-terminal.write('\x1b[35m│\x1b[0m  Type a message to chat with Claude     \x1b[35m│\x1b[0m\r\n');
-terminal.write('\x1b[35m╰─────────────────────────────────────────╯\x1b[0m\r\n');
-showPrompt();
+// ============ Welcome ============
+
+terminal.write('\x1b[36m╭────────────────────────────────────────────╮\x1b[0m\r\n');
+terminal.write('\x1b[36m│\x1b[0m  \x1b[1mClaude Code\x1b[0m - Browser Edition            \x1b[36m│\x1b[0m\r\n');
+terminal.write('\x1b[36m│\x1b[0m  Files persist in OPFS sandbox            \x1b[36m│\x1b[0m\r\n');
+terminal.write('\x1b[36m│\x1b[0m  Type /help for commands                  \x1b[36m│\x1b[0m\r\n');
+terminal.write('\x1b[36m╰────────────────────────────────────────────╯\x1b[0m\r\n');
+terminal.write('\x1b[90mInitializing sandbox...\x1b[0m\r\n');
 terminal.focus();
