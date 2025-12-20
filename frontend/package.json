@@ -1,0 +1,20 @@
+{
+    "name": "web-agent-frontend",
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.32.1",
+        "@xterm/addon-fit": "^0.10.0",
+        "@xterm/xterm": "^5.5.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.2",
+        "typescript": "^5.7.2",
+        "vite": "^6.0.3"
+    }
+}

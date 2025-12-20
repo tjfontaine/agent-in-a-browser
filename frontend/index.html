@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Agent</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #header {
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #header h1 {
+      font-size: 16px;
+      font-weight: 500;
+      color: #9d4edd;
+    }
+    #header .status {
+      font-size: 12px;
+      color: #4ade80;
+    }
+    #terminal-container {
+      flex: 1;
+      padding: 8px;
+      overflow: hidden;
+    }
+    #terminal {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>🤖 Web Agent</h1>
+    <span class="status" id="status">Ready</span>
+  </div>
+  <div id="terminal-container">
+    <div id="terminal"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
