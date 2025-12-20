@@ -9,7 +9,7 @@ const AUTH_TOKEN = 'dev-token';
 const TOOLS = [
     {
         name: 'shell',
-        description: 'Execute a shell command in an ephemeral browser sandbox. Has basic Unix tools: cat, echo, ls, mkdir, rm, pwd, cd, touch. The filesystem is ephemeral and starts empty.',
+        description: 'Execute a shell command using Bash in a browser sandbox. Has full Unix coreutils: ls, cat, grep, head, tail, sed, awk, etc. The /workspace directory persists during the session.',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -52,15 +52,22 @@ const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'modu
 const pendingCommands = new Map<string, (output: string) => void>();
 
 worker.onmessage = (event) => {
-    const { type, id, output } = event.data;
+    const { type, id, output, message } = event.data;
     if (type === 'ready') {
-        console.log('Shell worker ready');
+        console.log('Bash shell ready');
+        setStatus('Ready', '#4ade80');
+    } else if (type === 'status') {
+        console.log('Worker status:', message);
+        setStatus(message, '#facc15');
     } else if (type === 'result') {
         const resolve = pendingCommands.get(id);
         if (resolve) {
             resolve(output);
             pendingCommands.delete(id);
         }
+    } else if (type === 'error') {
+        console.error('Worker error:', message);
+        setStatus('Error', '#ef4444');
     }
 };
 
@@ -237,8 +244,8 @@ terminal.onData((data) => {
 // Welcome message
 terminal.write('\x1b[35m╭─────────────────────────────────────────╮\x1b[0m\r\n');
 terminal.write('\x1b[35m│\x1b[0m  \x1b[1mWeb Agent\x1b[0m - Browser-based Claude       \x1b[35m│\x1b[0m\r\n');
+terminal.write('\x1b[35m│\x1b[0m  Bash shell runs in WASM sandbox        \x1b[35m│\x1b[0m\r\n');
 terminal.write('\x1b[35m│\x1b[0m  Type a message to chat with Claude     \x1b[35m│\x1b[0m\r\n');
-terminal.write('\x1b[35m│\x1b[0m  Shell commands run in browser sandbox  \x1b[35m│\x1b[0m\r\n');
 terminal.write('\x1b[35m╰─────────────────────────────────────────╯\x1b[0m\r\n');
 showPrompt();
 terminal.focus();
