@@ -3,6 +3,10 @@
 
 export { }; // Make this a module
 
+// We'll dynamically import esbuild-wasm from esm.sh at runtime
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let esbuild: any = null;
+
 // Extend FileSystemDirectoryHandle for entries() support
 declare global {
     interface FileSystemDirectoryHandle {
@@ -12,6 +16,7 @@ declare global {
 
 // OPFS root handle
 let opfsRoot: FileSystemDirectoryHandle | null = null;
+let esbuildInitialized = false;
 
 // ============ OPFS Helpers ============
 
@@ -504,9 +509,108 @@ async function shellTee(args: string[]): Promise<string> {
     return `tee: piping not yet supported. Use write_file tool instead.`;
 }
 
+// ============ TypeScript Execution ============
+
+async function initEsbuild(): Promise<void> {
+    if (esbuildInitialized) return;
+
+    try {
+        // Dynamically import esbuild-wasm from esm.sh
+        const esbuildModule = await import(/* @vite-ignore */ 'https://esm.sh/esbuild-wasm@0.20.0');
+        esbuild = esbuildModule.default || esbuildModule;
+
+        // Initialize with wasmURL
+        await esbuild.initialize({
+            wasmURL: 'https://unpkg.com/esbuild-wasm@0.20.0/esbuild.wasm'
+        });
+
+        esbuildInitialized = true;
+    } catch (e: any) {
+        throw new Error(`Failed to initialize esbuild: ${e.message}`);
+    }
+}
+
+async function executeTypeScript(code: string): Promise<string> {
+    await initEsbuild();
+
+    // Transform npm imports to esm.sh URLs
+    const transformedCode = transformImports(code);
+
+    // Compile TypeScript to JavaScript
+    const result = await esbuild.transform(transformedCode, {
+        loader: 'tsx',
+        format: 'esm',
+        target: 'es2022',
+    });
+
+    // Extract imports from compiled code (they must be at top level)
+    const importRegex = /^import\s+.+;?\s*$/gm;
+    const imports: string[] = [];
+    const codeWithoutImports = result.code.replace(importRegex, (match: string) => {
+        imports.push(match);
+        return '';
+    });
+
+    // Create ESM module with imports at top, execution in async IIFE
+    const wrappedCode = `
+${imports.join('\n')}
+
+const __logs = [];
+const console = {
+    log: (...args) => __logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+    error: (...args) => __logs.push('ERROR: ' + args.map(a => String(a)).join(' ')),
+    warn: (...args) => __logs.push('WARN: ' + args.map(a => String(a)).join(' ')),
+};
+
+try {
+    ${codeWithoutImports}
+} catch (e) {
+    __logs.push('Error: ' + e.message);
+}
+
+export { __logs };
+    `;
+
+    const blob = new Blob([wrappedCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+
+    try {
+        const module = await import(/* @vite-ignore */ url);
+        URL.revokeObjectURL(url);
+
+        const logs = module.__logs || [];
+        return logs.join('\n') || '(no output)';
+    } catch (e: any) {
+        URL.revokeObjectURL(url);
+        throw new Error(`Execution error: ${e.message}`);
+    }
+}
+
+function transformImports(code: string): string {
+    // Transform bare npm imports to esm.sh URLs
+    // e.g., import lodash from 'lodash' -> import lodash from 'https://esm.sh/lodash'
+    return code.replace(
+        /from\s+['"]([^'"./][^'"]*)['"]/g,
+        (match, pkg) => {
+            // Don't transform URLs
+            if (pkg.startsWith('http') || pkg.startsWith('https')) {
+                return match;
+            }
+            return `from 'https://esm.sh/${pkg}'`;
+        }
+    ).replace(
+        /import\s+['"]([^'"./][^'"]*)['"]/g,
+        (match, pkg) => {
+            if (pkg.startsWith('http') || pkg.startsWith('https')) {
+                return match;
+            }
+            return `import 'https://esm.sh/${pkg}'`;
+        }
+    );
+}
+
+// Simple JS execution (for backward compatibility)
 function executeJs(code: string): string {
-    // Use simple Function() for now - isolated but not sandboxed
-    // In production, would use QuickJS or similar
     try {
         const fn = new Function('return (' + code + ')');
         const result = fn();
@@ -569,6 +673,10 @@ async function callTool(tool: ToolCall): Promise<ToolResult> {
 
             case 'execute':
                 output = executeJs(tool.input.code as string);
+                break;
+
+            case 'execute_typescript':
+                output = await executeTypeScript(tool.input.code as string);
                 break;
 
             default:
@@ -669,10 +777,24 @@ self.onmessage = async (event: MessageEvent) => {
                 },
                 {
                     name: 'execute',
-                    description: 'Execute JavaScript code',
+                    description: 'Execute simple JavaScript expression',
                     input_schema: {
                         type: 'object',
                         properties: { code: { type: 'string', description: 'JavaScript expression to evaluate' } },
+                        required: ['code']
+                    }
+                },
+                {
+                    name: 'execute_typescript',
+                    description: 'Execute TypeScript code with npm package support. Use import statements for packages (e.g., import lodash from "lodash"). Packages are loaded from esm.sh CDN. Use console.log() for output.',
+                    input_schema: {
+                        type: 'object',
+                        properties: {
+                            code: {
+                                type: 'string',
+                                description: 'TypeScript code to execute. Can include npm imports like: import lodash from "lodash"'
+                            }
+                        },
                         required: ['code']
                     }
                 }

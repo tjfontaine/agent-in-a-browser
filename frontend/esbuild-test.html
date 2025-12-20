@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>esbuild-wasm test</title>
+</head>
+
+<body>
+    <h1>esbuild-wasm test</h1>
+    <pre id="output">Loading...</pre>
+
+    <script type="module">
+        const output = document.getElementById('output');
+
+        async function test() {
+            try {
+                output.textContent = 'Loading esbuild-wasm from esm.sh...\n';
+
+                // Try different import approach - use the default export
+                const esbuildModule = await import('https://esm.sh/esbuild-wasm@0.20.0');
+                const esbuild = esbuildModule.default || esbuildModule;
+
+                output.textContent += '✓ Imported esbuild module\n';
+                output.textContent += 'Module keys: ' + Object.keys(esbuildModule).join(', ') + '\n';
+                output.textContent += 'esbuild keys: ' + Object.keys(esbuild).join(', ') + '\n\n';
+
+                // Check if initialize exists
+                if (!esbuild.initialize) {
+                    output.textContent += '\n❌ No initialize function on esbuild object\n';
+                    output.textContent += 'Type: ' + typeof esbuild + '\n';
+                    output.textContent += 'Keys: ' + JSON.stringify(Object.keys(esbuild), null, 2) + '\n';
+
+                    // Try looking deeper
+                    if (esbuild.default) {
+                        output.textContent += '\nTrying esbuild.default...\n';
+                        output.textContent += 'esbuild.default keys: ' + Object.keys(esbuild.default).join(', ') + '\n';
+                    }
+                    return;
+                }
+
+                output.textContent += 'Initializing esbuild...\n';
+
+                await esbuild.initialize({
+                    wasmURL: 'https://unpkg.com/esbuild-wasm@0.20.0/esbuild.wasm'
+                });
+
+                output.textContent += '✓ esbuild initialized!\n\n';
+
+                // Try to compile some TypeScript
+                const result = await esbuild.transform(
+                    `const x: number = 5; console.log(x);`,
+                    { loader: 'ts' }
+                );
+
+                output.textContent += '✓ Transform successful!\n\n';
+                output.textContent += 'Compiled code:\n' + result.code;
+
+            } catch (e) {
+                output.textContent += '\n\nError: ' + e.message + '\n\n' + e.stack;
+            }
+        }
+
+        test();
+    </script>
+</body>
+
+</html>
