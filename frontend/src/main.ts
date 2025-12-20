@@ -147,8 +147,14 @@ Node.js APIs are shimmed to use OPFS:
 
 // ============ Agent Loop ============
 
+// Debug logging - goes to browser console
+function debug(...args: any[]) {
+    console.log('[Agent]', new Date().toISOString().slice(11, 23), ...args);
+}
+
 let inputBuffer = '';
 let spinner: Spinner | null = null;
+let cancelRequested = false;
 
 async function sendMessage(userMessage: string): Promise<void> {
     // Handle slash commands
@@ -163,7 +169,9 @@ async function sendMessage(userMessage: string): Promise<void> {
     // Start spinner
     spinner = new Spinner(terminal);
     spinner.start('Thinking...');
+    cancelRequested = false; // Reset cancel flag
 
+    debug('User message:', userMessage);
     messages.push({ role: 'user', content: userMessage });
     await runAgentLoop();
 }
@@ -198,6 +206,12 @@ function handleSlashCommand(command: string): void {
 }
 
 async function runAgentLoop(): Promise<void> {
+    // Check if cancelled before making API call
+    if (cancelRequested) {
+        debug('Agent loop cancelled');
+        return;
+    }
+
     try {
         const response = await fetch(`${API_URL}/api/messages`, {
             method: 'POST',
@@ -212,13 +226,16 @@ async function runAgentLoop(): Promise<void> {
             }),
         });
 
+        debug('API response status:', response.status);
         const { content, toolCalls } = await handleSSEResponse(response);
 
         if (content.length > 0) {
+            debug('Content blocks:', content.length);
             messages.push({ role: 'assistant', content });
         }
 
         if (toolCalls.length > 0) {
+            debug('Tool calls:', toolCalls.map(t => t.name));
             if (spinner) spinner.stop();
             spinner = null;
 
@@ -233,6 +250,7 @@ async function runAgentLoop(): Promise<void> {
                 toolSpinner.start(`Running ${tool.name}...`);
 
                 const result = await callTool(tool.name, tool.input);
+                debug('Tool result:', tool.name, result.success ? 'success' : 'error');
 
                 toolSpinner.stop();
 
@@ -292,6 +310,24 @@ async function handleSSEResponse(response: Response): Promise<{ content: any[]; 
             try {
                 const event = JSON.parse(data);
 
+                // Type-specific debug logging
+                switch (event.type) {
+                    case 'text':
+                        debug('📝 text:', `"${event.text.slice(0, 50)}${event.text.length > 50 ? '...' : ''}" (${event.text.length} chars)`);
+                        break;
+                    case 'tool_use':
+                        debug('🔧 tool_use:', event.name, JSON.stringify(event.input).slice(0, 80));
+                        break;
+                    case 'message_end':
+                        debug('✅ message_end:', event.stop_reason, `${event.content?.length || 0} content blocks`);
+                        break;
+                    case 'error':
+                        debug('❌ error:', event.error);
+                        break;
+                    default:
+                        debug('📨 event:', event.type, JSON.stringify(event).slice(0, 100));
+                }
+
                 if (event.type === 'text') {
                     // Stop spinner on first text chunk
                     if (!firstTextReceived) {
@@ -331,6 +367,20 @@ function showPrompt(): void {
 
 terminal.onData((data) => {
     const code = data.charCodeAt(0);
+
+    // ESC key (27) cancels agent execution
+    if (code === 27) {
+        if (spinner) {
+            cancelRequested = true;
+            spinner.stop('Cancelled');
+            spinner = null;
+            terminal.write('\r\n\x1b[33m⚠ Cancelled by user\x1b[0m');
+            setStatus('Ready', '#3fb950');
+            showPrompt();
+            debug('User cancelled execution');
+        }
+        return;
+    }
 
     if (code === 13) {
         if (inputBuffer.trim()) {

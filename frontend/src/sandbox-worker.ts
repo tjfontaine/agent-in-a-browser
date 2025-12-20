@@ -640,11 +640,17 @@ const console = {
     info: (...args) => __logs.push('INFO: ' + args.map(a => String(a)).join(' ')),
 };
 
-try {
-    ${codeWithoutImports}
-} catch (e) {
-    __logs.push('Error: ' + e.message);
-}
+// Wrap user code in async IIFE so top-level await works
+const __run = async () => {
+    try {
+        ${codeWithoutImports}
+    } catch (e) {
+        __logs.push('Error: ' + e.message);
+    }
+};
+
+// Execute and wait for completion before exporting logs
+await __run();
 
 export { __logs };
     `;
