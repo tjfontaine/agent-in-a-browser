@@ -553,28 +553,71 @@ async function executeTypeScript(code: string): Promise<string> {
 
     // Create ESM module with imports at top, execution in async IIFE
     const wrappedCode = `
-// ===== Node.js fs/path Shims for Sandbox =====
+// ===== Node.js fs/path Shims for Sandbox (using OPFS via globalThis) =====
 const fs = {
     promises: {
-        readFile: async (p) => { throw new Error('fs.readFile not available in sandbox. Use read_file tool.'); },
-        writeFile: async (p, d) => { throw new Error('fs.writeFile not available. Use write_file tool.'); },
-        readdir: async (p) => { throw new Error('fs.readdir not available. Use list tool.'); },
-        mkdir: async (p) => { throw new Error('fs.mkdir not available. Use shell mkdir.'); },
-        rm: async (p) => { throw new Error('fs.rm not available. Use shell rm.'); },
-        stat: async (p) => { throw new Error('fs.stat not available.'); },
+        readFile: async (p, options) => {
+            if (typeof globalThis.__opfs?.readFile === 'function') {
+                return globalThis.__opfs.readFile(p);
+            }
+            throw new Error('fs.readFile not available');
+        },
+        writeFile: async (p, data, options) => {
+            if (typeof globalThis.__opfs?.writeFile === 'function') {
+                const content = typeof data === 'string' ? data : new TextDecoder().decode(data);
+                return globalThis.__opfs.writeFile(p, content);
+            }
+            throw new Error('fs.writeFile not available');
+        },
+        readdir: async (p, options) => {
+            if (typeof globalThis.__opfs?.readdir === 'function') {
+                return globalThis.__opfs.readdir(p);
+            }
+            throw new Error('fs.readdir not available');
+        },
+        mkdir: async (p, options) => {
+            if (typeof globalThis.__opfs?.mkdir === 'function') {
+                return globalThis.__opfs.mkdir(p);
+            }
+            throw new Error('fs.mkdir not available');
+        },
+        rm: async (p, options) => {
+            if (typeof globalThis.__opfs?.rm === 'function') {
+                return globalThis.__opfs.rm(p, options?.recursive || false);
+            }
+            throw new Error('fs.rm not available');
+        },
+        stat: async (p) => {
+            if (typeof globalThis.__opfs?.stat === 'function') {
+                return globalThis.__opfs.stat(p);
+            }
+            throw new Error('fs.stat not available');
+        },
+        access: async (p) => {
+            if (typeof globalThis.__opfs?.exists === 'function') {
+                const exists = await globalThis.__opfs.exists(p);
+                if (!exists) throw new Error('ENOENT: no such file or directory');
+            }
+        },
     },
-    readFileSync: () => { throw new Error('Sync fs not available. Use async or tools.'); },
-    writeFileSync: () => { throw new Error('Sync fs not available. Use async or tools.'); },
-    existsSync: () => false,
+    readFileSync: (p) => { throw new Error('Sync fs not available. Use fs.promises.readFile.'); },
+    writeFileSync: (p, d) => { throw new Error('Sync fs not available. Use fs.promises.writeFile.'); },
+    existsSync: (p) => {
+        console.warn('fs.existsSync is not reliable in sandbox, use fs.promises.access instead');
+        return false;
+    },
 };
 
 const path = {
-    join: (...p) => p.join('/').replace(/\\/\\/+/g, '/'),
-    resolve: (...p) => '/' + p.join('/').replace(/\\/\\/+/g, '/').replace(/^\\/+/, ''),
+    join: (...p) => p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/'),
+    resolve: (...p) => '/' + p.filter(Boolean).join('/').replace(/\\/\\/+/g, '/').replace(/^\\/+/, ''),
     dirname: (p) => p.split('/').slice(0, -1).join('/') || '/',
     basename: (p, ext) => { const b = p.split('/').pop() || ''; return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b; },
     extname: (p) => { const b = p.split('/').pop() || ''; const i = b.lastIndexOf('.'); return i > 0 ? b.slice(i) : ''; },
     sep: '/',
+    delimiter: ':',
+    isAbsolute: (p) => p.startsWith('/'),
+    normalize: (p) => p.replace(/\\/\\/+/g, '/'),
 };
 
 // ===== External imports =====
@@ -598,6 +641,75 @@ try {
 export { __logs };
     `;
 
+    // Expose OPFS functions on globalThis so blob URL module can access them
+    // These functions include console.log for easier debugging in browser DevTools
+    (globalThis as any).__opfs = {
+        readFile: async (p: string) => {
+            console.log('[OPFS] readFile:', p);
+            const content = await readFile(p);
+            console.log('[OPFS] readFile result:', content.length, 'chars');
+            return content;
+        },
+        writeFile: async (p: string, content: string) => {
+            console.log('[OPFS] writeFile:', p, `(${content.length} chars)`);
+            const bytes = await writeFile(p, content);
+            console.log('[OPFS] writeFile done:', bytes, 'bytes');
+            return bytes;
+        },
+        readdir: async (p: string) => {
+            console.log('[OPFS] readdir:', p);
+            const result = await listDir(p);
+            console.log('[OPFS] readdir result:', result);
+            return result;
+        },
+        mkdir: async (p: string) => {
+            console.log('[OPFS] mkdir:', p);
+            await getDirHandle(p, true);
+            console.log('[OPFS] mkdir done');
+        },
+        rm: async (p: string, recursive: boolean) => {
+            console.log('[OPFS] rm:', p, { recursive });
+            const parts = p.split('/').filter((x: string) => x);
+            const name = parts.pop()!;
+            const parentPath = '/' + parts.join('/');
+            const parent = await getDirHandle(parentPath);
+            await parent.removeEntry(name, { recursive });
+            console.log('[OPFS] rm done');
+        },
+        exists: async (p: string) => {
+            console.log('[OPFS] exists:', p);
+            try {
+                await getFileHandle(p);
+                console.log('[OPFS] exists: true (file)');
+                return true;
+            } catch {
+                try {
+                    await getDirHandle(p);
+                    console.log('[OPFS] exists: true (dir)');
+                    return true;
+                } catch {
+                    console.log('[OPFS] exists: false');
+                    return false;
+                }
+            }
+        },
+        stat: async (p: string) => {
+            console.log('[OPFS] stat:', p);
+            try {
+                const file = await getFileHandle(p);
+                const f = await file.getFile();
+                const result = { size: f.size, isFile: () => true, isDirectory: () => false };
+                console.log('[OPFS] stat result:', result);
+                return result;
+            } catch {
+                await getDirHandle(p);
+                const result = { size: 0, isFile: () => false, isDirectory: () => true };
+                console.log('[OPFS] stat result:', result);
+                return result;
+            }
+        },
+    };
+
     const blob = new Blob([wrappedCode], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
 
@@ -605,10 +717,14 @@ export { __logs };
         const module = await import(/* @vite-ignore */ url);
         URL.revokeObjectURL(url);
 
+        // Clean up globalThis.__opfs
+        delete (globalThis as any).__opfs;
+
         const logs = module.__logs || [];
         return logs.join('\n') || '(no output)';
     } catch (e: any) {
         URL.revokeObjectURL(url);
+        delete (globalThis as any).__opfs;
         throw new Error(`Execution error: ${e.message}`);
     }
 }
