@@ -553,13 +553,40 @@ async function executeTypeScript(code: string): Promise<string> {
 
     // Create ESM module with imports at top, execution in async IIFE
     const wrappedCode = `
+// ===== Node.js fs/path Shims for Sandbox =====
+const fs = {
+    promises: {
+        readFile: async (p) => { throw new Error('fs.readFile not available in sandbox. Use read_file tool.'); },
+        writeFile: async (p, d) => { throw new Error('fs.writeFile not available. Use write_file tool.'); },
+        readdir: async (p) => { throw new Error('fs.readdir not available. Use list tool.'); },
+        mkdir: async (p) => { throw new Error('fs.mkdir not available. Use shell mkdir.'); },
+        rm: async (p) => { throw new Error('fs.rm not available. Use shell rm.'); },
+        stat: async (p) => { throw new Error('fs.stat not available.'); },
+    },
+    readFileSync: () => { throw new Error('Sync fs not available. Use async or tools.'); },
+    writeFileSync: () => { throw new Error('Sync fs not available. Use async or tools.'); },
+    existsSync: () => false,
+};
+
+const path = {
+    join: (...p) => p.join('/').replace(/\\/\\/+/g, '/'),
+    resolve: (...p) => '/' + p.join('/').replace(/\\/\\/+/g, '/').replace(/^\\/+/, ''),
+    dirname: (p) => p.split('/').slice(0, -1).join('/') || '/',
+    basename: (p, ext) => { const b = p.split('/').pop() || ''; return ext && b.endsWith(ext) ? b.slice(0, -ext.length) : b; },
+    extname: (p) => { const b = p.split('/').pop() || ''; const i = b.lastIndexOf('.'); return i > 0 ? b.slice(i) : ''; },
+    sep: '/',
+};
+
+// ===== External imports =====
 ${imports.join('\n')}
 
+// ===== Execution environment =====
 const __logs = [];
 const console = {
     log: (...args) => __logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
     error: (...args) => __logs.push('ERROR: ' + args.map(a => String(a)).join(' ')),
     warn: (...args) => __logs.push('WARN: ' + args.map(a => String(a)).join(' ')),
+    info: (...args) => __logs.push('INFO: ' + args.map(a => String(a)).join(' ')),
 };
 
 try {
@@ -587,13 +614,25 @@ export { __logs };
 }
 
 function transformImports(code: string): string {
+    // Skip Node.js built-in imports (we provide shims)
+    const nodeBuiltins = ['fs', 'path', 'node:fs', 'node:path', 'fs/promises', 'node:fs/promises'];
+
+    // First, remove Node.js built-in imports entirely (we inject shims)
+    let transformed = code.replace(
+        /import\s+.*?\s+from\s+['"](?:node:)?(?:fs|path)(?:\/promises)?['"];?\s*\n?/g,
+        ''
+    );
+
     // Transform bare npm imports to esm.sh URLs
-    // e.g., import lodash from 'lodash' -> import lodash from 'https://esm.sh/lodash'
-    return code.replace(
+    transformed = transformed.replace(
         /from\s+['"]([^'"./][^'"]*)['"]/g,
         (match, pkg) => {
             // Don't transform URLs
             if (pkg.startsWith('http') || pkg.startsWith('https')) {
+                return match;
+            }
+            // Don't transform Node.js builtins
+            if (nodeBuiltins.includes(pkg)) {
                 return match;
             }
             return `from 'https://esm.sh/${pkg}'`;
@@ -604,9 +643,14 @@ function transformImports(code: string): string {
             if (pkg.startsWith('http') || pkg.startsWith('https')) {
                 return match;
             }
+            if (nodeBuiltins.includes(pkg)) {
+                return match;
+            }
             return `import 'https://esm.sh/${pkg}'`;
         }
     );
+
+    return transformed;
 }
 
 // Simple JS execution (for backward compatibility)
