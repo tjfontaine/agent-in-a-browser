@@ -56,6 +56,9 @@ sandbox.onmessage = (event) => {
         setStatus(message, '#d29922');
     } else if (type === 'ready') {
         setStatus('Ready', '#3fb950');
+        // Clear the "Initializing sandbox..." line and show Ready!
+        terminal.write('\x1b[A\r\x1b[K'); // Move up one line and clear it
+        terminal.write('\x1b[32m✓ Sandbox ready\x1b[0m\r\n');
         sandbox.postMessage({ type: 'get_tools' });
         showPrompt();
     } else if (type === 'tools') {

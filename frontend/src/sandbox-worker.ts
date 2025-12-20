@@ -620,6 +620,14 @@ const path = {
     normalize: (p) => p.replace(/\\/\\/+/g, '/'),
 };
 
+// ===== Network fetch shim (proxied through worker) =====
+const fetch = async (url, options) => {
+    if (typeof globalThis.__opfs?.fetch === 'function') {
+        return globalThis.__opfs.fetch(url, options);
+    }
+    throw new Error('fetch not available in sandbox');
+};
+
 // ===== External imports =====
 ${imports.join('\n')}
 
@@ -706,6 +714,27 @@ export { __logs };
                 const result = { size: 0, isFile: () => false, isDirectory: () => true };
                 console.log('[OPFS] stat result:', result);
                 return result;
+            }
+        },
+        // Network fetch - proxied through the worker
+        fetch: async (url: string, options?: RequestInit) => {
+            console.log('[SANDBOX] fetch:', url, options?.method || 'GET');
+            try {
+                const response = await fetch(url, options);
+                const text = await response.text();
+                console.log('[SANDBOX] fetch response:', response.status, text.length, 'chars');
+                // Return an object that mimics Response but with already-resolved body
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    text: async () => text,
+                    json: async () => JSON.parse(text),
+                };
+            } catch (e: any) {
+                console.error('[SANDBOX] fetch error:', e.message);
+                throw e;
             }
         },
     };
