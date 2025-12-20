@@ -155,6 +155,7 @@ function debug(...args: any[]) {
 let inputBuffer = '';
 let spinner: Spinner | null = null;
 let cancelRequested = false;
+let abortController: AbortController | null = null;
 
 async function sendMessage(userMessage: string): Promise<void> {
     // Handle slash commands
@@ -170,6 +171,7 @@ async function sendMessage(userMessage: string): Promise<void> {
     spinner = new Spinner(terminal);
     spinner.start('Thinking...');
     cancelRequested = false; // Reset cancel flag
+    abortController = new AbortController(); // Create new abort controller
 
     debug('User message:', userMessage);
     messages.push({ role: 'user', content: userMessage });
@@ -224,6 +226,7 @@ async function runAgentLoop(): Promise<void> {
                 tools,
                 system: SYSTEM_PROMPT,
             }),
+            signal: abortController?.signal, // Allow aborting the fetch
         });
 
         debug('API response status:', response.status);
@@ -276,11 +279,21 @@ async function runAgentLoop(): Promise<void> {
 
         if (spinner) spinner.stop();
         spinner = null;
+        abortController = null;
         showPrompt();
         setStatus('Ready', '#3fb950');
     } catch (error: any) {
+        // Don't show error if user cancelled
+        if (error.name === 'AbortError' || cancelRequested) {
+            debug('Request aborted by user');
+            if (spinner) spinner.stop();
+            spinner = null;
+            abortController = null;
+            return;
+        }
         terminal.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
         setStatus('Error', '#ff7b72');
+        abortController = null;
         showPrompt();
     }
 }
@@ -370,10 +383,17 @@ terminal.onData((data) => {
 
     // ESC key (27) cancels agent execution
     if (code === 27) {
-        if (spinner) {
+        if (spinner || abortController) {
             cancelRequested = true;
-            spinner.stop('Cancelled');
-            spinner = null;
+            // Abort any in-flight API request
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            if (spinner) {
+                spinner.stop('Cancelled');
+                spinner = null;
+            }
             terminal.write('\r\n\x1b[33m⚠ Cancelled by user\x1b[0m');
             setStatus('Ready', '#3fb950');
             showPrompt();
