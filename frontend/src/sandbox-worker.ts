@@ -197,6 +197,19 @@ async function shell(command: string): Promise<string> {
             case 'help':
                 return `Available commands: ${cmds.join(', ')}`;
 
+            // TypeScript/Node.js commands
+            case 'tsc':
+                return await shellTsc(args);
+
+            case 'node':
+                return await shellNode(args);
+
+            case 'tsx':
+                return await shellTsx(args);
+
+            case 'npx':
+                return await shellNpx(args);
+
             default:
                 return `sh: ${cmd}: command not found. Type 'help' for available commands.`;
         }
@@ -205,7 +218,7 @@ async function shell(command: string): Promise<string> {
     }
 }
 
-const cmds = ['echo', 'pwd', 'date', 'cat', 'ls', 'mkdir', 'rm', 'touch', 'cp', 'mv', 'head', 'tail', 'wc', 'find', 'grep', 'sort', 'uniq', 'tee', 'which', 'help'];
+const cmds = ['echo', 'pwd', 'date', 'cat', 'ls', 'mkdir', 'rm', 'touch', 'cp', 'mv', 'head', 'tail', 'wc', 'find', 'grep', 'sort', 'uniq', 'tee', 'which', 'help', 'tsc', 'node', 'tsx', 'npx'];
 
 function parseCommand(command: string): string[] {
     const tokens: string[] = [];
@@ -509,6 +522,137 @@ async function shellTee(args: string[]): Promise<string> {
     return `tee: piping not yet supported. Use write_file tool instead.`;
 }
 
+// ============ tsc / node / tsx Commands ============
+
+async function shellTsc(args: string[]): Promise<string> {
+    await initEsbuild();
+
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length === 0) return 'tsc: no input files';
+
+    const results: string[] = [];
+
+    for (const filePath of paths) {
+        if (!filePath.endsWith('.ts') && !filePath.endsWith('.tsx')) {
+            results.push(`tsc: ${filePath}: not a TypeScript file`);
+            continue;
+        }
+
+        try {
+            const code = await readFile(filePath);
+            const transformed = transformImports(code);
+
+            // Use esbuild to compile - it will throw on errors
+            const result = await esbuild.transform(transformed, {
+                loader: filePath.endsWith('.tsx') ? 'tsx' : 'ts',
+                format: 'esm',
+                target: 'es2022',
+            });
+
+            // Write the compiled JS file
+            const jsPath = filePath.replace(/\.tsx?$/, '.js');
+            await writeFile(jsPath, result.code);
+
+            results.push(`✓ ${filePath} → ${jsPath}`);
+
+            // Show any warnings
+            if (result.warnings && result.warnings.length > 0) {
+                for (const warn of result.warnings) {
+                    results.push(`  ⚠ ${warn.text}`);
+                }
+            }
+        } catch (e: any) {
+            // Format compilation errors nicely
+            if (e.errors) {
+                for (const err of e.errors) {
+                    const loc = err.location ? `:${err.location.line}:${err.location.column}` : '';
+                    results.push(`✗ ${filePath}${loc}: ${err.text}`);
+                }
+            } else {
+                results.push(`✗ ${filePath}: ${e.message}`);
+            }
+        }
+    }
+
+    return results.join('\n');
+}
+
+async function shellNode(args: string[]): Promise<string> {
+    await initEsbuild();
+
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length === 0) return 'node: no input file';
+
+    const filePath = paths[0];
+
+    try {
+        const code = await readFile(filePath);
+        // Run the JS code through our execution framework
+        return await executeCode(code, 'js');
+    } catch (e: any) {
+        return `node: ${e.message}`;
+    }
+}
+
+async function shellTsx(args: string[]): Promise<string> {
+    await initEsbuild();
+
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length === 0) return 'tsx: no input file';
+
+    const filePath = paths[0];
+
+    try {
+        const code = await readFile(filePath);
+        // Compile and run the TypeScript code
+        return await executeTypeScript(code);
+    } catch (e: any) {
+        // Format compilation errors nicely
+        if (e.errors) {
+            const results: string[] = [];
+            for (const err of e.errors) {
+                const loc = err.location ? `:${err.location.line}:${err.location.column}` : '';
+                results.push(`✗ ${filePath}${loc}: ${err.text}`);
+            }
+            return results.join('\n');
+        }
+        return `tsx: ${e.message}`;
+    }
+}
+
+async function shellNpx(args: string[]): Promise<string> {
+    if (args.length === 0) return 'npx: no command specified';
+
+    const subCmd = args[0];
+    const subArgs = args.slice(1);
+
+    switch (subCmd) {
+        case 'tsx':
+        case 'ts-node':
+            // npx tsx file.ts - run TypeScript directly
+            return await shellTsx(subArgs);
+
+        case 'tsc':
+            // npx tsc file.ts - compile TypeScript
+            return await shellTsc(subArgs);
+
+        default:
+            // For other packages, try to run if it looks like a .ts or .js file
+            if (subCmd.endsWith('.ts') || subCmd.endsWith('.tsx')) {
+                return await shellTsx([subCmd, ...subArgs]);
+            } else if (subCmd.endsWith('.js')) {
+                return await shellNode([subCmd, ...subArgs]);
+            }
+            return `npx: '${subCmd}' - package execution not supported. Use 'tsx' for TypeScript files.`;
+    }
+}
+
+// Helper to execute both JS and TS code
+async function executeCode(code: string, _loader: 'js' | 'ts' | 'tsx' = 'ts'): Promise<string> {
+    // executeTypeScript can handle JS too since esbuild supports JavaScript
+    return await executeTypeScript(code);
+}
+
 // ============ TypeScript Execution ============
 
 async function initEsbuild(): Promise<void> {
@@ -644,6 +788,19 @@ const console = {
 const __run = async () => {
     try {
         ${codeWithoutImports}
+        
+        // Auto-detect and call common async entry point functions
+        // This makes code "just work" like npx tsx
+        const __entryPoints = ['main', 'run', 'start', 'fetchData', 'fetchUser', 'execute', 'init'];
+        for (const name of __entryPoints) {
+            if (typeof globalThis[name] === 'function') {
+                const result = globalThis[name]();
+                if (result instanceof Promise) {
+                    await result;
+                }
+                break; // Only call the first found entry point
+            }
+        }
     } catch (e) {
         __logs.push('Error: ' + e.message);
     }
