@@ -1,4 +1,4 @@
-// Claude Code TUI - Browser Edition
+// Web Agent TUI - Browser Edition
 // Uses OPFS sandbox via WebWorker + Anthropic API
 
 import '@xterm/xterm/css/xterm.css';
@@ -36,6 +36,7 @@ const fitAddon = new FitAddon();
 terminal.loadAddon(fitAddon);
 terminal.open(document.getElementById('terminal')!);
 fitAddon.fit();
+
 window.addEventListener('resize', () => fitAddon.fit());
 
 // ============ Sandbox Worker ============
@@ -56,6 +57,7 @@ sandbox.onmessage = (event) => {
     } else if (type === 'ready') {
         setStatus('Ready', '#3fb950');
         sandbox.postMessage({ type: 'get_tools' });
+        showPrompt();
     } else if (type === 'tools') {
         tools = workerTools;
         console.log('Loaded tools:', tools.map((t: any) => t.name));
@@ -95,7 +97,7 @@ function setStatus(status: string, color = '#3fb950') {
 type Message = { role: 'user' | 'assistant'; content: any };
 const messages: Message[] = [];
 
-const SYSTEM_PROMPT = `You are Claude Code (Browser Edition), an AI assistant running in a WASM sandbox.
+const SYSTEM_PROMPT = `You are a helpful AI assistant running in a WASM sandbox.
 
 # Tone and Style
 - Keep responses short and concise for CLI output
@@ -347,10 +349,14 @@ terminal.onData((data) => {
 
 // ============ Welcome ============
 
+
+
 terminal.write('\x1b[36m╭────────────────────────────────────────────╮\x1b[0m\r\n');
-terminal.write('\x1b[36m│\x1b[0m  \x1b[1mClaude Code\x1b[0m - Browser Edition            \x1b[36m│\x1b[0m\r\n');
+terminal.write('\x1b[36m│\x1b[0m  \x1b[1mWeb Agent\x1b[0m - Browser Edition              \x1b[36m│\x1b[0m\r\n');
 terminal.write('\x1b[36m│\x1b[0m  Files persist in OPFS sandbox            \x1b[36m│\x1b[0m\r\n');
 terminal.write('\x1b[36m│\x1b[0m  Type /help for commands                  \x1b[36m│\x1b[0m\r\n');
 terminal.write('\x1b[36m╰────────────────────────────────────────────╯\x1b[0m\r\n');
 terminal.write('\x1b[90mInitializing sandbox...\x1b[0m\r\n');
+
+// Prompt will be shown when sandbox is ready
 terminal.focus();
