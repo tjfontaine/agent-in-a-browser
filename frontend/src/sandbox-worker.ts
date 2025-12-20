@@ -120,21 +120,388 @@ async function grep(pattern: string, path: string = '/'): Promise<{ file: string
     return results;
 }
 
-function shell(command: string): string {
-    const parts = command.trim().split(/\s+/);
-    const cmd = parts[0];
-    const args = parts.slice(1);
+// ============ Shell with Coreutils ============
 
-    switch (cmd) {
-        case 'echo':
-            return args.join(' ');
-        case 'pwd':
-            return '/';
-        case 'date':
-            return new Date().toISOString();
-        default:
-            return `Unknown command: ${cmd}. Available: echo, pwd, date. Use read_file/write_file for file ops.`;
+async function shell(command: string): Promise<string> {
+    // Parse command - handle quotes and pipes (basic)
+    const tokens = parseCommand(command);
+    if (tokens.length === 0) return '';
+
+    const cmd = tokens[0];
+    const args = tokens.slice(1);
+
+    try {
+        switch (cmd) {
+            case 'echo':
+                return args.join(' ');
+
+            case 'pwd':
+                return '/';
+
+            case 'date':
+                return new Date().toISOString();
+
+            case 'cat':
+                return await shellCat(args);
+
+            case 'ls':
+                return await shellLs(args);
+
+            case 'mkdir':
+                return await shellMkdir(args);
+
+            case 'rm':
+                return await shellRm(args);
+
+            case 'touch':
+                return await shellTouch(args);
+
+            case 'cp':
+                return await shellCp(args);
+
+            case 'mv':
+                return await shellMv(args);
+
+            case 'head':
+                return await shellHead(args);
+
+            case 'tail':
+                return await shellTail(args);
+
+            case 'wc':
+                return await shellWc(args);
+
+            case 'find':
+                return await shellFind(args);
+
+            case 'grep':
+                return await shellGrep(args);
+
+            case 'sort':
+                return await shellSort(args);
+
+            case 'uniq':
+                return await shellUniq(args);
+
+            case 'tee':
+                return await shellTee(args);
+
+            case 'which':
+                return cmds.includes(args[0]) ? `/bin/${args[0]}` : `${args[0]} not found`;
+
+            case 'help':
+                return `Available commands: ${cmds.join(', ')}`;
+
+            default:
+                return `sh: ${cmd}: command not found. Type 'help' for available commands.`;
+        }
+    } catch (e: any) {
+        return `${cmd}: ${e.message}`;
     }
+}
+
+const cmds = ['echo', 'pwd', 'date', 'cat', 'ls', 'mkdir', 'rm', 'touch', 'cp', 'mv', 'head', 'tail', 'wc', 'find', 'grep', 'sort', 'uniq', 'tee', 'which', 'help'];
+
+function parseCommand(command: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let inQuote = false;
+    let quoteChar = '';
+
+    for (const char of command) {
+        if ((char === '"' || char === "'") && !inQuote) {
+            inQuote = true;
+            quoteChar = char;
+        } else if (char === quoteChar && inQuote) {
+            inQuote = false;
+            quoteChar = '';
+        } else if (char === ' ' && !inQuote) {
+            if (current) {
+                tokens.push(current);
+                current = '';
+            }
+        } else {
+            current += char;
+        }
+    }
+    if (current) tokens.push(current);
+    return tokens;
+}
+
+async function shellCat(args: string[]): Promise<string> {
+    if (args.length === 0) return 'cat: missing file operand';
+    const results: string[] = [];
+    for (const path of args) {
+        const content = await readFile(path);
+        results.push(content);
+    }
+    return results.join('\n');
+}
+
+async function shellLs(args: string[]): Promise<string> {
+    const path = args.find(a => !a.startsWith('-')) || '/';
+    const showLong = args.includes('-l') || args.includes('-la') || args.includes('-al');
+    const showAll = args.includes('-a') || args.includes('-la') || args.includes('-al');
+
+    const dir = await getDirHandle(path);
+    const entries: string[] = [];
+
+    if (showAll) {
+        entries.push(showLong ? 'drwxr-xr-x  ./' : '.');
+        entries.push(showLong ? 'drwxr-xr-x  ../' : '..');
+    }
+
+    for await (const [name, handle] of dir.entries()) {
+        if (showLong) {
+            const isDir = handle.kind === 'directory';
+            const prefix = isDir ? 'drwxr-xr-x' : '-rw-r--r--';
+            let size = 0;
+            if (!isDir) {
+                const file = await (handle as FileSystemFileHandle).getFile();
+                size = file.size;
+            }
+            entries.push(`${prefix}  ${size.toString().padStart(8)}  ${name}${isDir ? '/' : ''}`);
+        } else {
+            entries.push(handle.kind === 'directory' ? `${name}/` : name);
+        }
+    }
+
+    return entries.length > 0 ? entries.join('\n') : '';
+}
+
+async function shellMkdir(args: string[]): Promise<string> {
+    const createParents = args.includes('-p');
+    const paths = args.filter(a => !a.startsWith('-'));
+
+    if (paths.length === 0) return 'mkdir: missing operand';
+
+    for (const path of paths) {
+        await getDirHandle(path, true);
+    }
+    return '';
+}
+
+async function shellRm(args: string[]): Promise<string> {
+    const recursive = args.includes('-r') || args.includes('-rf') || args.includes('-fr');
+    const paths = args.filter(a => !a.startsWith('-'));
+
+    if (paths.length === 0) return 'rm: missing operand';
+
+    for (const path of paths) {
+        const parts = path.split('/').filter(p => p);
+        const name = parts.pop()!;
+        const parentPath = '/' + parts.join('/');
+        const parent = await getDirHandle(parentPath);
+        await parent.removeEntry(name, { recursive });
+    }
+    return '';
+}
+
+async function shellTouch(args: string[]): Promise<string> {
+    if (args.length === 0) return 'touch: missing file operand';
+
+    for (const path of args) {
+        try {
+            await getFileHandle(path);
+        } catch {
+            await writeFile(path, '');
+        }
+    }
+    return '';
+}
+
+async function shellCp(args: string[]): Promise<string> {
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length < 2) return 'cp: missing destination file operand';
+
+    const src = paths[0];
+    const dest = paths[1];
+    const content = await readFile(src);
+    await writeFile(dest, content);
+    return '';
+}
+
+async function shellMv(args: string[]): Promise<string> {
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length < 2) return 'mv: missing destination file operand';
+
+    const src = paths[0];
+    const dest = paths[1];
+    const content = await readFile(src);
+    await writeFile(dest, content);
+
+    // Remove source
+    const parts = src.split('/').filter(p => p);
+    const name = parts.pop()!;
+    const parentPath = '/' + parts.join('/');
+    const parent = await getDirHandle(parentPath);
+    await parent.removeEntry(name);
+    return '';
+}
+
+async function shellHead(args: string[]): Promise<string> {
+    let n = 10;
+    const nIdx = args.indexOf('-n');
+    if (nIdx !== -1 && args[nIdx + 1]) {
+        n = parseInt(args[nIdx + 1], 10);
+    }
+    const path = args.find(a => !a.startsWith('-') && !/^\d+$/.test(a));
+    if (!path) return 'head: missing file operand';
+
+    const content = await readFile(path);
+    return content.split('\n').slice(0, n).join('\n');
+}
+
+async function shellTail(args: string[]): Promise<string> {
+    let n = 10;
+    const nIdx = args.indexOf('-n');
+    if (nIdx !== -1 && args[nIdx + 1]) {
+        n = parseInt(args[nIdx + 1], 10);
+    }
+    const path = args.find(a => !a.startsWith('-') && !/^\d+$/.test(a));
+    if (!path) return 'tail: missing file operand';
+
+    const content = await readFile(path);
+    const lines = content.split('\n');
+    return lines.slice(-n).join('\n');
+}
+
+async function shellWc(args: string[]): Promise<string> {
+    const path = args.find(a => !a.startsWith('-'));
+    if (!path) return 'wc: missing file operand';
+
+    const content = await readFile(path);
+    const lines = content.split('\n').length;
+    const words = content.split(/\s+/).filter(w => w).length;
+    const bytes = new TextEncoder().encode(content).length;
+
+    return `  ${lines}   ${words}  ${bytes} ${path}`;
+}
+
+async function shellFind(args: string[]): Promise<string> {
+    const startPath = args.find(a => !a.startsWith('-')) || '/';
+    const namePattern = args.includes('-name') ? args[args.indexOf('-name') + 1] : null;
+
+    const results: string[] = [];
+
+    async function search(path: string, dir: FileSystemDirectoryHandle): Promise<void> {
+        for await (const [name, handle] of dir.entries()) {
+            const fullPath = path === '/' ? `/${name}` : `${path}/${name}`;
+
+            if (!namePattern || matchGlob(name, namePattern)) {
+                results.push(fullPath);
+            }
+
+            if (handle.kind === 'directory') {
+                await search(fullPath, handle as FileSystemDirectoryHandle);
+            }
+        }
+    }
+
+    const dir = await getDirHandle(startPath);
+    await search(startPath, dir);
+    return results.join('\n');
+}
+
+function matchGlob(name: string, pattern: string): boolean {
+    const regex = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
+    return new RegExp(`^${regex}$`).test(name);
+}
+
+async function shellGrep(args: string[]): Promise<string> {
+    const ignoreCase = args.includes('-i');
+    const showLineNums = args.includes('-n');
+    const invertMatch = args.includes('-v');
+    const remaining = args.filter(a => !a.startsWith('-'));
+
+    if (remaining.length < 2) return 'grep: missing pattern or file';
+
+    const pattern = remaining[0];
+    const files = remaining.slice(1);
+    const regex = new RegExp(pattern, ignoreCase ? 'gi' : 'g');
+    const results: string[] = [];
+
+    for (const file of files) {
+        try {
+            const content = await readFile(file);
+            const lines = content.split('\n');
+
+            lines.forEach((line, idx) => {
+                const matches = regex.test(line);
+                regex.lastIndex = 0;
+
+                if (matches !== invertMatch) {
+                    const prefix = files.length > 1 ? `${file}:` : '';
+                    const lineNum = showLineNums ? `${idx + 1}:` : '';
+                    results.push(`${prefix}${lineNum}${line}`);
+                }
+            });
+        } catch (e) {
+            results.push(`grep: ${file}: No such file`);
+        }
+    }
+
+    return results.join('\n');
+}
+
+async function shellSort(args: string[]): Promise<string> {
+    const reverse = args.includes('-r');
+    const numeric = args.includes('-n');
+    const path = args.find(a => !a.startsWith('-'));
+
+    if (!path) return 'sort: missing file operand';
+
+    const content = await readFile(path);
+    let lines = content.split('\n');
+
+    if (numeric) {
+        lines.sort((a, b) => parseFloat(a) - parseFloat(b));
+    } else {
+        lines.sort();
+    }
+
+    if (reverse) lines.reverse();
+    return lines.join('\n');
+}
+
+async function shellUniq(args: string[]): Promise<string> {
+    const count = args.includes('-c');
+    const path = args.find(a => !a.startsWith('-'));
+
+    if (!path) return 'uniq: missing file operand';
+
+    const content = await readFile(path);
+    const lines = content.split('\n');
+    const results: string[] = [];
+
+    let prevLine = '';
+    let lineCount = 0;
+
+    for (const line of lines) {
+        if (line === prevLine) {
+            lineCount++;
+        } else {
+            if (prevLine !== '' || lineCount > 0) {
+                results.push(count ? `${lineCount.toString().padStart(7)} ${prevLine}` : prevLine);
+            }
+            prevLine = line;
+            lineCount = 1;
+        }
+    }
+    if (prevLine !== '' || lineCount > 0) {
+        results.push(count ? `${lineCount.toString().padStart(7)} ${prevLine}` : prevLine);
+    }
+
+    return results.join('\n');
+}
+
+async function shellTee(args: string[]): Promise<string> {
+    // Read from stdin (simulated - just return empty for now)
+    // In real usage, would need piping support
+    const path = args.find(a => !a.startsWith('-'));
+    if (!path) return 'tee: missing file operand';
+
+    return `tee: piping not yet supported. Use write_file tool instead.`;
 }
 
 function executeJs(code: string): string {
@@ -197,7 +564,7 @@ async function callTool(tool: ToolCall): Promise<ToolResult> {
                 break;
 
             case 'shell':
-                output = shell(tool.input.command as string);
+                output = await shell(tool.input.command as string);
                 break;
 
             case 'execute':
@@ -293,10 +660,10 @@ self.onmessage = async (event: MessageEvent) => {
                 },
                 {
                     name: 'shell',
-                    description: 'Run shell command (echo, pwd, date)',
+                    description: 'Run shell commands. Available: cat, ls, mkdir, rm, touch, cp, mv, head, tail, wc, find, grep, sort, uniq, echo, pwd, date. Supports flags like -l, -r, -n.',
                     input_schema: {
                         type: 'object',
-                        properties: { command: { type: 'string', description: 'Shell command' } },
+                        properties: { command: { type: 'string', description: 'Shell command with arguments' } },
                         required: ['command']
                     }
                 },
