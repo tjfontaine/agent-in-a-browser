@@ -4,7 +4,26 @@ import { FitAddon } from '@xterm/addon-fit';
 
 const API_URL = 'http://localhost:3001';
 const AUTH_TOKEN = 'dev-token';
-const SESSION_ID = crypto.randomUUID();
+
+// Tool definitions - exposed to Claude from the browser
+const TOOLS = [
+    {
+        name: 'shell',
+        description: 'Execute a shell command in an ephemeral browser sandbox. Has basic Unix tools: cat, echo, ls, mkdir, rm, pwd, cd, touch. The filesystem is ephemeral and starts empty.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                command: {
+                    type: 'string',
+                    description: 'The shell command to execute',
+                },
+            },
+            required: ['command'],
+        },
+    },
+];
+
+const SYSTEM_PROMPT = `You are an AI assistant running in a browser sandbox. You have access to a shell tool that executes commands in an ephemeral filesystem. Use it to help users with file operations. Be concise.`;
 
 // Initialize terminal
 const terminal = new Terminal({
@@ -60,13 +79,24 @@ function setStatus(status: string, color = '#4ade80') {
     el.style.color = color;
 }
 
+// Conversation state (managed in browser)
+type Message = { role: 'user' | 'assistant'; content: any };
+const messages: Message[] = [];
+
 // Agent loop
 let inputBuffer = '';
 
-async function sendMessage(message: string) {
+async function sendMessage(userMessage: string) {
     setStatus('Thinking...', '#facc15');
     terminal.write('\r\n');
 
+    // Add user message
+    messages.push({ role: 'user', content: userMessage });
+
+    await runAgentLoop();
+}
+
+async function runAgentLoop() {
     try {
         const response = await fetch(`${API_URL}/api/messages`, {
             method: 'POST',
@@ -74,41 +104,60 @@ async function sendMessage(message: string) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${AUTH_TOKEN}`,
             },
-            body: JSON.stringify({ sessionId: SESSION_ID, message }),
+            body: JSON.stringify({
+                messages,
+                tools: TOOLS,
+                system: SYSTEM_PROMPT,
+            }),
         });
 
-        await handleSSEResponse(response);
+        const { content, toolCalls } = await handleSSEResponse(response);
+
+        // Save assistant message
+        if (content.length > 0) {
+            messages.push({ role: 'assistant', content });
+        }
+
+        // Handle tool calls
+        if (toolCalls.length > 0) {
+            setStatus('Executing...', '#9d4edd');
+            const toolResults: any[] = [];
+
+            for (const tool of toolCalls) {
+                if (tool.name === 'shell') {
+                    const output = await executeShellCommand(tool.input.command);
+                    terminal.write(`\x1b[32m${output || '(no output)'}\x1b[0m\r\n`);
+                    toolResults.push({
+                        type: 'tool_result',
+                        tool_use_id: tool.id,
+                        content: output || '(command completed with no output)',
+                    });
+                }
+            }
+
+            // Add tool results to conversation and continue
+            messages.push({ role: 'user', content: toolResults });
+            await runAgentLoop();
+            return;
+        }
+
+        // Done - show prompt
+        showPrompt();
+        setStatus('Ready', '#4ade80');
     } catch (error: any) {
         terminal.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
         setStatus('Error', '#ef4444');
+        showPrompt();
     }
 }
 
-async function continueWithToolResults(toolResults: Array<{ tool_use_id: string; output: string }>) {
-    setStatus('Thinking...', '#facc15');
-
-    try {
-        const response = await fetch(`${API_URL}/api/messages/continue`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AUTH_TOKEN}`,
-            },
-            body: JSON.stringify({ sessionId: SESSION_ID, toolResults }),
-        });
-
-        await handleSSEResponse(response);
-    } catch (error: any) {
-        terminal.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
-        setStatus('Error', '#ef4444');
-    }
-}
-
-async function handleSSEResponse(response: Response) {
+async function handleSSEResponse(response: Response): Promise<{ content: any[]; toolCalls: any[] }> {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    const pendingToolCalls: Array<{ id: string; name: string; input: any }> = [];
+    const content: any[] = [];
+    const toolCalls: any[] = [];
+    let currentText = '';
 
     while (true) {
         const { done, value } = await reader.read();
@@ -127,30 +176,17 @@ async function handleSSEResponse(response: Response) {
                 const event = JSON.parse(data);
 
                 if (event.type === 'text') {
-                    // Stream text to terminal with word wrap
+                    currentText += event.text;
                     const text = event.text.replace(/\n/g, '\r\n');
                     terminal.write(text);
                 } else if (event.type === 'tool_use') {
-                    pendingToolCalls.push({ id: event.id, name: event.name, input: event.input });
+                    toolCalls.push({ id: event.id, name: event.name, input: event.input });
                     terminal.write(`\r\n\x1b[36m⚡ Tool: ${event.name}\x1b[0m\r\n`);
                     terminal.write(`\x1b[90m$ ${event.input.command}\x1b[0m\r\n`);
                 } else if (event.type === 'message_end') {
-                    if (event.stop_reason === 'tool_use' && pendingToolCalls.length > 0) {
-                        // Execute tools
-                        setStatus('Executing...', '#9d4edd');
-                        const results: Array<{ tool_use_id: string; output: string }> = [];
-
-                        for (const tool of pendingToolCalls) {
-                            if (tool.name === 'shell') {
-                                const output = await executeShellCommand(tool.input.command);
-                                terminal.write(`\x1b[32m${output || '(no output)'}\x1b[0m\r\n`);
-                                results.push({ tool_use_id: tool.id, output: output || '(command completed with no output)' });
-                            }
-                        }
-
-                        // Continue with results
-                        await continueWithToolResults(results);
-                        return;
+                    // Use the full content from the message
+                    if (event.content) {
+                        content.push(...event.content);
                     }
                 } else if (event.type === 'error') {
                     terminal.write(`\r\n\x1b[31mAPI Error: ${event.error}\x1b[0m\r\n`);
@@ -161,9 +197,12 @@ async function handleSSEResponse(response: Response) {
         }
     }
 
-    // Done
-    showPrompt();
-    setStatus('Ready', '#4ade80');
+    // If we collected text but didn't get content from message_end, add it
+    if (currentText && content.length === 0) {
+        content.push({ type: 'text', text: currentText });
+    }
+
+    return { content, toolCalls };
 }
 
 function showPrompt() {
