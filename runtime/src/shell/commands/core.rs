@@ -1,11 +1,11 @@
-//! Core shell commands: echo, pwd, true, false, yes
+//! Core shell commands: echo, pwd, true, false, yes, help
 
 use futures_lite::io::AsyncWriteExt;
 use runtime_macros::{shell_command, shell_commands};
 use std::io;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn};
+use super::{parse_common, CommandFn, ShellCommands};
 
 /// Core commands - basic shell utilities.
 pub struct CoreCommands;
@@ -161,6 +161,57 @@ impl CoreCommands {
                 }
             }
             1
+        })
+    }
+
+    /// help - display available commands or help for a specific command
+    #[shell_command(
+        name = "help",
+        usage = "help [COMMAND]",
+        description = "Display available commands or help for a specific command"
+    )]
+    fn cmd_help(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = CoreCommands::show_help("help") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            
+            if remaining.is_empty() {
+                // List all commands
+                let commands = ShellCommands::list_commands();
+                let _ = stdout.write_all(b"Available commands:\n").await;
+                
+                // Display in columns
+                for chunk in commands.chunks(5) {
+                    let line = chunk.iter()
+                        .map(|c| format!("{:<12}", c))
+                        .collect::<Vec<_>>()
+                        .join("");
+                    let _ = stdout.write_all(format!("  {}\n", line.trim_end()).as_bytes()).await;
+                }
+                let _ = stdout.write_all(b"\nUse 'help COMMAND' for more information on a specific command.\n").await;
+                0
+            } else {
+                // Show help for specific command
+                let cmd_name = &remaining[0];
+                if let Some(help) = ShellCommands::show_help(cmd_name) {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    0
+                } else {
+                    let _ = stderr.write_all(format!("help: no help for '{}'\n", cmd_name).as_bytes()).await;
+                    1
+                }
+            }
         })
     }
 }
