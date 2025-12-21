@@ -212,17 +212,30 @@ export class OutgoingResponse {
     private _body: OutgoingBody;
     public _bodyChunks: Uint8Array[] = [];
     public _onBodyFinished?: () => void;
+    public _onChunk?: (chunk: Uint8Array) => void;
 
-    constructor(headers: Fields) {
+    constructor(headers: Fields, onChunk?: (chunk: Uint8Array) => void) {
         this._headers = headers;
         this._statusCode = 200;
+        this._onChunk = onChunk;
         this._body = new OutgoingBody(new OutputStream({
             write: (bytes: Uint8Array) => {
                 this._bodyChunks.push(bytes);
+                // Emit chunk immediately if streaming callback is set
+                if (this._onChunk) {
+                    this._onChunk(bytes);
+                }
                 return BigInt(bytes.length);
             },
             flush: () => { },
             blockingFlush: () => { },
+            blockingWriteAndFlush: (bytes: Uint8Array) => {
+                this._bodyChunks.push(bytes);
+                // Emit chunk immediately if streaming callback is set
+                if (this._onChunk) {
+                    this._onChunk(bytes);
+                }
+            },
             checkWrite: () => BigInt(1024 * 1024)
         }));
         this._body._onFinish = () => {
@@ -260,6 +273,13 @@ export class OutgoingResponse {
             offset += chunk.length;
         }
         return new TextDecoder().decode(result);
+    }
+
+    /**
+     * Check if streaming is enabled
+     */
+    isStreaming(): boolean {
+        return this._onChunk !== undefined;
     }
 }
 

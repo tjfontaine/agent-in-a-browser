@@ -173,3 +173,69 @@ export async function sendMcpRequest(request: {
         });
     });
 }
+
+/**
+ * SSE event from streaming MCP response
+ */
+export interface StreamEvent {
+    event?: string;
+    data: string;
+    id?: string;
+}
+
+/**
+ * Send a streaming MCP JSON-RPC request via the sandbox worker.
+ * This allows receiving progress events during tool execution.
+ * 
+ * @param request The JSON-RPC request
+ * @param onEvent Callback for each streaming event
+ * @returns The final JSON-RPC response
+ */
+export async function sendMcpRequestStreaming(
+    request: {
+        jsonrpc: '2.0';
+        id: number;
+        method: string;
+        params?: Record<string, unknown>;
+    },
+    onEvent: (event: StreamEvent) => void
+): Promise<{
+    jsonrpc: '2.0';
+    id: number;
+    result?: any;
+    error?: { code: number; message: string };
+}> {
+    return new Promise((resolve, reject) => {
+        const internalId = crypto.randomUUID();
+
+        // Handler for streaming events and final response
+        const handler = (event: MessageEvent<SandboxMessage & { event?: StreamEvent }>) => {
+            // Handle stream events
+            if (event.data.type === 'mcp-stream-event' && (event.data as any).requestId === request.id) {
+                onEvent((event.data as any).event);
+                return; // Don't remove handler, more events may come
+            }
+
+            // Handle final response
+            if (event.data.type === 'mcp-response' && event.data.response?.id === request.id) {
+                sandbox.removeEventListener('message', handler);
+                resolve(event.data.response as any);
+            }
+
+            // Handle streaming error
+            if (event.data.type === 'mcp-stream-error' && event.data.id === internalId) {
+                sandbox.removeEventListener('message', handler);
+                reject(new Error((event.data as any).error || 'Streaming error'));
+            }
+        };
+        sandbox.addEventListener('message', handler);
+
+        // Send as streaming MCP request
+        sandbox.postMessage({
+            type: 'mcp-request-streaming',
+            id: internalId,
+            request
+        });
+    });
+}
+

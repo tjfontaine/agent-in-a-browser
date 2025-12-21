@@ -11,7 +11,7 @@ import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, t
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { experimental_createMCPClient as createMCPClient, type MCPTransport } from '@ai-sdk/mcp';
 import { z } from 'zod';
-import { sendMcpRequest } from './agent/sandbox';
+import { sendMcpRequest, sendMcpRequestStreaming, StreamEvent } from './agent/sandbox';
 import type { JsonRpcRequest, JsonRpcResponse, McpTool } from './mcp-client';
 import { getRemoteMCPRegistry } from './remote-mcp-registry';
 
@@ -43,6 +43,7 @@ export interface StreamCallbacks {
     onText?: (text: string) => void;
     onToolCall?: (name: string, input: Record<string, unknown>) => void;
     onToolResult?: (name: string, result: string, success: boolean) => void;
+    onToolProgress?: (name: string, data: string) => void;  // Live progress from tool execution
     onStepStart?: (step: number) => void;
     onStepFinish?: (step: number) => void;
     onError?: (error: Error) => void;
@@ -68,8 +69,8 @@ class WasmMcpTransport implements MCPTransport {
             id: ++this.messageId,
             method: 'initialize',
             params: {
-                protocolVersion: '2024-11-05',
-                capabilities: { tools: {} },
+                protocolVersion: '2025-11-25',
+                capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
                 clientInfo: { name: 'vercel-ai-sdk', version: '0.1.0' }
             }
         });
@@ -127,8 +128,8 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
         id: 1,
         method: 'initialize',
         params: {
-            protocolVersion: '2024-11-05',
-            capabilities: { tools: {} },
+            protocolVersion: '2025-11-25',
+            capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
             clientInfo: { name: 'vercel-ai-sdk', version: '0.1.0' }
         }
     });
@@ -167,9 +168,13 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
 }
 
 /**
- * Call an MCP tool
+ * Call an MCP tool with streaming progress support
  */
-async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
+async function callMcpToolStreaming(
+    name: string,
+    args: Record<string, unknown>,
+    onProgress?: (data: string) => void
+): Promise<string> {
     console.log('[MCP Tool Call] ===================================');
     console.log('[MCP Tool Call] Tool:', name);
     console.log('[MCP Tool Call] Args:', JSON.stringify(args, null, 2));
@@ -182,15 +187,25 @@ async function callMcpTool(name: string, args: Record<string, unknown>): Promise
         throw new Error(errorMsg);
     }
 
-    const response = await callMcpServer({
-        jsonrpc: '2.0',
+    const request = {
+        jsonrpc: '2.0' as const,
         id: Date.now(),
         method: 'tools/call',
         params: {
             name,
             arguments: args
         }
-    });
+    };
+
+    // Use streaming if callback provided
+    const response = onProgress
+        ? await sendMcpRequestStreaming(request, (event) => {
+            console.log('[MCP Tool Call] Stream event:', event);
+            if (event.data) {
+                onProgress(event.data);
+            }
+        })
+        : await sendMcpRequest(request);
 
     console.log('[MCP Tool Call] Response:', JSON.stringify(response, null, 2));
 
@@ -298,7 +313,7 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
                 console.log(`[Agent] Execute received args:`, JSON.stringify(argsObj, null, 2));
                 console.log(`[Agent] Args type:`, typeof argsObj);
                 console.log(`[Agent] Args keys:`, Object.keys(argsObj || {}));
-                return callMcpTool(mcpTool.name, argsObj);
+                return callMcpToolStreaming(mcpTool.name, argsObj);
             },
         });
     }

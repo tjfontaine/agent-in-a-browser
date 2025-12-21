@@ -67,13 +67,148 @@ pub struct ServerInfo {
     pub version: String,
 }
 
-/// MCP Tool Definition
+/// MCP Log Level for notifications/message
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Debug,
+    Info,
+    Notice,
+    Warning,
+    Error,
+    Critical,
+    Alert,
+    Emergency,
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        LogLevel::Info
+    }
+}
+
+/// MCP Log Message for notifications/message notification
 #[derive(Debug, Serialize)]
+pub struct LogMessage {
+    pub level: LogLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logger: Option<String>,
+    pub data: serde_json::Value,
+}
+
+impl LogMessage {
+    /// Create a log message with the given level and data
+    pub fn new(level: LogLevel, data: impl Into<serde_json::Value>) -> Self {
+        Self {
+            level,
+            logger: None,
+            data: data.into(),
+        }
+    }
+
+    /// Create an info-level log message
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(LogLevel::Info, serde_json::json!({ "message": message.into() }))
+    }
+
+    /// Create an error-level log message
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(LogLevel::Error, serde_json::json!({ "message": message.into() }))
+    }
+
+    /// Create a debug-level log message
+    pub fn debug(message: impl Into<String>) -> Self {
+        Self::new(LogLevel::Debug, serde_json::json!({ "message": message.into() }))
+    }
+}
+
+/// JSON-RPC Notification (no id, no response expected)
+#[derive(Debug, Serialize)]
+pub struct JsonRpcNotification {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: serde_json::Value,
+}
+
+impl JsonRpcNotification {
+    /// Create a notifications/message notification
+    pub fn log_message(message: LogMessage) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            method: "notifications/message".to_string(),
+            params: serde_json::to_value(message).unwrap_or_default(),
+        }
+    }
+
+    /// Create a notifications/progress notification
+    /// progress_token: Token from either the request's _meta.progressToken or server-generated
+    /// progress: Current progress (0.0 to 1.0 or custom scale)
+    /// total: Optional total for denominator
+    /// message: Optional status message
+    pub fn progress(
+        progress_token: impl Into<String>,
+        progress: f64,
+        total: Option<f64>,
+        message: Option<String>,
+    ) -> Self {
+        let mut params = serde_json::json!({
+            "progressToken": progress_token.into(),
+            "progress": progress
+        });
+        if let Some(t) = total {
+            params["total"] = serde_json::json!(t);
+        }
+        if let Some(m) = message {
+            params["message"] = serde_json::json!(m);
+        }
+        Self {
+            jsonrpc: "2.0".to_string(),
+            method: "notifications/progress".to_string(),
+            params,
+        }
+    }
+
+    /// Serialize to SSE event format
+    pub fn to_sse_event(&self) -> String {
+        let data = serde_json::to_string(self).unwrap_or_default();
+        format!("event: message\ndata: {}\n\n", data)
+    }
+}
+
+/// MCP Tool Annotations - hints about tool behavior per 2025-11-25 spec
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    /// If true, the tool does not modify any state
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only_hint: Option<bool>,
+    /// If true, the tool may perform destructive operations
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destructive_hint: Option<bool>,
+    /// If true, calling this tool multiple times with same args has same effect
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotent_hint: Option<bool>,
+    /// If true, the tool interacts with external systems
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_world_hint: Option<bool>,
+}
+
+/// MCP Tool Definition - extended for 2025-11-25 spec
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
-    #[serde(rename = "inputSchema")]
     pub input_schema: serde_json::Value,
+    /// Human-readable display name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// JSON Schema for expected output structure
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
+    /// Hints about tool behavior
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
 }
 
 /// MCP Tool Result - aligned with rmcp's CallToolResult
@@ -93,17 +228,30 @@ pub struct ToolResult {
     pub meta: Option<serde_json::Value>,
 }
 
-/// Tool content item - text, image, or other content types
+/// Tool content item - text, image, audio, resource, or resource_link
+/// Extended for MCP 2025-11-25 spec compliance
 #[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct ToolContent {
     #[serde(rename = "type")]
     pub content_type: String,
+    /// Text content (for type: "text")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// Base64 encoded data (for type: "image", "audio")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
+    /// MIME type (for type: "image", "audio")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
+    /// Resource URI (for type: "resource", "resource_link")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
+    /// Resource name (for type: "resource", "resource_link")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Resource title (for type: "resource", "resource_link")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 impl ToolContent {
@@ -114,6 +262,9 @@ impl ToolContent {
             text: Some(text.into()),
             data: None,
             mime_type: None,
+            uri: None,
+            name: None,
+            title: None,
         }
     }
     
@@ -124,6 +275,48 @@ impl ToolContent {
             text: None,
             data: Some(data.into()),
             mime_type: Some(mime_type.into()),
+            uri: None,
+            name: None,
+            title: None,
+        }
+    }
+
+    /// Create an audio content item (base64 encoded)
+    pub fn audio(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
+        Self {
+            content_type: "audio".to_string(),
+            text: None,
+            data: Some(data.into()),
+            mime_type: Some(mime_type.into()),
+            uri: None,
+            name: None,
+            title: None,
+        }
+    }
+
+    /// Create an embedded resource content item
+    pub fn resource(uri: impl Into<String>, text: impl Into<String>, mime_type: Option<String>) -> Self {
+        Self {
+            content_type: "resource".to_string(),
+            text: Some(text.into()),
+            data: None,
+            mime_type,
+            uri: Some(uri.into()),
+            name: None,
+            title: None,
+        }
+    }
+
+    /// Create a resource link (reference without content)
+    pub fn resource_link(uri: impl Into<String>, name: Option<String>, title: Option<String>) -> Self {
+        Self {
+            content_type: "resource_link".to_string(),
+            text: None,
+            data: None,
+            mime_type: None,
+            uri: Some(uri.into()),
+            name,
+            title,
         }
     }
 }
@@ -228,9 +421,12 @@ pub fn handle_request<S: McpServer>(server: &mut S, request: JsonRpcRequest) -> 
         "initialize" => {
             let info = server.server_info();
             let result = serde_json::json!({
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {
-                    "tools": {}
+                    "tools": {},
+                    "resources": {},
+                    "prompts": {},
+                    "logging": {}
                 },
                 "serverInfo": {
                     "name": info.name,
@@ -242,6 +438,11 @@ pub fn handle_request<S: McpServer>(server: &mut S, request: JsonRpcRequest) -> 
 
         "initialized" => {
             // Notification, no response needed but we send empty result
+            JsonRpcResponse::success(request.id, serde_json::json!({}))
+        }
+
+        "ping" => {
+            // Health check - return empty object
             JsonRpcResponse::success(request.id, serde_json::json!({}))
         }
 
@@ -268,6 +469,44 @@ pub fn handle_request<S: McpServer>(server: &mut S, request: JsonRpcRequest) -> 
                 }
                 None => JsonRpcResponse::error(request.id, -32602, "Missing tool name".to_string()),
             }
+        }
+
+        // Resources - noop stubs per spec
+        "resources/list" => {
+            JsonRpcResponse::success(request.id, serde_json::json!({ "resources": [] }))
+        }
+
+        "resources/read" => {
+            JsonRpcResponse::error(request.id, -32601, "Resources not supported".to_string())
+        }
+
+        "resources/templates/list" => {
+            JsonRpcResponse::success(request.id, serde_json::json!({ "resourceTemplates": [] }))
+        }
+
+        // Prompts - noop stubs (generic agent composes tools)
+        "prompts/list" => {
+            JsonRpcResponse::success(request.id, serde_json::json!({ "prompts": [] }))
+        }
+
+        "prompts/get" => {
+            JsonRpcResponse::error(request.id, -32601, "No prompts available".to_string())
+        }
+
+        // Logging
+        "logging/setLevel" => {
+            // Accept the level but we don't have state management yet
+            // Future: store level and filter notifications/message
+            JsonRpcResponse::success(request.id, serde_json::json!({}))
+        }
+
+        // Cancellation - acknowledge but no-op for now
+        // Breadcrumb: track in-flight request IDs, pass cancellation token to tools
+        // For QuickJS: investigate ctx.interrupt_handler() for cooperative cancellation
+        "notifications/cancelled" => {
+            // This is a notification, no response expected
+            // Future: mark request.params.requestId as cancelled
+            JsonRpcResponse::success(request.id, serde_json::json!({}))
         }
 
         _ => JsonRpcResponse::error(
@@ -393,4 +632,63 @@ mod tests {
         assert!(json.contains("-32600"));
         assert!(!json.contains("\"result\""));
     }
+
+    // ============================================================
+    // MCP 2025-11-25 Specification Tests
+    // ============================================================
+
+    #[test]
+    fn test_tool_definition_extended() {
+        let tool = ToolDefinition {
+            name: "test_tool".to_string(),
+            description: "A test tool".to_string(),
+            input_schema: json!({"type": "object"}),
+            title: Some("Test Tool".to_string()),
+            output_schema: Some(json!({"type": "string"})),
+            annotations: Some(ToolAnnotations {
+                read_only_hint: Some(true),
+                destructive_hint: None,
+                idempotent_hint: Some(true),
+                open_world_hint: None,
+            }),
+        };
+        
+        let serialized = serde_json::to_string(&tool).unwrap();
+        assert!(serialized.contains("\"title\":\"Test Tool\""));
+        assert!(serialized.contains("\"outputSchema\""));
+        assert!(serialized.contains("\"readOnlyHint\":true"));
+        assert!(serialized.contains("\"idempotentHint\":true"));
+        // Skipped fields should not appear
+        assert!(!serialized.contains("\"destructiveHint\""));
+        assert!(!serialized.contains("\"openWorldHint\""));
+    }
+
+    #[test]
+    fn test_tool_definition_minimal() {
+        let tool = ToolDefinition {
+            name: "minimal".to_string(),
+            description: "Minimal tool".to_string(),
+            input_schema: json!({"type": "object"}),
+            title: None,
+            output_schema: None,
+            annotations: None,
+        };
+        
+        let serialized = serde_json::to_string(&tool).unwrap();
+        assert!(serialized.contains("\"name\":\"minimal\""));
+        // Optional fields should not appear when None
+        assert!(!serialized.contains("\"title\""));
+        assert!(!serialized.contains("\"outputSchema\""));
+        assert!(!serialized.contains("\"annotations\""));
+    }
+
+    #[test]
+    fn test_tool_annotations_default() {
+        let annotations = ToolAnnotations::default();
+        assert!(annotations.read_only_hint.is_none());
+        assert!(annotations.destructive_hint.is_none());
+        assert!(annotations.idempotent_hint.is_none());
+        assert!(annotations.open_world_hint.is_none());
+    }
 }
+

@@ -11,7 +11,7 @@ export type { McpServerInfo, McpTool, McpToolResult, JsonRpcRequest, JsonRpcResp
  * Messages sent from the sandbox worker to the main thread
  */
 export interface SandboxMessage {
-    type: 'status' | 'ready' | 'mcp-initialized' | 'tools' | 'tool_result' | 'console' | 'error' | 'mcp-response' | 'init_complete';
+    type: 'status' | 'ready' | 'mcp-initialized' | 'tools' | 'tool_result' | 'console' | 'error' | 'mcp-response' | 'init_complete' | 'mcp-stream-event' | 'mcp-stream-error';
     message?: string;
     tools?: Array<{ name: string; description?: string }>;
     serverInfo?: { name: string; version: string };
@@ -29,7 +29,7 @@ export interface SandboxMessage {
  * Messages sent from the main thread to the sandbox worker
  */
 export interface SandboxRequest {
-    type: 'init' | 'get_tools' | 'mcp-request';
+    type: 'init' | 'get_tools' | 'mcp-request' | 'mcp-request-streaming';
     id?: string;
     request?: {
         jsonrpc: string;

@@ -284,6 +284,9 @@ fn generate_list_tools(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
                     },
                     "required": [#(#required),*]
                 }),
+                title: None,
+                output_schema: None,
+                annotations: None,
             }
         }
     });

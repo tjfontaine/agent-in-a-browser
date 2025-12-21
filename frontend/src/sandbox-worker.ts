@@ -4,13 +4,11 @@
 
 export { }; // Make this a module
 
-import { createWasmMcpClient, McpClient, JsonRpcRequest, JsonRpcResponse } from './mcp-client';
-
-// MCP Client
-let mcpClient: McpClient | null = null;
+import { callWasmMcpServer, callWasmMcpServerStreaming, SSEEvent, type JsonRpcRequest, type JsonRpcResponse } from './wasm-mcp-bridge';
 
 // OPFS root handle (exported for browser-fs-impl.ts)
 let opfsRoot: FileSystemDirectoryHandle | null = null;
+let initialized = false;
 
 // Extend FileSystemDirectoryHandle for entries() support
 declare global {
@@ -56,6 +54,8 @@ export function getOpfsRoot(): FileSystemDirectoryHandle | null {
 // ============ Initialization ============
 
 async function initialize(): Promise<void> {
+    if (initialized) return;
+
     console.log('[Sandbox] Initializing...');
 
     // Initialize OPFS root handle (for legacy helpers)
@@ -67,16 +67,44 @@ async function initialize(): Promise<void> {
     await initFilesystem();
     console.log('[Sandbox] OPFS filesystem shim initialized');
 
-    // Initialize MCP Client - using direct WASM bridge
-    // The WASM component is loaded and executed in-process via the bridge
-    mcpClient = await createWasmMcpClient();
-
+    // Initialize MCP by calling initialize on WASM directly
     try {
-        const serverInfo = await mcpClient.initialize();
+        const initResponse = await callWasmMcpServer({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: {
+                protocolVersion: '2025-11-25',
+                capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
+                clientInfo: { name: 'web-agent-frontend', version: '0.1.0' }
+            }
+        });
+
+        if (initResponse.error) {
+            throw new Error(`MCP initialize error: ${initResponse.error.message}`);
+        }
+
+        const serverInfo = initResponse.result?.serverInfo;
         console.log('[Sandbox] MCP initialized:', serverInfo);
 
-        const tools = await mcpClient.listTools();
-        console.log('[Sandbox] MCP tools:', tools);
+        // Send initialized notification
+        await callWasmMcpServer({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'initialized',
+            params: {}
+        });
+
+        // List tools
+        const toolsResponse = await callWasmMcpServer({
+            jsonrpc: '2.0',
+            id: 3,
+            method: 'tools/list',
+            params: {}
+        });
+
+        const tools = toolsResponse.result?.tools || [];
+        console.log('[Sandbox] MCP tools:', tools.map((t: any) => t.name));
 
         // Send tools list to main thread
         self.postMessage({
@@ -84,6 +112,8 @@ async function initialize(): Promise<void> {
             serverInfo,
             tools
         });
+
+        initialized = true;
     } catch (error) {
         console.error('[Sandbox] MCP initialization failed:', error);
         // Continue without MCP - graceful degradation
@@ -103,83 +133,10 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
 
             case 'mcp-request':
-                // Forward MCP requests to the WASM MCP server
-                if (!mcpClient) {
-                    self.postMessage({
-                        type: 'mcp-response',
-                        id,
-                        response: {
-                            jsonrpc: '2.0',
-                            id: data.request.id,
-                            error: {
-                                code: -32000,
-                                message: 'MCP client not initialized'
-                            }
-                        }
-                    });
-                    break;
-                }
-
+                // Passthrough ALL MCP requests directly to WASM bridge
                 try {
                     const request = data.request as JsonRpcRequest;
-                    let response: JsonRpcResponse;
-
-                    // Route to appropriate MCP method
-                    switch (request.method) {
-                        case 'initialize': {
-                            // Return server info - already initialized during worker startup
-                            const serverInfo = mcpClient.getServerInfo();
-                            response = {
-                                jsonrpc: '2.0',
-                                id: request.id,
-                                result: {
-                                    protocolVersion: '2024-11-05',
-                                    serverInfo: serverInfo || { name: 'ts-runtime', version: '0.1.0' },
-                                    capabilities: { tools: {} }
-                                }
-                            };
-                            break;
-                        }
-                        case 'initialized': {
-                            // Notification - just acknowledge
-                            response = {
-                                jsonrpc: '2.0',
-                                id: request.id,
-                                result: {}
-                            };
-                            break;
-                        }
-                        case 'tools/call': {
-                            const result = await mcpClient.callTool(
-                                request.params?.name || '',
-                                request.params?.arguments || {}
-                            );
-                            response = {
-                                jsonrpc: '2.0',
-                                id: request.id,
-                                result
-                            };
-                            break;
-                        }
-                        case 'tools/list': {
-                            const tools = await mcpClient.listTools();
-                            response = {
-                                jsonrpc: '2.0',
-                                id: request.id,
-                                result: { tools }
-                            };
-                            break;
-                        }
-                        default:
-                            response = {
-                                jsonrpc: '2.0',
-                                id: request.id,
-                                error: {
-                                    code: -32601,
-                                    message: `Method not found: ${request.method}`
-                                }
-                            };
-                    }
+                    const response = await callWasmMcpServer(request);
 
                     self.postMessage({
                         type: 'mcp-response',
@@ -202,6 +159,40 @@ self.onmessage = async (event: MessageEvent) => {
                 }
                 break;
 
+            // Streaming MCP request - emits events as they arrive
+            case 'mcp-request-streaming':
+                try {
+                    const request = data.request as JsonRpcRequest;
+
+                    // Use streaming bridge function - passthrough with callback
+                    const response = await callWasmMcpServerStreaming(
+                        request,
+                        (event: SSEEvent) => {
+                            // Emit each streaming event to main thread
+                            self.postMessage({
+                                type: 'mcp-stream-event',
+                                id,
+                                requestId: request.id,
+                                event
+                            });
+                        }
+                    );
+
+                    // Send final response
+                    self.postMessage({
+                        type: 'mcp-response',
+                        id,
+                        response
+                    });
+                } catch (error: any) {
+                    self.postMessage({
+                        type: 'mcp-stream-error',
+                        id,
+                        error: error.message
+                    });
+                }
+                break;
+
             default:
                 self.postMessage({ type: 'error', id, message: `Unknown message type: ${type}` });
         }
@@ -209,3 +200,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', id, message: e.message });
     }
 };
+
+
