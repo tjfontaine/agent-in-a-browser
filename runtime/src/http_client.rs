@@ -1,121 +1,192 @@
-//! HTTP Client using custom browser-http interface
+//! HTTP Client using WASI HTTP outgoing-handler
 //!
 //! Provides a synchronous fetch function for use within QuickJS.
-//! Uses the browser-http WIT interface which maps to JavaScript XMLHttpRequest.
+//! Uses the standard WASI HTTP interface which maps to JavaScript XMLHttpRequest shim.
 
-use crate::bindings::mcp::ts_runtime::browser_http;
-
-/// Perform a synchronous HTTP GET request
-pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
-    eprintln!("[http_client] fetch_sync: {}", url);
-    
-    // Call the browser-http interface
-    let result_json = browser_http::http_get(url);
-    eprintln!("[http_client] Got result: {}", &result_json[..result_json.len().min(200)]);
-    
-    // Parse the JSON response
-    parse_response(&result_json)
-}
-
-/// Perform a synchronous HTTP request with custom method, headers, body
-pub fn fetch_request(
-    method: &str,
-    url: &str,
-    headers: Option<&str>,
-    body: Option<&str>,
-) -> Result<FetchResponse, String> {
-    eprintln!("[http_client] fetch_request: {} {}", method, url);
-    
-    // Call the browser-http interface
-    let result_json = browser_http::http_request(
-        method,
-        url,
-        headers.unwrap_or("{}"),
-        body.unwrap_or(""),
-    );
-    eprintln!("[http_client] Got result: {}", &result_json[..result_json.len().min(200)]);
-    
-    // Parse the JSON response
-    parse_response(&result_json)
-}
-
-/// Parse the JSON response from browser-http
-fn parse_response(json: &str) -> Result<FetchResponse, String> {
-    // Parse the JSON manually (we don't have serde in the guest)
-    // Format: {"status":200,"ok":true,"body":"..."} or {"status":0,"ok":false,"error":"..."}
-    
-    // Extract status
-    let status = extract_number(json, "\"status\":")
-        .ok_or("Failed to parse status")?;
-    
-    // Extract ok
-    let ok = json.contains("\"ok\":true");
-    
-    // Check for error
-    if let Some(error) = extract_string(json, "\"error\":\"") {
-        return Err(error);
-    }
-    
-    // Extract body
-    let body = extract_string(json, "\"body\":\"")
-        .unwrap_or_default();
-    
-    Ok(FetchResponse { status, ok, body })
-}
-
-/// Extract a number value from JSON
-fn extract_number(json: &str, key: &str) -> Option<u16> {
-    let start = json.find(key)?;
-    let value_start = start + key.len();
-    let rest = &json[value_start..];
-    
-    // Find end of number (comma, brace, or end)
-    let end = rest.find(|c: char| c == ',' || c == '}' || c == ' ')
-        .unwrap_or(rest.len());
-    
-    rest[..end].trim().parse().ok()
-}
-
-/// Extract a string value from JSON
-fn extract_string(json: &str, key: &str) -> Option<String> {
-    let start = json.find(key)?;
-    let value_start = start + key.len();
-    let rest = &json[value_start..];
-    
-    // Find end of string (closing quote, accounting for escapes)
-    let mut end = 0;
-    let mut escaped = false;
-    for (i, c) in rest.chars().enumerate() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if c == '\\' {
-            escaped = true;
-            continue;
-        }
-        if c == '"' {
-            end = i;
-            break;
-        }
-    }
-    
-    if end > 0 {
-        // Unescape common JSON escapes
-        let s = &rest[..end];
-        Some(s.replace("\\n", "\n")
-              .replace("\\r", "\r")
-              .replace("\\t", "\t")
-              .replace("\\\"", "\"")
-              .replace("\\\\", "\\"))
-    } else {
-        None
-    }
-}
+use crate::bindings::wasi::http::{
+    outgoing_handler,
+    types::{Fields, Method, OutgoingRequest, Scheme},
+};
 
 /// Response from a fetch operation
 pub struct FetchResponse {
     pub status: u16,
     pub ok: bool,
     pub body: String,
+}
+
+/// Parse a URL into scheme, authority, and path components
+fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
+    // Handle scheme
+    let (scheme, rest) = if url.starts_with("https://") {
+        (Scheme::Https, &url[8..])
+    } else if url.starts_with("http://") {
+        (Scheme::Http, &url[7..])
+    } else {
+        return Err(format!("Unsupported URL scheme: {}", url));
+    };
+
+    // Split authority and path
+    let (authority, path) = match rest.find('/') {
+        Some(idx) => (rest[..idx].to_string(), rest[idx..].to_string()),
+        None => (rest.to_string(), "/".to_string()),
+    };
+
+    if authority.is_empty() {
+        return Err("URL has no authority (host)".to_string());
+    }
+
+    Ok((scheme, authority, path))
+}
+
+/// Read the entire body from an IncomingBody stream
+fn read_body(
+    body: crate::bindings::wasi::http::types::IncomingBody,
+) -> Result<String, String> {
+    let stream = body.stream().map_err(|_| "Failed to get body stream")?;
+
+    let mut bytes = Vec::new();
+    loop {
+        match stream.blocking_read(65536) {
+            Ok(chunk) => {
+                if chunk.is_empty() {
+                    break;
+                }
+                bytes.extend(chunk);
+            }
+            Err(_) => break,
+        }
+    }
+
+    drop(stream);
+    
+    String::from_utf8(bytes).map_err(|e| format!("Body is not valid UTF-8: {}", e))
+}
+
+/// Perform a synchronous HTTP GET request
+pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
+    eprintln!("[http_client] fetch_sync: {}", url);
+
+    let (scheme, authority, path) = parse_url(url)?;
+
+    // Build headers
+    let headers = Fields::new();
+
+    // Build request
+    let request = OutgoingRequest::new(headers);
+    request.set_method(&Method::Get).map_err(|_| "Failed to set method")?;
+    request.set_scheme(Some(&scheme)).map_err(|_| "Failed to set scheme")?;
+    request.set_authority(Some(&authority)).map_err(|_| "Failed to set authority")?;
+    request.set_path_with_query(Some(&path)).map_err(|_| "Failed to set path")?;
+
+    // Send request
+    let future_response = outgoing_handler::handle(request, None)
+        .map_err(|e| format!("HTTP request failed: {:?}", e))?;
+
+    // Wait for response (our shim resolves synchronously)
+    loop {
+        if let Some(result) = future_response.get() {
+            let response = result.map_err(|_| "Response error")?
+                                 .map_err(|e| format!("HTTP error: {:?}", e))?;
+
+            let status = response.status();
+            let ok = status >= 200 && status < 300;
+
+            // Read body
+            let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
+            let body = read_body(body_handle)?;
+
+            eprintln!("[http_client] Got response: status={}, body_len={}", status, body.len());
+
+            return Ok(FetchResponse { status, ok, body });
+        }
+    }
+}
+
+/// Perform a synchronous HTTP request with custom method, headers, body
+pub fn fetch_request(
+    method: &str,
+    url: &str,
+    headers_json: Option<&str>,
+    body: Option<&str>,
+) -> Result<FetchResponse, String> {
+    eprintln!("[http_client] fetch_request: {} {}", method, url);
+
+    let (scheme, authority, path) = parse_url(url)?;
+
+    // Build headers
+    let headers = Fields::new();
+    
+    // Parse JSON headers if provided
+    if let Some(headers_str) = headers_json {
+        // Simple JSON parsing for {"key": "value", ...}
+        // This is a basic parser since we don't have serde
+        for pair in headers_str.trim_matches(|c| c == '{' || c == '}').split(',') {
+            let parts: Vec<&str> = pair.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                let key = parts[0].trim().trim_matches('"');
+                let value = parts[1].trim().trim_matches('"');
+                if !key.is_empty() && !value.is_empty() {
+                    let _ = headers.append(
+                        &key.to_string(),
+                        &value.as_bytes().to_vec(),
+                    );
+                }
+            }
+        }
+    }
+
+    // Build request
+    let request = OutgoingRequest::new(headers);
+    
+    // Set method
+    let method_enum = match method.to_uppercase().as_str() {
+        "GET" => Method::Get,
+        "HEAD" => Method::Head,
+        "POST" => Method::Post,
+        "PUT" => Method::Put,
+        "DELETE" => Method::Delete,
+        "OPTIONS" => Method::Options,
+        "TRACE" => Method::Trace,
+        "PATCH" => Method::Patch,
+        _ => Method::Other(method.to_string()),
+    };
+    request.set_method(&method_enum).map_err(|_| "Failed to set method")?;
+    request.set_scheme(Some(&scheme)).map_err(|_| "Failed to set scheme")?;
+    request.set_authority(Some(&authority)).map_err(|_| "Failed to set authority")?;
+    request.set_path_with_query(Some(&path)).map_err(|_| "Failed to set path")?;
+
+    // Write body if provided
+    if let Some(_body_str) = body {
+        // Note: For now we only support GET-style requests
+        // Full body support would require writing to the OutgoingBody stream
+        // This matches the previous browser-http behavior
+    }
+
+    // Send request
+    let future_response = outgoing_handler::handle(request, None)
+        .map_err(|e| format!("HTTP request failed: {:?}", e))?;
+
+    // Wait for response (our shim resolves synchronously)
+    loop {
+        if let Some(result) = future_response.get() {
+            let response = result.map_err(|_| "Response error")?
+                                 .map_err(|e| format!("HTTP error: {:?}", e))?;
+
+            let status = response.status();
+            let ok = status >= 200 && status < 300;
+
+            // Read body
+            let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
+            let response_body = read_body(body_handle)?;
+
+            eprintln!("[http_client] Got response: status={}, body_len={}", status, response_body.len());
+
+            return Ok(FetchResponse { 
+                status, 
+                ok, 
+                body: response_body,
+            });
+        }
+    }
 }

@@ -1,19 +1,7 @@
 package mcp:ts-runtime@0.2.0;
 
-/// Custom HTTP interface for browser environments
-/// This bypasses WASI HTTP which is not properly implemented in browsers
-interface browser-http {
-  /// Simple synchronous HTTP GET request
-  /// Returns JSON string with {status, ok, body} or {error}
-  http-get: func(url: string) -> string;
-  
-  /// HTTP request with method, url, headers (JSON), body
-  /// Returns JSON string with {status, ok, headers, body} or {error}
-  http-request: func(method: string, url: string, headers: string, body: string) -> string;
-}
-
 /// TypeScript Runtime MCP Server with HTTP interface
-/// Uses standard WASI filesystem (wasi:filesystem) for file operations
+/// Uses standard WASI interfaces for all functionality
 world ts-runtime-mcp {
   import wasi:clocks/monotonic-clock@0.2.4;
   import wasi:clocks/wall-clock@0.2.4;
@@ -25,7 +13,6 @@ world ts-runtime-mcp {
   import wasi:http/types@0.2.4;
   import wasi:http/outgoing-handler@0.2.4;
   import wasi:random/random@0.2.4;
-  import browser-http;
   
   export wasi:http/incoming-handler@0.2.4;
 }

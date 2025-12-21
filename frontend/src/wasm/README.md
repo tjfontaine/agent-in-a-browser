@@ -12,26 +12,26 @@ This directory contains the browser-side infrastructure that connects the WASM M
           │            │   │   WASM MCP Server (jco-transpiled)   │  │
           │            │   │                                       │  │
           ▼            │   │  Imports these WIT interfaces:       │  │
-   mcp-client.ts ──────┼──►│  - mcp:ts-runtime/browser-fs         │  │
-          │            │   │  - mcp:ts-runtime/browser-http       │  │
-          │            │   │  - wasi:http/*                       │  │
+   mcp-client.ts ──────┼──►│  - wasi:filesystem/*                 │  │
+          │            │   │  - wasi:http/outgoing-handler        │  │
+          │            │   │  - wasi:clocks/*                     │  │
           │            │   │                                       │  │
           │            │   │  Exports:                            │  │
           │            │   │  - wasi:http/incoming-handler        │  │
           │            │   └─────────┬───────────────┬────────────┘  │
           │            │             │               │                │
           │            │             ▼               ▼                │
-          │            │   ┌─────────────┐  ┌──────────────────┐     │
-          │            │   │browser-fs   │  │browser-http      │     │
-          │            │   │-impl.ts     │  │-impl.ts          │     │
-          │            │   │             │  │                  │     │
-          │            │   │ In-memory   │  │ Sync XHR for     │     │
-          │            │   │ + OPFS      │  │ HTTP requests    │     │
-          │            │   └─────────────┘  └──────────────────┘     │
+          │            │   ┌─────────────────┐  ┌─────────────────┐  │
+          │            │   │opfs-filesystem  │  │wasi-http        │  │
+          │            │   │-impl.ts         │  │-impl.ts         │  │
+          │            │   │                 │  │                 │  │
+          │            │   │ SyncAccessHandle│  │ Sync XHR for    │  │
+          │            │   │ + in-memory tree│  │ HTTP requests   │  │
+          │            │   └─────────────────┘  └─────────────────┘  │
           │            │                                              │
           │            │   ┌────────────────────────────────────┐    │
-          │            │   │ wasi-http-impl.ts                  │    │
-          │            │   │ Async fetch() for outgoing HTTP    │    │
+          │            │   │ clocks-impl.js                     │    │
+          │            │   │ Custom Pollable with busy-wait     │    │
           │            │   └────────────────────────────────────┘    │
           └────────────┴──────────────────────────────────────────────┘
 ```
@@ -46,11 +46,11 @@ This directory contains the browser-side infrastructure that connects the WASM M
 
 ### Host Bridge Implementations
 
-| File | WIT Interface | Purpose |
-|------|---------------|---------|
-| `browser-fs-impl.ts` | `mcp:ts-runtime/browser-fs` | Sync filesystem via in-memory cache + OPFS persistence |
-| `browser-http-impl.ts` | `mcp:ts-runtime/browser-http` | Sync HTTP via XMLHttpRequest |
-| `wasi-http-impl.ts` | `wasi:http/*` | Async HTTP via fetch() |
+| File | WASI Interface | Purpose |
+|------|----------------|---------|
+| `opfs-filesystem-impl.ts` | `wasi:filesystem/*` | Sync filesystem via SyncAccessHandle + in-memory directory tree |
+| `wasi-http-impl.ts` | `wasi:http/outgoing-handler` | Sync HTTP via XMLHttpRequest |
+| `clocks-impl.js` | `wasi:clocks/*` | Custom Pollable extensions for sync blocking |
 
 ## How It Works
 
@@ -64,30 +64,19 @@ The AI agent (Vercel AI SDK) sends MCP JSON-RPC requests. The `mcp-client.ts` in
 
 ### 2. File System Bridge
 
-The WASM component needs synchronous file operations, but browser OPFS is async. We solve this with a **hybrid architecture**:
+The WASM component uses standard `wasi:filesystem` via `std::fs` in Rust. Our `opfs-filesystem-impl.ts` bridges this to the browser:
 
-1. **In-memory cache** - All file state kept in memory (instant sync reads)
-2. **Background persistence** - Writes go to OPFS asynchronously (fire-and-forget)
-3. **Session isolation** - Sandbox starts empty, no startup sync needed
-
-```typescript
-// browser-fs-impl.ts exports these sync functions:
-export const browserFs = {
-    readFile(path: string): string,   // Returns JSON: {ok, content} or {ok: false, error}
-    writeFile(path: string, content: string): string,
-    listDir(path: string): string,
-    grep(pattern: string, path: string): string,
-};
-```
+1. **SyncAccessHandle** - File I/O via synchronous OPFS handles (Web Worker only)
+2. **In-memory directory tree** - Fast directory operations (mkdir, readdir, stat)
+3. **Session isolation** - Sandbox starts empty, builds state as needed
 
 ### 3. HTTP Bridge
 
-Two different HTTP implementations:
+HTTP requests use standard `wasi:http/outgoing-handler` implemented in `wasi-http-impl.ts`:
 
-| Implementation | When Used | Why |
-|----------------|-----------|-----|
-| `browser-http-impl.ts` | Internal WASM calls | Sync XMLHttpRequest for blocking calls |
-| `wasi-http-impl.ts` | Standard WASI HTTP | Async fetch() for wasi:http compatibility |
+- Uses **synchronous XMLHttpRequest** to block the WASM module (deprecated but necessary)
+- Constructs proper WASI HTTP types (`OutgoingRequest`, `IncomingResponse`, etc.)
+- Returns immediately-resolved `FutureIncomingResponse` for sync semantics
 
 ## Build Process
 
@@ -106,9 +95,10 @@ Two different HTTP implementations:
    This generates `mcp-server/` with interface mappings:
 
    ```text
-   --map 'mcp:ts-runtime/browser-fs=../browser-fs-impl.js#browserFs'
-   --map 'mcp:ts-runtime/browser-http=../browser-http-impl.js#browserHttp'
+   --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*'
    --map 'wasi:http/types=../wasi-http-impl.js'
+   --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler'
+   --map 'wasi:clocks/*=../clocks-impl.js#*'
    ...
    ```
 
@@ -116,37 +106,11 @@ Two different HTTP implementations:
 
 ## Updating Host Bridges
 
-When modifying `browser-fs-impl.ts` or `browser-http-impl.ts`:
+When modifying `opfs-filesystem-impl.ts` or `wasi-http-impl.ts`:
 
-1. **Match the WIT interface** - Functions must match signatures in `runtime/wit/world.wit`
-2. **Return JSON strings** - All functions return `string` containing JSON
-3. **Handle errors** - Return `{ok: false, error: "message"}` on failure
-4. **Keep it synchronous** - The WASM component expects sync responses
-
-Example for adding a new `browser-fs` function:
-
-```typescript
-// 1. Add to runtime/wit/world.wit:
-//    new-function: func(arg: string) -> string;
-
-// 2. Implement in browser-fs-impl.ts:
-function newFunction(arg: string): string {
-    try {
-        const result = /* ... */;
-        return JSON.stringify({ ok: true, data: result });
-    } catch (e) {
-        return JSON.stringify({ ok: false, error: e.message });
-    }
-}
-
-// 3. Export in browserFs object:
-export const browserFs = {
-    // ...existing...
-    newFunction,
-};
-
-// 4. Rebuild: cargo component build && npm run transpile:component
-```
+1. **Match the WASI interface** - Functions must match standard WASI signatures
+2. **Keep it synchronous** - The WASM component expects sync responses (we run in a Web Worker)
+3. **Handle resources properly** - WASI uses resource handles, implement `[Symbol.dispose]` when needed
 
 ## Related Documentation
 

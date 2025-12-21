@@ -58,6 +58,36 @@ export class Fields {
     }
 
     /**
+     * Append a value to a field (WASI HTTP spec method)
+     * Returns void on success, jco wraps in Result automatically
+     */
+    append(name: string, value: Uint8Array): void {
+        const key = name.toLowerCase();
+        const existing = this._fields.get(key) || [];
+        existing.push(value);
+        this._fields.set(key, existing);
+    }
+
+    /**
+     * Delete a field (WASI HTTP spec method)
+     * Returns void on success, jco wraps in Result automatically
+     */
+    delete(name: string): void {
+        this._fields.delete(name.toLowerCase());
+    }
+
+    /**
+     * Clone fields (WASI HTTP spec method)
+     */
+    clone(): Fields {
+        const newFields = new Fields();
+        for (const [name, values] of this._fields) {
+            newFields._fields.set(name, [...values]);
+        }
+        return newFields;
+    }
+
+    /**
      * Returns entries flattened - one [name, value] pair per value
      * This matches the WASI HTTP Fields.entries() interface
      */
@@ -83,6 +113,7 @@ export class FutureTrailers {
 
 export class IncomingBody {
     private _stream: any;
+    private _consumed: boolean = false;
 
     constructor(streamOrBytes: any | Uint8Array) {
         if (streamOrBytes instanceof Uint8Array) {
@@ -92,7 +123,15 @@ export class IncomingBody {
         }
     }
 
+    /**
+     * Get the body stream. Throws if already consumed.
+     * JCO wraps the return in Result automatically.
+     */
     stream(): any {
+        if (this._consumed) {
+            throw new Error('Body stream already consumed');
+        }
+        this._consumed = true;
         return this._stream;
     }
 
@@ -279,28 +318,22 @@ export function createJsonRpcRequest(body: string): IncomingRequest {
 
 /**
  * FutureIncomingResponse - represents a pending HTTP response
+ * 
+ * IMPORTANT: Since we use synchronous XHR, the result is available immediately.
+ * We store it directly instead of using Promise.then() which is async.
  */
 export class FutureIncomingResponse {
-    private _promise: Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>;
     private _result: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } | null = null;
 
-    constructor(promise: Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>) {
-        this._promise = promise;
-        // Start resolving immediately
-        this._promise.then(
-            (result) => {
-                const headers = new Fields();
-                for (const [name, value] of result.headers) {
-                    const existing = headers.get(name);
-                    headers.set(name, [...existing, value]);
-                }
-                const body = new IncomingBody(result.body);
-                this._result = { tag: 'ok', val: new IncomingResponse(result.status, headers, body) };
-            },
-            (error) => {
-                this._result = { tag: 'err', val: { tag: 'internal-error', val: String(error) } };
-            }
-        );
+    constructor(resolvedData: { status: number; headers: [string, Uint8Array][]; body: Uint8Array }) {
+        // Store result synchronously since XHR is synchronous
+        const headers = new Fields();
+        for (const [name, value] of resolvedData.headers) {
+            const existing = headers.get(name);
+            headers.set(name, [...existing, value]);
+        }
+        const body = new IncomingBody(resolvedData.body);
+        this._result = { tag: 'ok', val: new IncomingResponse(resolvedData.status, headers, body) };
     }
 
     subscribe(): any {
@@ -308,11 +341,15 @@ export class FutureIncomingResponse {
         return { ready: () => true };
     }
 
-    get(): { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } } | { tag: 'err' } {
+    /**
+     * Get the response. Returns:
+     * - undefined: not ready (never happens with sync XHR)
+     * - { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } }: success
+     * - { tag: 'ok', val: { tag: 'err', val: ErrorCode } }: HTTP error
+     */
+    get(): { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } } | undefined {
         if (this._result === null) {
-            // Not ready yet - block synchronously (we need to find a way to make this work)
-            // For now, return error
-            return { tag: 'err' };
+            return undefined; // Not ready
         }
         return { tag: 'ok', val: this._result };
     }
@@ -373,48 +410,44 @@ export class OutgoingRequest {
         return this._method;
     }
 
-    setMethod(method: { tag: string, val?: string }): { tag: 'ok' } | { tag: 'err' } {
+    setMethod(method: { tag: string, val?: string }): void {
         this._method = method;
-        return { tag: 'ok' };
     }
 
     scheme(): { tag: string, val?: string } | null {
         return this._scheme;
     }
 
-    setScheme(scheme: { tag: string, val?: string } | null): { tag: 'ok' } | { tag: 'err' } {
+    setScheme(scheme: { tag: string, val?: string } | null): void {
         this._scheme = scheme;
-        return { tag: 'ok' };
     }
 
     authority(): string | null {
         return this._authority;
     }
 
-    setAuthority(authority: string | null): { tag: 'ok' } | { tag: 'err' } {
+    setAuthority(authority: string | null): void {
         this._authority = authority;
-        return { tag: 'ok' };
     }
 
     pathWithQuery(): string | null {
         return this._pathWithQuery;
     }
 
-    setPathWithQuery(path: string | null): { tag: 'ok' } | { tag: 'err' } {
+    setPathWithQuery(path: string | null): void {
         this._pathWithQuery = path;
-        return { tag: 'ok' };
     }
 
     headers(): Fields {
         return this._headers;
     }
 
-    body(): { tag: 'ok', val: OutgoingBody } | { tag: 'err' } {
+    body(): OutgoingBody {
         if (this._body) {
-            return { tag: 'err' }; // Already retrieved
+            throw new Error('Body already retrieved');
         }
         this._body = new OutgoingBody(null);
-        return { tag: 'ok', val: this._body };
+        return this._body;
     }
 }
 
@@ -437,75 +470,72 @@ export class RequestOptions {
 /**
  * The outgoing handler - makes actual HTTP requests using synchronous XMLHttpRequest
  * Note: sync XHR is deprecated but necessary for WASM components that expect sync I/O
+ * 
+ * Returns FutureIncomingResponse directly (jco wraps in Result automatically)
+ * Throws on error (jco catches and converts to Result.err)
  */
 export const outgoingHandler = {
-    handle(request: OutgoingRequest, _options: RequestOptions | null): { tag: 'ok', val: FutureIncomingResponse } | { tag: 'err', val: any } {
-        try {
-            // Build the URL
-            const scheme = request.scheme();
-            const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'https');
-            const authority = request.authority() || '';
-            const path = request.pathWithQuery() || '/';
-            const url = `${schemeStr}://${authority}${path}`;
+    handle(request: OutgoingRequest, _options: RequestOptions | null): FutureIncomingResponse {
+        // Build the URL
+        const scheme = request.scheme();
+        const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'https');
+        const authority = request.authority() || '';
+        const path = request.pathWithQuery() || '/';
+        const url = `${schemeStr}://${authority}${path}`;
 
-            // Build method
-            const methodObj = request.method();
-            const method = methodObj.tag === 'other' ? (methodObj.val || 'GET') : methodObj.tag.toUpperCase();
+        // Build method
+        const methodObj = request.method();
+        const method = methodObj.tag === 'other' ? (methodObj.val || 'GET') : methodObj.tag.toUpperCase();
 
-            // Build headers
-            const headers: Record<string, string> = {};
-            for (const [name, value] of request.headers().entries()) {
-                headers[name] = new TextDecoder().decode(value);
-            }
+        // Build headers
+        const headers: Record<string, string> = {};
+        for (const [name, value] of request.headers().entries()) {
+            headers[name] = new TextDecoder().decode(value);
+        }
 
-            console.log(`[http] Sync request: ${method} ${url}`);
+        console.log(`[http] Sync request: ${method} ${url}`);
 
-            // Use synchronous XMLHttpRequest
-            const xhr = new XMLHttpRequest();
-            xhr.open(method, url, false); // false = synchronous
+        // Use synchronous XMLHttpRequest
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, url, false); // false = synchronous
 
-            // Set headers (skip user-agent and host as they cause issues)
-            for (const [name, value] of Object.entries(headers)) {
-                if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
-                    try {
-                        xhr.setRequestHeader(name, value);
-                    } catch (e) {
-                        console.warn(`[http] Could not set header ${name}:`, e);
-                    }
+        // Set headers (skip user-agent and host as they cause issues)
+        for (const [name, value] of Object.entries(headers)) {
+            if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
+                try {
+                    xhr.setRequestHeader(name, value);
+                } catch (e) {
+                    console.warn(`[http] Could not set header ${name}:`, e);
                 }
             }
-
-            // Send request
-            xhr.send(null);
-
-            console.log(`[http] Sync response: ${xhr.status}`);
-
-            // Build response
-            const responseBody = xhr.responseText
-                ? new TextEncoder().encode(xhr.responseText)
-                : new Uint8Array(0);
-
-            const responseHeaders: [string, Uint8Array][] = [];
-            xhr.getAllResponseHeaders()
-                .trim()
-                .split(/[\r\n]+/)
-                .forEach((line) => {
-                    const parts = line.split(': ');
-                    const key = parts.shift();
-                    const value = parts.join(': ');
-                    if (key) {
-                        responseHeaders.push([key.toLowerCase(), new TextEncoder().encode(value)]);
-                    }
-                });
-
-            // Create a pre-resolved FutureIncomingResponse
-            const resolvedResponse = { status: xhr.status, headers: responseHeaders, body: responseBody };
-            const future = new FutureIncomingResponse(Promise.resolve(resolvedResponse));
-
-            return { tag: 'ok', val: future };
-        } catch (error) {
-            console.error('[http] Request error:', error);
-            return { tag: 'err', val: { tag: 'internal-error', val: String(error) } };
         }
+
+        // Send request
+        xhr.send(null);
+
+        console.log(`[http] Sync response: ${xhr.status}`);
+
+        // Build response
+        const responseBody = xhr.responseText
+            ? new TextEncoder().encode(xhr.responseText)
+            : new Uint8Array(0);
+
+        const responseHeaders: [string, Uint8Array][] = [];
+        xhr.getAllResponseHeaders()
+            .trim()
+            .split(/[\r\n]+/)
+            .forEach((line) => {
+                const parts = line.split(': ');
+                const key = parts.shift();
+                const value = parts.join(': ');
+                if (key) {
+                    responseHeaders.push([key.toLowerCase(), new TextEncoder().encode(value)]);
+                }
+            });
+
+        // Create a pre-resolved FutureIncomingResponse
+        const resolvedResponse = { status: xhr.status, headers: responseHeaders, body: responseBody };
+        return new FutureIncomingResponse(resolvedResponse);
     }
 };
+
