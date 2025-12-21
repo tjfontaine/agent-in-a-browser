@@ -127,9 +127,9 @@ export default function App() {
 
         // Show welcome banner
         addOutput('system', '╭────────────────────────────────────────────╮', colors.cyan);
-        addOutput('system', '│  Web Agent - Browser Edition              │', colors.cyan);
-        addOutput('system', '│  Files persist in OPFS sandbox            │', colors.cyan);
-        addOutput('system', '│  Type /help for commands                  │', colors.cyan);
+        addOutput('system', '│  Web Agent - Browser Edition               │', colors.cyan);
+        addOutput('system', '│  Files persist in OPFS sandbox             │', colors.cyan);
+        addOutput('system', '│  Type /help for commands                   │', colors.cyan);
         addOutput('system', '╰────────────────────────────────────────────╯', colors.cyan);
         addOutput('system', '', undefined);
 
