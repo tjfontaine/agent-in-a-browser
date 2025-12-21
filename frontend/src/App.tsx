@@ -138,7 +138,8 @@ export default function App() {
         initialize();
 
         // Delay terminal mount to ensure container dimensions are ready
-        const timer = setTimeout(() => setTerminalMounted(true), 50);
+        // 200ms gives xterm enough time to initialize its viewport dimensions
+        const timer = setTimeout(() => setTerminalMounted(true), 200);
         return () => clearTimeout(timer);
     }, [initialize, addOutput]);
 
