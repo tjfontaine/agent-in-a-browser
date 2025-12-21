@@ -48,6 +48,38 @@ export function registerCommand(name: string, handler: CommandHandler): void {
     commands[name] = handler;
 }
 
+// Get all registered command names (for tab completion)
+export function getRegisteredCommands(): string[] {
+    return Object.keys(commands);
+}
+
+// Get completions for a partial input
+export function getCommandCompletions(input: string): string[] {
+    if (!input.startsWith('/')) return [];
+
+    const partial = input.slice(1).toLowerCase();
+    const parts = partial.split(/\s+/);
+
+    // Completing command name
+    if (parts.length === 1) {
+        const matching = Object.keys(commands)
+            .filter(cmd => cmd.startsWith(parts[0]))
+            .map(cmd => `/${cmd}`);
+        return matching;
+    }
+
+    // Completing /mcp subcommands
+    if (parts[0] === 'mcp' && parts.length === 2) {
+        const subcommands = ['add', 'remove', 'auth', 'connect', 'disconnect'];
+        const matching = subcommands
+            .filter(sub => sub.startsWith(parts[1]))
+            .map(sub => `/mcp ${sub}`);
+        return matching;
+    }
+
+    return [];
+}
+
 // Execute a slash command
 export async function executeCommand(
     input: string,

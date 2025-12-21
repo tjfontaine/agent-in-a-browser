@@ -18,6 +18,7 @@
         "@ai-sdk/anthropic": "^2.0.56",
         "@ai-sdk/mcp": "^0.0.12",
         "@anthropic-ai/sdk": "^0.32.1",
+        "@inkjs/ui": "^2.0.0",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/addon-search": "^0.15.0",
         "@xterm/addon-web-links": "^0.11.0",

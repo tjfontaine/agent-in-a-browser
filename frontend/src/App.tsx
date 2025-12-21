@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { InkXterm, Box, Text, useStdout, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
 import { useAgent, AgentOutput } from './agent/useAgent';
-import { executeCommand } from './commands';
+import { executeCommand, getCommandCompletions } from './commands';
 import 'ink-web/css';
 import 'xterm/css/xterm.css';
 
@@ -39,12 +39,14 @@ function TerminalContent({
     isReady,
     isBusy,
     onSubmit,
+    getCompletions,
     onCancel,
 }: {
     outputs: AgentOutput[];
     isReady: boolean;
     isBusy: boolean;
     onSubmit: (value: string) => void;
+    getCompletions: (input: string) => string[];
     onCancel: () => void;
 }) {
     // Get terminal dimensions from Ink's stdout
@@ -79,6 +81,7 @@ function TerminalContent({
                     promptColor={colors.cyan}
                     placeholder="Type a message or /help..."
                     focus={true}
+                    getCompletions={getCompletions}
                 />
             )}
             {isBusy && (
@@ -169,6 +172,7 @@ export default function App() {
                         isReady={isReady}
                         isBusy={isBusy}
                         onSubmit={handleSubmit}
+                        getCompletions={getCommandCompletions}
                         onCancel={cancelRequest}
                     />
                 </InkXterm>
