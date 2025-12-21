@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { InkXterm, Box, Text, useStdout, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
+import { TaskPanel } from './components/TaskPanel';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
 import 'ink-web/css';
@@ -91,6 +92,9 @@ function TerminalContent({
                 height={contentRows}
                 overflow="hidden"
             >
+                {/* Task panel at top */}
+                <TaskPanel />
+
                 {visibleOutputs.map((output) => (
                     <OutputLine key={output.id} output={output} />
                 ))}

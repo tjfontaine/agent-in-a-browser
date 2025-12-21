@@ -6,8 +6,9 @@
  * - Arrow key cursor navigation
  * - Command history (up/down arrows)
  * - Tab completion
+ * - Paste support (Ctrl+V / browser paste)
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 // Completion function type
@@ -53,6 +54,27 @@ export const TextInput = ({
         onChange?.(newValue);
         setCursorPosition(newCursor !== undefined ? newCursor : newValue.length);
     }, [controlledValue, onChange]);
+
+    // Handle paste events from browser
+    useEffect(() => {
+        if (!focus) return;
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const pastedText = e.clipboardData?.getData('text');
+            if (pastedText) {
+                // Insert at cursor position
+                const before = value.slice(0, cursorPosition);
+                const after = value.slice(cursorPosition);
+                const newValue = before + pastedText + after;
+                const newCursor = cursorPosition + pastedText.length;
+                setValue(newValue, newCursor);
+                e.preventDefault();
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [focus, value, cursorPosition, setValue]);
 
     useInput((inputChar, key) => {
         if (!focus) return;
