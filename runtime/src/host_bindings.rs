@@ -171,29 +171,59 @@ pub fn install_fs(ctx: &Ctx<'_>) -> Result<()> {
 }
 
 /// Install fetch on the global object.
-/// Uses custom browser-http WIT interface for synchronous HTTP requests.
+/// Provides a standard Web Fetch API-compatible interface.
+/// Note: Returns synchronously (not Promises) but with compatible method signatures.
 pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
     let globals = ctx.globals();
 
-    // Create a low-level sync fetch function that returns JSON string
+    // Create a low-level sync fetch function that accepts options
     let sync_fetch_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
         eprintln!("[__syncFetch__] Called with {} args", args.0.len());
         
         // Get URL from first argument
         let url = args.0.first().and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
-        eprintln!("[__syncFetch__] URL: {:?}", url);
+        
+        // Get options JSON from second argument (method, headers, body)
+        let options_json = args.0.get(1).and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
+        
+        eprintln!("[__syncFetch__] URL: {:?}, options: {:?}", url, options_json);
 
         match url {
             Some(url_str) => {
-                eprintln!("[__syncFetch__] Making request to: {}", url_str);
-                // Make the synchronous HTTP request via browser-http interface
-                match crate::http_client::fetch_sync(&url_str) {
+                // Parse options if provided
+                let (method, headers_json, body) = if let Some(opts) = &options_json {
+                    // Parse the options JSON
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(opts) {
+                        let m = parsed.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
+                        let h = parsed.get("headers").map(|v| v.to_string());
+                        let b = parsed.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        (m.to_string(), h, b)
+                    } else {
+                        ("GET".to_string(), None, None)
+                    }
+                } else {
+                    ("GET".to_string(), None, None)
+                };
+                
+                eprintln!("[__syncFetch__] Making {} request to: {}", method, url_str);
+                
+                // Make the synchronous HTTP request
+                let result = crate::http_client::fetch_request(
+                    &method,
+                    &url_str,
+                    headers_json.as_deref(),
+                    body.as_deref(),
+                );
+                
+                match result {
                     Ok(response) => {
                         eprintln!("[__syncFetch__] Got response: status={}, ok={}", response.status, response.ok);
-                        // Return a JSON result that JS can parse
+                        // Return JSON with headers array for reconstruction
                         serde_json::json!({
                             "ok": response.ok,
                             "status": response.status,
+                            "statusText": if response.ok { "OK" } else { "" },
+                            "headers": [],  // TODO: parse response headers from WASI HTTP
                             "body": response.body
                         }).to_string()
                     }
@@ -202,7 +232,9 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
                         serde_json::json!({
                             "ok": false,
                             "status": 0,
-                            "error": e
+                            "statusText": e,
+                            "headers": [],
+                            "body": ""
                         }).to_string()
                     }
                 }
@@ -212,7 +244,9 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
                 serde_json::json!({
                     "ok": false,
                     "status": 0,
-                    "error": "No URL provided"
+                    "statusText": "No URL provided",
+                    "headers": [],
+                    "body": ""
                 }).to_string()
             }
         }
@@ -220,37 +254,162 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
 
     globals.set("__syncFetch__", sync_fetch_fn)?;
 
-    // Create high-level fetch function in JavaScript that wraps __syncFetch__
+    // Create standard Web Fetch API in JavaScript
     ctx.eval::<(), _>(
         r#"
-        globalThis.fetch = function(url, options) {
-            console.log('[fetch] Called with URL:', url);
-            console.log('[fetch] __syncFetch__ type:', typeof __syncFetch__);
+        // Standard Headers class
+        globalThis.Headers = class Headers {
+            constructor(init) {
+                this._headers = {};
+                if (init) {
+                    if (init instanceof Headers) {
+                        init.forEach((value, name) => this.append(name, value));
+                    } else if (Array.isArray(init)) {
+                        init.forEach(([name, value]) => this.append(name, value));
+                    } else if (typeof init === 'object') {
+                        Object.entries(init).forEach(([name, value]) => this.append(name, value));
+                    }
+                }
+            }
+            append(name, value) {
+                const key = name.toLowerCase();
+                if (this._headers[key]) {
+                    this._headers[key] += ', ' + value;
+                } else {
+                    this._headers[key] = String(value);
+                }
+            }
+            delete(name) {
+                delete this._headers[name.toLowerCase()];
+            }
+            get(name) {
+                return this._headers[name.toLowerCase()] || null;
+            }
+            has(name) {
+                return name.toLowerCase() in this._headers;
+            }
+            set(name, value) {
+                this._headers[name.toLowerCase()] = String(value);
+            }
+            entries() {
+                return Object.entries(this._headers)[Symbol.iterator]();
+            }
+            keys() {
+                return Object.keys(this._headers)[Symbol.iterator]();
+            }
+            values() {
+                return Object.values(this._headers)[Symbol.iterator]();
+            }
+            forEach(callback, thisArg) {
+                Object.entries(this._headers).forEach(([name, value]) => {
+                    callback.call(thisArg, value, name, this);
+                });
+            }
+            // For JSON serialization
+            toJSON() {
+                return this._headers;
+            }
+        };
+
+        // Standard Response class
+        globalThis.Response = class Response {
+            constructor(body, init = {}) {
+                this._body = body || '';
+                this._bodyUsed = false;
+                this.status = init.status || 200;
+                this.statusText = init.statusText || '';
+                this.ok = this.status >= 200 && this.status < 300;
+                this.headers = new Headers(init.headers);
+                this.type = 'basic';
+                this.url = init.url || '';
+                this.redirected = false;
+            }
+            get body() { return null; } // No ReadableStream support
+            get bodyUsed() { return this._bodyUsed; }
+            text() {
+                this._bodyUsed = true;
+                return this._body;
+            }
+            json() {
+                this._bodyUsed = true;
+                return JSON.parse(this._body);
+            }
+            arrayBuffer() {
+                this._bodyUsed = true;
+                const encoder = new TextEncoder();
+                return encoder.encode(this._body).buffer;
+            }
+            blob() {
+                throw new Error('Blob not supported in this environment');
+            }
+            formData() {
+                throw new Error('FormData not supported in this environment');
+            }
+            clone() {
+                if (this._bodyUsed) {
+                    throw new TypeError('Cannot clone a Response whose body is already used');
+                }
+                return new Response(this._body, {
+                    status: this.status,
+                    statusText: this.statusText,
+                    headers: this.headers,
+                    url: this.url
+                });
+            }
+        };
+
+        // Standard fetch function
+        globalThis.fetch = function(resource, options = {}) {
+            // Handle Request objects
+            let url = resource;
+            if (typeof resource === 'object' && resource.url) {
+                url = resource.url;
+                options = { ...resource, ...options };
+            }
+            
+            // Build options JSON for Rust
+            const fetchOptions = {
+                method: options.method || 'GET',
+                headers: {},
+                body: options.body
+            };
+            
+            // Convert headers to plain object
+            if (options.headers) {
+                if (options.headers instanceof Headers) {
+                    options.headers.forEach((value, name) => {
+                        fetchOptions.headers[name] = value;
+                    });
+                } else if (Array.isArray(options.headers)) {
+                    options.headers.forEach(([name, value]) => {
+                        fetchOptions.headers[name] = value;
+                    });
+                } else {
+                    fetchOptions.headers = options.headers;
+                }
+            }
             
             try {
-                const resultJson = __syncFetch__(url);
-                console.log('[fetch] Got result JSON:', resultJson);
+                const resultJson = __syncFetch__(url, JSON.stringify(fetchOptions));
                 const result = JSON.parse(resultJson);
-                console.log('[fetch] Parsed result:', result);
                 
-                return {
-                    ok: result.ok,
+                // Build Headers from response
+                const responseHeaders = new Headers(result.headers || []);
+                
+                // Return standard Response object
+                return new Response(result.body, {
                     status: result.status,
-                    statusText: result.ok ? 'OK' : (result.error || ''),
-                    _body: result.body || '',
-                    text: function() { return this._body; },
-                    json: function() { return JSON.parse(this._body); }
-                };
+                    statusText: result.statusText,
+                    headers: responseHeaders,
+                    url: url
+                });
             } catch (e) {
-                console.log('[fetch] Error:', e.message);
-                return {
-                    ok: false,
+                // Return error Response
+                return new Response('', {
                     status: 0,
-                    statusText: 'fetch error: ' + e.message,
-                    _body: '',
-                    text: function() { return ''; },
-                    json: function() { return {}; }
-                };
+                    statusText: 'Network error: ' + e.message,
+                    url: url
+                });
             }
         };
     "#,
@@ -258,3 +417,4 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
 
     Ok(())
 }
+

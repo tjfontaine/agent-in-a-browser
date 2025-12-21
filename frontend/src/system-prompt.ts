@@ -24,10 +24,7 @@ Execute shell commands. Use \`help\` to list available commands.
 ## run_typescript  
 Execute JavaScript/TypeScript code. Use console.log() for output.
 
-Includes synchronous \`fetch()\` - no await needed:
-\`\`\`javascript
-const data = fetch('https://api.example.com').json();
-\`\`\`
+Standard \`fetch()\` API is available (synchronous - no await needed).
 
 ## File Tools
 - **read_file** / **write_file**: OPFS file operations
