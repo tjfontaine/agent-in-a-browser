@@ -66,8 +66,20 @@ export function useAgent(): UseAgentReturn {
     const abortControllerRef = useRef<AbortController | null>(null);
     const cancelRequestedRef = useRef(false);
     const textBufferRef = useRef<string>('');  // Buffer for accumulating streaming text
+    const pendingOutputsRef = useRef<AgentOutput[]>([]);  // Pending outputs to batch
+    const flushScheduledRef = useRef(false);  // Whether a flush is scheduled
 
-    // Add output helper
+    // Flush pending outputs - batches multiple addOutput calls into single state update
+    const flushOutputs = useCallback(() => {
+        flushScheduledRef.current = false;
+        const pending = pendingOutputsRef.current;
+        if (pending.length > 0) {
+            pendingOutputsRef.current = [];
+            setOutputs(prev => [...prev, ...pending]);
+        }
+    }, []);
+
+    // Add output helper - batches updates using requestAnimationFrame
     const addOutput = useCallback((
         type: AgentOutput['type'],
         content: string,
@@ -75,15 +87,21 @@ export function useAgent(): UseAgentReturn {
         toolName?: string,
         success?: boolean
     ) => {
-        setOutputs(prev => [...prev, {
+        pendingOutputsRef.current.push({
             id: nextIdRef.current++,
             type,
             content,
             color,
             toolName,
             success,
-        }]);
-    }, []);
+        });
+
+        // Schedule flush on next animation frame if not already scheduled
+        if (!flushScheduledRef.current) {
+            flushScheduledRef.current = true;
+            requestAnimationFrame(flushOutputs);
+        }
+    }, [flushOutputs]);
 
     // Initialize sandbox and agent
     const initialize = useCallback(async () => {
