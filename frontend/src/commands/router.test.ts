@@ -26,8 +26,8 @@ function createMockTerminal(): Terminal & { output: string; cleared: boolean } {
 
 describe('handleSlashCommand', () => {
     let term: Terminal & { output: string; cleared: boolean };
-    let clearHistory: ReturnType<typeof vi.fn>;
-    let showPrompt: ReturnType<typeof vi.fn>;
+    let clearHistory: ReturnType<typeof vi.fn<() => void>>;
+    let showPrompt: ReturnType<typeof vi.fn<() => void>>;
 
     beforeEach(() => {
         term = createMockTerminal();
