@@ -17,6 +17,10 @@ export interface ProtectedResourceMetadata {
     bearer_methods_supported?: string[];
 }
 
+/**
+ * Auth server metadata - compatible with mcp-auth's AuthorizationServerMetadata
+ * but uses snake_case to match OAuth 2.0 spec (RFC 8414)
+ */
 export interface AuthServerMetadata {
     issuer: string;
     authorization_endpoint: string;
@@ -26,6 +30,7 @@ export interface AuthServerMetadata {
     response_types_supported: string[];
     code_challenge_methods_supported?: string[];
     client_id_metadata_document_supported?: boolean;
+    jwks_uri?: string;
 }
 
 export interface TokenResponse {

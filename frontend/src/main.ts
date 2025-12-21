@@ -1,9 +1,13 @@
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { SearchAddon } from '@xterm/addon-search';
+import { Readline } from 'xterm-readline';
 import { Spinner, renderToolOutput } from './tui';
 import { WasmAgent } from './agent-sdk';
 import { getRemoteMCPRegistry, type RemoteMCPServer } from './remote-mcp-registry';
+import { parseSlashCommand } from './command-parser';
 
 const API_URL = 'http://localhost:3001';
 
@@ -35,9 +39,58 @@ const terminal = new Terminal({
 });
 
 const fitAddon = new FitAddon();
+const webLinksAddon = new WebLinksAddon();
+const searchAddon = new SearchAddon();
+const readline = new Readline();
+
 terminal.loadAddon(fitAddon);
+terminal.loadAddon(webLinksAddon);  // Makes URLs clickable
+terminal.loadAddon(searchAddon);    // Enables search (Ctrl+Shift+F)
+terminal.loadAddon(readline);        // Readline for proper line editing
+
 terminal.open(document.getElementById('terminal')!);
 fitAddon.fit();
+
+// Add Ctrl+W (delete word) support - must intercept before browser closes tab
+terminal.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
+    // Ctrl+W: Delete word backwards
+    if (ev.ctrlKey && ev.key === 'w') {
+        ev.preventDefault();
+
+        // Access readline's internal state (not publicly typed but available at runtime)
+        const state = (readline as any).state;
+        if (state && state.line) {
+            const line = state.line;
+            const buf: string = line.buf;
+            const pos: number = line.pos;
+
+            if (pos > 0) {
+                // Find word boundary: skip trailing spaces, then delete word chars
+                let deleteCount = 0;
+                let i = pos - 1;
+
+                // Skip any trailing whitespace
+                while (i >= 0 && /\s/.test(buf[i])) {
+                    i--;
+                    deleteCount++;
+                }
+
+                // Delete word characters (non-whitespace)
+                while (i >= 0 && !/\s/.test(buf[i])) {
+                    i--;
+                    deleteCount++;
+                }
+
+                if (deleteCount > 0) {
+                    state.editBackspace(deleteCount);
+                }
+            }
+        }
+        return false; // Prevent xterm from processing this key
+    }
+
+    return true; // Let other keys pass through
+});
 
 window.addEventListener('resize', () => fitAddon.fit());
 
@@ -69,7 +122,7 @@ sandbox.onmessage = (event) => {
         terminal.write('\x1b[A\r\x1b[K'); // Move up one line and clear it
         terminal.write('\x1b[32m✓ Sandbox ready\x1b[0m\r\n');
         sandbox.postMessage({ type: 'get_tools' });
-        showPrompt();
+        // Don't show prompt yet - wait for MCP to initialize
     } else if (type === 'mcp-initialized') {
         mcpInitialized = true;
         mcpServerInfo = serverInfo;
@@ -88,6 +141,9 @@ sandbox.onmessage = (event) => {
             maxSteps: 15,
         });
         terminal.write(`\x1b[32m✓ Agent ready\x1b[0m\r\n`);
+
+        // Start the readline prompt loop now that everything is initialized
+        promptLoop();
     } else if (type === 'tools') {
         // Tools now managed by agent SDK via MCP bridge
         console.log('Loaded tools:', workerTools?.map((t: any) => t.name));
@@ -208,7 +264,6 @@ function debug(...args: any[]) {
     console.log('[Agent]', new Date().toISOString().slice(11, 23), ...args);
 }
 
-let inputBuffer = '';
 let spinner: Spinner | null = null;
 let cancelRequested = false;
 let abortController: AbortController | null = null;
@@ -233,12 +288,18 @@ async function sendMessage(userMessage: string): Promise<void> {
     await runAgentLoop(userMessage);
 }
 
-function handleSlashCommand(command: string): void {
-    const parts = command.slice(1).split(/\s+/);
-    const cmd = parts[0].toLowerCase();
-    const args = parts.slice(1);
+function handleSlashCommand(input: string): void {
+    const parsed = parseSlashCommand(input);
 
-    switch (cmd) {
+    if (!parsed) {
+        terminal.write(`\r\n\x1b[31mInvalid command format\x1b[0m\r\n`);
+        showPrompt();
+        return;
+    }
+
+    const { command, subcommand, args } = parsed;
+
+    switch (command) {
         case 'clear':
             terminal.clear();
             if (agent) agent.clearHistory();
@@ -253,21 +314,24 @@ function handleSlashCommand(command: string): void {
             });
             return;
         case 'mcp':
-            handleMcpCommand(args);
+            // Pass subcommand and args to MCP handler
+            handleMcpCommand(subcommand, args, parsed.options);
             return;
         case 'help':
             terminal.write('\r\n\x1b[36mCommands:\x1b[0m\r\n');
-            terminal.write('  /clear          - Clear conversation\r\n');
-            terminal.write('  /files          - List files in sandbox\r\n');
-            terminal.write('  /mcp            - Show MCP status\r\n');
-            terminal.write('  /mcp add <url>  - Add remote MCP server\r\n');
-            terminal.write('  /mcp remove <id> - Remove remote server\r\n');
-            terminal.write('  /mcp auth <id> [client_id] - Authenticate with OAuth\r\n');
-            terminal.write('  /mcp connect <id> - Connect to remote server\r\n');
-            terminal.write('  /help           - Show this help\r\n');
+            terminal.write('  /clear              - Clear conversation\r\n');
+            terminal.write('  /files              - List files in sandbox\r\n');
+            terminal.write('  /mcp                - Show MCP status\r\n');
+            terminal.write('  /mcp add <url>      - Add remote MCP server\r\n');
+            terminal.write('  /mcp remove <id>    - Remove remote server\r\n');
+            terminal.write('  /mcp auth <id> [--client-id <id>] - Authenticate with OAuth\r\n');
+            terminal.write('  /mcp connect <id>   - Connect to remote server\r\n');
+            terminal.write('  /mcp disconnect <id> - Disconnect from server\r\n');
+            terminal.write('  /help               - Show this help\r\n');
             break;
         default:
-            terminal.write(`\r\n\x1b[31mUnknown command: ${command} \x1b[0m\r\n`);
+            terminal.write(`\r\n\x1b[31mUnknown command: /${command}\x1b[0m\r\n`);
+            terminal.write('\x1b[90mType /help for available commands\x1b[0m\r\n');
     }
     showPrompt();
 }
@@ -275,8 +339,11 @@ function handleSlashCommand(command: string): void {
 /**
  * Handle /mcp subcommands for remote server management
  */
-async function handleMcpCommand(args: string[]): Promise<void> {
-    const subcommand = args[0]?.toLowerCase();
+async function handleMcpCommand(
+    subcommand: string | null,
+    args: string[],
+    options: Record<string, string | boolean>
+): Promise<void> {
     const registry = getRemoteMCPRegistry();
 
     if (!subcommand) {
@@ -289,7 +356,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
     try {
         switch (subcommand) {
             case 'add': {
-                const url = args[1];
+                const url = args[0];
                 if (!url) {
                     terminal.write('\r\n\x1b[31mUsage: /mcp add <url>\x1b[0m\r\n');
                     showPrompt();
@@ -323,7 +390,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
             }
 
             case 'remove': {
-                const id = args[1];
+                const id = args[0];
                 if (!id) {
                     terminal.write('\r\n\x1b[31mUsage: /mcp remove <id>\x1b[0m\r\n');
                     showPrompt();
@@ -340,10 +407,11 @@ async function handleMcpCommand(args: string[]): Promise<void> {
             }
 
             case 'auth': {
-                const id = args[1];
-                const clientId = args[2];
+                const id = args[0];
+                // Support both --client-id option and positional arg for backwards compat
+                const clientId = (options['client-id'] as string) || args[1];
                 if (!id) {
-                    terminal.write('\r\n\x1b[31mUsage: /mcp auth <id> [client_id]\x1b[0m\r\n');
+                    terminal.write('\r\n\x1b[31mUsage: /mcp auth <id> [--client-id <id>]\x1b[0m\r\n');
                     showPrompt();
                     return;
                 }
@@ -358,7 +426,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
                 const effectiveClientId = clientId || server.oauthClientId;
                 if (!effectiveClientId) {
                     terminal.write('\r\n\x1b[31m✗ OAuth client ID required\x1b[0m\r\n');
-                    terminal.write('\x1b[90mUsage: /mcp auth <id> <client_id>\x1b[0m\r\n');
+                    terminal.write('\x1b[90mUsage: /mcp auth <id> --client-id <your-client-id>\x1b[0m\r\n');
                     showPrompt();
                     return;
                 }
@@ -382,7 +450,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
             }
 
             case 'connect': {
-                const id = args[1];
+                const id = args[0];
                 if (!id) {
                     terminal.write('\r\n\x1b[31mUsage: /mcp connect <id>\x1b[0m\r\n');
                     showPrompt();
@@ -402,7 +470,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
             }
 
             case 'disconnect': {
-                const id = args[1];
+                const id = args[0];
                 if (!id) {
                     terminal.write('\r\n\x1b[31mUsage: /mcp disconnect <id>\x1b[0m\r\n');
                     showPrompt();
@@ -612,53 +680,53 @@ async function runAgentLoopWithSDK(userMessage: string): Promise<void> {
     }
 }
 
-// ============ Input Handling ============
+// ============ Input Handling (Readline-based) ============
 
-function showPrompt(): void {
-    terminal.write('\r\n\x1b[36m❯\x1b[0m ');
-}
+const PROMPT = '\x1b[36m❯\x1b[0m ';
 
-terminal.onData((data) => {
-    const code = data.charCodeAt(0);
-
-    // ESC key (27) cancels agent execution
-    if (code === 27) {
-        if (spinner || abortController) {
-            cancelRequested = true;
-            // Abort any in-flight API request
-            if (abortController) {
-                abortController.abort();
-                abortController = null;
-            }
-            if (spinner) {
-                spinner.stop('Cancelled');
-                spinner = null;
-            }
-            terminal.write('\r\n\x1b[33m⚠ Cancelled by user\x1b[0m');
-            setStatus('Ready', '#3fb950');
-            showPrompt();
-            debug('User cancelled execution');
+// Set up Ctrl+C handler for cancellation during agent execution
+readline.setCtrlCHandler(() => {
+    if (spinner || abortController) {
+        cancelRequested = true;
+        // Abort any in-flight API request
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
         }
-        return;
-    }
-
-    if (code === 13) {
-        if (inputBuffer.trim()) {
-            sendMessage(inputBuffer.trim());
-        } else {
-            showPrompt();
+        if (spinner) {
+            spinner.stop('Cancelled');
+            spinner = null;
         }
-        inputBuffer = '';
-    } else if (code === 127) {
-        if (inputBuffer.length > 0) {
-            inputBuffer = inputBuffer.slice(0, -1);
-            terminal.write('\b \b');
-        }
-    } else if (code >= 32) {
-        inputBuffer += data;
-        terminal.write(data);
+        readline.println('\x1b[33m⚠ Cancelled by user\x1b[0m');
+        setStatus('Ready', '#3fb950');
+        debug('User cancelled execution');
     }
 });
+
+/**
+ * Main prompt loop using xterm-readline
+ * Provides: command history, Ctrl+U (clear line), Ctrl+K (delete to end),
+ * Home/End, arrow keys for cursor movement
+ */
+async function promptLoop(): Promise<void> {
+    while (true) {
+        try {
+            const input = await readline.read(PROMPT);
+            if (input.trim()) {
+                await sendMessage(input.trim());
+            }
+        } catch (e) {
+            // Readline was cancelled or errored
+            debug('Readline error:', e);
+        }
+    }
+}
+
+// Legacy showPrompt for compatibility (now triggers readline)
+function showPrompt(): void {
+    // Readline handles prompting, but we may need this for status updates
+    // The prompt loop will automatically show the next prompt
+}
 
 // ============ Welcome ============
 
