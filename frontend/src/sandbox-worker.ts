@@ -4,11 +4,7 @@
 
 export { }; // Make this a module
 
-import { initTsRuntime, TsRuntime } from './wasm/ts-runtime';
 import { createWasmMcpClient, McpClient, JsonRpcRequest, JsonRpcResponse } from './mcp-client';
-
-// Runtime instance (used by browser-fs-impl.ts via globalThis)
-let tsRuntime: TsRuntime | null = null;
 
 // MCP Client
 let mcpClient: McpClient | null = null;
@@ -65,10 +61,6 @@ async function initialize(): Promise<void> {
     // Initialize OPFS
     opfsRoot = await navigator.storage.getDirectory();
     console.log('[Sandbox] OPFS initialized');
-
-    // Initialize TsRuntime
-    tsRuntime = await initTsRuntime();
-    console.log('[Sandbox] TsRuntime initialized');
 
     // Initialize MCP Client - using direct WASM bridge
     // The WASM component is loaded and executed in-process via the bridge

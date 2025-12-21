@@ -6,15 +6,13 @@
         "dev": "vite",
         "build": "npm run transpile:component && tsc && vite build",
         "preview": "vite preview",
-        "transpile:component": "jco transpile ../target/wasm32-wasip1/release/ts-runtime-mcp.wasm -o src/wasm/mcp-server --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=@bytecodealliance/preview2-shim/clocks#*' --map 'wasi:filesystem/*=@bytecodealliance/preview2-shim/filesystem#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --map 'mcp:ts-runtime/browser-http=../browser-http-impl.js#browserHttp' --map 'mcp:ts-runtime/browser-fs=../browser-fs-impl.js#browserFs' --valid-lifting-optimization --name ts-runtime-mcp",
-        "clean:wasm": "rm -rf src/wasm/mcp-server src/wasm/component"
+        "transpile:component": "jco transpile ../target/wasm32-wasip2/release/ts-runtime-mcp.wasm -o src/wasm/mcp-server --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=@bytecodealliance/preview2-shim/clocks#*' --map 'wasi:filesystem/*=@bytecodealliance/preview2-shim/filesystem#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --map 'mcp:ts-runtime/browser-http=../browser-http-impl.js#browserHttp' --map 'mcp:ts-runtime/browser-fs=../browser-fs-impl.js#browserFs' --valid-lifting-optimization --name ts-runtime-mcp",
+        "clean:wasm": "rm -rf src/wasm/mcp-server"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^2.0.56",
         "@ai-sdk/mcp": "^0.0.12",
         "@anthropic-ai/sdk": "^0.32.1",
-        "@bjorn3/browser_wasi_shim": "^0.4.2",
-        "@wasmer/sdk": "^0.8.0",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/addon-search": "^0.15.0",
         "@xterm/addon-web-links": "^0.11.0",

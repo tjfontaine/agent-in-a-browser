@@ -4,37 +4,54 @@ Browser-native sandboxed development environment with MCP integration.
 
 ## Architecture
 
-**3 Components:**
+```mermaid
+graph TB
+    subgraph Browser["Browser Environment"]
+        Terminal["Terminal UI<br/>(xterm.js)"]
+        Agent["AI Agent<br/>(Vercel AI SDK)"]
+        
+        subgraph Worker["Web Worker"]
+            WASM["WASM MCP Server<br/>(Rust)"]
+            Bridges["Host Bridges<br/>(TS → OPFS/XHR)"]
+        end
+    end
+    
+    Backend["Backend Server<br/>(Node.js proxy)"]
+    Anthropic["Anthropic API"]
+    
+    Terminal --> Agent
+    Agent -->|"postMessage"| WASM
+    WASM --> Bridges
+    Agent -->|"HTTP"| Backend
+    Backend --> Anthropic
+```
 
-1. **WASM Runtime** (Rust): Sandboxed TypeScript execution + MCP server
-   - Runs in web worker
-   - Exports MCP tools: `read_file`, `write_file`, `list_files`, `eval`
-   - Uses OPFS for file storage
-   - Built as WASI P2 component
+**Components:**
 
-2. **Frontend** (TypeScript + Vite): TUI inspired by claude-code
-   - Terminal-like interface
-   - Connects to WASM MCP server
-   - Manages web worker communication
-
-3. **Backend** (TBD - likely Rust): Simple static server + Anthropic proxy
-   - Serves frontend assets
-   - Proxies requests to Anthropic API
-   - Currently planning to replace Node.js with Rust
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| [runtime/](runtime/README.md) | Rust + WASI P2 | WASM MCP server with TypeScript execution |
+| [frontend/](frontend/src/README.md) | TypeScript + Vite | Terminal UI with AI agent orchestration |
+| [frontend/src/wasm/](frontend/src/wasm/README.md) | TypeScript | Host bridges connecting WASM to browser APIs |
+| backend/ | Node.js | API proxy for Anthropic |
 
 ## Quick Start
 
 ### Prerequisites
 
-- Rust 1.83+ with `cargo component` and `wit-deps`
-- Node.js 20+ (for frontend only)
+- Rust 1.83+ with `wasm32-wasip2` target
+- Node.js 20+
+- Docker (optional)
 
 ```bash
-# Install Rust tools
+# Install Rust tooling
+rustup target add wasm32-wasip2
 cargo install cargo-component wit-deps cargo-watch
 
-# Build everything
+# Install dependencies
 npm install
+
+# Build everything
 npm run build
 
 # Development with hot reload
@@ -42,48 +59,80 @@ npm run dev
 ```
 
 This starts:
-- WASM component rebuild on Rust changes (cargo watch)
-- Frontend dev server on http://localhost:5173
+
+- WASM component rebuild on Rust changes (via `cargo watch`)
+- Frontend dev server on <http://localhost:5173>
 
 ## Build Commands
 
 | Command | Description |
 |---------|-------------|
-| `npm run build` | Build WASM + frontend |
+| `npm run build` | Build WASM component + frontend |
 | `npm run build:wasm` | Build WASM component only |
 | `npm run build:frontend` | Build frontend only |
-| `npm run dev` | Hot reload everything |
-| `npm run dev:wasm` | Watch Rust changes |
-| `npm run dev:frontend` | Frontend dev server |
+| `npm run dev` | Hot reload for WASM + frontend |
+| `npm run dev:wasm` | Watch Rust changes only |
+| `npm run dev:frontend` | Frontend dev server only |
 | `npm run clean` | Clean all build artifacts |
 | `npm test` | Run Rust tests |
 
+### Frontend-specific Commands
+
+```bash
+cd frontend
+
+# Transpile WASM component to ES modules
+npm run transpile:component
+
+# Clean generated WASM bindings
+npm run clean:wasm
+```
+
 ## Project Structure
 
-```
+```text
 web-agent/
-├── Cargo.toml           # Rust workspace root
-├── package.json         # npm scripts (frontend build)
+├── Cargo.toml               # Rust workspace root
+├── package.json             # npm scripts orchestration
 │
-├── runtime/             # WASM MCP component
+├── runtime/                 # ← Rust WASM MCP server
+│   ├── README.md            # Detailed architecture docs
 │   ├── Cargo.toml
-│   ├── wit/             # WASI interface definitions
-│   └── src/
-│       ├── main.rs      # MCP HTTP handler
-│       ├── lib.rs       # C-ABI exports
-│       ├── mcp_server.rs
-│       └── ...
+│   ├── src/
+│   │   ├── main.rs          # HTTP handler + MCP dispatch
+│   │   ├── mcp_server.rs    # JSON-RPC types
+│   │   └── ...
+│   └── wit/                 # WASI interface definitions
+│       ├── world.wit        # Custom browser-fs/http interfaces
+│       └── deps/            # WASI dependencies
 │
-├── frontend/            # TUI interface
+├── frontend/                # ← Browser UI + agent
 │   ├── package.json
 │   ├── src/
-│   │   ├── main.ts
-│   │   └── wasm/        # Generated from WASM component
+│   │   ├── main.ts          # Entry point
+│   │   ├── README.md        # Frontend architecture docs
+│   │   └── wasm/            # ← Host bridges + generated code
+│   │       ├── README.md    # Bridge layer docs
+│   │       ├── mcp-server/  # jco-transpiled WASM (generated)
+│   │       ├── browser-fs-impl.ts
+│   │       └── browser-http-impl.ts
 │   └── vite.config.ts
 │
-└── backend/             # (Future Rust implementation)
-    └── TBD - simple static server + proxy
+└── backend/                 # API proxy server
+    └── src/index.ts
 ```
+
+## MCP Tools
+
+The WASM runtime provides these tools to the AI agent:
+
+| Tool | Description |
+|------|-------------|
+| `run_typescript` | Execute TypeScript/JavaScript code |
+| `read_file` | Read file from virtual filesystem (OPFS) |
+| `write_file` | Write file to virtual filesystem |
+| `list` | List directory contents |
+| `grep` | Search for patterns in files |
 
 ## Docker
 
@@ -93,63 +142,38 @@ web-agent/
 docker-compose up
 ```
 
-Runs:
+Features:
+
+- Hot reload for all services
 - `cargo watch` for WASM rebuilds
-- Vite dev server with hot reload
+- Volume mounts for live code changes
 
 ### Production
 
 ```bash
+docker-compose -f docker-compose.prod.yml up
+
+# Or build standalone
 docker build -t web-agent .
 docker run -p 8080:8080 web-agent
 ```
 
-Uses Caddy for static file serving (frontend will be updated to proxy API requests when backend is ready).
+Multi-stage build: rust-builder → frontend-builder → backend-builder → production
 
-## Development Workflow
+## Environment Variables
 
-### Working on WASM Component
-
-```bash
-npm run dev:wasm
-```
-
-Watches `runtime/src/**/*.rs` and rebuilds component automatically.
-
-### Working on Frontend
+**backend/.env**
 
 ```bash
-npm run dev:frontend
+PORT=3000
+ANTHROPIC_API_KEY=your_key_here
+NODE_ENV=development
 ```
 
-After WASM changes, refresh browser to reload the new component.
-
-### Adding WASI Dependencies
+**frontend/.env**
 
 ```bash
-cd runtime
-# Edit wit/deps.toml
-wit-deps update
-cargo component add --target wasi:new-dep@version --path wit/deps/new-dep
-cargo component build --release --target wasm32-wasip2
-```
-
-## Future Backend
-
-The backend will likely be implemented as a Rust binary in this workspace:
-
-```
-backend/
-├── Cargo.toml
-└── src/
-    └── main.rs      # Axum/Actix server for static files + proxy
-```
-
-Add to workspace:
-```toml
-# Cargo.toml
-[workspace]
-members = ["runtime", "backend"]
+VITE_API_URL=http://localhost:3000
 ```
 
 ## Testing
@@ -160,227 +184,8 @@ cargo test --workspace
 
 # Specific package
 cargo test -p ts-runtime-mcp
-```
 
-## WASM Component Details
-
-The runtime exports `wasi:http/incoming-handler@0.2.4` which implements MCP protocol:
-
-- **Tools provided:**
-  - `eval`: Execute TypeScript/JavaScript
-  - `transpile`: TS → JS conversion
-  - `read_file`: Read from OPFS
-  - `write_file`: Write to OPFS
-  - `list_files`: List OPFS contents
-
-- **Size:** ~3.5 MB (release build)
-- **Transpiled JS:** ~500 KB (via jco)
-
-## Environment Variables
-
-**Frontend** (`.env`):
-```bash
-VITE_API_URL=http://localhost:8080/api
-```
-
-**Backend** (when implemented):
-```bash
-PORT=3000
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-## License
-
-MIT
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 20+
-- Rust 1.83+
-- Docker (optional)
-
-### Local Development
-
-```bash
-# Setup (first time only)
-chmod +x setup.sh
-./setup.sh
-
-# Build everything
-npm run build
-
-# Run development servers
-npm run dev
-```
-
-### Docker Development
-
-```bash
-# Development with hot reload
-docker-compose up
-
-# Production build
-docker-compose -f docker-compose.prod.yml up
-
-# Build Docker image
-npm run docker:build
-```
-
-## Build System
-
-The project uses npm workspaces for monorepo management:
-
-```bash
-# Install dependencies
-npm install
-
-# Build Rust WASM component
-npm run build:runtime
-
-# Transpile WASM to JS with jco
-npm run build:transpile
-
-# Build frontend & backend
-npm run build:workspaces
-
-# Clean all build artifacts
-npm run clean
-
-# Run tests
-npm run test
-```
-
-### Individual Workspace Commands
-
-```bash
-# Frontend only
-npm run dev -w frontend
-npm run build -w frontend
-
-# Backend only
-npm run dev -w backend
-npm run build -w backend
-```
-
-## Project Structure
-
-```
-web-agent/
-├── runtime/              # Rust WASM component
-│   ├── src/
-│   │   ├── main.rs      # HTTP handler (MCP server)
-│   │   ├── lib.rs       # C-ABI exports
-│   │   └── ...
-│   ├── wit/             # WASI interface definitions
-│   └── Cargo.toml
-├── frontend/            # Browser UI
-│   ├── src/
-│   │   ├── main.ts
-│   │   └── wasm/        # Generated WASM bindings
-│   └── package.json
-├── backend/             # API server
-│   ├── src/
-│   │   └── index.ts
-│   └── package.json
-├── package.json         # Workspace root
-├── Dockerfile           # Multi-stage build
-└── docker-compose.yml   # Development orchestration
-```
-
-## WASM Component
-
-The runtime is built as a WASI P2 component that:
-
-- Exports `wasi:http/incoming-handler` interface
-- Implements MCP JSON-RPC protocol
-- Provides TypeScript execution tools
-- Can be transpiled to JS for browser use with `jco`
-
-### Building the Component
-
-```bash
-cd runtime
-./build-component.sh
-```
-
-Output: `target/wasm32-wasip2/release/ts-runtime-mcp.wasm`
-
-### Transpiling for Browser
-
-```bash
-npm run build:transpile
-```
-
-Generates ES modules in `frontend/src/wasm/mcp-server/`
-
-## Docker
-
-### Multi-stage Build
-
-The Dockerfile uses 4 stages:
-1. **rust-builder**: Builds WASM component
-2. **frontend-builder**: Transpiles WASM and builds frontend
-3. **backend-builder**: Builds backend
-4. **production**: Minimal runtime image
-
-### Development Mode
-
-```bash
-docker-compose up
-```
-
-Features:
-- Hot reload for all services
-- Rust cargo-watch for WASM rebuilds
-- Volume mounts for live code changes
-- Separate containers for frontend/backend/rust
-
-### Production Mode
-
-```bash
-docker-compose -f docker-compose.prod.yml up
-```
-
-Features:
-- Optimized multi-stage build
-- Minimal runtime image
-- Health checks
-- Auto-restart
-
-## Development Workflow
-
-1. Make changes to Rust code → auto-rebuilds in Docker
-2. Transpile: `npm run build:transpile`
-3. Frontend/backend auto-reload
-
-## Environment Variables
-
-Create `.env` files in respective directories:
-
-**backend/.env**
-```bash
-PORT=3000
-ANTHROPIC_API_KEY=your_key_here
-NODE_ENV=development
-```
-
-**frontend/.env**
-```bash
-VITE_API_URL=http://localhost:3000
-```
-
-## Testing
-
-```bash
-# All tests
-npm test
-
-# Rust tests only
-cd runtime && cargo test
-
-# Component validation
+# Validate WASM component
 wasm-tools component wit runtime/target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 ```
 
@@ -403,6 +208,7 @@ npm install -g @bytecodealliance/jco@latest
 ### Docker build is slow
 
 Use BuildKit:
+
 ```bash
 DOCKER_BUILDKIT=1 docker build -t web-agent .
 ```
