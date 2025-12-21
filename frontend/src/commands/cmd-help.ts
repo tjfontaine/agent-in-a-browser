@@ -16,7 +16,8 @@ export const helpCommand: CommandDef = {
         ctx.output('system', '  /files [path]      - List files in sandbox');
         ctx.output('system', '', undefined);
         ctx.output('system', 'MCP Commands:', colors.cyan);
-        ctx.output('system', '  /mcp               - Show MCP server status');
+        ctx.output('system', '  /mcp               - Show MCP status');
+        ctx.output('system', '  /mcp list          - List servers with IDs');
         ctx.output('system', '  /mcp add <url>     - Add remote MCP server');
         ctx.output('system', '  /mcp remove <id>   - Remove remote server');
         ctx.output('system', '  /mcp auth <id>     - Authenticate with OAuth');

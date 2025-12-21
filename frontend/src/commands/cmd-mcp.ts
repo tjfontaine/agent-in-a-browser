@@ -15,7 +15,7 @@ export const mcpCommand: CommandDef = {
     // Tab completion for subcommands
     completions: (partial, args) => {
         if (args.length === 0 || (args.length === 1 && partial)) {
-            const subcommands = ['add', 'remove', 'auth', 'connect', 'disconnect'];
+            const subcommands = ['list', 'add', 'remove', 'auth', 'connect', 'disconnect'];
             const search = args[0] || '';
             return subcommands
                 .filter(sub => sub.startsWith(search))
@@ -25,6 +25,42 @@ export const mcpCommand: CommandDef = {
     },
 
     subcommands: [
+        {
+            name: 'list',
+            description: 'List remote servers with details',
+            usage: '/mcp list',
+            handler: (ctx) => {
+                const registry = getRemoteMCPRegistry();
+                const servers = registry.getServers();
+
+                if (servers.length === 0) {
+                    ctx.output('system', 'No remote servers configured.', colors.dim);
+                    ctx.output('system', 'Use /mcp add <url> to add one.', colors.dim);
+                    return;
+                }
+
+                ctx.output('system', '', undefined);
+                ctx.output('system', '🌐 Remote MCP Servers:', colors.magenta);
+                ctx.output('system', '', undefined);
+
+                for (const server of servers) {
+                    const statusIcon = server.status === 'connected' ? '●' : '○';
+                    const statusColor = server.status === 'connected' ? colors.green : colors.dim;
+
+                    ctx.output('system', `${statusIcon} ${server.name}`, statusColor);
+                    ctx.output('system', `  ID:     ${server.id}`, colors.cyan);
+                    ctx.output('system', `  URL:    ${server.url}`, colors.dim);
+                    ctx.output('system', `  Status: ${server.status}`, statusColor);
+                    ctx.output('system', `  Tools:  ${server.tools.length}`, colors.dim);
+                    ctx.output('system', '', undefined);
+                }
+
+                ctx.output('system', 'Commands:', colors.dim);
+                ctx.output('system', '  /mcp connect <ID>    - Connect to server', colors.dim);
+                ctx.output('system', '  /mcp disconnect <ID> - Disconnect from server', colors.dim);
+                ctx.output('system', '  /mcp remove <ID>     - Remove server', colors.dim);
+            },
+        },
         {
             name: 'add',
             description: 'Add a remote MCP server',
@@ -130,9 +166,13 @@ export const mcpCommand: CommandDef = {
             ctx.output('system', '│', colors.cyan);
             ctx.output('system', `│ 🌐 Remote Servers (${mcpData.remoteServers.length}):`, colors.magenta);
             for (const server of mcpData.remoteServers) {
+                const statusIcon = server.status === 'connected' ? '●' : '○';
                 const statusColor = server.status === 'connected' ? colors.green : colors.dim;
-                ctx.output('system', `│   ${server.name} (${server.status}) - ${server.toolCount} tools`, statusColor);
+                ctx.output('system', `│   ${statusIcon} ${server.name}`, statusColor);
+                ctx.output('system', `│     ID: ${server.id} | ${server.status} | ${server.toolCount} tools`, colors.dim);
             }
+            ctx.output('system', '│', colors.cyan);
+            ctx.output('system', '│ Use: /mcp connect <ID> | /mcp disconnect <ID>', colors.dim);
         } else {
             ctx.output('system', '│', colors.cyan);
             ctx.output('system', '│ No remote servers. Use /mcp add <url>', colors.dim);
