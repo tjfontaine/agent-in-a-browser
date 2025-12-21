@@ -4,27 +4,27 @@ This directory contains the browser-based AI agent application.
 
 ## Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│  Browser                                                     │
+│  Browser                                                    │
 │  ┌──────────────────┐  ┌───────────────────────────────────┐│
-│  │ Terminal UI      │  │ Agent                              ││
+│  │ Terminal UI      │  │ Agent                             ││
 │  │ (xterm.js)       │  │ - Vercel AI SDK                   ││
 │  │                  │  │ - MCP Tool Integration            ││
 │  └────────┬─────────┘  └────────────────┬──────────────────┘│
-│           │                              │                   │
+│           │                             │                   │
 │  ┌────────▼─────────────────────────────▼──────────────────┐│
-│  │ Sandbox Worker (Web Worker)                              ││
-│  │ - WASM MCP Server                                        ││
-│  │ - OPFS File System                                       ││
-│  │ - TypeScript Execution                                   ││
-│  └──────────────────────────────────────────────────────────┘│
+│  │ Sandbox Worker (Web Worker)                             ││
+│  │ - WASM MCP Server                                       ││
+│  │ - OPFS File System                                      ││
+│  │ - TypeScript Execution                                  ││
+│  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Directory Structure
 
-```
+```text
 src/
 ├── main.ts                 # Entry point - orchestrates initialization
 ├── types.ts                # Shared type definitions

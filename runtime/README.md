@@ -6,28 +6,28 @@ A WebAssembly-based MCP (Model Context Protocol) server that provides TypeScript
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          Browser Environment                             │
-│                                                                          │
+│                          Browser Environment                            │
+│                                                                         │
 │  ┌──────────────┐     ┌─────────────────────────────────────────────┐   │
-│  │ Main Thread  │     │              Web Worker                      │   │
-│  │              │     │                                              │   │
+│  │ Main Thread  │     │              Web Worker                     │   │
+│  │              │     │                                             │   │
 │  │  AI Agent    │     │  ┌────────────────────────────────────────┐ │   │
 │  │  (Vercel AI) ├────►│  │     WASM MCP Server (this crate)       │ │   │
-│  │              │     │  │                                         │ │   │
+│  │              │     │  │                                        │ │   │
 │  │  MCP Client  │     │  │  ┌─────────────┐  ┌─────────────────┐  │ │   │
 │  └──────────────┘     │  │  │ QuickJS-NG  │  │ SWC Transpiler  │  │ │   │
 │                       │  │  │ (execution) │  │ (TS → JS)       │  │ │   │
 │                       │  │  └─────────────┘  └─────────────────┘  │ │   │
-│                       │  │                                         │ │   │
-│                       │  │     Implements wasi:http/incoming-handler│ │   │
+│                       │  │                                        │ │   │
+│                       │  │   Implements wasi:http/incoming-handler│ │   │
 │                       │  └──────────────────────┬─────────────────┘ │   │
-│                       │                          │                   │   │
-│                       │  ┌───────────────────────▼─────────────────┐ │   │
-│                       │  │         Host Bridges (TypeScript)       │ │   │
-│                       │  │                                         │ │   │
+│                       │                         │                   │   │
+│                       │  ┌──────────────────────▼─────────────────┐ │   │
+│                       │  │         Host Bridges (TypeScript)      │ │   │
+│                       │  │                                        │ │   │
 │                       │  │  browser-fs-impl.ts → OPFS             │ │   │
-│                       │  │  browser-http-impl.ts → sync XHR        │ │   │
-│                       │  └─────────────────────────────────────────┘ │   │
+│                       │  │  browser-http-impl.ts → sync XHR       │ │   │
+│                       │  └────────────────────────────────────────┘ │   │
 │                       └─────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

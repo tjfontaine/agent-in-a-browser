@@ -163,7 +163,7 @@ Multi-stage build: rust-builder → frontend-builder → backend-builder → pro
 
 ## Environment Variables
 
-**backend/.env**
+### backend/.env
 
 ```bash
 PORT=3000
@@ -171,7 +171,7 @@ ANTHROPIC_API_KEY=your_key_here
 NODE_ENV=development
 ```
 
-**frontend/.env**
+### frontend/.env
 
 ```bash
 VITE_API_URL=http://localhost:3000
