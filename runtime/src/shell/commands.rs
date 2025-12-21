@@ -82,16 +82,22 @@ fn cmd_ls(
     mut stdout: piper::Writer,
     mut stderr: piper::Writer,
 ) -> futures_lite::future::Boxed<i32> {
-    // Resolve path relative to cwd
+    // Use "/" for root like the working list MCP tool
+    let cwd_str = env.cwd.to_string_lossy();
     let path = if args.is_empty() {
-        env.cwd.clone()
-    } else {
-        let arg_path = std::path::Path::new(&args[0]);
-        if arg_path.is_absolute() {
-            arg_path.to_path_buf()
+        // If cwd is "." or empty, use "/" like the working list tool
+        if cwd_str == "." || cwd_str.is_empty() {
+            "/".to_string()
         } else {
-            env.cwd.join(arg_path)
+            cwd_str.to_string()
         }
+    } else if args[0].starts_with('/') {
+        args[0].clone()
+    } else if cwd_str == "." || cwd_str.is_empty() {
+        // Relative path from root
+        format!("/{}", args[0])
+    } else {
+        format!("{}/{}", cwd_str, args[0])
     };
 
     Box::pin(async move {
@@ -121,7 +127,7 @@ fn cmd_ls(
                 0
             }
             Err(e) => {
-                let msg = format!("ls: {}: {}\n", path.display(), e);
+                let msg = format!("ls: {}: {}\n", path, e);
                 let _ = stderr.write_all(msg.as_bytes()).await;
                 1
             }
@@ -137,8 +143,8 @@ fn cmd_cat(
     mut stdout: piper::Writer,
     mut stderr: piper::Writer,
 ) -> futures_lite::future::Boxed<i32> {
-    // Clone cwd upfront to avoid lifetime issues
-    let cwd = env.cwd.clone();
+    // Clone cwd as string upfront to avoid lifetime issues
+    let cwd = env.cwd.to_string_lossy().to_string();
     
     // If args provided, read from files; otherwise read stdin
     Box::pin(async move {
@@ -158,22 +164,22 @@ fn cmd_cat(
                 }
             }
         } else {
-            // Read from files
+            // Read from files using string paths
             for arg in &args {
-                let path = if std::path::Path::new(arg).is_absolute() {
-                    std::path::PathBuf::from(arg)
+                let path = if arg.starts_with('/') {
+                    arg.clone()
                 } else {
-                    cwd.join(arg)
+                    format!("{}/{}", cwd, arg)
                 };
                 
-                match std::fs::read(&path) {
+                match std::fs::read_to_string(&path) {
                     Ok(content) => {
-                        if stdout.write_all(&content).await.is_err() {
+                        if stdout.write_all(content.as_bytes()).await.is_err() {
                             return 1;
                         }
                     }
                     Err(e) => {
-                        let msg = format!("cat: {}: {}\n", path.display(), e);
+                        let msg = format!("cat: {}: {}\n", path, e);
                         let _ = stderr.write_all(msg.as_bytes()).await;
                         return 1;
                     }

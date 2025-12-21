@@ -126,6 +126,29 @@ self.onmessage = async (event: MessageEvent) => {
 
                     // Route to appropriate MCP method
                     switch (request.method) {
+                        case 'initialize': {
+                            // Return server info - already initialized during worker startup
+                            const serverInfo = mcpClient.getServerInfo();
+                            response = {
+                                jsonrpc: '2.0',
+                                id: request.id,
+                                result: {
+                                    protocolVersion: '2024-11-05',
+                                    serverInfo: serverInfo || { name: 'ts-runtime', version: '0.1.0' },
+                                    capabilities: { tools: {} }
+                                }
+                            };
+                            break;
+                        }
+                        case 'initialized': {
+                            // Notification - just acknowledge
+                            response = {
+                                jsonrpc: '2.0',
+                                id: request.id,
+                                result: {}
+                            };
+                            break;
+                        }
                         case 'tools/call': {
                             const result = await mcpClient.callTool(
                                 request.params?.name || '',

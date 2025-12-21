@@ -2,7 +2,7 @@
  * Vercel AI SDK Integration with WASM MCP Server
  * 
  * Uses the Vercel AI SDK for agent orchestration with:
- * - Custom MCP transport for WASM bridge
+ * - Routes all MCP calls through sandbox worker (single WASM instance)
  * - Anthropic provider with configurable baseURL
  * - Multi-step tool calling with max steps limit
  */
@@ -11,9 +11,22 @@ import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, t
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { experimental_createMCPClient as createMCPClient, type MCPTransport } from '@ai-sdk/mcp';
 import { z } from 'zod';
-import { callWasmMcpServer } from './wasm-mcp-bridge';
+import { sendMcpRequest } from './agent/sandbox';
 import type { JsonRpcRequest, JsonRpcResponse, McpTool } from './mcp-client';
 import { getRemoteMCPRegistry } from './remote-mcp-registry';
+
+/**
+ * Wrapper that matches the callMcpServer signature for sendMcpRequest
+ */
+async function callMcpServer(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const response = await sendMcpRequest({
+        jsonrpc: '2.0',
+        id: typeof request.id === 'number' ? request.id : Date.now(),
+        method: request.method,
+        params: request.params
+    });
+    return response as JsonRpcResponse;
+}
 
 export interface AgentConfig {
     model?: string;
@@ -50,7 +63,7 @@ class WasmMcpTransport implements MCPTransport {
         console.log('[WasmTransport] Starting...');
 
         // Initialize MCP connection
-        const initResponse = await callWasmMcpServer({
+        const initResponse = await callMcpServer({
             jsonrpc: '2.0',
             id: ++this.messageId,
             method: 'initialize',
@@ -68,7 +81,7 @@ class WasmMcpTransport implements MCPTransport {
         console.log('[WasmTransport] Server info:', initResponse.result?.serverInfo);
 
         // Send initialized notification
-        await callWasmMcpServer({
+        await callMcpServer({
             jsonrpc: '2.0',
             id: ++this.messageId,
             method: 'initialized',
@@ -91,7 +104,7 @@ class WasmMcpTransport implements MCPTransport {
         const request = message as JsonRpcRequest;
         console.log('[WasmTransport] Sending:', request.method);
 
-        await callWasmMcpServer({
+        await callMcpServer({
             ...request,
             id: request.id ?? ++this.messageId
         });
@@ -109,7 +122,7 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
     console.log('[Agent] Initializing WASM MCP server...');
 
     // Initialize MCP connection
-    const initResponse = await callWasmMcpServer({
+    const initResponse = await callMcpServer({
         jsonrpc: '2.0',
         id: 1,
         method: 'initialize',
@@ -127,7 +140,7 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
     console.log('[Agent] MCP server info:', initResponse.result?.serverInfo);
 
     // Send initialized notification
-    await callWasmMcpServer({
+    await callMcpServer({
         jsonrpc: '2.0',
         id: 2,
         method: 'initialized',
@@ -135,7 +148,7 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
     });
 
     // List available tools
-    const toolsResponse = await callWasmMcpServer({
+    const toolsResponse = await callMcpServer({
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/list',
@@ -169,7 +182,7 @@ async function callMcpTool(name: string, args: Record<string, unknown>): Promise
         throw new Error(errorMsg);
     }
 
-    const response = await callWasmMcpServer({
+    const response = await callMcpServer({
         jsonrpc: '2.0',
         id: Date.now(),
         method: 'tools/call',
@@ -555,6 +568,3 @@ export class WasmAgent {
         return messages;
     }
 }
-
-// Export for convenience
-export { callWasmMcpServer } from './wasm-mcp-bridge';

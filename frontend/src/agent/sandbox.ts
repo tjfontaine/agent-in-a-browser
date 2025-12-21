@@ -136,3 +136,40 @@ export async function callTool(name: string, input: Record<string, unknown>): Pr
         });
     });
 }
+
+/**
+ * Send a generic MCP JSON-RPC request via the sandbox worker.
+ * This is the single entry point for ALL MCP communication.
+ */
+export async function sendMcpRequest(request: {
+    jsonrpc: '2.0';
+    id: number;
+    method: string;
+    params?: Record<string, unknown>;
+}): Promise<{
+    jsonrpc: '2.0';
+    id: number;
+    result?: any;
+    error?: { code: number; message: string };
+}> {
+    return new Promise((resolve) => {
+        const internalId = crypto.randomUUID();
+
+        // Handler for mcp-response messages
+        const handler = (event: MessageEvent<SandboxMessage>) => {
+            if (event.data.type === 'mcp-response' && event.data.response?.id === request.id) {
+                sandbox.removeEventListener('message', handler);
+                // Cast to expected type - worker returns compatible structure
+                resolve(event.data.response as any);
+            }
+        };
+        sandbox.addEventListener('message', handler);
+
+        // Send as MCP JSON-RPC request
+        sandbox.postMessage({
+            type: 'mcp-request',
+            id: internalId,
+            request
+        });
+    });
+}

@@ -16,7 +16,8 @@ impl ShellEnv {
     /// Create a new shell environment with default values.
     pub fn new() -> Self {
         Self {
-            cwd: PathBuf::from("/"),
+            // Use "." for current directory - works better with WASI preopened dirs
+            cwd: PathBuf::from("."),
             env_vars: HashMap::new(),
         }
     }

@@ -12,6 +12,22 @@ import {
     OutgoingResponse
 } from './wasm/wasi-http-impl.js';
 import { JsonRpcRequest, JsonRpcResponse } from './mcp-client';
+import { initFilesystem } from './wasm/opfs-filesystem-impl';
+
+// Track if OPFS has been initialized
+let opfsInitialized = false;
+
+/**
+ * Ensure OPFS filesystem is initialized before WASM calls
+ */
+async function ensureOpfsInit(): Promise<void> {
+    if (opfsInitialized) return;
+
+    console.log('[WASM Bridge] Initializing OPFS filesystem...');
+    await initFilesystem();
+    opfsInitialized = true;
+    console.log('[WASM Bridge] OPFS filesystem initialized');
+}
 
 /**
  * Call the WASM MCP server with a JSON-RPC request
@@ -24,6 +40,9 @@ import { JsonRpcRequest, JsonRpcResponse } from './mcp-client';
  * 5. Parses and returns the JSON-RPC response
  */
 export async function callWasmMcpServer(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+    // Ensure OPFS is initialized before any WASM calls
+    await ensureOpfsInit();
+
     // 1. Serialize the request to JSON
     const requestBody = JSON.stringify(request);
 
@@ -121,7 +140,7 @@ export async function callWasmMcpServer(request: JsonRpcRequest): Promise<JsonRp
  * This is called once to ensure the WASM module is loaded
  */
 export async function initWasmBridge(): Promise<void> {
-    // The module is already loaded via import
-    // This function exists for API consistency
+    await ensureOpfsInit();
     console.log('[WASM Bridge] Initialized');
 }
+

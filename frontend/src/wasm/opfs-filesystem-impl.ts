@@ -8,6 +8,11 @@
  * This replaces @bytecodealliance/preview2-shim/filesystem for browser workers.
  */
 
+// @ts-ignore
+import { streams } from '@bytecodealliance/preview2-shim/io';
+// @ts-ignore
+const { InputStream } = streams as any;
+
 // ============================================================
 // DIRECTORY TREE (in-memory, loaded on startup)
 // ============================================================
@@ -53,19 +58,31 @@ export async function initFilesystem(): Promise<void> {
 }
 
 /**
- * Recursively scan OPFS directory and populate the tree
+ * Recursively scan OPFS directory, populate the tree, and pre-acquire sync handles
  */
-async function scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry): Promise<void> {
+async function scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry, basePath: string = ''): Promise<void> {
     if (!tree.dir) tree.dir = {};
 
     for await (const [name, child] of (handle as any).entries()) {
+        const fullPath = basePath ? `${basePath}/${name}` : name;
+
         if (child.kind === 'directory') {
             tree.dir[name] = { dir: {} };
-            await scanDirectory(child as FileSystemDirectoryHandle, tree.dir[name]);
+            await scanDirectory(child as FileSystemDirectoryHandle, tree.dir[name], fullPath);
         } else {
-            // Get file size
-            const file = await (child as FileSystemFileHandle).getFile();
+            // Get file size and pre-acquire sync handle
+            const fileHandle = child as FileSystemFileHandle;
+            const file = await fileHandle.getFile();
             tree.dir[name] = { size: file.size };
+
+            // Pre-acquire sync handle for reads
+            try {
+                const syncHandle = await fileHandle.createSyncAccessHandle();
+                syncHandleCache.set(fullPath, syncHandle);
+                console.log('[opfs-fs] Pre-acquired sync handle for:', fullPath);
+            } catch (e) {
+                console.warn('[opfs-fs] Failed to acquire sync handle for:', fullPath, e);
+            }
         }
     }
 }
@@ -348,7 +365,7 @@ class Descriptor {
     }
 
     /**
-     * Read via stream - simplified version
+     * Read via stream - returns proper WASI InputStream resource
      */
     readViaStream(_offset: bigint): any {
         const path = this.path;
@@ -356,16 +373,17 @@ class Descriptor {
 
         const handle = syncHandleCache.get(path);
         if (!handle) {
+            console.warn('[opfs-fs] No sync handle for readViaStream, path:', path);
             throw 'no-entry';
         }
 
         const size = handle.getSize();
 
-        // Return a simple object with blockingRead
-        return {
-            blockingRead(len: bigint) {
+        // Return a proper InputStream instance (required by WASI)
+        return new InputStream({
+            read(len: bigint): Uint8Array {
                 if (offset >= size) {
-                    throw { tag: 'closed' };
+                    return new Uint8Array(0);
                 }
                 const readLen = Math.min(Number(len), size - offset);
                 const buffer = new Uint8Array(readLen);
@@ -373,7 +391,19 @@ class Descriptor {
                 offset += readLen;
                 return buffer;
             },
-        };
+            blockingRead(len: bigint): Uint8Array {
+                if (offset >= size) {
+                    return new Uint8Array(0);
+                }
+                const readLen = Math.min(Number(len), size - offset);
+                const buffer = new Uint8Array(readLen);
+                handle.read(buffer, { at: offset });
+                offset += readLen;
+                return buffer;
+            },
+            subscribe(): void { },
+            [Symbol.dispose](): void { }
+        });
     }
 
     /**
@@ -426,11 +456,13 @@ class Descriptor {
     }
 
     readDirectory(): DirectoryEntryStream {
+        console.log('[opfs-fs] readDirectory called, path:', this.path, 'hasDir:', !!this.treeEntry.dir);
         if (!this.treeEntry.dir) {
             throw 'bad-descriptor';
         }
 
         const entries = Object.entries(this.treeEntry.dir).sort(([a], [b]) => a > b ? 1 : -1);
+        console.log('[opfs-fs] readDirectory returning', entries.length, 'entries:', entries.map(e => e[0]));
         return new DirectoryEntryStream(entries);
     }
 
