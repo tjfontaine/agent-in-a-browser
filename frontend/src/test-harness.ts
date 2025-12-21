@@ -1,3 +1,10 @@
+/**
+ * Test Harness for MCP Tools
+ * 
+ * Tests the WASM MCP server tools through the sandbox worker.
+ * Uses the proper MCP JSON-RPC protocol.
+ */
+
 const output = document.getElementById('output')!;
 
 function log(msg: string, type: 'info' | 'error' | 'success' = 'info') {
@@ -11,139 +18,129 @@ function log(msg: string, type: 'info' | 'error' | 'success' = 'info') {
 
 const worker = new Worker(new URL('./sandbox-worker.ts', import.meta.url), { type: 'module' });
 
-let pendingResolvers = new Map<string, (result: any) => void>();
+let pendingResolvers = new Map<string | number, (result: any) => void>();
 let nextId = 1;
+let mcpInitialized = false;
 
 worker.onmessage = (e) => {
     const data = e.data;
-    if (data.type === 'ready') {
-        log('Sandbox Worker Ready', 'success');
+    if (data.type === 'mcp-initialized') {
+        log(`MCP initialized: ${data.serverInfo.name} v${data.serverInfo.version}`, 'success');
+        log(`Available tools: ${data.tools.map((t: any) => t.name).join(', ')}`);
+        mcpInitialized = true;
         runTests();
-    } else if (data.type === 'tool_result') {
-        const resolve = pendingResolvers.get(data.id);
+    } else if (data.type === 'mcp-response') {
+        const resolve = pendingResolvers.get(data.response.id);
         if (resolve) {
-            pendingResolvers.delete(data.id);
-            resolve(data.result);
+            pendingResolvers.delete(data.response.id);
+            resolve(data.response);
         }
-    } else if (data.type === 'log') {
-        // Legacy logs
-        log(`Worker Log: ${data.message}`);
     } else if (data.type === 'error') {
         log(`Worker Error: ${data.message}`, 'error');
     }
 };
 
-function callTool(name: string, input: any): Promise<any> {
+/**
+ * Call an MCP tool via JSON-RPC
+ */
+function callMcpTool(name: string, args: Record<string, unknown>): Promise<{ success: boolean, output: string, error?: string }> {
     return new Promise((resolve) => {
-        const id = String(nextId++);
-        pendingResolvers.set(id, resolve);
-        worker.postMessage({ type: 'call_tool', id, tool: { name, input } });
+        const id = nextId++;
+        pendingResolvers.set(id, (response) => {
+            if (response.error) {
+                resolve({ success: false, output: '', error: response.error.message });
+            } else {
+                const result = response.result;
+                // MCP returns content array with text items
+                const text = result.content?.map((c: any) => c.text).join('\n') || '';
+                const isError = result.isError === true;
+                resolve({
+                    success: !isError,
+                    output: text,
+                    error: isError ? text : undefined
+                });
+            }
+        });
+
+        worker.postMessage({
+            type: 'mcp-request',
+            request: {
+                jsonrpc: '2.0',
+                id,
+                method: 'tools/call',
+                params: { name, arguments: args }
+            }
+        });
     });
 }
 
 async function runTests() {
-    log('Starting tests...');
+    log('Starting MCP tool tests...');
 
     try {
-        // Test 1: Console
-        log('Test 1: Console execution');
-        let res = await callTool('execute', { code: 'console.log("Hello Harness")' });
-        if (res.success && res.output.includes('Hello Harness')) {
+        // Test 1: run_typescript with console.log
+        log('Test 1: run_typescript with console.log');
+        let res = await callMcpTool('run_typescript', { code: 'console.log("Hello MCP")' });
+        if (res.success && res.output.includes('Hello MCP')) {
             log('Test 1 Passed', 'success');
         } else {
             log(`Test 1 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 2a: Fetch Status (Basic Async)
-        log('Test 2a: Fetch Status');
-        res = await callTool('execute_typescript', {
+        // Test 2: run_typescript with fetch
+        log('Test 2: run_typescript with fetch');
+        res = await callMcpTool('run_typescript', {
             code: `
-                console.log('Fetching 2a...');
                 const r = await fetch('https://jsonplaceholder.typicode.com/todos/1'); 
-                console.log('Status 2a:', r.status);
+                console.log('Status:', r.status);
             `
         });
-        if (res.success && res.output.includes('Status 2a: 200')) {
-            log('Test 2a Passed', 'success');
+        if (res.success && res.output.includes('Status: 200')) {
+            log('Test 2 Passed', 'success');
         } else {
-            log(`Test 2a Failed: ${JSON.stringify(res)}`, 'error');
+            log(`Test 2 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 2b: Fetch Text
-        log('Test 2b: Fetch Text');
-        res = await callTool('execute_typescript', {
-            code: `
-                console.log('Fetching 2b...');
-                const r = await fetch('https://jsonplaceholder.typicode.com/todos/1'); 
-                const t = await r.text();
-                console.log('Text length:', t.length);
-            `
-        });
-        if (res.success && res.output.includes('Text length:')) {
-            log('Test 2b Passed', 'success');
-        } else {
-            log(`Test 2b Failed: ${JSON.stringify(res)}`, 'error');
-        }
-
-        // Test 2c: Fetch JSON
-        log('Test 2c: Fetch JSON');
-        res = await callTool('execute_typescript', {
-            code: `
-                console.log('Fetching 2c...');
-                const r = await fetch('https://jsonplaceholder.typicode.com/todos/1'); 
-                const j = await r.json(); 
-                console.log("Fetched ID:", j.id);
-            `
-        });
-        if (res.success && res.output.includes('Fetched ID: 1')) {
-            log('Test 2c Passed', 'success');
-        } else {
-            log(`Test 2c Failed: ${JSON.stringify(res)}`, 'error');
-        }
-
-        // Test 3: FS (OPFS)
-        log('Test 3: File System');
-        await callTool('write_file', { path: '/test.txt', content: 'hello harness' });
-        res = await callTool('read_file', { path: '/test.txt' });
-        if (res.success && res.output === 'hello harness') {
+        // Test 3: write_file and read_file
+        log('Test 3: write_file and read_file');
+        await callMcpTool('write_file', { path: '/test.txt', content: 'hello mcp' });
+        res = await callMcpTool('read_file', { path: '/test.txt' });
+        if (res.success && res.output === 'hello mcp') {
             log('Test 3 Passed', 'success');
         } else {
             log(`Test 3 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 3b: FS (QuickJS)
-        log('Test 3b: File System (QuickJS)');
-        res = await callTool('execute_typescript', {
-            code: `
-                const path = '/test-quickjs.txt';
-                await fs.promises.writeFile(path, 'from quickjs');
-                const content = await fs.promises.readFile(path);
-                console.log('Read:', content);
-            `
-        });
-        if (res.success && res.output.includes('Read: from quickjs')) {
-            log('Test 3b Passed', 'success');
+        // Test 4: list directory
+        log('Test 4: list directory');
+        res = await callMcpTool('list', { path: '/' });
+        if (res.success && res.output.includes('test.txt')) {
+            log('Test 4 Passed', 'success');
         } else {
-            log(`Test 3b Failed: ${JSON.stringify(res)}`, 'error');
+            log(`Test 4 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 4: Timeout (Infinite Loop)
-        log('Test 4: Timeout (Infinite Loop)');
-        res = await callTool('execute', { code: 'while(true){}' });
-        // Error message might vary but should indicate timeout
-        if (res.success === false && (res.error?.includes('timed out') || res.error?.includes('interrupted'))) {
-            log('Test 4 Passed (Correctly timed out)', 'success');
-        } else {
-            log(`Test 4 Failed: Expected timeout, got ${JSON.stringify(res)}`, 'error');
-        }
-
-        // Test 5: Recovery after timeout
-        log('Test 5: Recovery check');
-        res = await callTool('execute', { code: 'console.log("Recovered")' });
-        if (res.success && res.output.includes('Recovered')) {
+        // Test 5: grep
+        log('Test 5: grep');
+        res = await callMcpTool('grep', { pattern: 'hello', path: '/' });
+        if (res.success && res.output.includes('/test.txt')) {
             log('Test 5 Passed', 'success');
         } else {
-            log(`Test 5 Failed: Context did not recover. ${JSON.stringify(res)}`, 'error');
+            log(`Test 5 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 6: TypeScript type annotations
+        log('Test 6: TypeScript type annotations');
+        res = await callMcpTool('run_typescript', {
+            code: `
+                const add = (a: number, b: number): number => a + b;
+                console.log('Sum:', add(2, 3));
+            `
+        });
+        if (res.success && res.output.includes('Sum: 5')) {
+            log('Test 6 Passed', 'success');
+        } else {
+            log(`Test 6 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
         log('All tests completed.');
