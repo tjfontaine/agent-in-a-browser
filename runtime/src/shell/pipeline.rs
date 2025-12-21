@@ -6,11 +6,106 @@ use super::env::{ShellEnv, ShellResult};
 /// Default pipe capacity in bytes.
 const PIPE_CAPACITY: usize = 4096;
 
-/// Run a shell pipeline.
+/// Operator for chaining commands
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ChainOp {
+    /// && - run next only if previous succeeded
+    And,
+    /// || - run next only if previous failed
+    Or,
+    /// ; - always run next
+    Seq,
+}
+
+/// Run a shell pipeline with support for &&, ||, and ; operators.
 /// 
-/// Parses the command line, creates pipe chains, and executes all commands.
-/// Returns the exit code of the last command in the pipeline.
+/// Parses the command line, handles chaining operators, creates pipe chains, 
+/// and executes all commands. Returns the exit code of the last command.
 pub async fn run_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
+    let cmd_line = cmd_line.trim();
+    
+    if cmd_line.is_empty() {
+        return ShellResult::success("");
+    }
+
+    // First, split by chain operators (&&, ||, ;) while preserving the operator
+    let chain_segments = split_by_chain_ops(cmd_line);
+    
+    let mut combined_stdout = String::new();
+    let mut combined_stderr = String::new();
+    let mut last_code = 0i32;
+    
+    for (segment, op) in chain_segments {
+        // Check if we should run this segment based on previous result
+        let should_run = match op {
+            None => true, // First segment always runs
+            Some(ChainOp::And) => last_code == 0,
+            Some(ChainOp::Or) => last_code != 0,
+            Some(ChainOp::Seq) => true,
+        };
+        
+        if should_run {
+            let result = run_single_pipeline(segment.trim(), env).await;
+            combined_stdout.push_str(&result.stdout);
+            combined_stderr.push_str(&result.stderr);
+            last_code = result.code;
+        }
+    }
+    
+    ShellResult {
+        stdout: combined_stdout,
+        stderr: combined_stderr,
+        code: last_code,
+    }
+}
+
+/// Split command line by chain operators (&&, ||, ;)
+/// Returns Vec of (segment, preceding_operator)
+fn split_by_chain_ops(cmd_line: &str) -> Vec<(&str, Option<ChainOp>)> {
+    let mut result = Vec::new();
+    let mut remaining = cmd_line;
+    let mut prev_op: Option<ChainOp> = None;
+    
+    loop {
+        // Find the next chain operator
+        let and_pos = remaining.find("&&");
+        let or_pos = remaining.find("||");
+        let seq_pos = remaining.find(';');
+        
+        // Find the earliest operator
+        let next_split = [
+            and_pos.map(|p| (p, 2, ChainOp::And)),
+            or_pos.map(|p| (p, 2, ChainOp::Or)),
+            seq_pos.map(|p| (p, 1, ChainOp::Seq)),
+        ]
+        .into_iter()
+        .flatten()
+        .min_by_key(|(pos, _, _)| *pos);
+        
+        match next_split {
+            Some((pos, len, op)) => {
+                let segment = &remaining[..pos];
+                if !segment.trim().is_empty() {
+                    result.push((segment, prev_op));
+                }
+                prev_op = Some(op);
+                remaining = &remaining[pos + len..];
+            }
+            None => {
+                // No more operators, push remaining if non-empty
+                if !remaining.trim().is_empty() {
+                    result.push((remaining, prev_op));
+                }
+                break;
+            }
+        }
+    }
+    
+    result
+}
+
+/// Run a single pipeline (handles | only, no &&/||/;)
+async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
     let cmd_line = cmd_line.trim();
     
     if cmd_line.is_empty() {

@@ -1,10 +1,14 @@
-//! Miscellaneous commands: seq, sleep
+//! Miscellaneous commands: seq, sleep, date
 
 use futures_lite::io::AsyncWriteExt;
 use runtime_macros::{shell_command, shell_commands};
 
 use super::super::ShellEnv;
 use super::{parse_common, CommandFn};
+
+// Import WASI clock bindings
+use crate::bindings::wasi::clocks::monotonic_clock;
+use crate::bindings::wasi::clocks::wall_clock;
 
 /// Miscellaneous commands.
 pub struct MiscCommands;
@@ -91,9 +95,112 @@ impl MiscCommands {
             }
             
             let secs: f64 = remaining[0].parse().unwrap_or(0.0);
-            // Note: In WASM we can't actually sleep synchronously
-            let _ = secs;
+            
+            // Convert seconds to nanoseconds for WASI Duration
+            let nanos = (secs * 1_000_000_000.0) as u64;
+            
+            if nanos > 0 {
+                // Idiomatic WASI: subscribe to a duration pollable and block until ready
+                let pollable = monotonic_clock::subscribe_duration(nanos);
+                pollable.block();
+            }
+            
             0
         })
     }
+
+    /// date - print the current date and time
+    #[shell_command(
+        name = "date",
+        usage = "date [+FORMAT]",
+        description = "Print the current date and time"
+    )]
+    fn cmd_date(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        _stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, _remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("date") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            
+            // Get current wall clock time from WASI
+            let datetime = wall_clock::now();
+            
+            // Convert to human-readable format
+            // datetime.seconds is seconds since Unix epoch (1970-01-01 00:00:00 UTC)
+            let total_secs = datetime.seconds;
+            
+            // Simple date/time calculation (UTC)
+            const SECS_PER_MIN: u64 = 60;
+            const SECS_PER_HOUR: u64 = 3600;
+            const SECS_PER_DAY: u64 = 86400;
+            
+            let days_since_epoch = total_secs / SECS_PER_DAY;
+            let time_of_day = total_secs % SECS_PER_DAY;
+            
+            let hours = time_of_day / SECS_PER_HOUR;
+            let minutes = (time_of_day % SECS_PER_HOUR) / SECS_PER_MIN;
+            let seconds = time_of_day % SECS_PER_MIN;
+            
+            // Calculate year, month, day from days since epoch
+            // Using a simplified algorithm
+            let (year, month, day) = days_to_ymd(days_since_epoch);
+            
+            let output = format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC\n",
+                year, month, day, hours, minutes, seconds
+            );
+            
+            let _ = stdout.write_all(output.as_bytes()).await;
+            0
+        })
+    }
+}
+
+/// Convert days since Unix epoch to year, month, day
+fn days_to_ymd(days: u64) -> (i32, u32, u32) {
+    // Days since 1970-01-01
+    let mut remaining_days = days as i64;
+    let mut year = 1970i32;
+    
+    loop {
+        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        year += 1;
+    }
+    
+    let leap = is_leap_year(year);
+    let days_in_months: [i64; 12] = if leap {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    
+    let mut month = 1u32;
+    for days_in_month in days_in_months.iter() {
+        if remaining_days < *days_in_month {
+            break;
+        }
+        remaining_days -= days_in_month;
+        month += 1;
+    }
+    
+    let day = (remaining_days + 1) as u32;
+    
+    (year, month, day)
+}
+
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
