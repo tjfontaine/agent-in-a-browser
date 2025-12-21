@@ -16,10 +16,9 @@ use bindings::exports::wasi::http::incoming_handler::Guest;
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
-use mcp_server::{
-    JsonRpcRequest, JsonRpcResponse, McpServer, ServerInfo, ToolDefinition, ToolResult,
-};
+use mcp_server::{JsonRpcRequest, JsonRpcResponse, ToolResult};
 use rquickjs::{AsyncContext, AsyncRuntime, CatchResultExt};
+use runtime_macros::mcp_tool_router;
 use serde_json::json;
 use std::cell::RefCell;
 
@@ -33,6 +32,7 @@ thread_local! {
     static MCP_SERVER: RefCell<Option<TsRuntimeMcp>> = RefCell::new(None);
 }
 
+#[mcp_tool_router]
 impl TsRuntimeMcp {
     pub fn new() -> Result<Self, String> {
         let runtime =
@@ -101,19 +101,24 @@ impl TsRuntimeMcp {
         }))
     }
 
+    // Internal helpers - may be used for non-browser-fs implementations in the future
+    #[allow(dead_code)]
     fn transpile_code(&self, code: &str) -> Result<String, String> {
         transpiler::transpile(code)
     }
 
-    fn read_file(&self, path: &str) -> Result<String, String> {
+    #[allow(dead_code)]
+    fn read_file_internal(&self, path: &str) -> Result<String, String> {
         std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))
     }
 
-    fn write_file(&self, path: &str, content: &str) -> Result<(), String> {
+    #[allow(dead_code)]
+    fn write_file_internal(&self, path: &str, content: &str) -> Result<(), String> {
         std::fs::write(path, content).map_err(|e| format!("Failed to write {}: {}", path, e))
     }
 
-    fn list_dir(&self, path: &str) -> Result<Vec<String>, String> {
+    #[allow(dead_code)]
+    fn list_dir_internal(&self, path: &str) -> Result<Vec<String>, String> {
         let entries =
             std::fs::read_dir(path).map_err(|e| format!("Failed to list {}: {}", path, e))?;
         let mut result = Vec::new();
@@ -127,214 +132,130 @@ impl TsRuntimeMcp {
         }
         Ok(result)
     }
-}
 
-impl McpServer for TsRuntimeMcp {
-    fn server_info(&self) -> ServerInfo {
-        ServerInfo {
-            name: "ts-runtime".to_string(),
-            version: "0.1.0".to_string(),
+    // ============================================================
+    // MCP Tools - these are auto-registered by #[mcp_tool_router]
+    // ============================================================
+
+    #[mcp_tool(description = "Execute TypeScript or JavaScript code and return the output. Use console.log() to produce output.")]
+    fn run_typescript(&mut self, code: String) -> ToolResult {
+        if code.is_empty() {
+            return ToolResult::error("No code provided");
+        }
+        match self.eval_code(&code) {
+            Ok(r) => ToolResult::text(r),
+            Err(e) => ToolResult::error(e),
         }
     }
 
-    fn list_tools(&self) -> Vec<ToolDefinition> {
-        vec![
-            ToolDefinition {
-                name: "run_typescript".to_string(),
-                description: "Execute TypeScript or JavaScript code and return the output. Use console.log() to produce output.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The TypeScript or JavaScript code to execute"
-                        }
-                    },
-                    "required": ["code"]
-                }),
-            },
-            ToolDefinition {
-                name: "read_file".to_string(),
-                description: "Read the contents of a file at the given path.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "The path to the file to read"
-                        }
-                    },
-                    "required": ["path"]
-                }),
-            },
-            ToolDefinition {
-                name: "write_file".to_string(),
-                description: "Write content to a file at the given path. Creates parent directories if needed.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "The path to the file to write"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "The content to write to the file"
-                        }
-                    },
-                    "required": ["path", "content"]
-                }),
-            },
-            ToolDefinition {
-                name: "list".to_string(),
-                description: "List files and directories at the given path.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "The directory path to list (default: /)"
-                        }
-                    },
-                    "required": []
-                }),
-            },
-            ToolDefinition {
-                name: "grep".to_string(),
-                description: "Search for a pattern in files under the given path.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "pattern": {
-                            "type": "string",
-                            "description": "The regex pattern to search for"
-                        },
-                        "path": {
-                            "type": "string",
-                            "description": "The directory path to search in (default: /)"
-                        }
-                    },
-                    "required": ["pattern"]
-                }),
-            },
-        ]
+    #[mcp_tool(description = "Read the contents of a file at the given path.")]
+    fn read_file(&self, path: String) -> ToolResult {
+        use crate::bindings::mcp::ts_runtime::browser_fs;
+
+        if path.is_empty() {
+            return ToolResult::error("No path provided");
+        }
+        let result_json = browser_fs::read_file(&path);
+        match serde_json::from_str::<serde_json::Value>(&result_json) {
+            Ok(result) => {
+                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    let content = result.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                    ToolResult::text(content)
+                } else {
+                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    ToolResult::error(error)
+                }
+            }
+            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+        }
     }
 
-    fn call_tool(&mut self, name: &str, arguments: serde_json::Value) -> ToolResult {
+    #[mcp_tool(description = "Write content to a file at the given path. Creates parent directories if needed.")]
+    fn write_file(&self, path: String, content: String) -> ToolResult {
         use crate::bindings::mcp::ts_runtime::browser_fs;
-        
-        match name {
-            "run_typescript" => {
-                let code = arguments.get("code").and_then(|v| v.as_str()).unwrap_or("");
-                if code.is_empty() {
-                    return ToolResult::error("No code provided".to_string());
-                }
-                match self.eval_code(code) {
-                    Ok(r) => ToolResult::text(r),
-                    Err(e) => ToolResult::error(e),
+
+        if path.is_empty() {
+            return ToolResult::error("No path provided");
+        }
+        let result_json = browser_fs::write_file(&path, &content);
+        match serde_json::from_str::<serde_json::Value>(&result_json) {
+            Ok(result) => {
+                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    ToolResult::text(format!("File written: {}", path))
+                } else {
+                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    ToolResult::error(error)
                 }
             }
-            "read_file" => {
-                let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                if path.is_empty() {
-                    return ToolResult::error("No path provided".to_string());
-                }
-                let result_json = browser_fs::read_file(path);
-                // Parse the result and return appropriately
-                match serde_json::from_str::<serde_json::Value>(&result_json) {
-                    Ok(result) => {
-                        if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            let content = result.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                            ToolResult::text(content.to_string())
-                        } else {
-                            let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                            ToolResult::error(error.to_string())
-                        }
+            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+        }
+    }
+
+    #[mcp_tool(description = "List files and directories at the given path.")]
+    fn list(&self, path: Option<String>) -> ToolResult {
+        use crate::bindings::mcp::ts_runtime::browser_fs;
+
+        let path = path.as_deref().unwrap_or("/");
+        let result_json = browser_fs::list_dir(path);
+        match serde_json::from_str::<serde_json::Value>(&result_json) {
+            Ok(result) => {
+                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    let entries = result.get("entries")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .collect::<Vec<_>>()
+                            .join("\n"))
+                        .unwrap_or_default();
+                    if entries.is_empty() {
+                        ToolResult::text("(empty directory)")
+                    } else {
+                        ToolResult::text(entries)
                     }
-                    Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+                } else {
+                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    ToolResult::error(error)
                 }
             }
-            "write_file" => {
-                let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                let content = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                if path.is_empty() {
-                    return ToolResult::error("No path provided".to_string());
-                }
-                let result_json = browser_fs::write_file(path, content);
-                match serde_json::from_str::<serde_json::Value>(&result_json) {
-                    Ok(result) => {
-                        if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            ToolResult::text(format!("File written: {}", path))
-                        } else {
-                            let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                            ToolResult::error(error.to_string())
-                        }
+            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+        }
+    }
+
+    #[mcp_tool(description = "Search for a pattern in files under the given path.")]
+    fn grep(&self, pattern: String, path: Option<String>) -> ToolResult {
+        use crate::bindings::mcp::ts_runtime::browser_fs;
+
+        if pattern.is_empty() {
+            return ToolResult::error("No pattern provided");
+        }
+        let path = path.as_deref().unwrap_or("/");
+        let result_json = browser_fs::grep(&pattern, path);
+        match serde_json::from_str::<serde_json::Value>(&result_json) {
+            Ok(result) => {
+                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    let matches = result.get("matches")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter()
+                            .filter_map(|m| {
+                                let file = m.get("file")?.as_str()?;
+                                let line = m.get("line")?.as_u64()?;
+                                let text = m.get("text")?.as_str()?;
+                                Some(format!("{}:{}: {}", file, line, text))
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n"))
+                        .unwrap_or_default();
+                    if matches.is_empty() {
+                        ToolResult::text("No matches found")
+                    } else {
+                        ToolResult::text(matches)
                     }
-                    Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+                } else {
+                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+                    ToolResult::error(error)
                 }
             }
-            "list" => {
-                let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("/");
-                let result_json = browser_fs::list_dir(path);
-                match serde_json::from_str::<serde_json::Value>(&result_json) {
-                    Ok(result) => {
-                        if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            let entries = result.get("entries")
-                                .and_then(|v| v.as_array())
-                                .map(|arr| arr.iter()
-                                    .filter_map(|v| v.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join("\n"))
-                                .unwrap_or_default();
-                            if entries.is_empty() {
-                                ToolResult::text("(empty directory)".to_string())
-                            } else {
-                                ToolResult::text(entries)
-                            }
-                        } else {
-                            let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                            ToolResult::error(error.to_string())
-                        }
-                    }
-                    Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
-                }
-            }
-            "grep" => {
-                let pattern = arguments.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
-                let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("/");
-                if pattern.is_empty() {
-                    return ToolResult::error("No pattern provided".to_string());
-                }
-                let result_json = browser_fs::grep(pattern, path);
-                match serde_json::from_str::<serde_json::Value>(&result_json) {
-                    Ok(result) => {
-                        if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            let matches = result.get("matches")
-                                .and_then(|v| v.as_array())
-                                .map(|arr| arr.iter()
-                                    .filter_map(|m| {
-                                        let file = m.get("file")?.as_str()?;
-                                        let line = m.get("line")?.as_u64()?;
-                                        let text = m.get("text")?.as_str()?;
-                                        Some(format!("{}:{}: {}", file, line, text))
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("\n"))
-                                .unwrap_or_default();
-                            if matches.is_empty() {
-                                ToolResult::text("No matches found".to_string())
-                            } else {
-                                ToolResult::text(matches)
-                            }
-                        } else {
-                            let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                            ToolResult::error(error.to_string())
-                        }
-                    }
-                    Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
-                }
-            }
-            _ => ToolResult::error(format!("Unknown tool: {}", name)),
+            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
         }
     }
 }

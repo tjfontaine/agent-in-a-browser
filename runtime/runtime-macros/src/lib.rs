@@ -38,6 +38,17 @@ pub fn mcp_tool(attr: TokenStream, item: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// Internal marker attribute - consumed by #[mcp_tool_router].
+/// When expanded standalone (not in router context), just passes through the item.
+/// The router looks for these before they would run.
+#[proc_macro_attribute]
+pub fn mcp_tool_marker(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // If we reach here, it means mcp_tool_router already ran and stripped us,
+    // or we're being used incorrectly. Just return the item unchanged.
+    let _ = attr; // suppress unused warning
+    item
+}
+
 /// Parsed arguments from #[mcp_tool(description = "...")]
 struct ToolAttrArgs {
     description: LitStr,
@@ -61,9 +72,9 @@ impl ToTokens for ToolAttrArgs {
     }
 }
 
-/// Parses the description from a #[mcp_tool_marker(description = "...")] attribute
+/// Parses the description from a #[mcp_tool(description = "...")] attribute
 fn parse_tool_description(attr: &Attribute) -> Option<String> {
-    if !attr.path().is_ident("mcp_tool_marker") {
+    if !attr.path().is_ident("mcp_tool") {
         return None;
     }
     
@@ -98,9 +109,9 @@ pub fn mcp_tool_router(_attr: TokenStream, item: TokenStream) -> TokenStream {
     for item in input.items {
         match item {
             ImplItem::Fn(mut method) => {
-                // Check if this method has #[mcp_tool_marker] attribute
+                // Check if this method has #[mcp_tool] attribute
                 let tool_attr = method.attrs.iter()
-                    .find(|a| a.path().is_ident("mcp_tool_marker"));
+                    .find(|a| a.path().is_ident("mcp_tool"));
                 
                 if let Some(attr) = tool_attr {
                     if let Some(description) = parse_tool_description(attr) {
@@ -115,8 +126,8 @@ pub fn mcp_tool_router(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         });
                     }
                     
-                    // Remove the marker attribute from the output
-                    method.attrs.retain(|a| !a.path().is_ident("mcp_tool_marker"));
+                    // Remove the mcp_tool attribute from the output
+                    method.attrs.retain(|a| !a.path().is_ident("mcp_tool"));
                 }
                 
                 methods.push(method);
