@@ -6,7 +6,7 @@
  * - Prompt always stays at the bottom of the viewport
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, memo } from 'react';
 import { InkXterm, Box, Text, useStdout, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
 import { useAgent, AgentOutput } from './agent/useAgent';
@@ -24,14 +24,14 @@ const colors = {
     dim: '#8b949e',
 };
 
-// OutputLine component for rendering different types of output
-function OutputLine({ output }: { output: AgentOutput }) {
+// OutputLine component - memoized to reduce re-renders
+const OutputLine = memo(function OutputLine({ output }: { output: AgentOutput }) {
     return (
         <Text color={output.color}>
             {output.content || ' '}
         </Text>
     );
-}
+});
 
 // Terminal content component - rendered inside InkXterm
 function TerminalContent({
@@ -53,6 +53,13 @@ function TerminalContent({
     const { stdout } = useStdout();
     const terminalRows = stdout?.rows ?? 24;
 
+    // Reserve space for prompt (2 lines) and calculate available content rows
+    const promptRows = 2;
+    const contentRows = Math.max(1, terminalRows - promptRows);
+
+    // Only show the last N outputs to prevent overflow
+    const visibleOutputs = outputs.slice(-contentRows);
+
     // Handle Ctrl+C to cancel
     useInput((_input, key) => {
         if (key.ctrl && _input === 'c' && isBusy) {
@@ -66,14 +73,18 @@ function TerminalContent({
             height={terminalRows}
             paddingX={1}
         >
-            {/* Content area - takes all available space minus prompt */}
-            <Box flexDirection="column" flexGrow={1}>
-                {outputs.map((output) => (
+            {/* Content area - fixed height, shows last N lines */}
+            <Box
+                flexDirection="column"
+                height={contentRows}
+                overflow="hidden"
+            >
+                {visibleOutputs.map((output) => (
                     <OutputLine key={output.id} output={output} />
                 ))}
             </Box>
 
-            {/* Prompt at bottom */}
+            {/* Prompt at bottom - always visible */}
             {isReady && !isBusy && (
                 <TextInput
                     onSubmit={onSubmit}
