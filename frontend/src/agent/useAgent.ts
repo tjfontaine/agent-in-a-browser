@@ -70,6 +70,8 @@ export function useAgent(): UseAgentReturn {
     const flushScheduledRef = useRef(false);  // Whether a flush is scheduled
 
     // Flush pending outputs - batches multiple addOutput calls into single state update
+    // This helps mitigate xterm.js issue #5011 by reducing re-render frequency
+    // https://github.com/xtermjs/xterm.js/issues/5011
     const flushOutputs = useCallback(() => {
         flushScheduledRef.current = false;
         const pending = pendingOutputsRef.current;

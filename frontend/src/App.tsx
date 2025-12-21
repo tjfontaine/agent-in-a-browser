@@ -137,8 +137,12 @@ export default function App() {
         // Start initialization
         initialize();
 
-        // Delay terminal mount to ensure container dimensions are ready
-        // 200ms gives xterm enough time to initialize its viewport dimensions
+        // WORKAROUND: Delay terminal mount to mitigate xterm.js issue #5011
+        // https://github.com/xtermjs/xterm.js/issues/5011
+        // The xterm Viewport tries to access dimensions before the DOM element
+        // is fully rendered, causing "Cannot read dimensions of undefined" errors.
+        // 200ms delay gives the container time to establish its dimensions.
+        // The errors are harmless but noisy in the console.
         const timer = setTimeout(() => setTerminalMounted(true), 200);
         return () => clearTimeout(timer);
     }, [initialize, addOutput]);
