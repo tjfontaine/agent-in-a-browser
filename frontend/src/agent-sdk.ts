@@ -34,6 +34,8 @@ export interface StreamCallbacks {
     onStepFinish?: (step: number) => void;
     onError?: (error: Error) => void;
     onFinish?: (steps: number) => void;
+    /** Called between steps to get any pending steering messages from user */
+    getSteering?: () => string[];
 }
 
 // Cache for MCP tools
@@ -412,10 +414,15 @@ export class WasmAgent {
                         callbacks.onText?.(chunk.text);
                     }
                 },
-                onStepFinish: async ({ text: _text, toolCalls, toolResults }) => {
+                onStepFinish: async ({ text: stepText, toolCalls, toolResults }) => {
                     stepCount++;
                     console.log('[Agent] Step finished:', stepCount);
                     callbacks.onStepFinish?.(stepCount);
+
+                    // Add assistant's step text to history if any
+                    if (stepText) {
+                        this.messages.push({ role: 'assistant', content: stepText });
+                    }
 
                     // Emit tool calls as they complete
                     for (const toolCall of toolCalls || []) {
@@ -433,6 +440,22 @@ export class WasmAgent {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const isError = resultStr.startsWith('Error:') || (toolResult as any).isError;
                         callbacks.onToolResult?.(toolResult.toolName, resultStr, !isError);
+                    }
+
+                    // Check for steering messages from user (typed while agent was working)
+                    if (callbacks.getSteering) {
+                        const steeringMessages = callbacks.getSteering();
+                        if (steeringMessages.length > 0) {
+                            // Inject steering as user messages for the agent to see
+                            for (const steer of steeringMessages) {
+                                console.log('[Agent] Injecting steering:', steer);
+                                callbacks.onText?.(`\n\n💡 [User steering]: ${steer}\n\n`);
+                                this.messages.push({
+                                    role: 'user',
+                                    content: `[IMPORTANT - User steering while you were working]: ${steer}`
+                                });
+                            }
+                        }
                     }
                 },
             });

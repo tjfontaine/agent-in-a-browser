@@ -225,6 +225,16 @@ export function useAgent(): UseAgentReturn {
                         textBufferRef.current = '';
                     }
                 },
+                // Provide steering messages - called between steps
+                getSteering: () => {
+                    // Get steering messages (queued user inputs) and clear the queue
+                    const steering: string[] = [];
+                    setMessageQueue(prev => {
+                        steering.push(...prev);
+                        return []; // Clear the queue
+                    });
+                    return steering;
+                },
             });
 
             setStatus({ text: 'Ready', color: colors.green });
