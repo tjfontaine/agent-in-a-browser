@@ -11,7 +11,8 @@
 // @ts-ignore
 import { streams } from '@bytecodealliance/preview2-shim/io';
 // @ts-ignore
-const { InputStream } = streams as any;
+const { InputStream, OutputStream } = streams as any;
+
 
 // ============================================================
 // DIRECTORY TREE (in-memory, loaded on startup)
@@ -431,7 +432,7 @@ class Descriptor {
     }
 
     /**
-     * Write via stream - simplified version
+     * Write via stream - returns proper WASI OutputStream resource
      */
     writeViaStream(_offset: bigint): any {
         const path = this.path;
@@ -440,19 +441,37 @@ class Descriptor {
 
         const handle = syncHandleCache.get(path);
         if (!handle) {
+            console.warn('[opfs-fs] No sync handle for writeViaStream, path:', path);
             throw 'no-entry';
         }
 
-        // Return a simple object with write method
-        return {
-            write(buf: Uint8Array) {
+        // Return a proper OutputStream instance (required by WASI)
+        return new OutputStream({
+            write(buf: Uint8Array): bigint {
                 handle.write(buf, { at: offset });
                 handle.flush();
                 offset += buf.byteLength;
                 entry.size = Math.max(entry.size || 0, offset);
-                return buf.byteLength;
+                return BigInt(buf.byteLength);
             },
-        };
+            blockingWriteAndFlush(buf: Uint8Array): void {
+                handle.write(buf, { at: offset });
+                handle.flush();
+                offset += buf.byteLength;
+                entry.size = Math.max(entry.size || 0, offset);
+            },
+            flush(): void {
+                handle.flush();
+            },
+            blockingFlush(): void {
+                handle.flush();
+            },
+            checkWrite(): bigint {
+                return BigInt(1024 * 1024); // 1MB available
+            },
+            subscribe(): void { },
+            [Symbol.dispose](): void { }
+        });
     }
 
     readDirectory(): DirectoryEntryStream {
