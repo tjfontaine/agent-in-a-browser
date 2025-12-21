@@ -142,212 +142,6 @@ pub mod mcp {
                 }
             }
         }
-        /// Custom file system interface for browser OPFS
-        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
-        pub mod browser_fs {
-            #[used]
-            #[doc(hidden)]
-            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
-            use super::super::super::_rt;
-            #[allow(unused_unsafe, clippy::all)]
-            /// Read file content at path
-            /// Returns JSON: {ok: true, content: string} or {ok: false, error: string}
-            pub fn read_file(path: &str) -> _rt::String {
-                unsafe {
-                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
-                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-                    struct RetArea(
-                        [::core::mem::MaybeUninit<
-                            u8,
-                        >; 2 * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let mut ret_area = RetArea(
-                        [::core::mem::MaybeUninit::uninit(); 2
-                            * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let vec0 = path;
-                    let ptr0 = vec0.as_ptr().cast::<u8>();
-                    let len0 = vec0.len();
-                    let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "mcp:ts-runtime/browser-fs@0.2.0")]
-                    unsafe extern "C" {
-                        #[link_name = "read-file"]
-                        fn wit_import2(_: *mut u8, _: usize, _: *mut u8);
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    unsafe extern "C" fn wit_import2(_: *mut u8, _: usize, _: *mut u8) {
-                        unreachable!()
-                    }
-                    unsafe { wit_import2(ptr0.cast_mut(), len0, ptr1) };
-                    let l3 = *ptr1.add(0).cast::<*mut u8>();
-                    let l4 = *ptr1
-                        .add(::core::mem::size_of::<*const u8>())
-                        .cast::<usize>();
-                    let len5 = l4;
-                    let bytes5 = _rt::Vec::from_raw_parts(l3.cast(), len5, len5);
-                    let result6 = _rt::string_lift(bytes5);
-                    result6
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            /// Write content to file at path (creates parent dirs)
-            /// Returns JSON: {ok: true} or {ok: false, error: string}
-            pub fn write_file(path: &str, content: &str) -> _rt::String {
-                unsafe {
-                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
-                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-                    struct RetArea(
-                        [::core::mem::MaybeUninit<
-                            u8,
-                        >; 2 * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let mut ret_area = RetArea(
-                        [::core::mem::MaybeUninit::uninit(); 2
-                            * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let vec0 = path;
-                    let ptr0 = vec0.as_ptr().cast::<u8>();
-                    let len0 = vec0.len();
-                    let vec1 = content;
-                    let ptr1 = vec1.as_ptr().cast::<u8>();
-                    let len1 = vec1.len();
-                    let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "mcp:ts-runtime/browser-fs@0.2.0")]
-                    unsafe extern "C" {
-                        #[link_name = "write-file"]
-                        fn wit_import3(
-                            _: *mut u8,
-                            _: usize,
-                            _: *mut u8,
-                            _: usize,
-                            _: *mut u8,
-                        );
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    unsafe extern "C" fn wit_import3(
-                        _: *mut u8,
-                        _: usize,
-                        _: *mut u8,
-                        _: usize,
-                        _: *mut u8,
-                    ) {
-                        unreachable!()
-                    }
-                    unsafe {
-                        wit_import3(ptr0.cast_mut(), len0, ptr1.cast_mut(), len1, ptr2)
-                    };
-                    let l4 = *ptr2.add(0).cast::<*mut u8>();
-                    let l5 = *ptr2
-                        .add(::core::mem::size_of::<*const u8>())
-                        .cast::<usize>();
-                    let len6 = l5;
-                    let bytes6 = _rt::Vec::from_raw_parts(l4.cast(), len6, len6);
-                    let result7 = _rt::string_lift(bytes6);
-                    result7
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            /// List directory entries
-            /// Returns JSON: {ok: true, entries: string[]} or {ok: false, error: string}
-            pub fn list_dir(path: &str) -> _rt::String {
-                unsafe {
-                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
-                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-                    struct RetArea(
-                        [::core::mem::MaybeUninit<
-                            u8,
-                        >; 2 * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let mut ret_area = RetArea(
-                        [::core::mem::MaybeUninit::uninit(); 2
-                            * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let vec0 = path;
-                    let ptr0 = vec0.as_ptr().cast::<u8>();
-                    let len0 = vec0.len();
-                    let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "mcp:ts-runtime/browser-fs@0.2.0")]
-                    unsafe extern "C" {
-                        #[link_name = "list-dir"]
-                        fn wit_import2(_: *mut u8, _: usize, _: *mut u8);
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    unsafe extern "C" fn wit_import2(_: *mut u8, _: usize, _: *mut u8) {
-                        unreachable!()
-                    }
-                    unsafe { wit_import2(ptr0.cast_mut(), len0, ptr1) };
-                    let l3 = *ptr1.add(0).cast::<*mut u8>();
-                    let l4 = *ptr1
-                        .add(::core::mem::size_of::<*const u8>())
-                        .cast::<usize>();
-                    let len5 = l4;
-                    let bytes5 = _rt::Vec::from_raw_parts(l3.cast(), len5, len5);
-                    let result6 = _rt::string_lift(bytes5);
-                    result6
-                }
-            }
-            #[allow(unused_unsafe, clippy::all)]
-            /// Search for pattern in files under path
-            /// Returns JSON: {ok: true, matches: [{file, line, text}]} or {ok: false, error: string}
-            pub fn grep(pattern: &str, path: &str) -> _rt::String {
-                unsafe {
-                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
-                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-                    struct RetArea(
-                        [::core::mem::MaybeUninit<
-                            u8,
-                        >; 2 * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let mut ret_area = RetArea(
-                        [::core::mem::MaybeUninit::uninit(); 2
-                            * ::core::mem::size_of::<*const u8>()],
-                    );
-                    let vec0 = pattern;
-                    let ptr0 = vec0.as_ptr().cast::<u8>();
-                    let len0 = vec0.len();
-                    let vec1 = path;
-                    let ptr1 = vec1.as_ptr().cast::<u8>();
-                    let len1 = vec1.len();
-                    let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
-                    #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "mcp:ts-runtime/browser-fs@0.2.0")]
-                    unsafe extern "C" {
-                        #[link_name = "grep"]
-                        fn wit_import3(
-                            _: *mut u8,
-                            _: usize,
-                            _: *mut u8,
-                            _: usize,
-                            _: *mut u8,
-                        );
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    unsafe extern "C" fn wit_import3(
-                        _: *mut u8,
-                        _: usize,
-                        _: *mut u8,
-                        _: usize,
-                        _: *mut u8,
-                    ) {
-                        unreachable!()
-                    }
-                    unsafe {
-                        wit_import3(ptr0.cast_mut(), len0, ptr1.cast_mut(), len1, ptr2)
-                    };
-                    let l4 = *ptr2.add(0).cast::<*mut u8>();
-                    let l5 = *ptr2
-                        .add(::core::mem::size_of::<*const u8>())
-                        .cast::<usize>();
-                    let len6 = l5;
-                    let bytes6 = _rt::Vec::from_raw_parts(l4.cast(), len6, len6);
-                    let result7 = _rt::string_lift(bytes6);
-                    result7
-                }
-            }
-        }
     }
 }
 #[rustfmt::skip]
@@ -567,6 +361,2874 @@ pub mod wasi {
                         nanoseconds: l3 as u32,
                     };
                     result4
+                }
+            }
+        }
+    }
+    pub mod filesystem {
+        /// WASI filesystem is a filesystem API primarily intended to let users run WASI
+        /// programs that access their files on their existing filesystems, without
+        /// significant overhead.
+        ///
+        /// It is intended to be roughly portable between Unix-family platforms and
+        /// Windows, though it does not hide many of the major differences.
+        ///
+        /// Paths are passed as interface-type `string`s, meaning they must consist of
+        /// a sequence of Unicode Scalar Values (USVs). Some filesystems may contain
+        /// paths which are not accessible by this API.
+        ///
+        /// The directory separator in WASI is always the forward-slash (`/`).
+        ///
+        /// All paths in WASI are relative paths, and are interpreted relative to a
+        /// `descriptor` referring to a base directory. If a `path` argument to any WASI
+        /// function starts with `/`, or if any step of resolving a `path`, including
+        /// `..` and symbolic link steps, reaches a directory outside of the base
+        /// directory, or reaches a symlink to an absolute or rooted path in the
+        /// underlying filesystem, the function fails with `error-code::not-permitted`.
+        ///
+        /// For more information about WASI path resolution and sandboxing, see
+        /// [WASI filesystem path resolution].
+        ///
+        /// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod types {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type InputStream = super::super::super::wasi::io::streams::InputStream;
+            pub type OutputStream = super::super::super::wasi::io::streams::OutputStream;
+            pub type Error = super::super::super::wasi::io::streams::Error;
+            pub type Datetime = super::super::super::wasi::clocks::wall_clock::Datetime;
+            /// File size or length of a region within a file.
+            pub type Filesize = u64;
+            /// The type of a filesystem object referenced by a descriptor.
+            ///
+            /// Note: This was called `filetype` in earlier versions of WASI.
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum DescriptorType {
+                /// The type of the descriptor or file is unknown or is different from
+                /// any of the other types specified.
+                Unknown,
+                /// The descriptor refers to a block device inode.
+                BlockDevice,
+                /// The descriptor refers to a character device inode.
+                CharacterDevice,
+                /// The descriptor refers to a directory inode.
+                Directory,
+                /// The descriptor refers to a named pipe.
+                Fifo,
+                /// The file refers to a symbolic link inode.
+                SymbolicLink,
+                /// The descriptor refers to a regular file inode.
+                RegularFile,
+                /// The descriptor refers to a socket.
+                Socket,
+            }
+            impl ::core::fmt::Debug for DescriptorType {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        DescriptorType::Unknown => {
+                            f.debug_tuple("DescriptorType::Unknown").finish()
+                        }
+                        DescriptorType::BlockDevice => {
+                            f.debug_tuple("DescriptorType::BlockDevice").finish()
+                        }
+                        DescriptorType::CharacterDevice => {
+                            f.debug_tuple("DescriptorType::CharacterDevice").finish()
+                        }
+                        DescriptorType::Directory => {
+                            f.debug_tuple("DescriptorType::Directory").finish()
+                        }
+                        DescriptorType::Fifo => {
+                            f.debug_tuple("DescriptorType::Fifo").finish()
+                        }
+                        DescriptorType::SymbolicLink => {
+                            f.debug_tuple("DescriptorType::SymbolicLink").finish()
+                        }
+                        DescriptorType::RegularFile => {
+                            f.debug_tuple("DescriptorType::RegularFile").finish()
+                        }
+                        DescriptorType::Socket => {
+                            f.debug_tuple("DescriptorType::Socket").finish()
+                        }
+                    }
+                }
+            }
+            impl DescriptorType {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> DescriptorType {
+                    if !cfg!(debug_assertions) {
+                        return ::core::mem::transmute(val);
+                    }
+                    match val {
+                        0 => DescriptorType::Unknown,
+                        1 => DescriptorType::BlockDevice,
+                        2 => DescriptorType::CharacterDevice,
+                        3 => DescriptorType::Directory,
+                        4 => DescriptorType::Fifo,
+                        5 => DescriptorType::SymbolicLink,
+                        6 => DescriptorType::RegularFile,
+                        7 => DescriptorType::Socket,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            wit_bindgen_rt::bitflags::bitflags! {
+                #[doc = " Descriptor flags."] #[doc = ""] #[doc =
+                " Note: This was called `fdflags` in earlier versions of WASI."]
+                #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)] pub
+                struct DescriptorFlags : u8 { #[doc = " Read mode: Data can be read."]
+                const READ = 1 << 0; #[doc = " Write mode: Data can be written to."]
+                const WRITE = 1 << 1; #[doc =
+                " Request that writes be performed according to synchronized I/O file"]
+                #[doc =
+                " integrity completion. The data stored in the file and the file's"]
+                #[doc =
+                " metadata are synchronized. This is similar to `O_SYNC` in POSIX."]
+                #[doc = ""] #[doc =
+                " The precise semantics of this operation have not yet been defined for"]
+                #[doc =
+                " WASI. At this time, it should be interpreted as a request, and not a"]
+                #[doc = " requirement."] const FILE_INTEGRITY_SYNC = 1 << 2; #[doc =
+                " Request that writes be performed according to synchronized I/O data"]
+                #[doc = " integrity completion. Only the data stored in the file is"]
+                #[doc = " synchronized. This is similar to `O_DSYNC` in POSIX."] #[doc =
+                ""] #[doc =
+                " The precise semantics of this operation have not yet been defined for"]
+                #[doc =
+                " WASI. At this time, it should be interpreted as a request, and not a"]
+                #[doc = " requirement."] const DATA_INTEGRITY_SYNC = 1 << 3; #[doc =
+                " Requests that reads be performed at the same level of integrity"] #[doc
+                = " requested for writes. This is similar to `O_RSYNC` in POSIX."] #[doc
+                = ""] #[doc =
+                " The precise semantics of this operation have not yet been defined for"]
+                #[doc =
+                " WASI. At this time, it should be interpreted as a request, and not a"]
+                #[doc = " requirement."] const REQUESTED_WRITE_SYNC = 1 << 4; #[doc =
+                " Mutating directories mode: Directory contents may be mutated."] #[doc =
+                ""] #[doc =
+                " When this flag is unset on a descriptor, operations using the"] #[doc =
+                " descriptor which would create, rename, delete, modify the data or"]
+                #[doc =
+                " metadata of filesystem objects, or obtain another handle which"] #[doc
+                =
+                " would permit any of those, shall fail with `error-code::read-only` if"]
+                #[doc = " they would otherwise succeed."] #[doc = ""] #[doc =
+                " This may only be set on directories."] const MUTATE_DIRECTORY = 1 << 5;
+                }
+            }
+            wit_bindgen_rt::bitflags::bitflags! {
+                #[doc = " Flags determining the method of how paths are resolved."]
+                #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)] pub
+                struct PathFlags : u8 { #[doc =
+                " As long as the resolved path corresponds to a symbolic link, it is"]
+                #[doc = " expanded."] const SYMLINK_FOLLOW = 1 << 0; }
+            }
+            wit_bindgen_rt::bitflags::bitflags! {
+                #[doc = " Open flags used by `open-at`."] #[derive(PartialEq, Eq,
+                PartialOrd, Ord, Hash, Debug, Clone, Copy)] pub struct OpenFlags : u8 {
+                #[doc =
+                " Create file if it does not exist, similar to `O_CREAT` in POSIX."]
+                const CREATE = 1 << 0; #[doc =
+                " Fail if not a directory, similar to `O_DIRECTORY` in POSIX."] const
+                DIRECTORY = 1 << 1; #[doc =
+                " Fail if file already exists, similar to `O_EXCL` in POSIX."] const
+                EXCLUSIVE = 1 << 2; #[doc =
+                " Truncate file to size 0, similar to `O_TRUNC` in POSIX."] const
+                TRUNCATE = 1 << 3; }
+            }
+            /// Number of hard links to an inode.
+            pub type LinkCount = u64;
+            /// File attributes.
+            ///
+            /// Note: This was called `filestat` in earlier versions of WASI.
+            #[repr(C)]
+            #[derive(Clone, Copy)]
+            pub struct DescriptorStat {
+                /// File type.
+                pub type_: DescriptorType,
+                /// Number of hard links to the file.
+                pub link_count: LinkCount,
+                /// For regular files, the file size in bytes. For symbolic links, the
+                /// length in bytes of the pathname contained in the symbolic link.
+                pub size: Filesize,
+                /// Last data access timestamp.
+                ///
+                /// If the `option` is none, the platform doesn't maintain an access
+                /// timestamp for this file.
+                pub data_access_timestamp: Option<Datetime>,
+                /// Last data modification timestamp.
+                ///
+                /// If the `option` is none, the platform doesn't maintain a
+                /// modification timestamp for this file.
+                pub data_modification_timestamp: Option<Datetime>,
+                /// Last file status-change timestamp.
+                ///
+                /// If the `option` is none, the platform doesn't maintain a
+                /// status-change timestamp for this file.
+                pub status_change_timestamp: Option<Datetime>,
+            }
+            impl ::core::fmt::Debug for DescriptorStat {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("DescriptorStat")
+                        .field("type", &self.type_)
+                        .field("link-count", &self.link_count)
+                        .field("size", &self.size)
+                        .field("data-access-timestamp", &self.data_access_timestamp)
+                        .field(
+                            "data-modification-timestamp",
+                            &self.data_modification_timestamp,
+                        )
+                        .field("status-change-timestamp", &self.status_change_timestamp)
+                        .finish()
+                }
+            }
+            /// When setting a timestamp, this gives the value to set it to.
+            #[derive(Clone, Copy)]
+            pub enum NewTimestamp {
+                /// Leave the timestamp set to its previous value.
+                NoChange,
+                /// Set the timestamp to the current time of the system clock associated
+                /// with the filesystem.
+                Now,
+                /// Set the timestamp to the given value.
+                Timestamp(Datetime),
+            }
+            impl ::core::fmt::Debug for NewTimestamp {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        NewTimestamp::NoChange => {
+                            f.debug_tuple("NewTimestamp::NoChange").finish()
+                        }
+                        NewTimestamp::Now => f.debug_tuple("NewTimestamp::Now").finish(),
+                        NewTimestamp::Timestamp(e) => {
+                            f.debug_tuple("NewTimestamp::Timestamp").field(e).finish()
+                        }
+                    }
+                }
+            }
+            /// A directory entry.
+            #[derive(Clone)]
+            pub struct DirectoryEntry {
+                /// The type of the file referred to by this directory entry.
+                pub type_: DescriptorType,
+                /// The name of the object.
+                pub name: _rt::String,
+            }
+            impl ::core::fmt::Debug for DirectoryEntry {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("DirectoryEntry")
+                        .field("type", &self.type_)
+                        .field("name", &self.name)
+                        .finish()
+                }
+            }
+            /// Error codes returned by functions, similar to `errno` in POSIX.
+            /// Not all of these error codes are returned by the functions provided by this
+            /// API; some are used in higher-level library layers, and others are provided
+            /// merely for alignment with POSIX.
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum ErrorCode {
+                /// Permission denied, similar to `EACCES` in POSIX.
+                Access,
+                /// Resource unavailable, or operation would block, similar to `EAGAIN` and `EWOULDBLOCK` in POSIX.
+                WouldBlock,
+                /// Connection already in progress, similar to `EALREADY` in POSIX.
+                Already,
+                /// Bad descriptor, similar to `EBADF` in POSIX.
+                BadDescriptor,
+                /// Device or resource busy, similar to `EBUSY` in POSIX.
+                Busy,
+                /// Resource deadlock would occur, similar to `EDEADLK` in POSIX.
+                Deadlock,
+                /// Storage quota exceeded, similar to `EDQUOT` in POSIX.
+                Quota,
+                /// File exists, similar to `EEXIST` in POSIX.
+                Exist,
+                /// File too large, similar to `EFBIG` in POSIX.
+                FileTooLarge,
+                /// Illegal byte sequence, similar to `EILSEQ` in POSIX.
+                IllegalByteSequence,
+                /// Operation in progress, similar to `EINPROGRESS` in POSIX.
+                InProgress,
+                /// Interrupted function, similar to `EINTR` in POSIX.
+                Interrupted,
+                /// Invalid argument, similar to `EINVAL` in POSIX.
+                Invalid,
+                /// I/O error, similar to `EIO` in POSIX.
+                Io,
+                /// Is a directory, similar to `EISDIR` in POSIX.
+                IsDirectory,
+                /// Too many levels of symbolic links, similar to `ELOOP` in POSIX.
+                Loop,
+                /// Too many links, similar to `EMLINK` in POSIX.
+                TooManyLinks,
+                /// Message too large, similar to `EMSGSIZE` in POSIX.
+                MessageSize,
+                /// Filename too long, similar to `ENAMETOOLONG` in POSIX.
+                NameTooLong,
+                /// No such device, similar to `ENODEV` in POSIX.
+                NoDevice,
+                /// No such file or directory, similar to `ENOENT` in POSIX.
+                NoEntry,
+                /// No locks available, similar to `ENOLCK` in POSIX.
+                NoLock,
+                /// Not enough space, similar to `ENOMEM` in POSIX.
+                InsufficientMemory,
+                /// No space left on device, similar to `ENOSPC` in POSIX.
+                InsufficientSpace,
+                /// Not a directory or a symbolic link to a directory, similar to `ENOTDIR` in POSIX.
+                NotDirectory,
+                /// Directory not empty, similar to `ENOTEMPTY` in POSIX.
+                NotEmpty,
+                /// State not recoverable, similar to `ENOTRECOVERABLE` in POSIX.
+                NotRecoverable,
+                /// Not supported, similar to `ENOTSUP` and `ENOSYS` in POSIX.
+                Unsupported,
+                /// Inappropriate I/O control operation, similar to `ENOTTY` in POSIX.
+                NoTty,
+                /// No such device or address, similar to `ENXIO` in POSIX.
+                NoSuchDevice,
+                /// Value too large to be stored in data type, similar to `EOVERFLOW` in POSIX.
+                Overflow,
+                /// Operation not permitted, similar to `EPERM` in POSIX.
+                NotPermitted,
+                /// Broken pipe, similar to `EPIPE` in POSIX.
+                Pipe,
+                /// Read-only file system, similar to `EROFS` in POSIX.
+                ReadOnly,
+                /// Invalid seek, similar to `ESPIPE` in POSIX.
+                InvalidSeek,
+                /// Text file busy, similar to `ETXTBSY` in POSIX.
+                TextFileBusy,
+                /// Cross-device link, similar to `EXDEV` in POSIX.
+                CrossDevice,
+            }
+            impl ErrorCode {
+                pub fn name(&self) -> &'static str {
+                    match self {
+                        ErrorCode::Access => "access",
+                        ErrorCode::WouldBlock => "would-block",
+                        ErrorCode::Already => "already",
+                        ErrorCode::BadDescriptor => "bad-descriptor",
+                        ErrorCode::Busy => "busy",
+                        ErrorCode::Deadlock => "deadlock",
+                        ErrorCode::Quota => "quota",
+                        ErrorCode::Exist => "exist",
+                        ErrorCode::FileTooLarge => "file-too-large",
+                        ErrorCode::IllegalByteSequence => "illegal-byte-sequence",
+                        ErrorCode::InProgress => "in-progress",
+                        ErrorCode::Interrupted => "interrupted",
+                        ErrorCode::Invalid => "invalid",
+                        ErrorCode::Io => "io",
+                        ErrorCode::IsDirectory => "is-directory",
+                        ErrorCode::Loop => "loop",
+                        ErrorCode::TooManyLinks => "too-many-links",
+                        ErrorCode::MessageSize => "message-size",
+                        ErrorCode::NameTooLong => "name-too-long",
+                        ErrorCode::NoDevice => "no-device",
+                        ErrorCode::NoEntry => "no-entry",
+                        ErrorCode::NoLock => "no-lock",
+                        ErrorCode::InsufficientMemory => "insufficient-memory",
+                        ErrorCode::InsufficientSpace => "insufficient-space",
+                        ErrorCode::NotDirectory => "not-directory",
+                        ErrorCode::NotEmpty => "not-empty",
+                        ErrorCode::NotRecoverable => "not-recoverable",
+                        ErrorCode::Unsupported => "unsupported",
+                        ErrorCode::NoTty => "no-tty",
+                        ErrorCode::NoSuchDevice => "no-such-device",
+                        ErrorCode::Overflow => "overflow",
+                        ErrorCode::NotPermitted => "not-permitted",
+                        ErrorCode::Pipe => "pipe",
+                        ErrorCode::ReadOnly => "read-only",
+                        ErrorCode::InvalidSeek => "invalid-seek",
+                        ErrorCode::TextFileBusy => "text-file-busy",
+                        ErrorCode::CrossDevice => "cross-device",
+                    }
+                }
+                pub fn message(&self) -> &'static str {
+                    match self {
+                        ErrorCode::Access => {
+                            "Permission denied, similar to `EACCES` in POSIX."
+                        }
+                        ErrorCode::WouldBlock => {
+                            "Resource unavailable, or operation would block, similar to `EAGAIN` and `EWOULDBLOCK` in POSIX."
+                        }
+                        ErrorCode::Already => {
+                            "Connection already in progress, similar to `EALREADY` in POSIX."
+                        }
+                        ErrorCode::BadDescriptor => {
+                            "Bad descriptor, similar to `EBADF` in POSIX."
+                        }
+                        ErrorCode::Busy => {
+                            "Device or resource busy, similar to `EBUSY` in POSIX."
+                        }
+                        ErrorCode::Deadlock => {
+                            "Resource deadlock would occur, similar to `EDEADLK` in POSIX."
+                        }
+                        ErrorCode::Quota => {
+                            "Storage quota exceeded, similar to `EDQUOT` in POSIX."
+                        }
+                        ErrorCode::Exist => "File exists, similar to `EEXIST` in POSIX.",
+                        ErrorCode::FileTooLarge => {
+                            "File too large, similar to `EFBIG` in POSIX."
+                        }
+                        ErrorCode::IllegalByteSequence => {
+                            "Illegal byte sequence, similar to `EILSEQ` in POSIX."
+                        }
+                        ErrorCode::InProgress => {
+                            "Operation in progress, similar to `EINPROGRESS` in POSIX."
+                        }
+                        ErrorCode::Interrupted => {
+                            "Interrupted function, similar to `EINTR` in POSIX."
+                        }
+                        ErrorCode::Invalid => {
+                            "Invalid argument, similar to `EINVAL` in POSIX."
+                        }
+                        ErrorCode::Io => "I/O error, similar to `EIO` in POSIX.",
+                        ErrorCode::IsDirectory => {
+                            "Is a directory, similar to `EISDIR` in POSIX."
+                        }
+                        ErrorCode::Loop => {
+                            "Too many levels of symbolic links, similar to `ELOOP` in POSIX."
+                        }
+                        ErrorCode::TooManyLinks => {
+                            "Too many links, similar to `EMLINK` in POSIX."
+                        }
+                        ErrorCode::MessageSize => {
+                            "Message too large, similar to `EMSGSIZE` in POSIX."
+                        }
+                        ErrorCode::NameTooLong => {
+                            "Filename too long, similar to `ENAMETOOLONG` in POSIX."
+                        }
+                        ErrorCode::NoDevice => {
+                            "No such device, similar to `ENODEV` in POSIX."
+                        }
+                        ErrorCode::NoEntry => {
+                            "No such file or directory, similar to `ENOENT` in POSIX."
+                        }
+                        ErrorCode::NoLock => {
+                            "No locks available, similar to `ENOLCK` in POSIX."
+                        }
+                        ErrorCode::InsufficientMemory => {
+                            "Not enough space, similar to `ENOMEM` in POSIX."
+                        }
+                        ErrorCode::InsufficientSpace => {
+                            "No space left on device, similar to `ENOSPC` in POSIX."
+                        }
+                        ErrorCode::NotDirectory => {
+                            "Not a directory or a symbolic link to a directory, similar to `ENOTDIR` in POSIX."
+                        }
+                        ErrorCode::NotEmpty => {
+                            "Directory not empty, similar to `ENOTEMPTY` in POSIX."
+                        }
+                        ErrorCode::NotRecoverable => {
+                            "State not recoverable, similar to `ENOTRECOVERABLE` in POSIX."
+                        }
+                        ErrorCode::Unsupported => {
+                            "Not supported, similar to `ENOTSUP` and `ENOSYS` in POSIX."
+                        }
+                        ErrorCode::NoTty => {
+                            "Inappropriate I/O control operation, similar to `ENOTTY` in POSIX."
+                        }
+                        ErrorCode::NoSuchDevice => {
+                            "No such device or address, similar to `ENXIO` in POSIX."
+                        }
+                        ErrorCode::Overflow => {
+                            "Value too large to be stored in data type, similar to `EOVERFLOW` in POSIX."
+                        }
+                        ErrorCode::NotPermitted => {
+                            "Operation not permitted, similar to `EPERM` in POSIX."
+                        }
+                        ErrorCode::Pipe => "Broken pipe, similar to `EPIPE` in POSIX.",
+                        ErrorCode::ReadOnly => {
+                            "Read-only file system, similar to `EROFS` in POSIX."
+                        }
+                        ErrorCode::InvalidSeek => {
+                            "Invalid seek, similar to `ESPIPE` in POSIX."
+                        }
+                        ErrorCode::TextFileBusy => {
+                            "Text file busy, similar to `ETXTBSY` in POSIX."
+                        }
+                        ErrorCode::CrossDevice => {
+                            "Cross-device link, similar to `EXDEV` in POSIX."
+                        }
+                    }
+                }
+            }
+            impl ::core::fmt::Debug for ErrorCode {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("ErrorCode")
+                        .field("code", &(*self as i32))
+                        .field("name", &self.name())
+                        .field("message", &self.message())
+                        .finish()
+                }
+            }
+            impl ::core::fmt::Display for ErrorCode {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    write!(f, "{} (error {})", self.name(), * self as i32)
+                }
+            }
+            impl std::error::Error for ErrorCode {}
+            impl ErrorCode {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> ErrorCode {
+                    if !cfg!(debug_assertions) {
+                        return ::core::mem::transmute(val);
+                    }
+                    match val {
+                        0 => ErrorCode::Access,
+                        1 => ErrorCode::WouldBlock,
+                        2 => ErrorCode::Already,
+                        3 => ErrorCode::BadDescriptor,
+                        4 => ErrorCode::Busy,
+                        5 => ErrorCode::Deadlock,
+                        6 => ErrorCode::Quota,
+                        7 => ErrorCode::Exist,
+                        8 => ErrorCode::FileTooLarge,
+                        9 => ErrorCode::IllegalByteSequence,
+                        10 => ErrorCode::InProgress,
+                        11 => ErrorCode::Interrupted,
+                        12 => ErrorCode::Invalid,
+                        13 => ErrorCode::Io,
+                        14 => ErrorCode::IsDirectory,
+                        15 => ErrorCode::Loop,
+                        16 => ErrorCode::TooManyLinks,
+                        17 => ErrorCode::MessageSize,
+                        18 => ErrorCode::NameTooLong,
+                        19 => ErrorCode::NoDevice,
+                        20 => ErrorCode::NoEntry,
+                        21 => ErrorCode::NoLock,
+                        22 => ErrorCode::InsufficientMemory,
+                        23 => ErrorCode::InsufficientSpace,
+                        24 => ErrorCode::NotDirectory,
+                        25 => ErrorCode::NotEmpty,
+                        26 => ErrorCode::NotRecoverable,
+                        27 => ErrorCode::Unsupported,
+                        28 => ErrorCode::NoTty,
+                        29 => ErrorCode::NoSuchDevice,
+                        30 => ErrorCode::Overflow,
+                        31 => ErrorCode::NotPermitted,
+                        32 => ErrorCode::Pipe,
+                        33 => ErrorCode::ReadOnly,
+                        34 => ErrorCode::InvalidSeek,
+                        35 => ErrorCode::TextFileBusy,
+                        36 => ErrorCode::CrossDevice,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            /// File or memory access pattern advisory information.
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum Advice {
+                /// The application has no advice to give on its behavior with respect
+                /// to the specified data.
+                Normal,
+                /// The application expects to access the specified data sequentially
+                /// from lower offsets to higher offsets.
+                Sequential,
+                /// The application expects to access the specified data in a random
+                /// order.
+                Random,
+                /// The application expects to access the specified data in the near
+                /// future.
+                WillNeed,
+                /// The application expects that it will not access the specified data
+                /// in the near future.
+                DontNeed,
+                /// The application expects to access the specified data once and then
+                /// not reuse it thereafter.
+                NoReuse,
+            }
+            impl ::core::fmt::Debug for Advice {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        Advice::Normal => f.debug_tuple("Advice::Normal").finish(),
+                        Advice::Sequential => {
+                            f.debug_tuple("Advice::Sequential").finish()
+                        }
+                        Advice::Random => f.debug_tuple("Advice::Random").finish(),
+                        Advice::WillNeed => f.debug_tuple("Advice::WillNeed").finish(),
+                        Advice::DontNeed => f.debug_tuple("Advice::DontNeed").finish(),
+                        Advice::NoReuse => f.debug_tuple("Advice::NoReuse").finish(),
+                    }
+                }
+            }
+            impl Advice {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> Advice {
+                    if !cfg!(debug_assertions) {
+                        return ::core::mem::transmute(val);
+                    }
+                    match val {
+                        0 => Advice::Normal,
+                        1 => Advice::Sequential,
+                        2 => Advice::Random,
+                        3 => Advice::WillNeed,
+                        4 => Advice::DontNeed,
+                        5 => Advice::NoReuse,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            /// A 128-bit hash value, split into parts because wasm doesn't have a
+            /// 128-bit integer type.
+            #[repr(C)]
+            #[derive(Clone, Copy)]
+            pub struct MetadataHashValue {
+                /// 64 bits of a 128-bit hash value.
+                pub lower: u64,
+                /// Another 64 bits of a 128-bit hash value.
+                pub upper: u64,
+            }
+            impl ::core::fmt::Debug for MetadataHashValue {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("MetadataHashValue")
+                        .field("lower", &self.lower)
+                        .field("upper", &self.upper)
+                        .finish()
+                }
+            }
+            /// A descriptor is a reference to a filesystem object, which may be a file,
+            /// directory, named pipe, special file, or other object on which filesystem
+            /// calls may be made.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct Descriptor {
+                handle: _rt::Resource<Descriptor>,
+            }
+            impl Descriptor {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for Descriptor {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]descriptor"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+            /// A stream of directory entries.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct DirectoryEntryStream {
+                handle: _rt::Resource<DirectoryEntryStream>,
+            }
+            impl DirectoryEntryStream {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for DirectoryEntryStream {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]directory-entry-stream"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return a stream for reading from a file, if available.
+                ///
+                /// May fail with an error-code describing why the file cannot be read.
+                ///
+                /// Multiple read, write, and append streams may be active on the same open
+                /// file and they do not interfere with each other.
+                ///
+                /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
+                pub fn read_via_stream(
+                    &self,
+                    offset: Filesize,
+                ) -> Result<InputStream, ErrorCode> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.read-via-stream"]
+                            fn wit_import1(_: i32, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i64, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(offset),
+                                ptr0,
+                            )
+                        };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0.add(4).cast::<i32>();
+                                    unsafe {
+                                        super::super::super::wasi::io::streams::InputStream::from_handle(
+                                            l3 as u32,
+                                        )
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(4).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return a stream for writing to a file, if available.
+                ///
+                /// May fail with an error-code describing why the file cannot be written.
+                ///
+                /// Note: This allows using `write-stream`, which is similar to `write` in
+                /// POSIX.
+                pub fn write_via_stream(
+                    &self,
+                    offset: Filesize,
+                ) -> Result<OutputStream, ErrorCode> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.write-via-stream"]
+                            fn wit_import1(_: i32, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i64, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(offset),
+                                ptr0,
+                            )
+                        };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0.add(4).cast::<i32>();
+                                    unsafe {
+                                        super::super::super::wasi::io::streams::OutputStream::from_handle(
+                                            l3 as u32,
+                                        )
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(4).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return a stream for appending to a file, if available.
+                ///
+                /// May fail with an error-code describing why the file cannot be appended.
+                ///
+                /// Note: This allows using `write-stream`, which is similar to `write` with
+                /// `O_APPEND` in POSIX.
+                pub fn append_via_stream(&self) -> Result<OutputStream, ErrorCode> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.append-via-stream"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0.add(4).cast::<i32>();
+                                    unsafe {
+                                        super::super::super::wasi::io::streams::OutputStream::from_handle(
+                                            l3 as u32,
+                                        )
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(4).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Provide file advisory information on a descriptor.
+                ///
+                /// This is similar to `posix_fadvise` in POSIX.
+                pub fn advise(
+                    &self,
+                    offset: Filesize,
+                    length: Filesize,
+                    advice: Advice,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.advise"]
+                            fn wit_import1(_: i32, _: i64, _: i64, _: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(
+                            _: i32,
+                            _: i64,
+                            _: i64,
+                            _: i32,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(offset),
+                                _rt::as_i64(length),
+                                advice.clone() as i32,
+                                ptr0,
+                            )
+                        };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result4 = match l2 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l3 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result4
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Synchronize the data of a file to disk.
+                ///
+                /// This function succeeds with no effect if the file descriptor is not
+                /// opened for writing.
+                ///
+                /// Note: This is similar to `fdatasync` in POSIX.
+                pub fn sync_data(&self) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.sync-data"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result4 = match l2 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l3 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result4
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Get flags associated with a descriptor.
+                ///
+                /// Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX.
+                ///
+                /// Note: This returns the value that was the `fs_flags` value returned
+                /// from `fdstat_get` in earlier versions of WASI.
+                pub fn get_flags(&self) -> Result<DescriptorFlags, ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.get-flags"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    DescriptorFlags::empty()
+                                        | DescriptorFlags::from_bits_retain(((l3 as u8) << 0) as _)
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Get the dynamic type of a descriptor.
+                ///
+                /// Note: This returns the same value as the `type` field of the `fd-stat`
+                /// returned by `stat`, `stat-at` and similar.
+                ///
+                /// Note: This returns similar flags to the `st_mode & S_IFMT` value provided
+                /// by `fstat` in POSIX.
+                ///
+                /// Note: This returns the value that was the `fs_filetype` value returned
+                /// from `fdstat_get` in earlier versions of WASI.
+                pub fn get_type(&self) -> Result<DescriptorType, ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.get-type"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    DescriptorType::_lift(l3 as u8)
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Adjust the size of an open file. If this increases the file's size, the
+                /// extra bytes are filled with zeros.
+                ///
+                /// Note: This was called `fd_filestat_set_size` in earlier versions of WASI.
+                pub fn set_size(&self, size: Filesize) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.set-size"]
+                            fn wit_import1(_: i32, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i64, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1((self).handle() as i32, _rt::as_i64(size), ptr0)
+                        };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result4 = match l2 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l3 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result4
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Adjust the timestamps of an open file or directory.
+                ///
+                /// Note: This is similar to `futimens` in POSIX.
+                ///
+                /// Note: This was called `fd_filestat_set_times` in earlier versions of WASI.
+                pub fn set_times(
+                    &self,
+                    data_access_timestamp: NewTimestamp,
+                    data_modification_timestamp: NewTimestamp,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let (result1_0, result1_1, result1_2) = match data_access_timestamp {
+                            NewTimestamp::NoChange => (0i32, 0i64, 0i32),
+                            NewTimestamp::Now => (1i32, 0i64, 0i32),
+                            NewTimestamp::Timestamp(e) => {
+                                let super::super::super::wasi::clocks::wall_clock::Datetime {
+                                    seconds: seconds0,
+                                    nanoseconds: nanoseconds0,
+                                } = e;
+                                (2i32, _rt::as_i64(seconds0), _rt::as_i32(nanoseconds0))
+                            }
+                        };
+                        let (result3_0, result3_1, result3_2) = match data_modification_timestamp {
+                            NewTimestamp::NoChange => (0i32, 0i64, 0i32),
+                            NewTimestamp::Now => (1i32, 0i64, 0i32),
+                            NewTimestamp::Timestamp(e) => {
+                                let super::super::super::wasi::clocks::wall_clock::Datetime {
+                                    seconds: seconds2,
+                                    nanoseconds: nanoseconds2,
+                                } = e;
+                                (2i32, _rt::as_i64(seconds2), _rt::as_i32(nanoseconds2))
+                            }
+                        };
+                        let ptr4 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.set-times"]
+                            fn wit_import5(
+                                _: i32,
+                                _: i32,
+                                _: i64,
+                                _: i32,
+                                _: i32,
+                                _: i64,
+                                _: i32,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import5(
+                            _: i32,
+                            _: i32,
+                            _: i64,
+                            _: i32,
+                            _: i32,
+                            _: i64,
+                            _: i32,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import5(
+                                (self).handle() as i32,
+                                result1_0,
+                                result1_1,
+                                result1_2,
+                                result3_0,
+                                result3_1,
+                                result3_2,
+                                ptr4,
+                            )
+                        };
+                        let l6 = i32::from(*ptr4.add(0).cast::<u8>());
+                        let result8 = match l6 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l7 = i32::from(*ptr4.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l7 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result8
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read from a descriptor, without using and updating the descriptor's offset.
+                ///
+                /// This function returns a list of bytes containing the data that was
+                /// read, along with a bool which, when true, indicates that the end of the
+                /// file was reached. The returned list will contain up to `length` bytes; it
+                /// may return fewer than requested, if the end of the file is reached or
+                /// if the I/O operation is interrupted.
+                ///
+                /// In the future, this may change to return a `stream<u8, error-code>`.
+                ///
+                /// Note: This is similar to `pread` in POSIX.
+                pub fn read(
+                    &self,
+                    length: Filesize,
+                    offset: Filesize,
+                ) -> Result<(_rt::Vec<u8>, bool), ErrorCode> {
+                    unsafe {
+                        #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                        #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 4 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 4
+                                * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.read"]
+                            fn wit_import1(_: i32, _: i64, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(
+                            _: i32,
+                            _: i64,
+                            _: i64,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(length),
+                                _rt::as_i64(offset),
+                                ptr0,
+                            )
+                        };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result8 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<*mut u8>();
+                                    let l4 = *ptr0
+                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len5 = l4;
+                                    let l6 = i32::from(
+                                        *ptr0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>(),
+                                    );
+                                    (
+                                        _rt::Vec::from_raw_parts(l3.cast(), len5, len5),
+                                        _rt::bool_lift(l6 as u8),
+                                    )
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l7 = i32::from(
+                                        *ptr0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                    );
+                                    ErrorCode::_lift(l7 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result8
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Write to a descriptor, without using and updating the descriptor's offset.
+                ///
+                /// It is valid to write past the end of a file; the file is extended to the
+                /// extent of the write, with bytes between the previous end and the start of
+                /// the write set to zero.
+                ///
+                /// In the future, this may change to take a `stream<u8, error-code>`.
+                ///
+                /// Note: This is similar to `pwrite` in POSIX.
+                pub fn write(
+                    &self,
+                    buffer: &[u8],
+                    offset: Filesize,
+                ) -> Result<Filesize, ErrorCode> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 16]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 16],
+                        );
+                        let vec0 = buffer;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.write"]
+                            fn wit_import2(
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: i64,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: i64,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                _rt::as_i64(offset),
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result6 = match l3 {
+                            0 => {
+                                let e = {
+                                    let l4 = *ptr1.add(8).cast::<i64>();
+                                    l4 as u64
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l5 = i32::from(*ptr1.add(8).cast::<u8>());
+                                    ErrorCode::_lift(l5 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result6
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read directory entries from a directory.
+                ///
+                /// On filesystems where directories contain entries referring to themselves
+                /// and their parents, often named `.` and `..` respectively, these entries
+                /// are omitted.
+                ///
+                /// This always returns a new stream which starts at the beginning of the
+                /// directory. Multiple streams may be active on the same directory, and they
+                /// do not interfere with each other.
+                pub fn read_directory(&self) -> Result<DirectoryEntryStream, ErrorCode> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.read-directory"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result5 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0.add(4).cast::<i32>();
+                                    unsafe { DirectoryEntryStream::from_handle(l3 as u32) }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr0.add(4).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Synchronize the data and metadata of a file to disk.
+                ///
+                /// This function succeeds with no effect if the file descriptor is not
+                /// opened for writing.
+                ///
+                /// Note: This is similar to `fsync` in POSIX.
+                pub fn sync(&self) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.sync"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result4 = match l2 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l3 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result4
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Create a directory.
+                ///
+                /// Note: This is similar to `mkdirat` in POSIX.
+                pub fn create_directory_at(&self, path: &str) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let vec0 = path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.create-directory-at"]
+                            fn wit_import2(_: i32, _: *mut u8, _: usize, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result5 = match l3 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr1.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return the attributes of an open file or directory.
+                ///
+                /// Note: This is similar to `fstat` in POSIX, except that it does not return
+                /// device and inode information. For testing whether two descriptors refer to
+                /// the same underlying filesystem object, use `is-same-object`. To obtain
+                /// additional data that can be used do determine whether a file has been
+                /// modified, use `metadata-hash`.
+                ///
+                /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
+                pub fn stat(&self) -> Result<DescriptorStat, ErrorCode> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 104]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 104],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.stat"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result16 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = i32::from(*ptr0.add(8).cast::<u8>());
+                                    let l4 = *ptr0.add(16).cast::<i64>();
+                                    let l5 = *ptr0.add(24).cast::<i64>();
+                                    let l6 = i32::from(*ptr0.add(32).cast::<u8>());
+                                    let l9 = i32::from(*ptr0.add(56).cast::<u8>());
+                                    let l12 = i32::from(*ptr0.add(80).cast::<u8>());
+                                    DescriptorStat {
+                                        type_: DescriptorType::_lift(l3 as u8),
+                                        link_count: l4 as u64,
+                                        size: l5 as u64,
+                                        data_access_timestamp: match l6 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l7 = *ptr0.add(40).cast::<i64>();
+                                                    let l8 = *ptr0.add(48).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l7 as u64,
+                                                        nanoseconds: l8 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                        data_modification_timestamp: match l9 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l10 = *ptr0.add(64).cast::<i64>();
+                                                    let l11 = *ptr0.add(72).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l10 as u64,
+                                                        nanoseconds: l11 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                        status_change_timestamp: match l12 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l13 = *ptr0.add(88).cast::<i64>();
+                                                    let l14 = *ptr0.add(96).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l13 as u64,
+                                                        nanoseconds: l14 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l15 = i32::from(*ptr0.add(8).cast::<u8>());
+                                    ErrorCode::_lift(l15 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result16
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return the attributes of a file or directory.
+                ///
+                /// Note: This is similar to `fstatat` in POSIX, except that it does not
+                /// return device and inode information. See the `stat` description for a
+                /// discussion of alternatives.
+                ///
+                /// Note: This was called `path_filestat_get` in earlier versions of WASI.
+                pub fn stat_at(
+                    &self,
+                    path_flags: PathFlags,
+                    path: &str,
+                ) -> Result<DescriptorStat, ErrorCode> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 104]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 104],
+                        );
+                        let flags0 = path_flags;
+                        let vec1 = path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.stat-at"]
+                            fn wit_import3(
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import3(
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import3(
+                                (self).handle() as i32,
+                                (flags0.bits() >> 0) as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                ptr2,
+                            )
+                        };
+                        let l4 = i32::from(*ptr2.add(0).cast::<u8>());
+                        let result18 = match l4 {
+                            0 => {
+                                let e = {
+                                    let l5 = i32::from(*ptr2.add(8).cast::<u8>());
+                                    let l6 = *ptr2.add(16).cast::<i64>();
+                                    let l7 = *ptr2.add(24).cast::<i64>();
+                                    let l8 = i32::from(*ptr2.add(32).cast::<u8>());
+                                    let l11 = i32::from(*ptr2.add(56).cast::<u8>());
+                                    let l14 = i32::from(*ptr2.add(80).cast::<u8>());
+                                    DescriptorStat {
+                                        type_: DescriptorType::_lift(l5 as u8),
+                                        link_count: l6 as u64,
+                                        size: l7 as u64,
+                                        data_access_timestamp: match l8 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l9 = *ptr2.add(40).cast::<i64>();
+                                                    let l10 = *ptr2.add(48).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l9 as u64,
+                                                        nanoseconds: l10 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                        data_modification_timestamp: match l11 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l12 = *ptr2.add(64).cast::<i64>();
+                                                    let l13 = *ptr2.add(72).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l12 as u64,
+                                                        nanoseconds: l13 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                        status_change_timestamp: match l14 {
+                                            0 => None,
+                                            1 => {
+                                                let e = {
+                                                    let l15 = *ptr2.add(88).cast::<i64>();
+                                                    let l16 = *ptr2.add(96).cast::<i32>();
+                                                    super::super::super::wasi::clocks::wall_clock::Datetime {
+                                                        seconds: l15 as u64,
+                                                        nanoseconds: l16 as u32,
+                                                    }
+                                                };
+                                                Some(e)
+                                            }
+                                            _ => _rt::invalid_enum_discriminant(),
+                                        },
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l17 = i32::from(*ptr2.add(8).cast::<u8>());
+                                    ErrorCode::_lift(l17 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result18
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Adjust the timestamps of a file or directory.
+                ///
+                /// Note: This is similar to `utimensat` in POSIX.
+                ///
+                /// Note: This was called `path_filestat_set_times` in earlier versions of
+                /// WASI.
+                pub fn set_times_at(
+                    &self,
+                    path_flags: PathFlags,
+                    path: &str,
+                    data_access_timestamp: NewTimestamp,
+                    data_modification_timestamp: NewTimestamp,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let flags0 = path_flags;
+                        let vec1 = path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let (result3_0, result3_1, result3_2) = match data_access_timestamp {
+                            NewTimestamp::NoChange => (0i32, 0i64, 0i32),
+                            NewTimestamp::Now => (1i32, 0i64, 0i32),
+                            NewTimestamp::Timestamp(e) => {
+                                let super::super::super::wasi::clocks::wall_clock::Datetime {
+                                    seconds: seconds2,
+                                    nanoseconds: nanoseconds2,
+                                } = e;
+                                (2i32, _rt::as_i64(seconds2), _rt::as_i32(nanoseconds2))
+                            }
+                        };
+                        let (result5_0, result5_1, result5_2) = match data_modification_timestamp {
+                            NewTimestamp::NoChange => (0i32, 0i64, 0i32),
+                            NewTimestamp::Now => (1i32, 0i64, 0i32),
+                            NewTimestamp::Timestamp(e) => {
+                                let super::super::super::wasi::clocks::wall_clock::Datetime {
+                                    seconds: seconds4,
+                                    nanoseconds: nanoseconds4,
+                                } = e;
+                                (2i32, _rt::as_i64(seconds4), _rt::as_i32(nanoseconds4))
+                            }
+                        };
+                        let ptr6 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.set-times-at"]
+                            fn wit_import7(
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: i32,
+                                _: i64,
+                                _: i32,
+                                _: i32,
+                                _: i64,
+                                _: i32,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import7(
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: i64,
+                            _: i32,
+                            _: i32,
+                            _: i64,
+                            _: i32,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import7(
+                                (self).handle() as i32,
+                                (flags0.bits() >> 0) as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                result3_0,
+                                result3_1,
+                                result3_2,
+                                result5_0,
+                                result5_1,
+                                result5_2,
+                                ptr6,
+                            )
+                        };
+                        let l8 = i32::from(*ptr6.add(0).cast::<u8>());
+                        let result10 = match l8 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l9 = i32::from(*ptr6.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l9 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result10
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Create a hard link.
+                ///
+                /// Fails with `error-code::no-entry` if the old path does not exist,
+                /// with `error-code::exist` if the new path already exists, and
+                /// `error-code::not-permitted` if the old path is not a file.
+                ///
+                /// Note: This is similar to `linkat` in POSIX.
+                pub fn link_at(
+                    &self,
+                    old_path_flags: PathFlags,
+                    old_path: &str,
+                    new_descriptor: &Descriptor,
+                    new_path: &str,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let flags0 = old_path_flags;
+                        let vec1 = old_path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let vec2 = new_path;
+                        let ptr2 = vec2.as_ptr().cast::<u8>();
+                        let len2 = vec2.len();
+                        let ptr3 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.link-at"]
+                            fn wit_import4(
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import4(
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import4(
+                                (self).handle() as i32,
+                                (flags0.bits() >> 0) as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                (new_descriptor).handle() as i32,
+                                ptr2.cast_mut(),
+                                len2,
+                                ptr3,
+                            )
+                        };
+                        let l5 = i32::from(*ptr3.add(0).cast::<u8>());
+                        let result7 = match l5 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l6 = i32::from(*ptr3.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l6 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result7
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Open a file or directory.
+                ///
+                /// If `flags` contains `descriptor-flags::mutate-directory`, and the base
+                /// descriptor doesn't have `descriptor-flags::mutate-directory` set,
+                /// `open-at` fails with `error-code::read-only`.
+                ///
+                /// If `flags` contains `write` or `mutate-directory`, or `open-flags`
+                /// contains `truncate` or `create`, and the base descriptor doesn't have
+                /// `descriptor-flags::mutate-directory` set, `open-at` fails with
+                /// `error-code::read-only`.
+                ///
+                /// Note: This is similar to `openat` in POSIX.
+                pub fn open_at(
+                    &self,
+                    path_flags: PathFlags,
+                    path: &str,
+                    open_flags: OpenFlags,
+                    flags: DescriptorFlags,
+                ) -> Result<Descriptor, ErrorCode> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let flags0 = path_flags;
+                        let vec1 = path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let flags2 = open_flags;
+                        let flags3 = flags;
+                        let ptr4 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.open-at"]
+                            fn wit_import5(
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import5(
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import5(
+                                (self).handle() as i32,
+                                (flags0.bits() >> 0) as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                (flags2.bits() >> 0) as i32,
+                                (flags3.bits() >> 0) as i32,
+                                ptr4,
+                            )
+                        };
+                        let l6 = i32::from(*ptr4.add(0).cast::<u8>());
+                        let result9 = match l6 {
+                            0 => {
+                                let e = {
+                                    let l7 = *ptr4.add(4).cast::<i32>();
+                                    unsafe { Descriptor::from_handle(l7 as u32) }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l8 = i32::from(*ptr4.add(4).cast::<u8>());
+                                    ErrorCode::_lift(l8 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result9
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read the contents of a symbolic link.
+                ///
+                /// If the contents contain an absolute or rooted path in the underlying
+                /// filesystem, this function fails with `error-code::not-permitted`.
+                ///
+                /// Note: This is similar to `readlinkat` in POSIX.
+                pub fn readlink_at(&self, path: &str) -> Result<_rt::String, ErrorCode> {
+                    unsafe {
+                        #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                        #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 3 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 3
+                                * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let vec0 = path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.readlink-at"]
+                            fn wit_import2(_: i32, _: *mut u8, _: usize, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result8 = match l3 {
+                            0 => {
+                                let e = {
+                                    let l4 = *ptr1
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<*mut u8>();
+                                    let l5 = *ptr1
+                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len6 = l5;
+                                    let bytes6 = _rt::Vec::from_raw_parts(
+                                        l4.cast(),
+                                        len6,
+                                        len6,
+                                    );
+                                    _rt::string_lift(bytes6)
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l7 = i32::from(
+                                        *ptr1.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                    );
+                                    ErrorCode::_lift(l7 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result8
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Remove a directory.
+                ///
+                /// Return `error-code::not-empty` if the directory is not empty.
+                ///
+                /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
+                pub fn remove_directory_at(&self, path: &str) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let vec0 = path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.remove-directory-at"]
+                            fn wit_import2(_: i32, _: *mut u8, _: usize, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result5 = match l3 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr1.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Rename a filesystem object.
+                ///
+                /// Note: This is similar to `renameat` in POSIX.
+                pub fn rename_at(
+                    &self,
+                    old_path: &str,
+                    new_descriptor: &Descriptor,
+                    new_path: &str,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let vec0 = old_path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let vec1 = new_path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.rename-at"]
+                            fn wit_import3(
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import3(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import3(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                (new_descriptor).handle() as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                ptr2,
+                            )
+                        };
+                        let l4 = i32::from(*ptr2.add(0).cast::<u8>());
+                        let result6 = match l4 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l5 = i32::from(*ptr2.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l5 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result6
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Create a symbolic link (also known as a "symlink").
+                ///
+                /// If `old-path` starts with `/`, the function fails with
+                /// `error-code::not-permitted`.
+                ///
+                /// Note: This is similar to `symlinkat` in POSIX.
+                pub fn symlink_at(
+                    &self,
+                    old_path: &str,
+                    new_path: &str,
+                ) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let vec0 = old_path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let vec1 = new_path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.symlink-at"]
+                            fn wit_import3(
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import3(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import3(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1.cast_mut(),
+                                len1,
+                                ptr2,
+                            )
+                        };
+                        let l4 = i32::from(*ptr2.add(0).cast::<u8>());
+                        let result6 = match l4 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l5 = i32::from(*ptr2.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l5 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result6
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Unlink a filesystem object that is not a directory.
+                ///
+                /// Return `error-code::is-directory` if the path refers to a directory.
+                /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
+                pub fn unlink_file_at(&self, path: &str) -> Result<(), ErrorCode> {
+                    unsafe {
+                        #[repr(align(1))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2],
+                        );
+                        let vec0 = path;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.unlink-file-at"]
+                            fn wit_import2(_: i32, _: *mut u8, _: usize, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result5 = match l3 {
+                            0 => {
+                                let e = ();
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l4 = i32::from(*ptr1.add(1).cast::<u8>());
+                                    ErrorCode::_lift(l4 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result5
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Test whether two descriptors refer to the same filesystem object.
+                ///
+                /// In POSIX, this corresponds to testing whether the two descriptors have the
+                /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
+                /// wasi-filesystem does not expose device and inode numbers, so this function
+                /// may be used instead.
+                pub fn is_same_object(&self, other: &Descriptor) -> bool {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.is-same-object"]
+                            fn wit_import0(_: i32, _: i32) -> i32;
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32, _: i32) -> i32 {
+                            unreachable!()
+                        }
+                        let ret = unsafe {
+                            wit_import0((self).handle() as i32, (other).handle() as i32)
+                        };
+                        _rt::bool_lift(ret as u8)
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return a hash of the metadata associated with a filesystem object referred
+                /// to by a descriptor.
+                ///
+                /// This returns a hash of the last-modification timestamp and file size, and
+                /// may also include the inode number, device number, birth timestamp, and
+                /// other metadata fields that may change when the file is modified or
+                /// replaced. It may also include a secret value chosen by the
+                /// implementation and not otherwise exposed.
+                ///
+                /// Implementations are encouraged to provide the following properties:
+                ///
+                ///  - If the file is not modified or replaced, the computed hash value should
+                ///    usually not change.
+                ///  - If the object is modified or replaced, the computed hash value should
+                ///    usually change.
+                ///  - The inputs to the hash should not be easily computable from the
+                ///    computed hash.
+                ///
+                /// However, none of these is required.
+                pub fn metadata_hash(&self) -> Result<MetadataHashValue, ErrorCode> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 24]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 24],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.metadata-hash"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result6 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = *ptr0.add(8).cast::<i64>();
+                                    let l4 = *ptr0.add(16).cast::<i64>();
+                                    MetadataHashValue {
+                                        lower: l3 as u64,
+                                        upper: l4 as u64,
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l5 = i32::from(*ptr0.add(8).cast::<u8>());
+                                    ErrorCode::_lift(l5 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result6
+                    }
+                }
+            }
+            impl Descriptor {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Return a hash of the metadata associated with a filesystem object referred
+                /// to by a directory descriptor and a relative path.
+                ///
+                /// This performs the same hash computation as `metadata-hash`.
+                pub fn metadata_hash_at(
+                    &self,
+                    path_flags: PathFlags,
+                    path: &str,
+                ) -> Result<MetadataHashValue, ErrorCode> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 24]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 24],
+                        );
+                        let flags0 = path_flags;
+                        let vec1 = path;
+                        let ptr1 = vec1.as_ptr().cast::<u8>();
+                        let len1 = vec1.len();
+                        let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]descriptor.metadata-hash-at"]
+                            fn wit_import3(
+                                _: i32,
+                                _: i32,
+                                _: *mut u8,
+                                _: usize,
+                                _: *mut u8,
+                            );
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import3(
+                            _: i32,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import3(
+                                (self).handle() as i32,
+                                (flags0.bits() >> 0) as i32,
+                                ptr1.cast_mut(),
+                                len1,
+                                ptr2,
+                            )
+                        };
+                        let l4 = i32::from(*ptr2.add(0).cast::<u8>());
+                        let result8 = match l4 {
+                            0 => {
+                                let e = {
+                                    let l5 = *ptr2.add(8).cast::<i64>();
+                                    let l6 = *ptr2.add(16).cast::<i64>();
+                                    MetadataHashValue {
+                                        lower: l5 as u64,
+                                        upper: l6 as u64,
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l7 = i32::from(*ptr2.add(8).cast::<u8>());
+                                    ErrorCode::_lift(l7 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result8
+                    }
+                }
+            }
+            impl DirectoryEntryStream {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read a single directory entry from a `directory-entry-stream`.
+                pub fn read_directory_entry(
+                    &self,
+                ) -> Result<Option<DirectoryEntry>, ErrorCode> {
+                    unsafe {
+                        #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                        #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 5 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 5
+                                * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]directory-entry-stream.read-directory-entry"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result9 = match l2 {
+                            0 => {
+                                let e = {
+                                    let l3 = i32::from(
+                                        *ptr0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                    );
+                                    match l3 {
+                                        0 => None,
+                                        1 => {
+                                            let e = {
+                                                let l4 = i32::from(
+                                                    *ptr0
+                                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                                        .cast::<u8>(),
+                                                );
+                                                let l5 = *ptr0
+                                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<*mut u8>();
+                                                let l6 = *ptr0
+                                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len7 = l6;
+                                                let bytes7 = _rt::Vec::from_raw_parts(
+                                                    l5.cast(),
+                                                    len7,
+                                                    len7,
+                                                );
+                                                DirectoryEntry {
+                                                    type_: DescriptorType::_lift(l4 as u8),
+                                                    name: _rt::string_lift(bytes7),
+                                                }
+                                            };
+                                            Some(e)
+                                        }
+                                        _ => _rt::invalid_enum_discriminant(),
+                                    }
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l8 = i32::from(
+                                        *ptr0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                    );
+                                    ErrorCode::_lift(l8 as u8)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result9
+                    }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Attempts to extract a filesystem-related `error-code` from the stream
+            /// `error` provided.
+            ///
+            /// Stream operations which return `stream-error::last-operation-failed`
+            /// have a payload with more information about the operation that failed.
+            /// This payload can be passed through to this function to see if there's
+            /// filesystem-related information about the error to return.
+            ///
+            /// Note that this function is fallible because not all stream-related
+            /// errors are filesystem-related errors.
+            pub fn filesystem_error_code(err: &Error) -> Option<ErrorCode> {
+                unsafe {
+                    #[repr(align(1))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 2]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 2]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:filesystem/types@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "filesystem-error-code"]
+                        fn wit_import1(_: i32, _: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1((err).handle() as i32, ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                    let result4 = match l2 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l3 = i32::from(*ptr0.add(1).cast::<u8>());
+                                ErrorCode::_lift(l3 as u8)
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result4
+                }
+            }
+        }
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod preopens {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type Descriptor = super::super::super::wasi::filesystem::types::Descriptor;
+            #[allow(unused_unsafe, clippy::all)]
+            /// Return the set of preopened directories, and their paths.
+            pub fn get_directories() -> _rt::Vec<(Descriptor, _rt::String)> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 2 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 2
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:filesystem/preopens@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "get-directories"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = *ptr0.add(0).cast::<*mut u8>();
+                    let l3 = *ptr0
+                        .add(::core::mem::size_of::<*const u8>())
+                        .cast::<usize>();
+                    let base8 = l2;
+                    let len8 = l3;
+                    let mut result8 = _rt::Vec::with_capacity(len8);
+                    for i in 0..len8 {
+                        let base = base8
+                            .add(i * (3 * ::core::mem::size_of::<*const u8>()));
+                        let e8 = {
+                            let l4 = *base.add(0).cast::<i32>();
+                            let l5 = *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<*mut u8>();
+                            let l6 = *base
+                                .add(2 * ::core::mem::size_of::<*const u8>())
+                                .cast::<usize>();
+                            let len7 = l6;
+                            let bytes7 = _rt::Vec::from_raw_parts(l5.cast(), len7, len7);
+                            (
+                                unsafe {
+                                    super::super::super::wasi::filesystem::types::Descriptor::from_handle(
+                                        l4 as u32,
+                                    )
+                                },
+                                _rt::string_lift(bytes7),
+                            )
+                        };
+                        result8.push(e8);
+                    }
+                    _rt::cabi_dealloc(
+                        base8,
+                        len8 * (3 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result9 = result8;
+                    result9
                 }
             }
         }
@@ -9137,13 +11799,6 @@ mod _rt {
             unsafe { core::hint::unreachable_unchecked() }
         }
     }
-    pub unsafe fn cabi_dealloc(ptr: *mut u8, size: usize, align: usize) {
-        if size == 0 {
-            return;
-        }
-        let layout = alloc::Layout::from_size_align_unchecked(size, align);
-        alloc::dealloc(ptr, layout);
-    }
     pub fn as_i32<T: AsI32>(t: T) -> i32 {
         t.as_i32()
     }
@@ -9203,6 +11858,13 @@ mod _rt {
             self as i32
         }
     }
+    pub unsafe fn cabi_dealloc(ptr: *mut u8, size: usize, align: usize) {
+        if size == 0 {
+            return;
+        }
+        let layout = alloc::Layout::from_size_align_unchecked(size, align);
+        alloc::dealloc(ptr, layout);
+    }
     #[cfg(target_arch = "wasm32")]
     pub fn run_ctors_once() {
         wit_bindgen_rt::run_ctors_once();
@@ -9245,8 +11907,8 @@ pub(crate) use __export_ts_runtime_mcp_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 7093] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb06\x01A\x02\x01A!\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10181] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc0N\x01A\x02\x01A&\x01\
 B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[meth\
 od]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.b\
 lock\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\0\
@@ -9277,117 +11939,176 @@ stream.subscribe\x01\x16\x01@\x02\x04self\x11\x03lenw\0\x13\x04\0\"[method]outpu
 t-stream.write-zeroes\x01\x17\x04\05[method]output-stream.blocking-write-zeroes-\
 and-flush\x01\x17\x01@\x03\x04self\x11\x03src\x09\x03lenw\0\x0d\x04\0\x1c[method\
 ]output-stream.splice\x01\x18\x04\0%[method]output-stream.blocking-splice\x01\x18\
-\x03\0\x15wasi:io/streams@0.2.4\x05\x06\x02\x03\0\x01\x08duration\x02\x03\0\x04\x0c\
-input-stream\x02\x03\0\x04\x0doutput-stream\x01B\xc1\x01\x02\x03\x02\x01\x07\x04\
-\0\x08duration\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0cinput-stream\x03\0\x02\x02\x03\
-\x02\x01\x09\x04\0\x0doutput-stream\x03\0\x04\x02\x03\x02\x01\x05\x04\0\x08io-er\
-ror\x03\0\x06\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\x08\x01q\x0a\x03get\0\0\
-\x04head\0\0\x04post\0\0\x03put\0\0\x06delete\0\0\x07connect\0\0\x07options\0\0\x05\
-trace\0\0\x05patch\0\0\x05other\x01s\0\x04\0\x06method\x03\0\x0a\x01q\x03\x04HTT\
-P\0\0\x05HTTPS\0\0\x05other\x01s\0\x04\0\x06scheme\x03\0\x0c\x01ks\x01k{\x01r\x02\
-\x05rcode\x0e\x09info-code\x0f\x04\0\x11DNS-error-payload\x03\0\x10\x01k}\x01r\x02\
-\x08alert-id\x12\x0dalert-message\x0e\x04\0\x1aTLS-alert-received-payload\x03\0\x13\
-\x01ky\x01r\x02\x0afield-name\x0e\x0afield-size\x15\x04\0\x12field-size-payload\x03\
-\0\x16\x01kw\x01k\x17\x01q'\x0bDNS-timeout\0\0\x09DNS-error\x01\x11\0\x15destina\
-tion-not-found\0\0\x17destination-unavailable\0\0\x19destination-IP-prohibited\0\
-\0\x19destination-IP-unroutable\0\0\x12connection-refused\0\0\x15connection-term\
-inated\0\0\x12connection-timeout\0\0\x17connection-read-timeout\0\0\x18connectio\
-n-write-timeout\0\0\x18connection-limit-reached\0\0\x12TLS-protocol-error\0\0\x15\
-TLS-certificate-error\0\0\x12TLS-alert-received\x01\x14\0\x13HTTP-request-denied\
-\0\0\x1cHTTP-request-length-required\0\0\x16HTTP-request-body-size\x01\x18\0\x1b\
-HTTP-request-method-invalid\0\0\x18HTTP-request-URI-invalid\0\0\x19HTTP-request-\
-URI-too-long\0\0\x20HTTP-request-header-section-size\x01\x15\0\x18HTTP-request-h\
-eader-size\x01\x19\0!HTTP-request-trailer-section-size\x01\x15\0\x19HTTP-request\
--trailer-size\x01\x17\0\x18HTTP-response-incomplete\0\0!HTTP-response-header-sec\
-tion-size\x01\x15\0\x19HTTP-response-header-size\x01\x17\0\x17HTTP-response-body\
--size\x01\x18\0\"HTTP-response-trailer-section-size\x01\x15\0\x1aHTTP-response-t\
-railer-size\x01\x17\0\x1dHTTP-response-transfer-coding\x01\x0e\0\x1cHTTP-respons\
-e-content-coding\x01\x0e\0\x15HTTP-response-timeout\0\0\x13HTTP-upgrade-failed\0\
-\0\x13HTTP-protocol-error\0\0\x0dloop-detected\0\0\x13configuration-error\0\0\x0e\
-internal-error\x01\x0e\0\x04\0\x0aerror-code\x03\0\x1a\x01q\x03\x0einvalid-synta\
-x\0\0\x09forbidden\0\0\x09immutable\0\0\x04\0\x0cheader-error\x03\0\x1c\x01s\x04\
-\0\x09field-key\x03\0\x1e\x04\0\x0afield-name\x03\0\x1f\x01p}\x04\0\x0bfield-val\
-ue\x03\0!\x04\0\x06fields\x03\x01\x04\0\x07headers\x03\0#\x04\0\x08trailers\x03\0\
-#\x04\0\x10incoming-request\x03\x01\x04\0\x10outgoing-request\x03\x01\x04\0\x0fr\
-equest-options\x03\x01\x04\0\x11response-outparam\x03\x01\x01{\x04\0\x0bstatus-c\
-ode\x03\0*\x04\0\x11incoming-response\x03\x01\x04\0\x0dincoming-body\x03\x01\x04\
-\0\x0ffuture-trailers\x03\x01\x04\0\x11outgoing-response\x03\x01\x04\0\x0doutgoi\
-ng-body\x03\x01\x04\0\x18future-incoming-response\x03\x01\x01i#\x01@\0\02\x04\0\x13\
-[constructor]fields\x013\x01o\x02\x20\"\x01p4\x01j\x012\x01\x1d\x01@\x01\x07entr\
-ies5\06\x04\0\x18[static]fields.from-list\x017\x01h#\x01p\"\x01@\x02\x04self8\x04\
-name\x20\09\x04\0\x12[method]fields.get\x01:\x01@\x02\x04self8\x04name\x20\0\x7f\
-\x04\0\x12[method]fields.has\x01;\x01j\0\x01\x1d\x01@\x03\x04self8\x04name\x20\x05\
-value9\0<\x04\0\x12[method]fields.set\x01=\x01@\x02\x04self8\x04name\x20\0<\x04\0\
-\x15[method]fields.delete\x01>\x01@\x03\x04self8\x04name\x20\x05value\"\0<\x04\0\
-\x15[method]fields.append\x01?\x01@\x01\x04self8\05\x04\0\x16[method]fields.entr\
-ies\x01@\x01@\x01\x04self8\02\x04\0\x14[method]fields.clone\x01A\x01h&\x01@\x01\x04\
-self\xc2\0\0\x0b\x04\0\x1f[method]incoming-request.method\x01C\x01@\x01\x04self\xc2\
-\0\0\x0e\x04\0([method]incoming-request.path-with-query\x01D\x01k\x0d\x01@\x01\x04\
-self\xc2\0\0\xc5\0\x04\0\x1f[method]incoming-request.scheme\x01F\x04\0\"[method]\
-incoming-request.authority\x01D\x01i$\x01@\x01\x04self\xc2\0\0\xc7\0\x04\0\x20[m\
-ethod]incoming-request.headers\x01H\x01i-\x01j\x01\xc9\0\0\x01@\x01\x04self\xc2\0\
-\0\xca\0\x04\0\x20[method]incoming-request.consume\x01K\x01i'\x01@\x01\x07header\
-s\xc7\0\0\xcc\0\x04\0\x1d[constructor]outgoing-request\x01M\x01h'\x01i0\x01j\x01\
-\xcf\0\0\x01@\x01\x04self\xce\0\0\xd0\0\x04\0\x1d[method]outgoing-request.body\x01\
-Q\x01@\x01\x04self\xce\0\0\x0b\x04\0\x1f[method]outgoing-request.method\x01R\x01\
-j\0\0\x01@\x02\x04self\xce\0\x06method\x0b\0\xd3\0\x04\0#[method]outgoing-reques\
-t.set-method\x01T\x01@\x01\x04self\xce\0\0\x0e\x04\0([method]outgoing-request.pa\
-th-with-query\x01U\x01@\x02\x04self\xce\0\x0fpath-with-query\x0e\0\xd3\0\x04\0,[\
-method]outgoing-request.set-path-with-query\x01V\x01@\x01\x04self\xce\0\0\xc5\0\x04\
-\0\x1f[method]outgoing-request.scheme\x01W\x01@\x02\x04self\xce\0\x06scheme\xc5\0\
-\0\xd3\0\x04\0#[method]outgoing-request.set-scheme\x01X\x04\0\"[method]outgoing-\
-request.authority\x01U\x01@\x02\x04self\xce\0\x09authority\x0e\0\xd3\0\x04\0&[me\
-thod]outgoing-request.set-authority\x01Y\x01@\x01\x04self\xce\0\0\xc7\0\x04\0\x20\
-[method]outgoing-request.headers\x01Z\x01i(\x01@\0\0\xdb\0\x04\0\x1c[constructor\
-]request-options\x01\\\x01h(\x01k\x01\x01@\x01\x04self\xdd\0\0\xde\0\x04\0'[meth\
-od]request-options.connect-timeout\x01_\x01@\x02\x04self\xdd\0\x08duration\xde\0\
-\0\xd3\0\x04\0+[method]request-options.set-connect-timeout\x01`\x04\0*[method]re\
-quest-options.first-byte-timeout\x01_\x04\0.[method]request-options.set-first-by\
-te-timeout\x01`\x04\0-[method]request-options.between-bytes-timeout\x01_\x04\01[\
-method]request-options.set-between-bytes-timeout\x01`\x01i)\x01i/\x01j\x01\xe2\0\
-\x01\x1b\x01@\x02\x05param\xe1\0\x08response\xe3\0\x01\0\x04\0\x1d[static]respon\
-se-outparam.set\x01d\x01h,\x01@\x01\x04self\xe5\0\0+\x04\0\x20[method]incoming-r\
-esponse.status\x01f\x01@\x01\x04self\xe5\0\0\xc7\0\x04\0![method]incoming-respon\
-se.headers\x01g\x01@\x01\x04self\xe5\0\0\xca\0\x04\0![method]incoming-response.c\
-onsume\x01h\x01h-\x01i\x03\x01j\x01\xea\0\0\x01@\x01\x04self\xe9\0\0\xeb\0\x04\0\
-\x1c[method]incoming-body.stream\x01l\x01i.\x01@\x01\x04this\xc9\0\0\xed\0\x04\0\
-\x1c[static]incoming-body.finish\x01n\x01h.\x01i\x09\x01@\x01\x04self\xef\0\0\xf0\
-\0\x04\0![method]future-trailers.subscribe\x01q\x01i%\x01k\xf2\0\x01j\x01\xf3\0\x01\
-\x1b\x01j\x01\xf4\0\0\x01k\xf5\0\x01@\x01\x04self\xef\0\0\xf6\0\x04\0\x1b[method\
-]future-trailers.get\x01w\x01@\x01\x07headers\xc7\0\0\xe2\0\x04\0\x1e[constructo\
-r]outgoing-response\x01x\x01h/\x01@\x01\x04self\xf9\0\0+\x04\0%[method]outgoing-\
-response.status-code\x01z\x01@\x02\x04self\xf9\0\x0bstatus-code+\0\xd3\0\x04\0)[\
-method]outgoing-response.set-status-code\x01{\x01@\x01\x04self\xf9\0\0\xc7\0\x04\
-\0![method]outgoing-response.headers\x01|\x01@\x01\x04self\xf9\0\0\xd0\0\x04\0\x1e\
-[method]outgoing-response.body\x01}\x01h0\x01i\x05\x01j\x01\xff\0\0\x01@\x01\x04\
-self\xfe\0\0\x80\x01\x04\0\x1b[method]outgoing-body.write\x01\x81\x01\x01j\0\x01\
-\x1b\x01@\x02\x04this\xcf\0\x08trailers\xf3\0\0\x82\x01\x04\0\x1c[static]outgoin\
-g-body.finish\x01\x83\x01\x01h1\x01@\x01\x04self\x84\x01\0\xf0\0\x04\0*[method]f\
-uture-incoming-response.subscribe\x01\x85\x01\x01i,\x01j\x01\x86\x01\x01\x1b\x01\
-j\x01\x87\x01\0\x01k\x88\x01\x01@\x01\x04self\x84\x01\0\x89\x01\x04\0$[method]fu\
-ture-incoming-response.get\x01\x8a\x01\x01h\x07\x01k\x1b\x01@\x01\x03err\x8b\x01\
-\0\x8c\x01\x04\0\x0fhttp-error-code\x01\x8d\x01\x03\0\x15wasi:http/types@0.2.4\x05\
-\x0a\x02\x03\0\x05\x10outgoing-request\x02\x03\0\x05\x0frequest-options\x02\x03\0\
-\x05\x18future-incoming-response\x02\x03\0\x05\x0aerror-code\x01B\x0f\x02\x03\x02\
-\x01\x0b\x04\0\x10outgoing-request\x03\0\0\x02\x03\x02\x01\x0c\x04\0\x0frequest-\
-options\x03\0\x02\x02\x03\x02\x01\x0d\x04\0\x18future-incoming-response\x03\0\x04\
-\x02\x03\x02\x01\x0e\x04\0\x0aerror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01\
-i\x05\x01j\x01\x0b\x01\x07\x01@\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06\
-handle\x01\x0d\x03\0\x20wasi:http/outgoing-handler@0.2.4\x05\x0f\x01B\x05\x01p}\x01\
-@\x01\x03lenw\0\0\x04\0\x10get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-rando\
-m-u64\x01\x02\x03\0\x18wasi:random/random@0.2.4\x05\x10\x01B\x04\x01@\x01\x03url\
-s\0s\x04\0\x08http-get\x01\0\x01@\x04\x06methods\x03urls\x07headerss\x04bodys\0s\
-\x04\0\x0chttp-request\x01\x01\x03\0!mcp:ts-runtime/browser-http@0.2.0\x05\x11\x01\
-B\x07\x01@\x01\x04paths\0s\x04\0\x09read-file\x01\0\x01@\x02\x04paths\x07content\
-s\0s\x04\0\x0awrite-file\x01\x01\x04\0\x08list-dir\x01\0\x01@\x02\x07patterns\x04\
-paths\0s\x04\0\x04grep\x01\x02\x03\0\x1fmcp:ts-runtime/browser-fs@0.2.0\x05\x12\x02\
-\x03\0\x05\x10incoming-request\x02\x03\0\x05\x11response-outparam\x01B\x08\x02\x03\
-\x02\x01\x13\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\x01\x14\x04\0\x11resp\
-onse-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07request\x04\x0cresponse-ou\
-t\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/incoming-handler@0.2.4\x05\
-\x15\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0ets-runtime\
--mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\
-\x10wit-bindgen-rust\x060.41.0";
+\x03\0\x15wasi:io/streams@0.2.4\x05\x06\x02\x03\0\x04\x0cinput-stream\x02\x03\0\x04\
+\x0doutput-stream\x02\x03\0\x04\x05error\x02\x03\0\x02\x08datetime\x01Br\x02\x03\
+\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-s\
+tream\x03\0\x02\x02\x03\x02\x01\x09\x04\0\x05error\x03\0\x04\x02\x03\x02\x01\x0a\
+\x04\0\x08datetime\x03\0\x06\x01w\x04\0\x08filesize\x03\0\x08\x01m\x08\x07unknow\
+n\x0cblock-device\x10character-device\x09directory\x04fifo\x0dsymbolic-link\x0cr\
+egular-file\x06socket\x04\0\x0fdescriptor-type\x03\0\x0a\x01n\x06\x04read\x05wri\
+te\x13file-integrity-sync\x13data-integrity-sync\x14requested-write-sync\x10muta\
+te-directory\x04\0\x10descriptor-flags\x03\0\x0c\x01n\x01\x0esymlink-follow\x04\0\
+\x0apath-flags\x03\0\x0e\x01n\x04\x06create\x09directory\x09exclusive\x08truncat\
+e\x04\0\x0aopen-flags\x03\0\x10\x01w\x04\0\x0alink-count\x03\0\x12\x01k\x07\x01r\
+\x06\x04type\x0b\x0alink-count\x13\x04size\x09\x15data-access-timestamp\x14\x1bd\
+ata-modification-timestamp\x14\x17status-change-timestamp\x14\x04\0\x0fdescripto\
+r-stat\x03\0\x15\x01q\x03\x09no-change\0\0\x03now\0\0\x09timestamp\x01\x07\0\x04\
+\0\x0dnew-timestamp\x03\0\x17\x01r\x02\x04type\x0b\x04names\x04\0\x0fdirectory-e\
+ntry\x03\0\x19\x01m%\x06access\x0bwould-block\x07already\x0ebad-descriptor\x04bu\
+sy\x08deadlock\x05quota\x05exist\x0efile-too-large\x15illegal-byte-sequence\x0bi\
+n-progress\x0binterrupted\x07invalid\x02io\x0cis-directory\x04loop\x0etoo-many-l\
+inks\x0cmessage-size\x0dname-too-long\x09no-device\x08no-entry\x07no-lock\x13ins\
+ufficient-memory\x12insufficient-space\x0dnot-directory\x09not-empty\x0fnot-reco\
+verable\x0bunsupported\x06no-tty\x0eno-such-device\x08overflow\x0dnot-permitted\x04\
+pipe\x09read-only\x0cinvalid-seek\x0etext-file-busy\x0ccross-device\x04\0\x0aerr\
+or-code\x03\0\x1b\x01m\x06\x06normal\x0asequential\x06random\x09will-need\x09don\
+t-need\x08no-reuse\x04\0\x06advice\x03\0\x1d\x01r\x02\x05lowerw\x05upperw\x04\0\x13\
+metadata-hash-value\x03\0\x1f\x04\0\x0adescriptor\x03\x01\x04\0\x16directory-ent\
+ry-stream\x03\x01\x01h!\x01i\x01\x01j\x01$\x01\x1c\x01@\x02\x04self#\x06offset\x09\
+\0%\x04\0\"[method]descriptor.read-via-stream\x01&\x01i\x03\x01j\x01'\x01\x1c\x01\
+@\x02\x04self#\x06offset\x09\0(\x04\0#[method]descriptor.write-via-stream\x01)\x01\
+@\x01\x04self#\0(\x04\0$[method]descriptor.append-via-stream\x01*\x01j\0\x01\x1c\
+\x01@\x04\x04self#\x06offset\x09\x06length\x09\x06advice\x1e\0+\x04\0\x19[method\
+]descriptor.advise\x01,\x01@\x01\x04self#\0+\x04\0\x1c[method]descriptor.sync-da\
+ta\x01-\x01j\x01\x0d\x01\x1c\x01@\x01\x04self#\0.\x04\0\x1c[method]descriptor.ge\
+t-flags\x01/\x01j\x01\x0b\x01\x1c\x01@\x01\x04self#\00\x04\0\x1b[method]descript\
+or.get-type\x011\x01@\x02\x04self#\x04size\x09\0+\x04\0\x1b[method]descriptor.se\
+t-size\x012\x01@\x03\x04self#\x15data-access-timestamp\x18\x1bdata-modification-\
+timestamp\x18\0+\x04\0\x1c[method]descriptor.set-times\x013\x01p}\x01o\x024\x7f\x01\
+j\x015\x01\x1c\x01@\x03\x04self#\x06length\x09\x06offset\x09\06\x04\0\x17[method\
+]descriptor.read\x017\x01j\x01\x09\x01\x1c\x01@\x03\x04self#\x06buffer4\x06offse\
+t\x09\08\x04\0\x18[method]descriptor.write\x019\x01i\"\x01j\x01:\x01\x1c\x01@\x01\
+\x04self#\0;\x04\0![method]descriptor.read-directory\x01<\x04\0\x17[method]descr\
+iptor.sync\x01-\x01@\x02\x04self#\x04paths\0+\x04\0&[method]descriptor.create-di\
+rectory-at\x01=\x01j\x01\x16\x01\x1c\x01@\x01\x04self#\0>\x04\0\x17[method]descr\
+iptor.stat\x01?\x01@\x03\x04self#\x0apath-flags\x0f\x04paths\0>\x04\0\x1a[method\
+]descriptor.stat-at\x01@\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x15data-ac\
+cess-timestamp\x18\x1bdata-modification-timestamp\x18\0+\x04\0\x1f[method]descri\
+ptor.set-times-at\x01A\x01@\x05\x04self#\x0eold-path-flags\x0f\x08old-paths\x0en\
+ew-descriptor#\x08new-paths\0+\x04\0\x1a[method]descriptor.link-at\x01B\x01i!\x01\
+j\x01\xc3\0\x01\x1c\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x0aopen-flags\x11\
+\x05flags\x0d\0\xc4\0\x04\0\x1a[method]descriptor.open-at\x01E\x01j\x01s\x01\x1c\
+\x01@\x02\x04self#\x04paths\0\xc6\0\x04\0\x1e[method]descriptor.readlink-at\x01G\
+\x04\0&[method]descriptor.remove-directory-at\x01=\x01@\x04\x04self#\x08old-path\
+s\x0enew-descriptor#\x08new-paths\0+\x04\0\x1c[method]descriptor.rename-at\x01H\x01\
+@\x03\x04self#\x08old-paths\x08new-paths\0+\x04\0\x1d[method]descriptor.symlink-\
+at\x01I\x04\0![method]descriptor.unlink-file-at\x01=\x01@\x02\x04self#\x05other#\
+\0\x7f\x04\0![method]descriptor.is-same-object\x01J\x01j\x01\x20\x01\x1c\x01@\x01\
+\x04self#\0\xcb\0\x04\0\x20[method]descriptor.metadata-hash\x01L\x01@\x03\x04sel\
+f#\x0apath-flags\x0f\x04paths\0\xcb\0\x04\0#[method]descriptor.metadata-hash-at\x01\
+M\x01h\"\x01k\x1a\x01j\x01\xcf\0\x01\x1c\x01@\x01\x04self\xce\0\0\xd0\0\x04\03[m\
+ethod]directory-entry-stream.read-directory-entry\x01Q\x01h\x05\x01k\x1c\x01@\x01\
+\x03err\xd2\0\0\xd3\0\x04\0\x15filesystem-error-code\x01T\x03\0\x1bwasi:filesyst\
+em/types@0.2.4\x05\x0b\x02\x03\0\x05\x0adescriptor\x01B\x07\x02\x03\x02\x01\x0c\x04\
+\0\x0adescriptor\x03\0\0\x01i\x01\x01o\x02\x02s\x01p\x03\x01@\0\0\x04\x04\0\x0fg\
+et-directories\x01\x05\x03\0\x1ewasi:filesystem/preopens@0.2.4\x05\x0d\x02\x03\0\
+\x01\x08duration\x01B\xc1\x01\x02\x03\x02\x01\x0e\x04\0\x08duration\x03\0\0\x02\x03\
+\x02\x01\x07\x04\0\x0cinput-stream\x03\0\x02\x02\x03\x02\x01\x08\x04\0\x0doutput\
+-stream\x03\0\x04\x02\x03\x02\x01\x05\x04\0\x08io-error\x03\0\x06\x02\x03\x02\x01\
+\x01\x04\0\x08pollable\x03\0\x08\x01q\x0a\x03get\0\0\x04head\0\0\x04post\0\0\x03\
+put\0\0\x06delete\0\0\x07connect\0\0\x07options\0\0\x05trace\0\0\x05patch\0\0\x05\
+other\x01s\0\x04\0\x06method\x03\0\x0a\x01q\x03\x04HTTP\0\0\x05HTTPS\0\0\x05othe\
+r\x01s\0\x04\0\x06scheme\x03\0\x0c\x01ks\x01k{\x01r\x02\x05rcode\x0e\x09info-cod\
+e\x0f\x04\0\x11DNS-error-payload\x03\0\x10\x01k}\x01r\x02\x08alert-id\x12\x0dale\
+rt-message\x0e\x04\0\x1aTLS-alert-received-payload\x03\0\x13\x01ky\x01r\x02\x0af\
+ield-name\x0e\x0afield-size\x15\x04\0\x12field-size-payload\x03\0\x16\x01kw\x01k\
+\x17\x01q'\x0bDNS-timeout\0\0\x09DNS-error\x01\x11\0\x15destination-not-found\0\0\
+\x17destination-unavailable\0\0\x19destination-IP-prohibited\0\0\x19destination-\
+IP-unroutable\0\0\x12connection-refused\0\0\x15connection-terminated\0\0\x12conn\
+ection-timeout\0\0\x17connection-read-timeout\0\0\x18connection-write-timeout\0\0\
+\x18connection-limit-reached\0\0\x12TLS-protocol-error\0\0\x15TLS-certificate-er\
+ror\0\0\x12TLS-alert-received\x01\x14\0\x13HTTP-request-denied\0\0\x1cHTTP-reque\
+st-length-required\0\0\x16HTTP-request-body-size\x01\x18\0\x1bHTTP-request-metho\
+d-invalid\0\0\x18HTTP-request-URI-invalid\0\0\x19HTTP-request-URI-too-long\0\0\x20\
+HTTP-request-header-section-size\x01\x15\0\x18HTTP-request-header-size\x01\x19\0\
+!HTTP-request-trailer-section-size\x01\x15\0\x19HTTP-request-trailer-size\x01\x17\
+\0\x18HTTP-response-incomplete\0\0!HTTP-response-header-section-size\x01\x15\0\x19\
+HTTP-response-header-size\x01\x17\0\x17HTTP-response-body-size\x01\x18\0\"HTTP-r\
+esponse-trailer-section-size\x01\x15\0\x1aHTTP-response-trailer-size\x01\x17\0\x1d\
+HTTP-response-transfer-coding\x01\x0e\0\x1cHTTP-response-content-coding\x01\x0e\0\
+\x15HTTP-response-timeout\0\0\x13HTTP-upgrade-failed\0\0\x13HTTP-protocol-error\0\
+\0\x0dloop-detected\0\0\x13configuration-error\0\0\x0einternal-error\x01\x0e\0\x04\
+\0\x0aerror-code\x03\0\x1a\x01q\x03\x0einvalid-syntax\0\0\x09forbidden\0\0\x09im\
+mutable\0\0\x04\0\x0cheader-error\x03\0\x1c\x01s\x04\0\x09field-key\x03\0\x1e\x04\
+\0\x0afield-name\x03\0\x1f\x01p}\x04\0\x0bfield-value\x03\0!\x04\0\x06fields\x03\
+\x01\x04\0\x07headers\x03\0#\x04\0\x08trailers\x03\0#\x04\0\x10incoming-request\x03\
+\x01\x04\0\x10outgoing-request\x03\x01\x04\0\x0frequest-options\x03\x01\x04\0\x11\
+response-outparam\x03\x01\x01{\x04\0\x0bstatus-code\x03\0*\x04\0\x11incoming-res\
+ponse\x03\x01\x04\0\x0dincoming-body\x03\x01\x04\0\x0ffuture-trailers\x03\x01\x04\
+\0\x11outgoing-response\x03\x01\x04\0\x0doutgoing-body\x03\x01\x04\0\x18future-i\
+ncoming-response\x03\x01\x01i#\x01@\0\02\x04\0\x13[constructor]fields\x013\x01o\x02\
+\x20\"\x01p4\x01j\x012\x01\x1d\x01@\x01\x07entries5\06\x04\0\x18[static]fields.f\
+rom-list\x017\x01h#\x01p\"\x01@\x02\x04self8\x04name\x20\09\x04\0\x12[method]fie\
+lds.get\x01:\x01@\x02\x04self8\x04name\x20\0\x7f\x04\0\x12[method]fields.has\x01\
+;\x01j\0\x01\x1d\x01@\x03\x04self8\x04name\x20\x05value9\0<\x04\0\x12[method]fie\
+lds.set\x01=\x01@\x02\x04self8\x04name\x20\0<\x04\0\x15[method]fields.delete\x01\
+>\x01@\x03\x04self8\x04name\x20\x05value\"\0<\x04\0\x15[method]fields.append\x01\
+?\x01@\x01\x04self8\05\x04\0\x16[method]fields.entries\x01@\x01@\x01\x04self8\02\
+\x04\0\x14[method]fields.clone\x01A\x01h&\x01@\x01\x04self\xc2\0\0\x0b\x04\0\x1f\
+[method]incoming-request.method\x01C\x01@\x01\x04self\xc2\0\0\x0e\x04\0([method]\
+incoming-request.path-with-query\x01D\x01k\x0d\x01@\x01\x04self\xc2\0\0\xc5\0\x04\
+\0\x1f[method]incoming-request.scheme\x01F\x04\0\"[method]incoming-request.autho\
+rity\x01D\x01i$\x01@\x01\x04self\xc2\0\0\xc7\0\x04\0\x20[method]incoming-request\
+.headers\x01H\x01i-\x01j\x01\xc9\0\0\x01@\x01\x04self\xc2\0\0\xca\0\x04\0\x20[me\
+thod]incoming-request.consume\x01K\x01i'\x01@\x01\x07headers\xc7\0\0\xcc\0\x04\0\
+\x1d[constructor]outgoing-request\x01M\x01h'\x01i0\x01j\x01\xcf\0\0\x01@\x01\x04\
+self\xce\0\0\xd0\0\x04\0\x1d[method]outgoing-request.body\x01Q\x01@\x01\x04self\xce\
+\0\0\x0b\x04\0\x1f[method]outgoing-request.method\x01R\x01j\0\0\x01@\x02\x04self\
+\xce\0\x06method\x0b\0\xd3\0\x04\0#[method]outgoing-request.set-method\x01T\x01@\
+\x01\x04self\xce\0\0\x0e\x04\0([method]outgoing-request.path-with-query\x01U\x01\
+@\x02\x04self\xce\0\x0fpath-with-query\x0e\0\xd3\0\x04\0,[method]outgoing-reques\
+t.set-path-with-query\x01V\x01@\x01\x04self\xce\0\0\xc5\0\x04\0\x1f[method]outgo\
+ing-request.scheme\x01W\x01@\x02\x04self\xce\0\x06scheme\xc5\0\0\xd3\0\x04\0#[me\
+thod]outgoing-request.set-scheme\x01X\x04\0\"[method]outgoing-request.authority\x01\
+U\x01@\x02\x04self\xce\0\x09authority\x0e\0\xd3\0\x04\0&[method]outgoing-request\
+.set-authority\x01Y\x01@\x01\x04self\xce\0\0\xc7\0\x04\0\x20[method]outgoing-req\
+uest.headers\x01Z\x01i(\x01@\0\0\xdb\0\x04\0\x1c[constructor]request-options\x01\
+\\\x01h(\x01k\x01\x01@\x01\x04self\xdd\0\0\xde\0\x04\0'[method]request-options.c\
+onnect-timeout\x01_\x01@\x02\x04self\xdd\0\x08duration\xde\0\0\xd3\0\x04\0+[meth\
+od]request-options.set-connect-timeout\x01`\x04\0*[method]request-options.first-\
+byte-timeout\x01_\x04\0.[method]request-options.set-first-byte-timeout\x01`\x04\0\
+-[method]request-options.between-bytes-timeout\x01_\x04\01[method]request-option\
+s.set-between-bytes-timeout\x01`\x01i)\x01i/\x01j\x01\xe2\0\x01\x1b\x01@\x02\x05\
+param\xe1\0\x08response\xe3\0\x01\0\x04\0\x1d[static]response-outparam.set\x01d\x01\
+h,\x01@\x01\x04self\xe5\0\0+\x04\0\x20[method]incoming-response.status\x01f\x01@\
+\x01\x04self\xe5\0\0\xc7\0\x04\0![method]incoming-response.headers\x01g\x01@\x01\
+\x04self\xe5\0\0\xca\0\x04\0![method]incoming-response.consume\x01h\x01h-\x01i\x03\
+\x01j\x01\xea\0\0\x01@\x01\x04self\xe9\0\0\xeb\0\x04\0\x1c[method]incoming-body.\
+stream\x01l\x01i.\x01@\x01\x04this\xc9\0\0\xed\0\x04\0\x1c[static]incoming-body.\
+finish\x01n\x01h.\x01i\x09\x01@\x01\x04self\xef\0\0\xf0\0\x04\0![method]future-t\
+railers.subscribe\x01q\x01i%\x01k\xf2\0\x01j\x01\xf3\0\x01\x1b\x01j\x01\xf4\0\0\x01\
+k\xf5\0\x01@\x01\x04self\xef\0\0\xf6\0\x04\0\x1b[method]future-trailers.get\x01w\
+\x01@\x01\x07headers\xc7\0\0\xe2\0\x04\0\x1e[constructor]outgoing-response\x01x\x01\
+h/\x01@\x01\x04self\xf9\0\0+\x04\0%[method]outgoing-response.status-code\x01z\x01\
+@\x02\x04self\xf9\0\x0bstatus-code+\0\xd3\0\x04\0)[method]outgoing-response.set-\
+status-code\x01{\x01@\x01\x04self\xf9\0\0\xc7\0\x04\0![method]outgoing-response.\
+headers\x01|\x01@\x01\x04self\xf9\0\0\xd0\0\x04\0\x1e[method]outgoing-response.b\
+ody\x01}\x01h0\x01i\x05\x01j\x01\xff\0\0\x01@\x01\x04self\xfe\0\0\x80\x01\x04\0\x1b\
+[method]outgoing-body.write\x01\x81\x01\x01j\0\x01\x1b\x01@\x02\x04this\xcf\0\x08\
+trailers\xf3\0\0\x82\x01\x04\0\x1c[static]outgoing-body.finish\x01\x83\x01\x01h1\
+\x01@\x01\x04self\x84\x01\0\xf0\0\x04\0*[method]future-incoming-response.subscri\
+be\x01\x85\x01\x01i,\x01j\x01\x86\x01\x01\x1b\x01j\x01\x87\x01\0\x01k\x88\x01\x01\
+@\x01\x04self\x84\x01\0\x89\x01\x04\0$[method]future-incoming-response.get\x01\x8a\
+\x01\x01h\x07\x01k\x1b\x01@\x01\x03err\x8b\x01\0\x8c\x01\x04\0\x0fhttp-error-cod\
+e\x01\x8d\x01\x03\0\x15wasi:http/types@0.2.4\x05\x0f\x02\x03\0\x07\x10outgoing-r\
+equest\x02\x03\0\x07\x0frequest-options\x02\x03\0\x07\x18future-incoming-respons\
+e\x02\x03\0\x07\x0aerror-code\x01B\x0f\x02\x03\x02\x01\x10\x04\0\x10outgoing-req\
+uest\x03\0\0\x02\x03\x02\x01\x11\x04\0\x0frequest-options\x03\0\x02\x02\x03\x02\x01\
+\x12\x04\0\x18future-incoming-response\x03\0\x04\x02\x03\x02\x01\x13\x04\0\x0aer\
+ror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01@\
+\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\0\x20wasi:h\
+ttp/outgoing-handler@0.2.4\x05\x14\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10\
+get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi\
+:random/random@0.2.4\x05\x15\x01B\x04\x01@\x01\x03urls\0s\x04\0\x08http-get\x01\0\
+\x01@\x04\x06methods\x03urls\x07headerss\x04bodys\0s\x04\0\x0chttp-request\x01\x01\
+\x03\0!mcp:ts-runtime/browser-http@0.2.0\x05\x16\x02\x03\0\x07\x10incoming-reque\
+st\x02\x03\0\x07\x11response-outparam\x01B\x08\x02\x03\x02\x01\x17\x04\0\x10inco\
+ming-request\x03\0\0\x02\x03\x02\x01\x18\x04\0\x11response-outparam\x03\0\x02\x01\
+i\x01\x01i\x03\x01@\x02\x07request\x04\x0cresponse-out\x05\x01\0\x04\0\x06handle\
+\x01\x06\x04\0\x20wasi:http/incoming-handler@0.2.4\x05\x19\x04\0#mcp:ts-runtime/\
+ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0ets-runtime-mcp\x03\0\0\0G\x09produce\
+rs\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.\
+41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

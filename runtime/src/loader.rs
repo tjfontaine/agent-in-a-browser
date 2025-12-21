@@ -1,4 +1,4 @@
-//! Module loader that fetches from network or OPFS.
+//! Module loader that fetches from network or filesystem.
 
 use rquickjs::loader::Loader;
 use rquickjs::module::Declared;
@@ -6,7 +6,7 @@ use rquickjs::{Ctx, Module, Result};
 
 use crate::transpiler;
 
-/// Hybrid loader that fetches modules from network (for URLs) or OPFS (for local paths).
+/// Hybrid loader that fetches modules from network (for URLs) or filesystem (for local paths).
 pub struct HybridLoader;
 
 impl Loader for HybridLoader {
@@ -72,7 +72,9 @@ pub async fn load_module(path: &str) -> std::result::Result<String, String> {
     let source = if path.starts_with("http://") || path.starts_with("https://") {
         fetch_url(path).await?
     } else {
-        crate::opfs::read_file(path).await?
+        // Use std::fs for local file access (WASI filesystem)
+        std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {}", path, e))?
     };
 
     // Auto-transpile TypeScript

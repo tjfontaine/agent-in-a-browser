@@ -8,7 +8,6 @@ mod host_bindings;
 mod http_client;
 mod loader;
 mod mcp_server;
-mod opfs;
 mod resolver;
 mod transpiler;
 
@@ -150,112 +149,121 @@ impl TsRuntimeMcp {
 
     #[mcp_tool(description = "Read the contents of a file at the given path.")]
     fn read_file(&self, path: String) -> ToolResult {
-        use crate::bindings::mcp::ts_runtime::browser_fs;
+        use std::fs;
 
         if path.is_empty() {
             return ToolResult::error("No path provided");
         }
-        let result_json = browser_fs::read_file(&path);
-        match serde_json::from_str::<serde_json::Value>(&result_json) {
-            Ok(result) => {
-                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    let content = result.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                    ToolResult::text(content)
-                } else {
-                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    ToolResult::error(error)
-                }
-            }
-            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+        match fs::read_to_string(&path) {
+            Ok(content) => ToolResult::text(content),
+            Err(e) => ToolResult::error(format!("Failed to read {}: {}", path, e)),
         }
     }
 
     #[mcp_tool(description = "Write content to a file at the given path. Creates parent directories if needed.")]
     fn write_file(&self, path: String, content: String) -> ToolResult {
-        use crate::bindings::mcp::ts_runtime::browser_fs;
+        use std::fs;
+        use std::path::Path;
 
         if path.is_empty() {
             return ToolResult::error("No path provided");
         }
-        let result_json = browser_fs::write_file(&path, &content);
-        match serde_json::from_str::<serde_json::Value>(&result_json) {
-            Ok(result) => {
-                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    ToolResult::text(format!("File written: {}", path))
-                } else {
-                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    ToolResult::error(error)
+
+        // Create parent directories if needed
+        if let Some(parent) = Path::new(&path).parent() {
+            if !parent.as_os_str().is_empty() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    return ToolResult::error(format!("Failed to create directories: {}", e));
                 }
             }
-            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+        }
+
+        match fs::write(&path, &content) {
+            Ok(()) => ToolResult::text(format!("File written: {}", path)),
+            Err(e) => ToolResult::error(format!("Failed to write {}: {}", path, e)),
         }
     }
 
     #[mcp_tool(description = "List files and directories at the given path.")]
     fn list(&self, path: Option<String>) -> ToolResult {
-        use crate::bindings::mcp::ts_runtime::browser_fs;
+        use std::fs;
 
         let path = path.as_deref().unwrap_or("/");
-        let result_json = browser_fs::list_dir(path);
-        match serde_json::from_str::<serde_json::Value>(&result_json) {
-            Ok(result) => {
-                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    let entries = result.get("entries")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .collect::<Vec<_>>()
-                            .join("\n"))
-                        .unwrap_or_default();
-                    if entries.is_empty() {
-                        ToolResult::text("(empty directory)")
+
+        match fs::read_dir(path) {
+            Ok(entries) => {
+                let mut names: Vec<String> = Vec::new();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        names.push(format!("{}/", name));
                     } else {
-                        ToolResult::text(entries)
+                        names.push(name);
                     }
+                }
+                names.sort();
+                if names.is_empty() {
+                    ToolResult::text("(empty directory)")
                 } else {
-                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    ToolResult::error(error)
+                    ToolResult::text(names.join("\n"))
                 }
             }
-            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+            Err(e) => ToolResult::error(format!("Failed to list {}: {}", path, e)),
         }
     }
 
     #[mcp_tool(description = "Search for a pattern in files under the given path.")]
     fn grep(&self, pattern: String, path: Option<String>) -> ToolResult {
-        use crate::bindings::mcp::ts_runtime::browser_fs;
+        use std::fs;
 
         if pattern.is_empty() {
             return ToolResult::error("No pattern provided");
         }
-        let path = path.as_deref().unwrap_or("/");
-        let result_json = browser_fs::grep(&pattern, path);
-        match serde_json::from_str::<serde_json::Value>(&result_json) {
-            Ok(result) => {
-                if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    let matches = result.get("matches")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter()
-                            .filter_map(|m| {
-                                let file = m.get("file")?.as_str()?;
-                                let line = m.get("line")?.as_u64()?;
-                                let text = m.get("text")?.as_str()?;
-                                Some(format!("{}:{}: {}", file, line, text))
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n"))
-                        .unwrap_or_default();
-                    if matches.is_empty() {
-                        ToolResult::text("No matches found")
-                    } else {
-                        ToolResult::text(matches)
+
+        let search_path = path.as_deref().unwrap_or("/");
+        let mut matches: Vec<String> = Vec::new();
+
+        // Recursive grep implementation
+        fn search_directory(
+            dir_path: &str,
+            pattern: &str,
+            matches: &mut Vec<String>,
+        ) -> Result<(), std::io::Error> {
+            for entry in fs::read_dir(dir_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                let path_str = path.to_string_lossy().to_string();
+
+                if entry.file_type()?.is_dir() {
+                    // Recurse into directory
+                    let _ = search_directory(&path_str, pattern, matches);
+                } else if entry.file_type()?.is_file() {
+                    // Search file content
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        for (line_num, line) in content.lines().enumerate() {
+                            if line.to_lowercase().contains(&pattern.to_lowercase()) {
+                                let trimmed = if line.len() > 100 {
+                                    format!("{}...", &line[..100])
+                                } else {
+                                    line.to_string()
+                                };
+                                matches.push(format!("{}:{}: {}", path_str, line_num + 1, trimmed.trim()));
+                            }
+                        }
                     }
-                } else {
-                    let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-                    ToolResult::error(error)
                 }
             }
-            Err(e) => ToolResult::error(format!("Failed to parse result: {}", e)),
+            Ok(())
+        }
+
+        if let Err(e) = search_directory(search_path, &pattern, &mut matches) {
+            return ToolResult::error(format!("Grep failed: {}", e));
+        }
+
+        if matches.is_empty() {
+            ToolResult::text("No matches found")
+        } else {
+            ToolResult::text(matches.join("\n"))
         }
     }
 }

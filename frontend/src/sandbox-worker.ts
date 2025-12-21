@@ -58,9 +58,14 @@ export function getOpfsRoot(): FileSystemDirectoryHandle | null {
 async function initialize(): Promise<void> {
     console.log('[Sandbox] Initializing...');
 
-    // Initialize OPFS
+    // Initialize OPFS root handle (for legacy helpers)
     opfsRoot = await navigator.storage.getDirectory();
-    console.log('[Sandbox] OPFS initialized');
+    console.log('[Sandbox] OPFS handle acquired');
+
+    // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
+    const { initFilesystem } = await import('./wasm/opfs-filesystem-impl');
+    await initFilesystem();
+    console.log('[Sandbox] OPFS filesystem shim initialized');
 
     // Initialize MCP Client - using direct WASM bridge
     // The WASM component is loaded and executed in-process via the bridge

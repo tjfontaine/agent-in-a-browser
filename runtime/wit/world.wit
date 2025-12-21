@@ -12,38 +12,20 @@ interface browser-http {
   http-request: func(method: string, url: string, headers: string, body: string) -> string;
 }
 
-/// Custom file system interface for browser OPFS
-interface browser-fs {
-  /// Read file content at path
-  /// Returns JSON: {ok: true, content: string} or {ok: false, error: string}
-  read-file: func(path: string) -> string;
-  
-  /// Write content to file at path (creates parent dirs)
-  /// Returns JSON: {ok: true} or {ok: false, error: string}
-  write-file: func(path: string, content: string) -> string;
-  
-  /// List directory entries
-  /// Returns JSON: {ok: true, entries: string[]} or {ok: false, error: string}
-  list-dir: func(path: string) -> string;
-  
-  /// Search for pattern in files under path
-  /// Returns JSON: {ok: true, matches: [{file, line, text}]} or {ok: false, error: string}
-  grep: func(pattern: string, path: string) -> string;
-}
-
 /// TypeScript Runtime MCP Server with HTTP interface
+/// Uses standard WASI filesystem (wasi:filesystem) for file operations
 world ts-runtime-mcp {
   import wasi:clocks/monotonic-clock@0.2.4;
   import wasi:clocks/wall-clock@0.2.4;
   import wasi:io/error@0.2.4;
   import wasi:io/poll@0.2.4;
   import wasi:io/streams@0.2.4;
+  import wasi:filesystem/types@0.2.4;
+  import wasi:filesystem/preopens@0.2.4;
   import wasi:http/types@0.2.4;
   import wasi:http/outgoing-handler@0.2.4;
   import wasi:random/random@0.2.4;
   import browser-http;
-  import browser-fs;
   
   export wasi:http/incoming-handler@0.2.4;
 }
-
