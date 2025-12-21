@@ -1,0 +1,22 @@
+{
+  "name": "web-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:wasm && npm run build:frontend",
+    "build:wasm": "cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml",
+    "build:frontend": "cd frontend && npm run build",
+    "dev:wasm": "cargo watch -w runtime/src -s 'cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml'",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently -n wasm,frontend -c yellow,cyan 'npm:dev:wasm' 'npm:dev:frontend'",
+    "clean": "cargo clean && cd frontend && rm -rf dist src/wasm/mcp-server",
+    "test": "cargo test --workspace",
+    "docker:build": "docker build -t web-agent .",
+    "docker:run": "docker run -p 8080:8080 web-agent"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cargo-watch": "^8.5.2"
+  }
+}

@@ -4,20 +4,25 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "tsc && vite build",
-        "preview": "vite preview"
+        "build": "npm run transpile:component && tsc && vite build",
+        "preview": "vite preview",
+        "transpile:component": "jco transpile ../target/wasm32-wasip1/release/ts-runtime-mcp.wasm -o src/wasm/mcp-server --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=@bytecodealliance/preview2-shim/clocks#*' --map 'wasi:filesystem/*=@bytecodealliance/preview2-shim/filesystem#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --map 'mcp:ts-runtime/browser-http=../browser-http-impl.js#browserHttp' --map 'mcp:ts-runtime/browser-fs=../browser-fs-impl.js#browserFs' --valid-lifting-optimization --name ts-runtime-mcp",
+        "clean:wasm": "rm -rf src/wasm/mcp-server src/wasm/component"
     },
     "dependencies": {
+        "@ai-sdk/anthropic": "^2.0.56",
+        "@ai-sdk/mcp": "^0.0.12",
         "@anthropic-ai/sdk": "^0.32.1",
-        "@jitl/quickjs-singlefile-browser-release-asyncify": "^0.31.0",
+        "@bjorn3/browser_wasi_shim": "^0.4.2",
         "@wasmer/sdk": "^0.8.0",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/xterm": "^5.5.0",
-        "esbuild-wasm": "^0.27.2",
-        "quickjs-emscripten": "^0.31.0",
-        "quickjs-emscripten-core": "^0.31.0"
+        "ai": "^5.0.116",
+        "zod": "^4.2.1"
     },
     "devDependencies": {
+        "@bytecodealliance/jco": "^1.15.4",
+        "@bytecodealliance/preview2-shim": "^0.17.5",
         "@types/node": "^22.10.2",
         "typescript": "^5.7.2",
         "vite": "^6.0.3"

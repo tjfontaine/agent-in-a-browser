@@ -1,0 +1,179 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust-component:
+    name: Build Rust WASM Component
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            runtime/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Install build tools
+        run: |
+          cargo install wit-deps cargo-component --locked
+
+      - name: Download WIT dependencies
+        working-directory: runtime
+        run: wit-deps update
+
+      - name: Build WASM component
+        working-directory: runtime
+        run: cargo component build --release --target wasm32-wasip2
+
+      - name: Verify component
+        working-directory: runtime
+        run: |
+          cargo install wasm-tools --locked
+          wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-component
+          path: runtime/target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+          retention-days: 7
+
+  frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: rust-component
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Download WASM component
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-component
+          path: runtime/target/wasm32-wasip2/release/
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install jco
+        run: npm install -g @bytecodealliance/jco
+
+      - name: Transpile WASM component
+        working-directory: frontend
+        run: npm run transpile:component
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist
+          retention-days: 7
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [rust-component, frontend, backend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: web-agent:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Rust tests
+        working-directory: runtime
+        run: cargo test
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test || echo "No tests yet"
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test || echo "No tests yet"

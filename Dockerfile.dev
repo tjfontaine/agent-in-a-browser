@@ -1,0 +1,97 @@
+# Development Dockerfile - builds WASM and runs both frontend and backend
+# Build: docker build -f Dockerfile.dev -t web-agent-dev .
+# Run: docker run -p 3000:3000 -p 3001:3001 --env-file .env web-agent-dev
+
+# Stage 1: Build WASM component
+FROM rust:1.85-slim AS wasm-builder
+
+RUN apt-get update && apt-get install -y curl git pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+# Add wasm target
+RUN rustup target add wasm32-wasip2
+
+# Install cargo tools separately with cache mount
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install cargo-component --locked
+
+# wit-deps might fail, install without --locked
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install wit-deps || echo "wit-deps install failed, will try without wit-deps update"
+
+WORKDIR /app
+
+# Copy only what's needed for the Rust build
+COPY Cargo.toml Cargo.lock ./
+COPY runtime ./runtime
+
+# Build WASM with cache
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cd runtime && \
+    (wit-deps update 2>/dev/null || true) && \
+    cargo component build --release --target wasm32-wasip2 && \
+    cp /app/target/wasm32-wasip2/release/ts-runtime-mcp.wasm /app/runtime/
+
+# Stage 2: Build and run both frontend and backend
+FROM node:20-slim
+
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Install jco for WASM transpilation
+RUN npm install -g @bytecodealliance/jco
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY frontend/package*.json ./frontend/
+COPY backend/package*.json ./backend/
+
+# Install frontend dependencies with cache
+WORKDIR /app/frontend
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+# Install backend dependencies with cache
+WORKDIR /app/backend
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+# Copy the WASM from builder stage
+WORKDIR /app
+RUN mkdir -p ./runtime/target/wasm32-wasip2/release/
+COPY --from=wasm-builder /app/runtime/ts-runtime-mcp.wasm ./runtime/target/wasm32-wasip2/release/
+
+# Copy application source
+COPY frontend ./frontend
+COPY backend ./backend
+
+# Transpile WASM component to JavaScript
+WORKDIR /app/frontend
+RUN npm run transpile:component
+
+# Create startup script that runs both services
+WORKDIR /app
+RUN echo '#!/bin/sh\n\
+    echo "Starting backend on port 3001..."\n\
+    cd /app/backend && npx tsx src/index.ts &\n\
+    BACKEND_PID=$!\n\
+    \n\
+    echo "Starting frontend on port 3000..."\n\
+    cd /app/frontend && npm run dev -- --host 0.0.0.0 --port 3000 &\n\
+    FRONTEND_PID=$!\n\
+    \n\
+    echo "Both services started. Backend PID: $BACKEND_PID, Frontend PID: $FRONTEND_PID"\n\
+    \n\
+    # Wait for either process to exit\n\
+    wait $BACKEND_PID $FRONTEND_PID\n\
+    ' > /app/start.sh && chmod +x /app/start.sh
+
+EXPOSE 3000 3001
+
+# Health check for both services
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost:3001/health && curl -sf http://localhost:3000 || exit 1
+
+CMD ["/app/start.sh"]

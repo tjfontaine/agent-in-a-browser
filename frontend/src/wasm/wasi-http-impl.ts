@@ -1,0 +1,511 @@
+// @ts-ignore
+import { streams } from '@bytecodealliance/preview2-shim/io';
+
+// @ts-ignore
+const { InputStream, OutputStream } = streams as any;
+
+/**
+ * Create an InputStream from a byte array
+ * This allows the WASM component to read the request body
+ */
+export function createInputStreamFromBytes(bytes: Uint8Array): any {
+    let offset = 0;
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            const remaining = bytes.length - offset;
+            if (remaining <= 0) {
+                return new Uint8Array(0);
+            }
+            const toRead = Math.min(Number(len), remaining);
+            const chunk = bytes.slice(offset, offset + toRead);
+            offset += toRead;
+            return chunk;
+        },
+        blockingRead(len: bigint): Uint8Array {
+            // Same as read for our synchronous use case
+            const remaining = bytes.length - offset;
+            if (remaining <= 0) {
+                return new Uint8Array(0);
+            }
+            const toRead = Math.min(Number(len), remaining);
+            const chunk = bytes.slice(offset, offset + toRead);
+            offset += toRead;
+            return chunk;
+        },
+        subscribe(): void { },
+        [Symbol.dispose](): void { }
+    });
+}
+
+export class Fields {
+    private _fields: Map<string, Uint8Array[]>;
+
+    constructor(fields?: [string, Uint8Array[]][]) {
+        this._fields = new Map(fields || []);
+    }
+
+    get(name: string): Uint8Array[] {
+        return this._fields.get(name.toLowerCase()) || [];
+    }
+
+    has(name: string): boolean {
+        return this._fields.has(name.toLowerCase());
+    }
+
+    set(name: string, value: Uint8Array[]) {
+        this._fields.set(name.toLowerCase(), value);
+    }
+
+    /**
+     * Returns entries flattened - one [name, value] pair per value
+     * This matches the WASI HTTP Fields.entries() interface
+     */
+    entries(): [string, Uint8Array][] {
+        const result: [string, Uint8Array][] = [];
+        for (const [name, values] of this._fields) {
+            for (const value of values) {
+                result.push([name, value]);
+            }
+        }
+        return result;
+    }
+
+    static fromList(entries: [string, Uint8Array[]][]): Fields {
+        return new Fields(entries);
+    }
+}
+
+export class FutureTrailers {
+    subscribe() { }
+    get() { return { tag: 'ok', val: undefined }; }
+}
+
+export class IncomingBody {
+    private _stream: any;
+
+    constructor(streamOrBytes: any | Uint8Array) {
+        if (streamOrBytes instanceof Uint8Array) {
+            this._stream = createInputStreamFromBytes(streamOrBytes);
+        } else {
+            this._stream = streamOrBytes;
+        }
+    }
+
+    stream(): any {
+        return this._stream;
+    }
+
+    static finish(body: IncomingBody): FutureTrailers {
+        return new FutureTrailers();
+    }
+}
+
+export class IncomingRequest {
+    private _method: string;
+    private _pathWithQuery: string;
+    private _scheme: string;
+    private _authority: string;
+    private _headers: Fields;
+    private _body: IncomingBody;
+    private _consumed: boolean = false;
+
+    constructor(method: string, pathWithQuery: string, scheme: string, authority: string, headers: Fields, body: IncomingBody) {
+        this._method = method;
+        this._pathWithQuery = pathWithQuery;
+        this._scheme = scheme;
+        this._authority = authority;
+        this._headers = headers;
+        this._body = body;
+    }
+
+    method(): string {
+        return this._method;
+    }
+
+    pathWithQuery(): string | undefined {
+        return this._pathWithQuery;
+    }
+
+    scheme(): string | undefined {
+        return this._scheme;
+    }
+
+    authority(): string | undefined {
+        return this._authority;
+    }
+
+    headers(): Fields {
+        return this._headers;
+    }
+
+    consume(): IncomingBody {
+        if (this._consumed) {
+            throw new Error('Body already consumed');
+        }
+        this._consumed = true;
+        return this._body;
+    }
+}
+
+export class OutgoingBody {
+    private _stream: any;
+    public _onFinish?: () => void;
+
+    constructor(stream: any) {
+        this._stream = stream;
+    }
+
+    write(): any {
+        return this._stream;
+    }
+
+    static finish(body: OutgoingBody, trailers?: Fields) {
+        if (body._onFinish) {
+            body._onFinish();
+        }
+    }
+}
+
+export class OutgoingResponse {
+    private _statusCode: number;
+    private _headers: Fields;
+    private _body: OutgoingBody;
+    public _bodyChunks: Uint8Array[] = [];
+    public _onBodyFinished?: () => void;
+
+    constructor(headers: Fields) {
+        this._headers = headers;
+        this._statusCode = 200;
+        this._body = new OutgoingBody(new OutputStream({
+            write: (bytes: Uint8Array) => {
+                this._bodyChunks.push(bytes);
+                return BigInt(bytes.length);
+            },
+            flush: () => { },
+            blockingFlush: () => { },
+            checkWrite: () => BigInt(1024 * 1024)
+        }));
+        this._body._onFinish = () => {
+            if (this._onBodyFinished) {
+                this._onBodyFinished();
+            }
+        };
+    }
+
+    statusCode(): number {
+        return this._statusCode;
+    }
+
+    setStatusCode(code: number) {
+        this._statusCode = code;
+    }
+
+    headers(): Fields {
+        return this._headers;
+    }
+
+    body(): OutgoingBody {
+        return this._body;
+    }
+
+    /**
+     * Get the collected response body as a string
+     */
+    getBodyAsString(): string {
+        const totalLength = this._bodyChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of this._bodyChunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return new TextDecoder().decode(result);
+    }
+}
+
+export class ResponseOutparam {
+    private _callback: (response: any) => void;
+    private _response: OutgoingResponse | null = null;
+
+    constructor(callback: (response: any) => void) {
+        this._callback = callback;
+    }
+
+    /**
+     * Get the response after it has been set
+     */
+    getResponse(): OutgoingResponse | null {
+        return this._response;
+    }
+
+    static set(param: ResponseOutparam, response: { tag: 'ok', val: OutgoingResponse } | { tag: 'err', val: any }) {
+        if (response.tag === 'ok') {
+            param._response = response.val;
+        }
+        if (param && param._callback) {
+            param._callback(response);
+        } else {
+            console.warn('ResponseOutparam.set called but no callback attached', param, response);
+        }
+    }
+}
+
+/**
+ * Helper to create a complete IncomingRequest for JSON-RPC
+ */
+export function createJsonRpcRequest(body: string): IncomingRequest {
+    const encoder = new TextEncoder();
+    const bodyBytes = encoder.encode(body);
+
+    const headers = new Fields();
+    headers.set('content-type', [encoder.encode('application/json')]);
+    headers.set('content-length', [encoder.encode(String(bodyBytes.length))]);
+    headers.set('accept', [encoder.encode('application/json')]);
+
+    const incomingBody = new IncomingBody(bodyBytes);
+
+    return new IncomingRequest(
+        'POST',
+        '/mcp',
+        'http',
+        'localhost',
+        headers,
+        incomingBody
+    );
+}
+
+// ============ Outgoing HTTP Handler ============
+
+/**
+ * FutureIncomingResponse - represents a pending HTTP response
+ */
+export class FutureIncomingResponse {
+    private _promise: Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>;
+    private _result: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } | null = null;
+
+    constructor(promise: Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>) {
+        this._promise = promise;
+        // Start resolving immediately
+        this._promise.then(
+            (result) => {
+                const headers = new Fields();
+                for (const [name, value] of result.headers) {
+                    const existing = headers.get(name);
+                    headers.set(name, [...existing, value]);
+                }
+                const body = new IncomingBody(result.body);
+                this._result = { tag: 'ok', val: new IncomingResponse(result.status, headers, body) };
+            },
+            (error) => {
+                this._result = { tag: 'err', val: { tag: 'internal-error', val: String(error) } };
+            }
+        );
+    }
+
+    subscribe(): any {
+        // Return a pollable that's immediately ready
+        return { ready: () => true };
+    }
+
+    get(): { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } } | { tag: 'err' } {
+        if (this._result === null) {
+            // Not ready yet - block synchronously (we need to find a way to make this work)
+            // For now, return error
+            return { tag: 'err' };
+        }
+        return { tag: 'ok', val: this._result };
+    }
+}
+
+/**
+ * IncomingResponse - represents a received HTTP response
+ */
+export class IncomingResponse {
+    private _status: number;
+    private _headers: Fields;
+    private _body: IncomingBody;
+    private _consumed: boolean = false;
+
+    constructor(status: number, headers: Fields, body: IncomingBody) {
+        this._status = status;
+        this._headers = headers;
+        this._body = body;
+    }
+
+    status(): number {
+        return this._status;
+    }
+
+    headers(): Fields {
+        return this._headers;
+    }
+
+    consume(): IncomingBody {
+        if (this._consumed) {
+            throw new Error('Body already consumed');
+        }
+        this._consumed = true;
+        return this._body;
+    }
+}
+
+/**
+ * OutgoingRequest - represents an outgoing HTTP request
+ */
+export class OutgoingRequest {
+    private _method: { tag: string, val?: string };
+    private _scheme: { tag: string, val?: string } | null;
+    private _authority: string | null;
+    private _pathWithQuery: string | null;
+    private _headers: Fields;
+    private _body: OutgoingBody | null = null;
+
+    constructor(headers: Fields) {
+        this._headers = headers;
+        this._method = { tag: 'get' };
+        this._scheme = null;
+        this._authority = null;
+        this._pathWithQuery = null;
+    }
+
+    method(): { tag: string, val?: string } {
+        return this._method;
+    }
+
+    setMethod(method: { tag: string, val?: string }): { tag: 'ok' } | { tag: 'err' } {
+        this._method = method;
+        return { tag: 'ok' };
+    }
+
+    scheme(): { tag: string, val?: string } | null {
+        return this._scheme;
+    }
+
+    setScheme(scheme: { tag: string, val?: string } | null): { tag: 'ok' } | { tag: 'err' } {
+        this._scheme = scheme;
+        return { tag: 'ok' };
+    }
+
+    authority(): string | null {
+        return this._authority;
+    }
+
+    setAuthority(authority: string | null): { tag: 'ok' } | { tag: 'err' } {
+        this._authority = authority;
+        return { tag: 'ok' };
+    }
+
+    pathWithQuery(): string | null {
+        return this._pathWithQuery;
+    }
+
+    setPathWithQuery(path: string | null): { tag: 'ok' } | { tag: 'err' } {
+        this._pathWithQuery = path;
+        return { tag: 'ok' };
+    }
+
+    headers(): Fields {
+        return this._headers;
+    }
+
+    body(): { tag: 'ok', val: OutgoingBody } | { tag: 'err' } {
+        if (this._body) {
+            return { tag: 'err' }; // Already retrieved
+        }
+        this._body = new OutgoingBody(null);
+        return { tag: 'ok', val: this._body };
+    }
+}
+
+/**
+ * RequestOptions - optional parameters for HTTP requests
+ */
+export class RequestOptions {
+    private _connectTimeout: bigint | null = null;
+    private _firstByteTimeout: bigint | null = null;
+    private _betweenBytesTimeout: bigint | null = null;
+
+    connectTimeout(): bigint | null { return this._connectTimeout; }
+    setConnectTimeout(t: bigint | null) { this._connectTimeout = t; }
+    firstByteTimeout(): bigint | null { return this._firstByteTimeout; }
+    setFirstByteTimeout(t: bigint | null) { this._firstByteTimeout = t; }
+    betweenBytesTimeout(): bigint | null { return this._betweenBytesTimeout; }
+    setBetweenBytesTimeout(t: bigint | null) { this._betweenBytesTimeout = t; }
+}
+
+/**
+ * The outgoing handler - makes actual HTTP requests using synchronous XMLHttpRequest
+ * Note: sync XHR is deprecated but necessary for WASM components that expect sync I/O
+ */
+export const outgoingHandler = {
+    handle(request: OutgoingRequest, _options: RequestOptions | null): { tag: 'ok', val: FutureIncomingResponse } | { tag: 'err', val: any } {
+        try {
+            // Build the URL
+            const scheme = request.scheme();
+            const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'https');
+            const authority = request.authority() || '';
+            const path = request.pathWithQuery() || '/';
+            const url = `${schemeStr}://${authority}${path}`;
+
+            // Build method
+            const methodObj = request.method();
+            const method = methodObj.tag === 'other' ? (methodObj.val || 'GET') : methodObj.tag.toUpperCase();
+
+            // Build headers
+            const headers: Record<string, string> = {};
+            for (const [name, value] of request.headers().entries()) {
+                headers[name] = new TextDecoder().decode(value);
+            }
+
+            console.log(`[http] Sync request: ${method} ${url}`);
+
+            // Use synchronous XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, url, false); // false = synchronous
+
+            // Set headers (skip user-agent and host as they cause issues)
+            for (const [name, value] of Object.entries(headers)) {
+                if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
+                    try {
+                        xhr.setRequestHeader(name, value);
+                    } catch (e) {
+                        console.warn(`[http] Could not set header ${name}:`, e);
+                    }
+                }
+            }
+
+            // Send request
+            xhr.send(null);
+
+            console.log(`[http] Sync response: ${xhr.status}`);
+
+            // Build response
+            const responseBody = xhr.responseText
+                ? new TextEncoder().encode(xhr.responseText)
+                : new Uint8Array(0);
+
+            const responseHeaders: [string, Uint8Array][] = [];
+            xhr.getAllResponseHeaders()
+                .trim()
+                .split(/[\r\n]+/)
+                .forEach((line) => {
+                    const parts = line.split(': ');
+                    const key = parts.shift();
+                    const value = parts.join(': ');
+                    if (key) {
+                        responseHeaders.push([key.toLowerCase(), new TextEncoder().encode(value)]);
+                    }
+                });
+
+            // Create a pre-resolved FutureIncomingResponse
+            const resolvedResponse = { status: xhr.status, headers: responseHeaders, body: responseBody };
+            const future = new FutureIncomingResponse(Promise.resolve(resolvedResponse));
+
+            return { tag: 'ok', val: future };
+        } catch (error) {
+            console.error('[http] Request error:', error);
+            return { tag: 'err', val: { tag: 'internal-error', val: String(error) } };
+        }
+    }
+};

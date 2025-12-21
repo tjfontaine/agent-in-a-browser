@@ -1,0 +1,95 @@
+[package]
+name = "ts-runtime-mcp"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ts-runtime-mcp"
+path = "src/main.rs"
+required-features = []
+
+[dependencies]
+# The Engine: rquickjs uses QuickJS-NG by default, using git for wasm32-wasip1 bindings (PR #548)
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = [
+    "futures",
+    "loader",
+    "classes",
+    "macro",
+] }
+
+# The Transpiler: Individual SWC crates - let cargo resolve compatible versions
+swc_common = "*"
+swc_ecma_ast = "*"
+swc_ecma_parser = { version = "*", default-features = false, features = [
+    "typescript",
+] }
+swc_ecma_codegen = "*"
+swc_ecma_transforms_typescript = "*"
+swc_ecma_visit = "*"
+
+# Browser Interop
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "WorkerGlobalScope",
+    "Navigator",
+    "StorageManager",
+    "Response",
+    "Request",
+    "RequestInit",
+    "Headers",
+    "FileSystemDirectoryHandle",
+    "FileSystemFileHandle",
+    "FileSystemGetFileOptions",
+    "FileSystemGetDirectoryOptions",
+    "FileSystemWritableFileStream",
+    "File",
+    "Blob",
+] }
+
+# Better panic messages in WASM
+console_error_panic_hook = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
+
+# Error handling
+thiserror = "1"
+
+# Async executor for WASI
+futures-lite = "2"
+
+# WASI bindings for http handler
+wasi = "0.14"
+wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+# cargo-component metadata for incoming-handler world
+[package.metadata.component]
+package = "mcp:ts-runtime"
+
+[package.metadata.component.target]
+path = "wit"
+world = "ts-runtime-mcp"
+
+[package.metadata.component.target.dependencies]
+"wasi:http" = { path = "wit/deps/http" }
+"wasi:clocks" = { path = "wit/deps/clocks" }
+"wasi:io" = { path = "wit/deps/io" }
+"wasi:random" = { path = "wit/deps/random" }
+"wasi:cli" = { path = "wit/deps/cli" }
+"wasi:sockets" = { path = "wit/deps/sockets" }
+"wasi:filesystem" = { path = "wit/deps/filesystem" }
+
+[package.metadata.component.dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true

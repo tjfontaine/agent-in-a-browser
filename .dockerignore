@@ -1,0 +1,54 @@
+# Build system
+Makefile
+*.sh
+
+# Dependencies
+node_modules/
+package-lock.json
+target/
+.cargo/
+
+# Build outputs
+dist/
+*.wasm
+
+# Generated files
+runtime/src/bindings.rs
+frontend/src/wasm/mcp-server/
+frontend/src/wasm/component/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+
+# Cache
+.cache/
+.vite/

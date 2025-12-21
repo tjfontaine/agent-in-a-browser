@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # WASM builder with hot reload
+  wasm-dev:
+    image: rust:1.83-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+    command: >
+      bash -c "
+        rustup target add wasm32-wasip2 &&
+        cargo install cargo-watch wit-deps cargo-component --locked 2>/dev/null &&
+        cd runtime && wit-deps update &&
+        cargo watch -w src -s 'cargo component build --release --target wasm32-wasip2'
+      "
+
+  # Frontend dev server
+  frontend:
+    image: node:20-slim
+    working_dir: /app/frontend
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend-modules:/app/frontend/node_modules
+    ports:
+      - "5173:5173"
+    command: >
+      bash -c "
+        npm install &&
+        npm run dev -- --host 0.0.0.0
+      "
+    depends_on:
+      - wasm-dev
+
+  # Backend placeholder (when you implement Rust backend, add it here)
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: backend/Dockerfile
+  #   ports:
+  #     - "3000:3000"
+
+volumes:
+  cargo-cache:
+  cargo-git:
+  frontend-modules:

@@ -1,13 +1,14 @@
-// Web Agent TUI - Browser Edition
-// Uses OPFS sandbox via WebWorker + Anthropic API
-
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { Spinner, renderToolOutput, renderSectionHeader } from './tui';
+import { Spinner, renderToolOutput } from './tui';
+import { WasmAgent } from './agent-sdk';
 
 const API_URL = 'http://localhost:3001';
-const AUTH_TOKEN = 'dev-token';
+
+
+// Get API key from environment or use dummy key (backend handles actual auth)
+const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || 'dummy-key-for-proxy';
 
 // ============ Terminal Setup ============
 
@@ -39,18 +40,25 @@ fitAddon.fit();
 
 window.addEventListener('resize', () => fitAddon.fit());
 
-// ============ Sandbox Worker ============
+// ============ WASM Agent Setup ============
 
+// Agent uses the WASM MCP server directly (no worker needed)
+let agent: WasmAgent | null = null;
+
+let mcpInitialized = false;
+let mcpServerInfo: { name: string; version: string } | null = null;
+let mcpToolsList: Array<{ name: string; description?: string }> = [];
+
+// Initialize Sandbox Worker
 const sandbox = new Worker(new URL('./sandbox-worker.ts', import.meta.url), { type: 'module' });
-
-// Tool definitions from worker
-let tools: any[] = [];
 
 // Pending tool calls
 const pendingToolCalls = new Map<string, (result: any) => void>();
 
+sandbox.postMessage({ type: 'init' });
+
 sandbox.onmessage = (event) => {
-    const { type, message, tools: workerTools, id, result } = event.data;
+    const { type, message, tools: workerTools, id, result, serverInfo } = event.data;
 
     if (type === 'status') {
         setStatus(message, '#d29922');
@@ -61,9 +69,27 @@ sandbox.onmessage = (event) => {
         terminal.write('\x1b[32m✓ Sandbox ready\x1b[0m\r\n');
         sandbox.postMessage({ type: 'get_tools' });
         showPrompt();
+    } else if (type === 'mcp-initialized') {
+        mcpInitialized = true;
+        mcpServerInfo = serverInfo;
+        mcpToolsList = event.data.tools || [];
+        console.log('MCP Server initialized:', serverInfo);
+        console.log('MCP Tools:', event.data.tools);
+        terminal.write(`\x1b[32m✓ MCP Server ready: ${serverInfo.name} v${serverInfo.version}\x1b[0m\r\n`);
+        terminal.write(`\x1b[90m  ${event.data.tools.length} tools available\x1b[0m\r\n`);
+
+        // Initialize Agent with the system prompt
+        agent = new WasmAgent({
+            model: 'claude-sonnet-4-5',
+            baseURL: API_URL,
+            apiKey: ANTHROPIC_API_KEY,
+            systemPrompt: SYSTEM_PROMPT,
+            maxSteps: 15,
+        });
+        terminal.write(`\x1b[32m✓ Agent ready\x1b[0m\r\n`);
     } else if (type === 'tools') {
-        tools = workerTools;
-        console.log('Loaded tools:', tools.map((t: any) => t.name));
+        // Tools now managed by agent SDK via MCP bridge
+        console.log('Loaded tools:', workerTools?.map((t: any) => t.name));
     } else if (type === 'tool_result') {
         const resolver = pendingToolCalls.get(id);
         if (resolver) {
@@ -97,8 +123,7 @@ function setStatus(status: string, color = '#3fb950') {
 
 // ============ Conversation State ============
 
-type Message = { role: 'user' | 'assistant'; content: any };
-const messages: Message[] = [];
+// Agent manages its own conversation history
 
 const SYSTEM_PROMPT = `You are a helpful AI assistant running in a WASM sandbox.
 
@@ -110,57 +135,42 @@ const SYSTEM_PROMPT = `You are a helpful AI assistant running in a WASM sandbox.
 
 # Available Tools
 
+## Code Execution
+- eval: Execute JavaScript/TypeScript code synchronously
+- transpile: Convert TypeScript to JavaScript
+
 ## File Operations
 - read_file: Read file contents from OPFS
-- write_file: Create/overwrite files in OPFS  
-- edit_file: Find and replace text in files
-- list: List directory contents
-- grep: Search files for patterns
+- write_file: Create/overwrite files in OPFS
+- list_dir: List directory contents
 
-## Shell Commands (via 'shell' tool)
-Coreutils: ls, cat, mkdir, rm, cp, mv, head, tail, wc, find, grep, sort, uniq, echo, pwd, date
-TypeScript: tsc, node, tsx, npx
+# Synchronous Fetch Available
 
-## Code Execution
-- execute: Run JavaScript expressions directly
-- execute_typescript: Run TypeScript code directly (for quick one-offs)
+The eval tool includes a synchronous \`fetch()\` function for HTTP requests.
+This is NOT the async browser fetch - it blocks and returns immediately with results.
 
-# TypeScript Workflow (Preferred)
-For TypeScript code, use the shell workflow:
+## How to Use Fetch
 
-1. Write the file: write_file with path like /app.ts
-2. Run it: shell with command "npx tsx /app.ts" or just "tsx /app.ts"
+\`\`\`javascript
+// Make a GET request - NO await needed, it's synchronous!
+const response = fetch('https://api.example.com/data');
+console.log('Status:', response.status);
+console.log('OK:', response.ok);
 
-Example workflow:
-\`\`\`
-// First, write the TypeScript file
-write_file({ path: "/fetch-user.ts", content: \`
-const response = await fetch('https://api.example.com/user');
-const user = await response.json();
-console.log(user.name);
-\` })
+// Get response body as text
+const text = response.text();
 
-// Then run it
-shell({ command: "tsx /fetch-user.ts" })
+// Get response body as JSON
+const data = response.json();
+console.log(data);
 \`\`\`
 
-Shell TypeScript commands:
-- \`tsc file.ts\` - Compile to JS, shows errors
-- \`tsx file.ts\` - Compile and run in one step  
-- \`npx tsx file.ts\` - Same as above
-- \`node file.js\` - Run JavaScript
-
-npm imports work automatically via esm.sh:
-\`\`\`typescript
-import _ from 'lodash';
-console.log(_.chunk([1,2,3,4], 2));
-\`\`\`
+IMPORTANT: Do NOT use await with fetch - it's synchronous and will return immediately.
 
 # Environment
 - Files persist in OPFS (Origin Private File System)
-- Top-level await works automatically
-- fetch() makes real network requests
-- fs.promises and path are shimmed to use OPFS`;
+- Synchronous file operations work via write_file/read_file
+- \`fetch()\` is available for HTTP requests (synchronous, returns immediately)`;
 
 // ============ Agent Loop ============
 
@@ -191,8 +201,7 @@ async function sendMessage(userMessage: string): Promise<void> {
     abortController = new AbortController(); // Create new abort controller
 
     debug('User message:', userMessage);
-    messages.push({ role: 'user', content: userMessage });
-    await runAgentLoop();
+    await runAgentLoop(userMessage);
 }
 
 function handleSlashCommand(command: string): void {
@@ -201,7 +210,7 @@ function handleSlashCommand(command: string): void {
     switch (cmd) {
         case 'clear':
             terminal.clear();
-            messages.length = 0;
+            if (agent) agent.clearHistory();
             terminal.write('\x1b[90mConversation cleared.\x1b[0m\r\n');
             break;
         case 'files':
@@ -212,90 +221,115 @@ function handleSlashCommand(command: string): void {
                 showPrompt();
             });
             return;
+        case 'mcp':
+            terminal.write('\r\n\x1b[36m┌─ MCP Status ─────────────────────────\x1b[0m\r\n');
+            terminal.write(`\x1b[36m│\x1b[0m Initialized: ${mcpInitialized ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
+            terminal.write(`\x1b[36m│\x1b[0m Agent SDK:   ${agent ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
+            if (mcpServerInfo) {
+                terminal.write(`\x1b[36m│\x1b[0m\r\n`);
+                terminal.write(`\x1b[36m│\x1b[0m \x1b[1m${mcpServerInfo.name}\x1b[0m v${mcpServerInfo.version}\r\n`);
+                terminal.write(`\x1b[36m│\x1b[0m Tools (${mcpToolsList.length}):\r\n`);
+                for (const tool of mcpToolsList) {
+                    const desc = tool.description ? ` - ${tool.description.substring(0, 50)}${tool.description.length > 50 ? '...' : ''}` : '';
+                    terminal.write(`\x1b[36m│\x1b[0m   \x1b[33m${tool.name}\x1b[0m\x1b[90m${desc}\x1b[0m\r\n`);
+                }
+            }
+            terminal.write('\x1b[36m└──────────────────────────────────────\x1b[0m\r\n');
+            if (!agent && !ANTHROPIC_API_KEY) {
+                terminal.write('\r\n\x1b[33mSet VITE_ANTHROPIC_API_KEY to enable Agent SDK\x1b[0m\r\n');
+            }
+            break;
         case 'help':
             terminal.write('\r\n\x1b[36mCommands:\x1b[0m\r\n');
             terminal.write('  /clear - Clear conversation\r\n');
             terminal.write('  /files - List files in sandbox\r\n');
+            terminal.write('  /mcp   - Show MCP status\r\n');
             terminal.write('  /help  - Show this help\r\n');
             break;
         default:
-            terminal.write(`\r\n\x1b[31mUnknown command: ${command}\x1b[0m\r\n`);
+            terminal.write(`\r\n\x1b[31mUnknown command: ${command} \x1b[0m\r\n`);
     }
     showPrompt();
 }
 
-async function runAgentLoop(): Promise<void> {
+async function runAgentLoop(userMessage: string): Promise<void> {
     // Check if cancelled before making API call
     if (cancelRequested) {
         debug('Agent loop cancelled');
         return;
     }
 
-    try {
-        const response = await fetch(`${API_URL}/api/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AUTH_TOKEN}`,
-            },
-            body: JSON.stringify({
-                messages,
-                tools,
-                system: SYSTEM_PROMPT,
-            }),
-            signal: abortController?.signal, // Allow aborting the fetch
-        });
-
-        debug('API response status:', response.status);
-        const { content, toolCalls } = await handleSSEResponse(response);
-
-        if (content.length > 0) {
-            debug('Content blocks:', content.length);
-            messages.push({ role: 'assistant', content });
-        }
-
-        if (toolCalls.length > 0) {
-            debug('Tool calls:', toolCalls.map(t => t.name));
-            if (spinner) spinner.stop();
-            spinner = null;
-
-            setStatus('Executing...', '#bc8cff');
-            const toolResults: any[] = [];
-
-            for (const tool of toolCalls) {
-                const args = tool.input.path || tool.input.command || tool.input.code || '';
-
-                // Show tool execution
-                const toolSpinner = new Spinner(terminal);
-                toolSpinner.start(`Running ${tool.name}...`);
-
-                const result = await callTool(tool.name, tool.input);
-                debug('Tool result:', tool.name, result.success ? 'success' : 'error');
-
-                toolSpinner.stop();
-
-                const output = result.success ? result.output : `Error: ${result.error}`;
-                renderToolOutput(terminal, tool.name, args, output, result.success);
-
-                toolResults.push({
-                    type: 'tool_result',
-                    tool_use_id: tool.id,
-                    content: output,
-                });
-            }
-
-            messages.push({ role: 'user', content: toolResults });
-
-            // Continue with another thinking spinner
-            spinner = new Spinner(terminal);
-            spinner.start('Thinking...');
-
-            await runAgentLoop();
-            return;
-        }
-
+    if (!agent || !mcpInitialized) {
+        terminal.write(`\r\n\x1b[31mError: Agent not initialized.Please wait for MCP to initialize.\x1b[0m\r\n`);
         if (spinner) spinner.stop();
         spinner = null;
+        showPrompt();
+        setStatus('Error', '#ff7b72');
+        return;
+    }
+
+    await runAgentLoopWithSDK(userMessage);
+}
+
+async function runAgentLoopWithSDK(userMessage: string): Promise<void> {
+    // Stop the initial thinking spinner - we'll show progress via callbacks
+    if (spinner) spinner.stop();
+    spinner = null;
+
+    // Use object wrapper to prevent TypeScript type narrowing issues with closures
+    const state = { toolSpinner: null as Spinner | null, firstTextReceived: false };
+
+    try {
+        await agent!.stream(userMessage, {
+            onText: (text) => {
+                // Stop spinner on first text
+                if (!state.firstTextReceived) {
+                    state.firstTextReceived = true;
+                    if (state.toolSpinner) {
+                        state.toolSpinner.stop();
+                        state.toolSpinner = null;
+                    }
+                }
+                terminal.write(text.replace(/\n/g, '\r\n'));
+            },
+            onToolCall: (name, input) => {
+                // Show tool execution spinner
+                const args = (input as any).path || (input as any).command || (input as any).code || '';
+                const argsDisplay = typeof args === 'string'
+                    ? (args.length > 30 ? args.substring(0, 27) + '...' : args)
+                    : '';
+                state.toolSpinner = new Spinner(terminal);
+                state.toolSpinner.start(`${name} ${argsDisplay} `);
+                setStatus('Executing...', '#bc8cff');
+            },
+            onToolResult: (name, result, success) => {
+                // Stop tool spinner and show result
+                if (state.toolSpinner) {
+                    state.toolSpinner.stop();
+                    state.toolSpinner = null;
+                }
+                renderToolOutput(terminal, name, '', result, success);
+                setStatus('Thinking...', '#d29922');
+            },
+            onStepFinish: (step) => {
+                debug('Step completed:', step);
+            },
+            onError: (error) => {
+                if (state.toolSpinner) {
+                    state.toolSpinner.stop();
+                    state.toolSpinner = null;
+                }
+                // Only show error if not cancelled
+                if (!cancelRequested && error.name !== 'AbortError') {
+                    terminal.write(`\r\n\x1b[31mError: ${error.message} \x1b[0m\r\n`);
+                    setStatus('Error', '#ff7b72');
+                }
+            },
+            onFinish: (steps) => {
+                debug('Agent finished with steps:', steps);
+            }
+        });
+
         abortController = null;
         showPrompt();
         setStatus('Ready', '#3fb950');
@@ -303,90 +337,15 @@ async function runAgentLoop(): Promise<void> {
         // Don't show error if user cancelled
         if (error.name === 'AbortError' || cancelRequested) {
             debug('Request aborted by user');
-            if (spinner) spinner.stop();
-            spinner = null;
+            if (state.toolSpinner) state.toolSpinner.stop();
             abortController = null;
             return;
         }
-        terminal.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+        terminal.write(`\r\n\x1b[31mError: ${error.message} \x1b[0m\r\n`);
         setStatus('Error', '#ff7b72');
         abortController = null;
         showPrompt();
     }
-}
-
-async function handleSSEResponse(response: Response): Promise<{ content: any[]; toolCalls: any[] }> {
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const content: any[] = [];
-    const toolCalls: any[] = [];
-    let currentText = '';
-    let firstTextReceived = false;
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-                const event = JSON.parse(data);
-
-                // Type-specific debug logging
-                switch (event.type) {
-                    case 'text':
-                        debug('📝 text:', `"${event.text.slice(0, 50)}${event.text.length > 50 ? '...' : ''}" (${event.text.length} chars)`);
-                        break;
-                    case 'tool_use':
-                        debug('🔧 tool_use:', event.name, JSON.stringify(event.input).slice(0, 80));
-                        break;
-                    case 'message_end':
-                        debug('✅ message_end:', event.stop_reason, `${event.content?.length || 0} content blocks`);
-                        break;
-                    case 'error':
-                        debug('❌ error:', event.error);
-                        break;
-                    default:
-                        debug('📨 event:', event.type, JSON.stringify(event).slice(0, 100));
-                }
-
-                if (event.type === 'text') {
-                    // Stop spinner on first text chunk
-                    if (!firstTextReceived) {
-                        firstTextReceived = true;
-                        if (spinner) {
-                            spinner.stop();
-                            spinner = null;
-                        }
-                    }
-                    currentText += event.text;
-                    terminal.write(event.text.replace(/\n/g, '\r\n'));
-                } else if (event.type === 'tool_use') {
-                    toolCalls.push({ id: event.id, name: event.name, input: event.input });
-                } else if (event.type === 'message_end' && event.content) {
-                    content.push(...event.content);
-                } else if (event.type === 'error') {
-                    terminal.write(`\r\n\x1b[31mAPI Error: ${event.error}\x1b[0m\r\n`);
-                }
-            } catch {
-                // Skip parse errors
-            }
-        }
-    }
-
-    if (currentText && content.length === 0) {
-        content.push({ type: 'text', text: currentText });
-    }
-
-    return { content, toolCalls };
 }
 
 // ============ Input Handling ============

@@ -2,3 +2,26 @@ node_modules/
 dist/
 .env
 *.log
+
+# Rust/Cargo Component
+target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# WIT dependencies (downloaded by cargo-component)
+runtime/wit/deps/
+runtime/wit/deps.lock
+
+# WASM build artifacts
+*.wasm
+!frontend/src/wasm/*.wasm
+
+# Build outputs
+runtime/doc/
+
+# Generated WASM MCP server (from jco transpile)
+frontend/src/wasm/mcp-server/
+frontend/src/wasm/ts-runtime-component/
+frontend/src/wasm/component/
+frontend/src/wasm/browser_ts_runtime.wasm
