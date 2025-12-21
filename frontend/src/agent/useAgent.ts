@@ -5,7 +5,7 @@
  * Bridges the existing agent code with React state management.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { initializeSandbox } from './sandbox';
 import { initializeWasmMcp, WasmAgent } from '../agent-sdk';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
@@ -33,13 +33,16 @@ export interface UseAgentReturn {
     outputs: AgentOutput[];
     isReady: boolean;
     isBusy: boolean;
+    messageQueue: string[];  // Queued messages waiting to be sent
 
     // Actions
     initialize: () => Promise<void>;
     sendMessage: (message: string) => Promise<void>;
+    queueMessage: (message: string) => void;  // Queue a message while busy
     cancelRequest: () => void;
     clearOutputs: () => void;
     clearHistory: () => void;
+    clearQueue: () => void;  // Clear all queued messages
 
     // Low-level output function for non-agent messages
     addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
@@ -60,6 +63,7 @@ export function useAgent(): UseAgentReturn {
     const [outputs, setOutputs] = useState<AgentOutput[]>([]);
     const [isReady, setIsReady] = useState(false);
     const [isBusy, setIsBusy] = useState(false);
+    const [messageQueue, setMessageQueue] = useState<string[]>([]);
 
     const agentRef = useRef<WasmAgent | null>(null);
     const nextIdRef = useRef(0);
@@ -260,16 +264,40 @@ export function useAgent(): UseAgentReturn {
         addOutput('system', 'Conversation cleared.', colors.dim);
     }, [addOutput, clearOutputs]);
 
+    // Queue a message to be sent after current request completes
+    const queueMessage = useCallback((message: string) => {
+        setMessageQueue(prev => [...prev, message]);
+        addOutput('system', `📋 Queued: ${message}`, colors.dim);
+    }, [addOutput]);
+
+    // Clear the message queue
+    const clearQueue = useCallback(() => {
+        setMessageQueue([]);
+        addOutput('system', 'Queue cleared.', colors.dim);
+    }, [addOutput]);
+
+    // Process queued messages when agent becomes idle
+    useEffect(() => {
+        if (!isBusy && messageQueue.length > 0 && isReady) {
+            const nextMessage = messageQueue[0];
+            setMessageQueue(prev => prev.slice(1));
+            sendMessage(nextMessage);
+        }
+    }, [isBusy, messageQueue, isReady, sendMessage]);
+
     return {
         status,
         outputs,
         isReady,
         isBusy,
+        messageQueue,
         initialize,
         sendMessage,
+        queueMessage,
         cancelRequest,
         clearOutputs,
         clearHistory,
+        clearQueue,
         addOutput,
     };
 }

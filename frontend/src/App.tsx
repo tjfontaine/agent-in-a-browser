@@ -38,6 +38,7 @@ function TerminalContent({
     outputs,
     isReady,
     isBusy,
+    queueLength,
     onSubmit,
     getCompletions,
     onCancel,
@@ -45,6 +46,7 @@ function TerminalContent({
     outputs: AgentOutput[];
     isReady: boolean;
     isBusy: boolean;
+    queueLength: number;
     onSubmit: (value: string) => void;
     getCompletions: (input: string) => string[];
     onCancel: () => void;
@@ -53,19 +55,29 @@ function TerminalContent({
     const { stdout } = useStdout();
     const terminalRows = stdout?.rows ?? 24;
 
-    // Reserve space for prompt (2 lines) and calculate available content rows
+    // Reserve space for prompt (2 lines) and status line when busy
+    const statusRows = isBusy ? 1 : 0;
     const promptRows = 2;
-    const contentRows = Math.max(1, terminalRows - promptRows);
+    const contentRows = Math.max(1, terminalRows - promptRows - statusRows);
 
     // Only show the last N outputs to prevent overflow
     const visibleOutputs = outputs.slice(-contentRows);
 
-    // Handle Ctrl+C to cancel
+    // Handle ESC to cancel (more intuitive for browser)
     useInput((_input, key) => {
+        if (key.escape && isBusy) {
+            onCancel();
+        }
+        // Also support Ctrl+C
         if (key.ctrl && _input === 'c' && isBusy) {
             onCancel();
         }
     });
+
+    // Build status line
+    const statusText = queueLength > 0
+        ? `⏳ Agent working... (${queueLength} queued) [ESC to cancel]`
+        : `⏳ Agent working... [ESC to cancel]`;
 
     return (
         <Box
@@ -84,21 +96,23 @@ function TerminalContent({
                 ))}
             </Box>
 
-            {/* Prompt at bottom - always visible */}
-            {isReady && !isBusy && (
+            {/* Status line when busy */}
+            {isBusy && (
+                <Box>
+                    <Text color={colors.yellow}>{statusText}</Text>
+                </Box>
+            )}
+
+            {/* Prompt at bottom - ALWAYS visible when ready (can queue while busy) */}
+            {isReady && (
                 <TextInput
                     onSubmit={onSubmit}
-                    prompt="❯ "
-                    promptColor={colors.cyan}
-                    placeholder="Type a message or /help..."
+                    prompt={isBusy ? "📋 " : "❯ "}
+                    promptColor={isBusy ? colors.dim : colors.cyan}
+                    placeholder={isBusy ? "Type to queue..." : "Type a message or /help..."}
                     focus={true}
                     getCompletions={getCompletions}
                 />
-            )}
-            {isBusy && (
-                <Box>
-                    <Text color={colors.yellow}>⏳ Agent is working... (Ctrl+C to cancel)</Text>
-                </Box>
             )}
         </Box>
     );
@@ -111,8 +125,10 @@ export default function App() {
         outputs,
         isReady,
         isBusy,
+        messageQueue,
         initialize,
         sendMessage,
+        queueMessage,
         cancelRequest,
         clearHistory,
         addOutput,
@@ -147,11 +163,11 @@ export default function App() {
         return () => clearTimeout(timer);
     }, [initialize, addOutput]);
 
-    // Handle user input
+    // Handle user input - queues if agent is busy
     const handleSubmit = useCallback(async (input: string) => {
         if (!input.trim()) return;
 
-        // Handle slash commands via command handler
+        // Handle slash commands via command handler (always immediate)
         if (input.startsWith('/')) {
             const ctx = {
                 output: addOutput,
@@ -162,9 +178,13 @@ export default function App() {
             return;
         }
 
-        // Send regular messages to agent
-        sendMessage(input);
-    }, [addOutput, clearHistory, sendMessage]);
+        // Queue if busy, otherwise send immediately
+        if (isBusy) {
+            queueMessage(input);
+        } else {
+            sendMessage(input);
+        }
+    }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);
 
     return (
         <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -193,6 +213,7 @@ export default function App() {
                             outputs={outputs}
                             isReady={isReady}
                             isBusy={isBusy}
+                            queueLength={messageQueue.length}
                             onSubmit={handleSubmit}
                             getCompletions={getCommandCompletions}
                             onCancel={cancelRequest}
