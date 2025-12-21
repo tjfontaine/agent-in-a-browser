@@ -1,0 +1,27 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+body {
+    background: #0d1117;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Hide xterm's native cursor - ink-web provides its own */
+.xterm-cursor {
+    display: none !important;
+}
+
+.xterm-cursor-layer {
+    display: none !important;
+}

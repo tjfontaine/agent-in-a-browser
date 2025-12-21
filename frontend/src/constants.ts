@@ -5,7 +5,7 @@
  */
 
 /** Backend API URL for anthropic proxy */
-export const API_URL = 'http://localhost:3001';
+export const API_URL = '';  // Same origin - Vite proxies to backend
 
 /** 
  * Anthropic API key - loaded from environment or uses a dummy key.

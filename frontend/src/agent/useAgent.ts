@@ -1,0 +1,255 @@
+/**
+ * useAgent Hook
+ * 
+ * React hook that provides agent functionality for the ink-web TUI.
+ * Bridges the existing agent code with React state management.
+ */
+
+import { useState, useCallback, useRef } from 'react';
+import { initializeSandbox } from './sandbox';
+import { initializeWasmMcp, WasmAgent } from '../agent-sdk';
+import { setMcpState, isMcpInitialized } from '../commands/mcp';
+import { API_URL, ANTHROPIC_API_KEY } from '../constants';
+import { SYSTEM_PROMPT } from '../system-prompt';
+
+// Output types for TUI
+export interface AgentOutput {
+    id: number;
+    type: 'text' | 'tool-start' | 'tool-result' | 'error' | 'system';
+    content: string;
+    color?: string;
+    toolName?: string;
+    success?: boolean;
+}
+
+export interface AgentStatus {
+    text: string;
+    color: string;
+}
+
+export interface UseAgentReturn {
+    // State
+    status: AgentStatus;
+    outputs: AgentOutput[];
+    isReady: boolean;
+    isBusy: boolean;
+
+    // Actions
+    initialize: () => Promise<void>;
+    sendMessage: (message: string) => Promise<void>;
+    cancelRequest: () => void;
+    clearOutputs: () => void;
+    clearHistory: () => void;
+
+    // Low-level output function for non-agent messages
+    addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
+}
+
+// Colors matching our theme
+const colors = {
+    cyan: '#39c5cf',
+    green: '#3fb950',
+    yellow: '#d29922',
+    red: '#ff7b72',
+    magenta: '#bc8cff',
+    dim: '#8b949e',
+};
+
+export function useAgent(): UseAgentReturn {
+    const [status, setStatus] = useState<AgentStatus>({ text: 'Not initialized', color: colors.dim });
+    const [outputs, setOutputs] = useState<AgentOutput[]>([]);
+    const [isReady, setIsReady] = useState(false);
+    const [isBusy, setIsBusy] = useState(false);
+
+    const agentRef = useRef<WasmAgent | null>(null);
+    const nextIdRef = useRef(0);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const cancelRequestedRef = useRef(false);
+    const textBufferRef = useRef<string>('');  // Buffer for accumulating streaming text
+
+    // Add output helper
+    const addOutput = useCallback((
+        type: AgentOutput['type'],
+        content: string,
+        color?: string,
+        toolName?: string,
+        success?: boolean
+    ) => {
+        setOutputs(prev => [...prev, {
+            id: nextIdRef.current++,
+            type,
+            content,
+            color,
+            toolName,
+            success,
+        }]);
+    }, []);
+
+    // Initialize sandbox and agent
+    const initialize = useCallback(async () => {
+        try {
+            setStatus({ text: 'Initializing...', color: colors.yellow });
+            addOutput('system', 'Initializing sandbox...', colors.dim);
+
+            // Initialize sandbox worker
+            await initializeSandbox();
+            addOutput('system', '✓ Sandbox ready', colors.green);
+
+            // Initialize MCP
+            const tools = await initializeWasmMcp();
+            const serverInfo = { name: 'wasm-mcp-server', version: '0.1.0' };
+            setMcpState(true, serverInfo, tools);
+            addOutput('system', `✓ MCP Server ready: ${serverInfo.name} v${serverInfo.version}`, colors.green);
+            addOutput('system', `  ${tools.length} tools available`, colors.dim);
+
+            // Initialize agent
+            agentRef.current = new WasmAgent({
+                model: 'claude-sonnet-4-5',
+                baseURL: API_URL,
+                apiKey: ANTHROPIC_API_KEY,
+                systemPrompt: SYSTEM_PROMPT,
+                maxSteps: 15,
+            });
+            addOutput('system', '✓ Agent ready', colors.green);
+            addOutput('system', '', undefined);
+
+            setStatus({ text: 'Ready', color: colors.green });
+            setIsReady(true);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setStatus({ text: 'Error', color: colors.red });
+            addOutput('error', `Error: ${message}`, colors.red);
+        }
+    }, [addOutput]);
+
+    // Send message to agent
+    const sendMessage = useCallback(async (message: string) => {
+        if (!agentRef.current || !isMcpInitialized()) {
+            addOutput('error', 'Agent not initialized. Please wait for initialization.', colors.red);
+            return;
+        }
+
+        if (isBusy) {
+            addOutput('error', 'Agent is busy. Please wait or cancel.', colors.red);
+            return;
+        }
+
+        setIsBusy(true);
+        cancelRequestedRef.current = false;
+        abortControllerRef.current = new AbortController();
+
+        // Echo user input
+        addOutput('text', `❯ ${message}`, colors.cyan);
+        setStatus({ text: 'Thinking...', color: colors.yellow });
+
+        // Reset text buffer
+        textBufferRef.current = '';
+
+        try {
+            await agentRef.current.stream(message, {
+                onText: (text) => {
+                    // Accumulate text in buffer
+                    textBufferRef.current += text;
+
+                    // Output complete lines only
+                    const lines = textBufferRef.current.split('\n');
+                    // Keep the last incomplete line in the buffer
+                    textBufferRef.current = lines.pop() || '';
+
+                    // Output all complete lines
+                    for (const line of lines) {
+                        addOutput('text', line);
+                    }
+                },
+                onToolCall: (name, input) => {
+                    // Flush any buffered text before tool output
+                    if (textBufferRef.current) {
+                        addOutput('text', textBufferRef.current);
+                        textBufferRef.current = '';
+                    }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const args = (input as any).path || (input as any).command || (input as any).code || '';
+                    const argsDisplay = typeof args === 'string'
+                        ? (args.length > 30 ? args.substring(0, 27) + '...' : args)
+                        : '';
+                    addOutput('tool-start', `⏳ ${name} ${argsDisplay}`, colors.magenta, name);
+                    setStatus({ text: `Running ${name}...`, color: colors.magenta });
+                },
+                onToolResult: (name, result, success) => {
+                    const preview = typeof result === 'string'
+                        ? (result.length > 100 ? result.substring(0, 97) + '...' : result)
+                        : JSON.stringify(result).substring(0, 100);
+                    addOutput(
+                        'tool-result',
+                        `${success ? '✓' : '✗'} ${name}: ${preview}`,
+                        success ? colors.green : colors.red,
+                        name,
+                        success
+                    );
+                    setStatus({ text: 'Thinking...', color: colors.yellow });
+                },
+                onError: (error) => {
+                    if (!cancelRequestedRef.current && error.name !== 'AbortError') {
+                        addOutput('error', `Error: ${error.message}`, colors.red);
+                        setStatus({ text: 'Error', color: colors.red });
+                    }
+                },
+                onFinish: () => {
+                    // Flush any remaining buffered text
+                    if (textBufferRef.current) {
+                        addOutput('text', textBufferRef.current);
+                        textBufferRef.current = '';
+                    }
+                },
+            });
+
+            setStatus({ text: 'Ready', color: colors.green });
+        } catch (error) {
+            const err = error as { name?: string; message?: string };
+            if (err.name !== 'AbortError' && !cancelRequestedRef.current) {
+                addOutput('error', `Error: ${err.message || String(error)}`, colors.red);
+                setStatus({ text: 'Error', color: colors.red });
+            }
+        } finally {
+            setIsBusy(false);
+            abortControllerRef.current = null;
+        }
+    }, [addOutput, isBusy]);
+
+    // Cancel current request
+    const cancelRequest = useCallback(() => {
+        if (abortControllerRef.current) {
+            cancelRequestedRef.current = true;
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+            addOutput('system', 'Cancelled', colors.dim);
+            setStatus({ text: 'Ready', color: colors.green });
+            setIsBusy(false);
+        }
+    }, [addOutput]);
+
+    // Clear outputs
+    const clearOutputs = useCallback(() => {
+        setOutputs([]);
+    }, []);
+
+    // Clear agent conversation history
+    const clearHistory = useCallback(() => {
+        agentRef.current?.clearHistory();
+        clearOutputs();
+        addOutput('system', 'Conversation cleared.', colors.dim);
+    }, [addOutput, clearOutputs]);
+
+    return {
+        status,
+        outputs,
+        isReady,
+        isBusy,
+        initialize,
+        sendMessage,
+        cancelRequest,
+        clearOutputs,
+        clearHistory,
+        addOutput,
+    };
+}

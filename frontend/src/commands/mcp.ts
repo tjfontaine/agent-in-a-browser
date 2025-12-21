@@ -33,6 +33,38 @@ export function isMcpInitialized(): boolean {
 }
 
 /**
+ * Get MCP status data for React components.
+ */
+export function getMcpStatusData(): {
+    initialized: boolean;
+    serverInfo: { name: string; version: string } | null;
+    tools: Array<{ name: string; description?: string }>;
+    remoteServers: Array<{
+        id: string;
+        name: string;
+        url: string;
+        status: string;
+        toolCount: number;
+    }>;
+} {
+    const registry = getRemoteMCPRegistry();
+    const remoteServers = registry.getServers().map(s => ({
+        id: s.id,
+        name: s.name,
+        url: s.url,
+        status: s.status,
+        toolCount: s.tools.length,
+    }));
+
+    return {
+        initialized: mcpInitialized,
+        serverInfo: mcpServerInfo,
+        tools: mcpToolsList,
+        remoteServers,
+    };
+}
+
+/**
  * Handle /mcp subcommands for remote server management
  */
 export async function handleMcpCommand(

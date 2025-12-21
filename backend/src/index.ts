@@ -5,7 +5,7 @@ import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3002;
 
 // Debug logging helper
 const DEBUG = process.env.DEBUG === 'true' || true;
