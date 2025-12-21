@@ -1,6 +1,6 @@
 //! Pipeline orchestrator - parses and executes shell pipelines.
 
-use super::commands::get_command;
+use super::commands::ShellCommands;
 use super::env::{ShellEnv, ShellResult};
 
 /// Default pipe capacity in bytes.
@@ -43,7 +43,7 @@ pub async fn run_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
 
     // Verify all commands exist
     for (cmd_name, _) in &commands {
-        if get_command(cmd_name).is_none() {
+        if ShellCommands::get_command(cmd_name).is_none() {
             return ShellResult::error(format!("{}: command not found", cmd_name), 127);
         }
     }
@@ -54,7 +54,7 @@ pub async fn run_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
     // For a single command, we run it directly
     if num_commands == 1 {
         let (cmd_name, args) = commands.into_iter().next().unwrap();
-        let cmd_fn = get_command(&cmd_name).unwrap();
+        let cmd_fn = ShellCommands::get_command(&cmd_name).unwrap();
 
         // Create stdin (empty/closed)
         let (stdin_reader, stdin_writer) = piper::pipe(PIPE_CAPACITY);
@@ -106,7 +106,7 @@ pub async fn run_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
     let mut all_stderr = Vec::<u8>::new();
 
     for (cmd_name, args) in commands.into_iter() {
-        let cmd_fn = get_command(&cmd_name).unwrap();
+        let cmd_fn = ShellCommands::get_command(&cmd_name).unwrap();
 
         // Create stdin from previous output
         let (stdin_reader, mut stdin_writer) = piper::pipe(PIPE_CAPACITY);

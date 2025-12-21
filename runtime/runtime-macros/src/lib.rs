@@ -347,3 +347,216 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
         }
     }
 }
+
+// =============================================================================
+// Shell Command Macros
+// =============================================================================
+
+/// Parsed arguments from #[shell_command(name = "...", usage = "...", description = "...")]
+struct ShellCommandAttrArgs {
+    name: String,
+    usage: String,
+    description: String,
+}
+
+impl syn::parse::Parse for ShellCommandAttrArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut name = None;
+        let mut usage = None;
+        let mut description = None;
+        
+        while !input.is_empty() {
+            let ident: Ident = input.parse()?;
+            input.parse::<syn::Token![=]>()?;
+            let value: LitStr = input.parse()?;
+            
+            match ident.to_string().as_str() {
+                "name" => name = Some(value.value()),
+                "usage" => usage = Some(value.value()),
+                "description" => description = Some(value.value()),
+                other => return Err(syn::Error::new(ident.span(), format!("unknown attribute: {}", other))),
+            }
+            
+            // Consume optional comma
+            if input.peek(syn::Token![,]) {
+                input.parse::<syn::Token![,]>()?;
+            }
+        }
+        
+        Ok(ShellCommandAttrArgs {
+            name: name.ok_or_else(|| syn::Error::new(input.span(), "missing `name`"))?,
+            usage: usage.ok_or_else(|| syn::Error::new(input.span(), "missing `usage`"))?,
+            description: description.ok_or_else(|| syn::Error::new(input.span(), "missing `description`"))?,
+        })
+    }
+}
+
+/// Attribute macro to mark a function as a shell command.
+///
+/// # Arguments
+/// - `name` - The command name (e.g., "ls")
+/// - `usage` - Usage string (e.g., "ls [-l] [PATH]...")
+/// - `description` - Brief description
+///
+/// # Example
+/// ```ignore
+/// #[shell_command(name = "ls", usage = "ls [-l] [PATH]...", description = "List directory contents")]
+/// fn cmd_ls(args: Vec<String>, env: &ShellEnv, ...) -> BoxedFuture<i32> { ... }
+/// ```
+#[proc_macro_attribute]
+pub fn shell_command(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args: ShellCommandAttrArgs = match syn::parse(attr) {
+        Ok(args) => args,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let func: ImplItemFn = parse_macro_input!(item as ImplItemFn);
+    
+    let name = &attr_args.name;
+    let usage = &attr_args.usage;
+    let description = &attr_args.description;
+    
+    // Pass through with marker attribute containing the metadata
+    let output = quote! {
+        #[shell_command_marker(name = #name, usage = #usage, description = #description)]
+        #func
+    };
+    
+    output.into()
+}
+
+/// Internal marker attribute - consumed by #[shell_commands].
+#[proc_macro_attribute]
+pub fn shell_command_marker(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
+
+/// Parses shell command metadata from a #[shell_command(...)] attribute
+fn parse_shell_command_attr(attr: &Attribute) -> Option<ShellCommandInfo> {
+    if !attr.path().is_ident("shell_command") {
+        return None;
+    }
+    
+    let args: syn::Result<ShellCommandAttrArgs> = attr.parse_args();
+    args.ok().map(|a| ShellCommandInfo {
+        name: a.name,
+        usage: a.usage,
+        description: a.description,
+        method_ident: None, // Will be filled in by caller
+    })
+}
+
+struct ShellCommandInfo {
+    name: String,
+    usage: String,
+    description: String,
+    method_ident: Option<Ident>,
+}
+
+/// Attribute macro to generate the shell command dispatcher.
+///
+/// This macro:
+/// 1. Collects all functions marked with `#[shell_command]`
+/// 2. Generates `get_command()` dispatcher  
+/// 3. Generates `show_help()` for --help output
+/// 4. Generates `list_commands()` for introspection
+///
+/// # Example
+/// ```ignore
+/// #[shell_commands]
+/// impl ShellCommands {
+///     #[shell_command(name = "echo", usage = "echo [STRING]...", description = "Display line of text")]
+///     fn cmd_echo(...) -> ... { }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemImpl);
+    
+    // Collect command information
+    let mut commands: Vec<ShellCommandInfo> = Vec::new();
+    let mut methods: Vec<ImplItemFn> = Vec::new();
+    let mut other_items: Vec<ImplItem> = Vec::new();
+    
+    for item in input.items {
+        match item {
+            ImplItem::Fn(mut method) => {
+                // Check if this method has #[shell_command] attribute
+                let cmd_attr = method.attrs.iter()
+                    .find(|a| a.path().is_ident("shell_command"));
+                
+                if let Some(attr) = cmd_attr {
+                    if let Some(mut info) = parse_shell_command_attr(attr) {
+                        info.method_ident = Some(method.sig.ident.clone());
+                        commands.push(info);
+                    }
+                    
+                    // Remove the shell_command attribute from the output
+                    method.attrs.retain(|a| !a.path().is_ident("shell_command"));
+                }
+                
+                methods.push(method);
+            }
+            other => other_items.push(other),
+        }
+    }
+    
+    // Generate get_command() dispatcher
+    let get_command_arms = commands.iter().map(|cmd| {
+        let name = &cmd.name;
+        let method_ident = cmd.method_ident.as_ref().unwrap();
+        quote! {
+            #name => Some(Self::#method_ident)
+        }
+    });
+    
+    // Generate show_help() function
+    let help_arms = commands.iter().map(|cmd| {
+        let name = &cmd.name;
+        let usage = &cmd.usage;
+        let description = &cmd.description;
+        let help_text = format!("Usage: {}\n\n{}\n", usage, description);
+        quote! {
+            #name => Some(#help_text)
+        }
+    });
+    
+    // Generate list_commands()
+    let command_names: Vec<_> = commands.iter().map(|cmd| &cmd.name).collect();
+    
+    // Reconstruct the impl block
+    let self_ty = &input.self_ty;
+    let generics = &input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    
+    let output = quote! {
+        impl #impl_generics #self_ty #ty_generics #where_clause {
+            #(#methods)*
+            
+            #(#other_items)*
+            
+            /// Get a command function by name.
+            pub fn get_command(name: &str) -> Option<crate::shell::commands::CommandFn> {
+                match name {
+                    #(#get_command_arms,)*
+                    _ => None,
+                }
+            }
+            
+            /// Get help text for a command.
+            pub fn show_help(name: &str) -> Option<&'static str> {
+                match name {
+                    #(#help_arms,)*
+                    _ => None,
+                }
+            }
+            
+            /// List all available commands.
+            pub fn list_commands() -> &'static [&'static str] {
+                &[#(#command_names),*]
+            }
+        }
+    };
+    
+    output.into()
+}

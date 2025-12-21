@@ -72,6 +72,8 @@ piper = "0.2"            # Bounded SPSC async pipe
 async-channel = "2"      # Bounded MPSC channels (shared stderr)
 shlex = "1"              # Command line parsing
 pin-project-lite = "0.2" # Pin projection for async
+lexopt = "0.3"           # Minimal argument parsing
+
 
 # WASI bindings for http handler
 wasi = "0.14"

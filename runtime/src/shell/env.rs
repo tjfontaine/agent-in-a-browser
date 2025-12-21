@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn test_shell_env_default() {
         let env = ShellEnv::new();
-        assert_eq!(env.cwd, PathBuf::from("/"));
+        assert_eq!(env.cwd, PathBuf::from("."));
         assert!(env.env_vars.is_empty());
     }
 
