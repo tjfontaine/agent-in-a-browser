@@ -11,39 +11,29 @@ export type { McpServerInfo, McpTool, McpToolResult, JsonRpcRequest, JsonRpcResp
  * Messages sent from the sandbox worker to the main thread
  */
 export interface SandboxMessage {
-    type: 'status' | 'ready' | 'mcp-initialized' | 'tools' | 'tool_result' | 'console' | 'error' | 'mcp-response' | 'init_complete' | 'mcp-stream-event' | 'mcp-stream-error';
-    message?: string;
-    tools?: Array<{ name: string; description?: string }>;
-    serverInfo?: { name: string; version: string };
+    type: 'init_complete' | 'error';
     id?: string;
-    result?: unknown;
-    response?: {
-        jsonrpc: string;
-        id?: string | number;
-        result?: unknown;
-        error?: { code: number; message: string; data?: unknown };
-    };
+    message?: string;
 }
 
 /**
  * Messages sent from the main thread to the sandbox worker
  */
 export interface SandboxRequest {
-    type: 'init' | 'get_tools' | 'mcp-request' | 'mcp-request-streaming';
+    type: 'init' | 'fetch';
     id?: string;
-    request?: {
-        jsonrpc: string;
-        id: string | number;
-        method: string;
-        params?: Record<string, unknown>;
-    };
+    url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
 }
 
 /**
- * Tool call result from sandbox
+ * Tool call result
  */
 export interface ToolCallResult {
     output?: string;
     error?: string;
     isError?: boolean;
 }
+

@@ -12,8 +12,6 @@ import { terminal, readline, initializeTerminal } from './terminal';
 import { showWelcome } from './terminal/welcome';
 import {
     initializeSandbox,
-    setSandboxCallbacks,
-    callTool,
     initializeAgent,
     sendMessage,
     clearAgentHistory,
@@ -21,24 +19,28 @@ import {
 } from './agent';
 import { handleSlashCommand, setMcpState } from './commands';
 import { setupCtrlCHandler, startPromptLoop, showPrompt } from './input';
+import { initializeWasmMcp } from './agent-sdk';
 
-// ============ Sandbox Event Handlers ============
+// ============ Startup ============
 
-setSandboxCallbacks({
-    onStatus: (message) => {
-        setStatus(message, '#d29922');
-    },
+async function main() {
+    // Initialize terminal and mount to DOM
+    initializeTerminal();
 
-    onReady: () => {
-        setStatus('Ready', '#3fb950');
-        // Clear the "Initializing sandbox..." line and show Ready!
-        terminal.write('\x1b[A\r\x1b[K'); // Move up one line and clear it
+    // Show welcome banner
+    showWelcome(terminal);
+
+    terminal.write('Initializing sandbox...\r\n');
+    setStatus('Initializing...', '#d29922');
+
+    try {
+        // Initialize sandbox worker
+        await initializeSandbox();
         terminal.write('\x1b[32m✓ Sandbox ready\x1b[0m\r\n');
-    },
 
-    onMcpInitialized: (serverInfo, tools) => {
-        console.log('MCP Server initialized:', serverInfo);
-        console.log('MCP Tools:', tools);
+        // Initialize MCP over workerFetch
+        const tools = await initializeWasmMcp();
+        const serverInfo = { name: 'wasm-mcp-server', version: '0.1.0' };
 
         // Update MCP state for commands module
         setMcpState(true, serverInfo, tools);
@@ -48,45 +50,34 @@ setSandboxCallbacks({
 
         // Initialize Agent
         initializeAgent();
-        terminal.write(`\x1b[32m✓ Agent ready\x1b[0m\r\n`);
+        terminal.write('\x1b[32m✓ Agent ready\x1b[0m\r\n');
+
+        setStatus('Ready', '#3fb950');
 
         // Setup Ctrl+C handler
         setupCtrlCHandler(readline);
 
         // Start the prompt loop
-        startPromptLoop(readline, async (input) => {
+        startPromptLoop(readline, async (input: string) => {
             await sendMessage(
                 terminal,
                 input,
-                (cmd) => handleSlashCommand(
+                (cmd: string) => handleSlashCommand(
                     terminal,
                     cmd,
-                    callTool,
                     clearAgentHistory,
                     showPrompt
                 ),
                 showPrompt
             );
         });
-    },
-
-    onError: (message) => {
+    } catch (error: any) {
         setStatus('Error', '#ff7b72');
-        terminal.write(`\x1b[31mError: ${message}\x1b[0m\r\n`);
-    },
-
-    onConsole: (message) => {
-        terminal.write(`\x1b[90m[js] ${message}\x1b[0m\r\n`);
+        terminal.write(`\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+        console.error('Startup error:', error);
     }
-});
+}
 
-// ============ Startup ============
+main();
 
-// Initialize terminal and mount to DOM
-initializeTerminal();
 
-// Show welcome banner
-showWelcome(terminal);
-
-// Initialize sandbox (triggers the callback chain above)
-initializeSandbox();

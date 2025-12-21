@@ -7,21 +7,18 @@
 import { Terminal } from '@xterm/xterm';
 import { parseSlashCommand } from '../command-parser';
 import { handleMcpCommand } from './mcp';
-import type { ToolCallResult } from '../types';
 
 /**
  * Handle a slash command input.
  * 
  * @param term - Terminal instance for output
  * @param input - Raw input string starting with /
- * @param callTool - Function to call MCP tools
  * @param clearHistory - Function to clear agent conversation history
  * @param showPrompt - Function to show the prompt again
  */
 export function handleSlashCommand(
     term: Terminal,
     input: string,
-    callTool: (name: string, args: Record<string, unknown>) => Promise<ToolCallResult>,
     clearHistory: () => void,
     showPrompt: () => void
 ): void {
@@ -43,15 +40,6 @@ export function handleSlashCommand(
             showPrompt();
             break;
 
-        case 'files':
-            callTool('list', { path: '/' }).then((result) => {
-                term.write('\r\n\x1b[36mFiles:\x1b[0m\r\n');
-                term.write(result.output || result.error || '(empty)');
-                term.write('\r\n');
-                showPrompt();
-            });
-            break;
-
         case 'mcp':
             // Pass subcommand and args to MCP handler
             handleMcpCommand(term, subcommand, args, options, showPrompt);
@@ -60,7 +48,6 @@ export function handleSlashCommand(
         case 'help':
             term.write('\r\n\x1b[36mCommands:\x1b[0m\r\n');
             term.write('  /clear              - Clear conversation\r\n');
-            term.write('  /files              - List files in sandbox\r\n');
             term.write('  /mcp                - Show MCP status\r\n');
             term.write('  /mcp add <url>      - Add remote MCP server\r\n');
             term.write('  /mcp remove <id>    - Remove remote server\r\n');
@@ -77,3 +64,4 @@ export function handleSlashCommand(
             showPrompt();
     }
 }
+

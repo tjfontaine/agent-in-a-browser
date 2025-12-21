@@ -1,10 +1,16 @@
 // Sandbox Worker with OPFS + MCP Tools
-// Uses the Rust-based WASM MCP server for all tool calls
-// OPFS helpers are only used by browser-fs-impl.ts
+// Uses the Rust-based WASM MCP server via a fetch-like interface
+
+console.log('[SandboxWorker] Module loading...');
 
 export { }; // Make this a module
 
-import { callWasmMcpServer, callWasmMcpServerStreaming, SSEEvent, type JsonRpcRequest, type JsonRpcResponse } from './wasm-mcp-bridge';
+import { callWasmMcpServerFetch } from './wasm-mcp-bridge';
+
+console.log('[SandboxWorker] Imports complete, sending ready signal');
+
+// Signal to main thread that worker is ready to receive messages
+self.postMessage({ type: 'ready' });
 
 // OPFS root handle (exported for browser-fs-impl.ts)
 let opfsRoot: FileSystemDirectoryHandle | null = null;
@@ -54,144 +60,122 @@ export function getOpfsRoot(): FileSystemDirectoryHandle | null {
 // ============ Initialization ============
 
 async function initialize(): Promise<void> {
-    if (initialized) return;
+    console.log('[SandboxWorker] initialize() called, initialized:', initialized);
+    if (initialized) {
+        console.log('[SandboxWorker] Already initialized, returning');
+        return;
+    }
 
-    console.log('[Sandbox] Initializing...');
+    console.log('[SandboxWorker] Starting initialization...');
 
     // Initialize OPFS root handle (for legacy helpers)
-    opfsRoot = await navigator.storage.getDirectory();
-    console.log('[Sandbox] OPFS handle acquired');
+    try {
+        console.log('[SandboxWorker] Acquiring OPFS handle...');
+        opfsRoot = await navigator.storage.getDirectory();
+        console.log('[SandboxWorker] OPFS handle acquired');
+    } catch (e) {
+        console.error('[SandboxWorker] Failed to acquire OPFS handle:', e);
+        throw e;
+    }
 
     // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
-    const { initFilesystem } = await import('./wasm/opfs-filesystem-impl');
-    await initFilesystem();
-    console.log('[Sandbox] OPFS filesystem shim initialized');
-
-    // Initialize MCP by calling initialize on WASM directly
     try {
-        const initResponse = await callWasmMcpServer({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'initialize',
-            params: {
-                protocolVersion: '2025-11-25',
-                capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
-                clientInfo: { name: 'web-agent-frontend', version: '0.1.0' }
-            }
-        });
-
-        if (initResponse.error) {
-            throw new Error(`MCP initialize error: ${initResponse.error.message}`);
-        }
-
-        const serverInfo = initResponse.result?.serverInfo;
-        console.log('[Sandbox] MCP initialized:', serverInfo);
-
-        // Send initialized notification
-        await callWasmMcpServer({
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'initialized',
-            params: {}
-        });
-
-        // List tools
-        const toolsResponse = await callWasmMcpServer({
-            jsonrpc: '2.0',
-            id: 3,
-            method: 'tools/list',
-            params: {}
-        });
-
-        const tools = toolsResponse.result?.tools || [];
-        console.log('[Sandbox] MCP tools:', tools.map((t: any) => t.name));
-
-        // Send tools list to main thread
-        self.postMessage({
-            type: 'mcp-initialized',
-            serverInfo,
-            tools
-        });
-
-        initialized = true;
-    } catch (error) {
-        console.error('[Sandbox] MCP initialization failed:', error);
-        // Continue without MCP - graceful degradation
+        console.log('[SandboxWorker] Loading filesystem shim...');
+        const { initFilesystem } = await import('./wasm/opfs-filesystem-impl');
+        console.log('[SandboxWorker] Calling initFilesystem()...');
+        await initFilesystem();
+        console.log('[SandboxWorker] OPFS filesystem shim initialized');
+    } catch (e) {
+        console.error('[SandboxWorker] Failed to initialize filesystem shim:', e);
+        throw e;
     }
+
+    // Note: MCP initialization is now handled by the client (agent-sdk.ts) 
+    // initiating the connection via the fetch transport.
+
+    initialized = true;
 }
 
 // ============ Message Handler ============
 
 self.onmessage = async (event: MessageEvent) => {
+    console.log('[SandboxWorker] Received message:', event.data.type);
     const { type, id, ...data } = event.data;
 
     try {
         switch (type) {
             case 'init':
+                console.log('[SandboxWorker] Handling init message');
                 await initialize();
+                console.log('[SandboxWorker] Posting init_complete');
                 self.postMessage({ type: 'init_complete', id });
                 break;
 
-            case 'mcp-request':
-                // Passthrough ALL MCP requests directly to WASM bridge
-                try {
-                    const request = data.request as JsonRpcRequest;
-                    const response = await callWasmMcpServer(request);
+            case 'fetch': {
+                // Handle fetch request from main thread via MessageChannel
+                console.log('[SandboxWorker] Handling fetch:', data.url, data.method);
+                const port = event.ports[0];
+                if (!port) {
+                    console.error('[SandboxWorker] missing port for fetch');
+                    return;
+                }
 
-                    self.postMessage({
-                        type: 'mcp-response',
-                        id,
-                        response
+                try {
+                    const reqInit: RequestInit = {
+                        method: data.method,
+                        headers: new Headers(data.headers),
+                    };
+
+                    if (data.body) {
+                        reqInit.body = data.body;
+                    }
+
+                    // Create Request object
+                    // Note: 'body' in Request constructor behaves differently depending on environment,
+                    // but for text/json it works. For streaming upload, we might need more care.
+                    const request = new Request(data.url, reqInit);
+
+                    // Call WASM MCP Bridge
+                    const { status, headers: respHeaders, body: respBody } = await callWasmMcpServerFetch(request);
+
+                    // Convert headers to plain object for transfer (or just entries)
+                    const headerEntries: [string, string][] = [];
+                    respHeaders.forEach((val, key) => headerEntries.push([key, val]));
+
+                    // Send head
+                    port.postMessage({
+                        type: 'head',
+                        payload: {
+                            status,
+                            statusText: status === 200 ? 'OK' : 'Error', // Minimal status text
+                            headers: headerEntries
+                        }
                     });
-                } catch (error: any) {
-                    self.postMessage({
-                        type: 'mcp-response',
-                        id,
-                        response: {
-                            jsonrpc: '2.0',
-                            id: data.request.id,
-                            error: {
-                                code: -32000,
-                                message: error.message
+
+                    // Pipe body
+                    const reader = respBody.getReader();
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) {
+                                port.postMessage({ type: 'end' });
+                                break;
                             }
+                            port.postMessage({ type: 'chunk', chunk: value }, [value.buffer]);
                         }
-                    });
-                }
-                break;
+                    } catch (readError: any) {
+                        port.postMessage({ type: 'error', error: readError.message });
+                    } finally {
+                        reader.releaseLock();
+                        port.close();
+                    }
 
-            // Streaming MCP request - emits events as they arrive
-            case 'mcp-request-streaming':
-                try {
-                    const request = data.request as JsonRpcRequest;
-
-                    // Use streaming bridge function - passthrough with callback
-                    const response = await callWasmMcpServerStreaming(
-                        request,
-                        (event: SSEEvent) => {
-                            // Emit each streaming event to main thread
-                            self.postMessage({
-                                type: 'mcp-stream-event',
-                                id,
-                                requestId: request.id,
-                                event
-                            });
-                        }
-                    );
-
-                    // Send final response
-                    self.postMessage({
-                        type: 'mcp-response',
-                        id,
-                        response
-                    });
                 } catch (error: any) {
-                    self.postMessage({
-                        type: 'mcp-stream-error',
-                        id,
-                        error: error.message
-                    });
+                    port.postMessage({ type: 'error', error: error.message });
+                    port.close();
                 }
                 break;
+            }
 
             default:
                 self.postMessage({ type: 'error', id, message: `Unknown message type: ${type}` });
@@ -200,5 +184,6 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', id, message: e.message });
     }
 };
+
 
 

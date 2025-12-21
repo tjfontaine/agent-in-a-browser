@@ -7,8 +7,7 @@
 export { setStatus } from './status';
 export {
     initializeSandbox,
-    setSandboxCallbacks,
-    callTool
+    fetchFromSandbox
 } from './sandbox';
 export {
     initializeAgent,

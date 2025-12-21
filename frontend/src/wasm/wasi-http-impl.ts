@@ -220,25 +220,34 @@ export class OutgoingResponse {
         this._onChunk = onChunk;
         this._body = new OutgoingBody(new OutputStream({
             write: (bytes: Uint8Array) => {
+                console.log('[OutgoingResponse] write() called, bytes:', bytes.length);
                 this._bodyChunks.push(bytes);
                 // Emit chunk immediately if streaming callback is set
                 if (this._onChunk) {
+                    console.log('[OutgoingResponse] Calling onChunk');
                     this._onChunk(bytes);
                 }
                 return BigInt(bytes.length);
             },
-            flush: () => { },
-            blockingFlush: () => { },
+            flush: () => {
+                console.log('[OutgoingResponse] flush() called');
+            },
+            blockingFlush: () => {
+                console.log('[OutgoingResponse] blockingFlush() called');
+            },
             blockingWriteAndFlush: (bytes: Uint8Array) => {
+                console.log('[OutgoingResponse] blockingWriteAndFlush() called, bytes:', bytes.length);
                 this._bodyChunks.push(bytes);
                 // Emit chunk immediately if streaming callback is set
                 if (this._onChunk) {
+                    console.log('[OutgoingResponse] Calling onChunk from blockingWriteAndFlush');
                     this._onChunk(bytes);
                 }
             },
             checkWrite: () => BigInt(1024 * 1024)
         }));
         this._body._onFinish = () => {
+            console.log('[OutgoingResponse] _onFinish called');
             if (this._onBodyFinished) {
                 this._onBodyFinished();
             }
@@ -558,4 +567,25 @@ export const outgoingHandler = {
         return new FutureIncomingResponse(resolvedResponse);
     }
 };
+
+export function createIncomingRequest(
+    method: string,
+    pathWithQuery: string,
+    headers: Fields,
+    body: string
+): IncomingRequest {
+    const encoder = new TextEncoder();
+    const bodyBytes = encoder.encode(body);
+    const incomingBody = new IncomingBody(bodyBytes);
+
+    return new IncomingRequest(
+        method,
+        pathWithQuery,
+        'https',
+        'localhost',
+        headers,
+        incomingBody
+    );
+}
+
 

@@ -9,24 +9,11 @@
 
 import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, type CoreMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { experimental_createMCPClient as createMCPClient, type MCPTransport } from '@ai-sdk/mcp';
+import { type MCPTransport } from '@ai-sdk/mcp';
 import { z } from 'zod';
-import { sendMcpRequest, sendMcpRequestStreaming, StreamEvent } from './agent/sandbox';
+import { fetchFromSandbox } from './agent/sandbox';
 import type { JsonRpcRequest, JsonRpcResponse, McpTool } from './mcp-client';
 import { getRemoteMCPRegistry } from './remote-mcp-registry';
-
-/**
- * Wrapper that matches the callMcpServer signature for sendMcpRequest
- */
-async function callMcpServer(request: JsonRpcRequest): Promise<JsonRpcResponse> {
-    const response = await sendMcpRequest({
-        jsonrpc: '2.0',
-        id: typeof request.id === 'number' ? request.id : Date.now(),
-        method: request.method,
-        params: request.params
-    });
-    return response as JsonRpcResponse;
-}
 
 export interface AgentConfig {
     model?: string;
@@ -54,180 +41,127 @@ export interface StreamCallbacks {
 let cachedTools: McpTool[] = [];
 
 /**
- * Custom MCP Transport that bridges to our WASM MCP server
+ * Custom MCP Transport that bridges to our WASM MCP server via workerFetch
+ * Uses direct POST requests since WASM MCP server doesn't support SSE
  */
-class WasmMcpTransport implements MCPTransport {
-    private messageId = 0;
-    private initialized = false;
+let mcpInitialized = false;
 
-    async start(): Promise<void> {
-        console.log('[WasmTransport] Starting...');
+/**
+ * Send an MCP JSON-RPC request via POST
+ */
+async function mcpRequest(method: string, params?: any): Promise<any> {
+    const id = Date.now();
+    const request = {
+        jsonrpc: '2.0',
+        id,
+        method,
+        params: params || {}
+    };
 
-        // Initialize MCP connection
-        const initResponse = await callMcpServer({
-            jsonrpc: '2.0',
-            id: ++this.messageId,
-            method: 'initialize',
-            params: {
-                protocolVersion: '2025-11-25',
-                capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
-                clientInfo: { name: 'vercel-ai-sdk', version: '0.1.0' }
-            }
-        });
+    console.log('[MCP] Request:', method, params);
 
-        if (initResponse.error) {
-            throw new Error(`MCP initialization failed: ${initResponse.error.message}`);
-        }
+    const response = await fetchFromSandbox('/mcp/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+    });
 
-        console.log('[WasmTransport] Server info:', initResponse.result?.serverInfo);
+    console.log('[MCP] Response status:', response.status);
 
-        // Send initialized notification
-        await callMcpServer({
-            jsonrpc: '2.0',
-            id: ++this.messageId,
-            method: 'initialized',
-            params: {}
-        });
-
-        this.initialized = true;
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`MCP request failed: ${response.status} ${text}`);
     }
 
-    async close(): Promise<void> {
-        console.log('[WasmTransport] Closing...');
-        this.initialized = false;
-    }
-
-    async send(message: unknown): Promise<void> {
-        if (!this.initialized) {
-            throw new Error('Transport not initialized');
-        }
-
-        const request = message as JsonRpcRequest;
-        console.log('[WasmTransport] Sending:', request.method);
-
-        await callMcpServer({
-            ...request,
-            id: request.id ?? ++this.messageId
-        });
-    }
+    const result = await response.json();
+    console.log('[MCP] Response:', result);
+    return result;
 }
+
 
 /**
  * Initialize the WASM MCP server and get tools
  */
 export async function initializeWasmMcp(): Promise<McpTool[]> {
-    if (cachedTools.length > 0) {
+    if (mcpInitialized) {
         return cachedTools;
     }
 
     console.log('[Agent] Initializing WASM MCP server...');
 
-    // Initialize MCP connection
-    const initResponse = await callMcpServer({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-            protocolVersion: '2025-11-25',
-            capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
-            clientInfo: { name: 'vercel-ai-sdk', version: '0.1.0' }
-        }
+    // MCP handshake
+    const initResult = await mcpRequest('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: { tools: {} },
+        clientInfo: { name: 'web-agent', version: '0.1.0' }
     });
 
-    if (initResponse.error) {
-        throw new Error(`MCP initialization failed: ${initResponse.error.message}`);
+    if (initResult.error) {
+        throw new Error(`MCP initialize failed: ${initResult.error.message}`);
     }
 
-    console.log('[Agent] MCP server info:', initResponse.result?.serverInfo);
+    console.log('[Agent] MCP Server:', initResult.result?.serverInfo);
 
     // Send initialized notification
-    await callMcpServer({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'initialized',
-        params: {}
-    });
+    await mcpRequest('initialized', {});
 
     // List available tools
-    const toolsResponse = await callMcpServer({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/list',
-        params: {}
-    });
+    const toolsResult = await mcpRequest('tools/list', {});
 
-    if (toolsResponse.error) {
-        throw new Error(`Failed to list tools: ${toolsResponse.error.message}`);
+    if (toolsResult.error) {
+        throw new Error(`Failed to list tools: ${toolsResult.error.message}`);
     }
 
-    cachedTools = toolsResponse.result?.tools || [];
+    cachedTools = (toolsResult.result?.tools || []).map((t: any) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema
+    }));
+
+    mcpInitialized = true;
+
     console.log('[Agent] Available tools:', cachedTools.map(t => t.name));
-    console.log('[Agent] Tool schemas:', JSON.stringify(cachedTools, null, 2));
 
     return cachedTools;
 }
 
 /**
  * Call an MCP tool with streaming progress support
+ * Used by the dynamic tool executors
  */
 async function callMcpToolStreaming(
     name: string,
     args: Record<string, unknown>,
     onProgress?: (data: string) => void
 ): Promise<string> {
-    console.log('[MCP Tool Call] ===================================');
     console.log('[MCP Tool Call] Tool:', name);
-    console.log('[MCP Tool Call] Args:', JSON.stringify(args, null, 2));
 
-    // FAIL LOUDLY: Check for empty or undefined args
-    if (!args || Object.keys(args).length === 0) {
-        const errorMsg = `INVARIANT VIOLATION: Tool "${name}" called with empty args! This is a bug in the Vercel AI SDK integration.`;
-        console.error('[MCP Tool Call] ' + errorMsg);
-        console.error('[MCP Tool Call] Cached tools:', cachedTools.map(t => ({ name: t.name, schema: t.inputSchema })));
-        throw new Error(errorMsg);
+    if (!mcpInitialized) {
+        throw new Error('MCP not initialized');
     }
 
-    const request = {
-        jsonrpc: '2.0' as const,
-        id: Date.now(),
-        method: 'tools/call',
-        params: {
-            name,
-            arguments: args
+    try {
+        const response = await mcpRequest('tools/call', { name, arguments: args });
+
+        if (response.error) {
+            throw new Error(response.error.message);
         }
-    };
 
-    // Use streaming if callback provided
-    const response = onProgress
-        ? await sendMcpRequestStreaming(request, (event) => {
-            console.log('[MCP Tool Call] Stream event:', event);
-            if (event.data) {
-                onProgress(event.data);
-            }
-        })
-        : await sendMcpRequest(request);
+        const result = response.result;
 
-    console.log('[MCP Tool Call] Response:', JSON.stringify(response, null, 2));
-
-    if (response.error) {
-        console.log('[MCP Tool Call] Error:', response.error.message);
-        return `Error: ${response.error.message}`;
-    }
-
-    // Extract text content from MCP result
-    const result = response.result;
-    if (result?.content) {
-        const output = result.content
+        // Format result
+        const content = result.content || [];
+        const textContent = content
             .filter((c: any) => c.type === 'text')
             .map((c: any) => c.text)
             .join('\n');
-        console.log('[MCP Tool Call] Output:', output);
-        return output;
-    }
 
-    const stringResult = JSON.stringify(result);
-    console.log('[MCP Tool Call] Result (JSON):', stringResult);
-    return stringResult;
+        console.log('[MCP Tool Call] Result:', textContent.substring(0, 100) + '...');
+        return textContent;
+    } catch (error: any) {
+        console.error('[MCP Tool Call] Error:', error);
+        return `Error: ${error.message}`;
+    }
 }
 
 /**
@@ -238,26 +172,13 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
     const tools: Record<string, any> = {};
 
     for (const mcpTool of mcpTools) {
-        console.log(`[Agent] Processing tool: ${mcpTool.name}`);
-        console.log(`[Agent] Raw inputSchema:`, JSON.stringify(mcpTool.inputSchema, null, 2));
-
         const properties = mcpTool.inputSchema?.properties || {};
         const required = mcpTool.inputSchema?.required || [];
-
-        console.log(`[Agent] Properties keys:`, Object.keys(properties));
-        console.log(`[Agent] Required:`, required);
-
-        // FAIL LOUDLY: Check if properties are empty when they shouldn't be
-        if (Object.keys(properties).length === 0) {
-            console.error(`[Agent] WARNING: Tool "${mcpTool.name}" has no properties in schema!`);
-            console.error(`[Agent] Full inputSchema:`, mcpTool.inputSchema);
-        }
 
         // Build Zod schema from MCP inputSchema properties
         const schemaProps: Record<string, z.ZodTypeAny> = {};
 
         for (const [key, propSchema] of Object.entries(properties) as [string, any][]) {
-            console.log(`[Agent] Processing property "${key}":`, propSchema);
             let zodType: z.ZodTypeAny;
 
             switch (propSchema.type) {
@@ -292,12 +213,6 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
             schemaProps[key] = zodType;
         }
 
-        const zodSchema = z.object(schemaProps);
-
-        console.log(`[Agent] Created Zod schema with keys:`, Object.keys(schemaProps));
-
-        // Use dynamicTool for runtime-defined tools with unknown types
-        // Must wrap with jsonSchema() to create a valid FlexibleSchema
         const inputSchemaObj = {
             type: 'object' as const,
             properties: properties,
@@ -310,9 +225,6 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
             execute: async (args: unknown) => {
                 const argsObj = args as Record<string, unknown>;
                 console.log(`[Agent] Executing tool ${mcpTool.name}`);
-                console.log(`[Agent] Execute received args:`, JSON.stringify(argsObj, null, 2));
-                console.log(`[Agent] Args type:`, typeof argsObj);
-                console.log(`[Agent] Args keys:`, Object.keys(argsObj || {}));
                 return callMcpToolStreaming(mcpTool.name, argsObj);
             },
         });
@@ -320,7 +232,6 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
 
     return tools;
 }
-
 
 /**
  * Agent message types for streaming
@@ -583,3 +494,4 @@ export class WasmAgent {
         return messages;
     }
 }
+

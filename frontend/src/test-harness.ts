@@ -1,9 +1,10 @@
 /**
  * Test Harness for MCP Tools
  * 
- * Tests the WASM MCP server tools through the sandbox worker.
- * Uses the proper MCP JSON-RPC protocol.
+ * Tests the WASM MCP server tools through the sandbox worker via workerFetch.
  */
+
+import { fetchFromSandbox } from './agent/sandbox';
 
 const output = document.getElementById('output')!;
 
@@ -16,68 +17,81 @@ function log(msg: string, type: 'info' | 'error' | 'success' = 'info') {
     console.log(msg);
 }
 
-const worker = new Worker(new URL('./sandbox-worker.ts', import.meta.url), { type: 'module' });
-
-let pendingResolvers = new Map<string | number, (result: any) => void>();
 let nextId = 1;
-let mcpInitialized = false;
-
-worker.onmessage = (e) => {
-    const data = e.data;
-    if (data.type === 'mcp-initialized') {
-        log(`MCP initialized: ${data.serverInfo.name} v${data.serverInfo.version}`, 'success');
-        log(`Available tools: ${data.tools.map((t: any) => t.name).join(', ')}`);
-        mcpInitialized = true;
-        runTests();
-    } else if (data.type === 'mcp-response') {
-        const resolve = pendingResolvers.get(data.response.id);
-        if (resolve) {
-            pendingResolvers.delete(data.response.id);
-            resolve(data.response);
-        }
-    } else if (data.type === 'error') {
-        log(`Worker Error: ${data.message}`, 'error');
-    }
-};
 
 /**
- * Call an MCP tool via JSON-RPC
+ * Call a generic MCP JSON-RPC method
  */
-function callMcpTool(name: string, args: Record<string, unknown>): Promise<{ success: boolean, output: string, error?: string }> {
-    return new Promise((resolve) => {
-        const id = nextId++;
-        pendingResolvers.set(id, (response) => {
-            if (response.error) {
-                resolve({ success: false, output: '', error: response.error.message });
-            } else {
-                const result = response.result;
-                // MCP returns content array with text items
-                const text = result.content?.map((c: any) => c.text).join('\n') || '';
-                const isError = result.isError === true;
-                resolve({
-                    success: !isError,
-                    output: text,
-                    error: isError ? text : undefined
-                });
-            }
-        });
+async function mcpRequest(method: string, params: Record<string, unknown> = {}) {
+    const id = nextId++;
+    const request = {
+        jsonrpc: '2.0',
+        id,
+        method,
+        params
+    };
 
-        worker.postMessage({
-            type: 'mcp-request',
-            request: {
-                jsonrpc: '2.0',
-                id,
-                method: 'tools/call',
-                params: { name, arguments: args }
-            }
-        });
+    const response = await fetchFromSandbox('/mcp/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
     });
+
+    if (!response.ok) {
+        throw new Error(`MCP Request failed: ${response.status} ${response.statusText}`);
+    }
+
+    // For sync requests (if supported) or purely waiting for side-effects.
+    // However, our current architecture expects responses via SSE for most things?
+    // Or does the POST return the response directly?
+    // The WASM bridge streams the response back.
+    // If the WASM component returns a response to the POST, we get it here.
+    // Let's assume the POST returns the JSON-RPC response directly for now,
+    // as that's how `callWasmMcpServerFetch` works (maps req -> resp).
+
+    return await response.json();
+}
+
+/**
+ * Call an MCP tool
+ */
+async function callMcpTool(name: string, args: Record<string, unknown>): Promise<{ success: boolean, output: string, error?: string }> {
+    try {
+        const response = await mcpRequest('tools/call', { name, arguments: args });
+
+        if (response.error) {
+            return { success: false, output: '', error: response.error.message };
+        }
+
+        const result = response.result;
+        // MCP returns content array with text items
+        const text = result.content?.map((c: any) => c.text).join('\n') || '';
+        const isError = result.isError === true;
+
+        return {
+            success: !isError,
+            output: text,
+            error: isError ? text : undefined
+        };
+    } catch (e: any) {
+        return { success: false, output: '', error: e.message };
+    }
 }
 
 async function runTests() {
     log('Starting MCP tool tests...');
 
     try {
+        // Init
+        log('Initializing MCP...');
+        await mcpRequest('initialize', {
+            protocolVersion: '2025-11-25',
+            capabilities: { tools: {} },
+            clientInfo: { name: 'test-harness', version: '1.0.0' }
+        });
+        await mcpRequest('initialized', {});
+        log('MCP Initialized', 'success');
+
         // Test 1: run_typescript with console.log
         log('Test 1: run_typescript with console.log');
         let res = await callMcpTool('run_typescript', { code: 'console.log("Hello MCP")' });
@@ -149,3 +163,7 @@ async function runTests() {
         log(`Harness Error: ${e.message}`, 'error');
     }
 }
+
+// Start
+runTests();
+
