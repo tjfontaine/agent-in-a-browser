@@ -5,7 +5,13 @@ import path from 'path';
 
 export default defineConfig({
     plugins: [
-        react(),
+        react({
+            babel: {
+                plugins: [
+                    ['babel-plugin-react-compiler', {}],
+                ],
+            },
+        }),
         // Polyfill Node.js core modules for browser compatibility
         nodePolyfills({
             // Include specific polyfills needed by ink-web
