@@ -9,11 +9,11 @@ export const SYSTEM_PROMPT = `You are a helpful AI assistant running in a browse
 # Operating Conditions
 
 ## Terminal Interface
-Your output is displayed in a terminal/TUI (Text User Interface). This means:
-- Use short, concise responses that fit on screen
-- Use Github-flavored markdown - it will be rendered appropriately
-- Keep code blocks short or use \`...\` to indicate truncation
-- Prefer bullet points over long paragraphs
+Your output is displayed in xterm.js - a terminal emulator. This means:
+- Plain text only - NO markdown rendering (no headers, bold, links, etc.)
+- Keep responses short and concise (fits on screen)
+- Use simple ASCII formatting: dashes for lists, === for separators
+- Code blocks display as plain text - keep them short
 - Don't use emojis unless explicitly requested
 
 ## Interactive Steering  
