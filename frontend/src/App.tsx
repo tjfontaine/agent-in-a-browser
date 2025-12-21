@@ -6,7 +6,7 @@
  * - Prompt always stays at the bottom of the viewport
  */
 
-import { useCallback, useEffect, useRef, memo } from 'react';
+import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { InkXterm, Box, Text, useStdout, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
 import { useAgent, AgentOutput } from './agent/useAgent';
@@ -119,6 +119,7 @@ export default function App() {
     } = useAgent();
 
     const initialized = useRef(false);
+    const [terminalMounted, setTerminalMounted] = useState(false);
 
     // Initialize on mount (only once)
     useEffect(() => {
@@ -135,6 +136,10 @@ export default function App() {
 
         // Start initialization
         initialize();
+
+        // Delay terminal mount to ensure container dimensions are ready
+        const timer = setTimeout(() => setTerminalMounted(true), 50);
+        return () => clearTimeout(timer);
     }, [initialize, addOutput]);
 
     // Handle user input
@@ -177,16 +182,20 @@ export default function App() {
 
             {/* Terminal */}
             <div style={{ flex: 1, overflow: 'hidden' }}>
-                <InkXterm focus>
-                    <TerminalContent
-                        outputs={outputs}
-                        isReady={isReady}
-                        isBusy={isBusy}
-                        onSubmit={handleSubmit}
-                        getCompletions={getCommandCompletions}
-                        onCancel={cancelRequest}
-                    />
-                </InkXterm>
+                {terminalMounted ? (
+                    <InkXterm focus>
+                        <TerminalContent
+                            outputs={outputs}
+                            isReady={isReady}
+                            isBusy={isBusy}
+                            onSubmit={handleSubmit}
+                            getCompletions={getCommandCompletions}
+                            onCancel={cancelRequest}
+                        />
+                    </InkXterm>
+                ) : (
+                    <div style={{ padding: '12px', color: '#8b949e' }}>Loading terminal...</div>
+                )}
             </div>
         </div>
     );
