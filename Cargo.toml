@@ -1,5 +1,5 @@
 [workspace]
-members = ["runtime"]
+members = ["runtime", "runtime/runtime-macros"]
 resolver = "2"
 
 [workspace.package]
@@ -16,7 +16,7 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = true          # Enable link-time optimization
-codegen-units = 1   # Better optimization
-strip = true        # Strip symbols
+opt-level = "z"   # Optimize for size
+lto = true        # Enable link-time optimization
+codegen-units = 1 # Better optimization
+strip = true      # Strip symbols

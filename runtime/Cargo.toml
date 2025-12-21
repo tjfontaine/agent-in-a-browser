@@ -9,6 +9,9 @@ path = "src/main.rs"
 required-features = []
 
 [dependencies]
+# MCP Tool Macros
+runtime-macros = { path = "runtime-macros" }
+
 # The Engine: rquickjs uses QuickJS-NG by default, using git for wasm32-wasip1 bindings (PR #548)
 rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = [
     "futures",

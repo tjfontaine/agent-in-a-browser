@@ -108,8 +108,36 @@ sandbox.onmessage = (event) => {
 async function callTool(name: string, input: Record<string, unknown>): Promise<any> {
     return new Promise((resolve) => {
         const id = crypto.randomUUID();
-        pendingToolCalls.set(id, resolve);
-        sandbox.postMessage({ type: 'call_tool', id, tool: { name, input } });
+        const requestId = Date.now();
+
+        // Handler for mcp-response messages
+        const handler = (event: MessageEvent) => {
+            if (event.data.type === 'mcp-response' && event.data.response?.id === requestId) {
+                sandbox.removeEventListener('message', handler);
+                const response = event.data.response;
+                if (response.error) {
+                    resolve({ error: response.error.message });
+                } else {
+                    // Extract text from content array
+                    const content = response.result?.content || [];
+                    const output = content.map((c: any) => c.text).filter(Boolean).join('\n');
+                    resolve({ output, isError: response.result?.isError });
+                }
+            }
+        };
+        sandbox.addEventListener('message', handler);
+
+        // Send as MCP JSON-RPC request
+        sandbox.postMessage({
+            type: 'mcp-request',
+            id,
+            request: {
+                jsonrpc: '2.0',
+                id: requestId,
+                method: 'tools/call',
+                params: { name, arguments: input }
+            }
+        });
     });
 }
 

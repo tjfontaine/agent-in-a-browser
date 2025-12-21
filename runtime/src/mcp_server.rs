@@ -76,40 +76,113 @@ pub struct ToolDefinition {
     pub input_schema: serde_json::Value,
 }
 
-/// MCP Tool Result
-#[derive(Debug, Serialize)]
+/// MCP Tool Result - aligned with rmcp's CallToolResult
+#[derive(Debug, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolResult {
+    /// The content returned by the tool (text, images, etc.)
     pub content: Vec<ToolContent>,
-    #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
+    /// Whether this result represents an error condition
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
+    /// An optional JSON object that represents the structured result of the tool call
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_content: Option<serde_json::Value>,
+    /// Optional protocol-level metadata for this result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+/// Tool content item - text, image, or other content types
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct ToolContent {
     #[serde(rename = "type")]
     pub content_type: String,
-    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+}
+
+impl ToolContent {
+    /// Create a text content item
+    pub fn text(text: impl Into<String>) -> Self {
+        Self {
+            content_type: "text".to_string(),
+            text: Some(text.into()),
+            data: None,
+            mime_type: None,
+        }
+    }
+    
+    /// Create an image content item (base64 encoded)
+    pub fn image(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
+        Self {
+            content_type: "image".to_string(),
+            text: None,
+            data: Some(data.into()),
+            mime_type: Some(mime_type.into()),
+        }
+    }
 }
 
 impl ToolResult {
-    pub fn text(text: String) -> Self {
+    /// Create a successful tool result with content items (rmcp-compatible)
+    pub fn success(content: Vec<ToolContent>) -> Self {
         Self {
-            content: vec![ToolContent {
-                content_type: "text".to_string(),
-                text,
-            }],
+            content,
             is_error: None,
+            structured_content: None,
+            meta: None,
         }
     }
 
-    pub fn error(message: String) -> Self {
+    /// Create a successful tool result with a single text content item
+    pub fn text(text: impl Into<String>) -> Self {
         Self {
-            content: vec![ToolContent {
-                content_type: "text".to_string(),
-                text: message,
-            }],
-            is_error: Some(true),
+            content: vec![ToolContent::text(text)],
+            is_error: None,
+            structured_content: None,
+            meta: None,
         }
+    }
+
+    /// Create an error tool result with a message
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            content: vec![ToolContent::text(message)],
+            is_error: Some(true),
+            structured_content: None,
+            meta: None,
+        }
+    }
+    
+    /// Create a successful tool result with structured JSON content (rmcp-compatible)
+    pub fn structured(value: serde_json::Value) -> Self {
+        Self {
+            content: vec![],
+            is_error: None,
+            structured_content: Some(value),
+            meta: None,
+        }
+    }
+    
+    /// Create an error tool result with structured JSON content (rmcp-compatible)
+    pub fn structured_error(value: serde_json::Value) -> Self {
+        Self {
+            content: vec![],
+            is_error: Some(true),
+            structured_content: Some(value),
+            meta: None,
+        }
+    }
+    
+    /// Add metadata to this result
+    pub fn with_meta(mut self, meta: serde_json::Value) -> Self {
+        self.meta = Some(meta);
+        self
     }
 }
 
@@ -202,5 +275,122 @@ pub fn handle_request<S: McpServer>(server: &mut S, request: JsonRpcRequest) -> 
             -32601,
             format!("Method not found: {}", request.method),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_tool_result_text() {
+        let result = ToolResult::text("hello");
+        assert_eq!(result.content.len(), 1);
+        assert_eq!(result.content[0].text, Some("hello".to_string()));
+        assert_eq!(result.content[0].content_type, "text");
+        assert!(result.is_error.is_none());
+        assert!(result.structured_content.is_none());
+        assert!(result.meta.is_none());
+    }
+
+    #[test]
+    fn test_tool_result_error() {
+        let result = ToolResult::error("something went wrong");
+        assert_eq!(result.content.len(), 1);
+        assert_eq!(result.content[0].text, Some("something went wrong".to_string()));
+        assert_eq!(result.is_error, Some(true));
+    }
+
+    #[test]
+    fn test_tool_result_success() {
+        let result = ToolResult::success(vec![
+            ToolContent::text("line 1"),
+            ToolContent::text("line 2"),
+        ]);
+        assert_eq!(result.content.len(), 2);
+        assert!(result.is_error.is_none());
+    }
+
+    #[test]
+    fn test_tool_result_structured() {
+        let result = ToolResult::structured(json!({"foo": "bar", "count": 42}));
+        assert!(result.content.is_empty());
+        assert!(result.is_error.is_none());
+        assert_eq!(result.structured_content, Some(json!({"foo": "bar", "count": 42})));
+    }
+
+    #[test]
+    fn test_tool_result_structured_error() {
+        let result = ToolResult::structured_error(json!({"error_code": "INVALID_INPUT"}));
+        assert!(result.content.is_empty());
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.structured_content.is_some());
+    }
+
+    #[test]
+    fn test_tool_result_with_meta() {
+        let result = ToolResult::text("test")
+            .with_meta(json!({"progress_token": "abc123"}));
+        assert!(result.meta.is_some());
+        assert_eq!(result.meta.unwrap()["progress_token"], "abc123");
+    }
+
+    #[test]
+    fn test_tool_content_image() {
+        let content = ToolContent::image("base64data==", "image/png");
+        assert_eq!(content.content_type, "image");
+        assert_eq!(content.data, Some("base64data==".to_string()));
+        assert_eq!(content.mime_type, Some("image/png".to_string()));
+        assert!(content.text.is_none());
+    }
+
+    #[test]
+    fn test_tool_result_serialization() {
+        let result = ToolResult::text("test");
+        let json = serde_json::to_string(&result).unwrap();
+        // Should have content array
+        assert!(json.contains("\"content\""));
+        // Should NOT have isError when None (skip_serializing_if)
+        assert!(!json.contains("\"isError\""));
+        // Should NOT have structuredContent when None
+        assert!(!json.contains("\"structuredContent\""));
+        // Should NOT have meta when None
+        assert!(!json.contains("\"meta\""));
+    }
+
+    #[test]
+    fn test_tool_result_serialization_with_error() {
+        let result = ToolResult::error("failed");
+        let json = serde_json::to_string(&result).unwrap();
+        // Should have isError when true
+        assert!(json.contains("\"isError\":true"));
+    }
+
+    #[test]
+    fn test_json_rpc_request_parsing() {
+        let json = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test"}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "tools/call");
+        assert_eq!(req.params["name"], "test");
+    }
+
+    #[test]
+    fn test_json_rpc_response_success() {
+        let resp = JsonRpcResponse::success(Some(json!(1)), json!({"result": "ok"}));
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"jsonrpc\":\"2.0\""));
+        assert!(json.contains("\"id\":1"));
+        assert!(json.contains("\"result\""));
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_json_rpc_response_error() {
+        let resp = JsonRpcResponse::error(Some(json!(1)), -32600, "Invalid Request".to_string());
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"error\""));
+        assert!(json.contains("-32600"));
+        assert!(!json.contains("\"result\""));
     }
 }
