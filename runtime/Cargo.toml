@@ -67,6 +67,12 @@ thiserror = "1"
 # Async executor for WASI
 futures-lite = "2"
 
+# Shell infrastructure
+piper = "0.2"            # Bounded SPSC async pipe
+async-channel = "2"      # Bounded MPSC channels (shared stderr)
+shlex = "1"              # Command line parsing
+pin-project-lite = "0.2" # Pin projection for async
+
 # WASI bindings for http handler
 wasi = "0.14"
 wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }

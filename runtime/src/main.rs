@@ -9,6 +9,7 @@ mod http_client;
 mod loader;
 mod mcp_server;
 mod resolver;
+mod shell;
 mod transpiler;
 
 use bindings::exports::wasi::http::incoming_handler::Guest;
@@ -264,6 +265,33 @@ impl TsRuntimeMcp {
             ToolResult::text("No matches found")
         } else {
             ToolResult::text(matches.join("\n"))
+        }
+    }
+
+    #[mcp_tool(description = "Execute shell commands with pipe support. Supports: echo, pwd, ls, cat, head, yes, true, false. Example: 'ls /data | head -n 5'")]
+    fn shell_eval(&self, command: String) -> ToolResult {
+        if command.is_empty() {
+            return ToolResult::error("No command provided");
+        }
+
+        let mut env = shell::ShellEnv::new();
+        let result = futures_lite::future::block_on(shell::run_pipeline(&command, &mut env));
+
+        if result.code == 0 {
+            if result.stdout.is_empty() && result.stderr.is_empty() {
+                ToolResult::text("(no output)")
+            } else if result.stderr.is_empty() {
+                ToolResult::text(result.stdout)
+            } else {
+                ToolResult::text(format!("{}\nstderr: {}", result.stdout, result.stderr))
+            }
+        } else {
+            ToolResult::error(format!(
+                "Exit code {}: {}{}\n",
+                result.code,
+                result.stderr,
+                result.stdout
+            ))
         }
     }
 }
