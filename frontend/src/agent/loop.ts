@@ -187,7 +187,15 @@ async function runAgentLoopWithSDK(
                     state.toolSpinner.stop();
                     state.toolSpinner = null;
                 }
-                renderToolOutput(term, name, '', result, success);
+
+                // task_write updates TaskPanel automatically via TaskManager subscription
+                // Just show a minimal confirmation for it, full output for other tools
+                if (name === 'task_write' && success) {
+                    // TaskPanel already updated - just log
+                    debug('task_write completed, TaskPanel updated');
+                } else {
+                    renderToolOutput(term, name, '', result, success);
+                }
                 setStatus('Thinking...', '#d29922');
             },
             onStepFinish: (step) => {

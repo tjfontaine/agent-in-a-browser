@@ -91,6 +91,14 @@ export interface PlanItem {
     status: 'pending' | 'running' | 'done' | 'error';
 }
 
+// Task alias for the task management feature
+// Maps TaskManager status to PlanItem status
+export interface TaskItem {
+    id: string;
+    content: string;
+    status: 'pending' | 'in_progress' | 'completed';
+}
+
 export function renderPlan(term: Terminal, items: PlanItem[]): void {
     term.write(`\r\n${C.bold}Plan${C.reset}\r\n`);
 
@@ -120,6 +128,20 @@ export function renderPlan(term: Terminal, items: PlanItem[]): void {
         term.write(`${color}${icon}${C.reset} ${i + 1}. ${item.text}\r\n`);
     }
     term.write('\r\n');
+}
+
+/**
+ * Render tasks from TaskManager
+ * Converts TaskItem status to PlanItem status for display
+ */
+export function renderTasks(term: Terminal, tasks: TaskItem[]): void {
+    const planItems: PlanItem[] = tasks.map(task => ({
+        text: task.content,
+        status: task.status === 'completed' ? 'done'
+            : task.status === 'in_progress' ? 'running'
+                : 'pending',
+    }));
+    renderPlan(term, planItems);
 }
 
 // ============ Spinner ============

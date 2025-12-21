@@ -20,12 +20,16 @@ import {
 import { handleSlashCommand, setMcpState } from './commands';
 import { setupCtrlCHandler, startPromptLoop, showPrompt } from './input';
 import { initializeWasmMcp } from './agent-sdk';
+import { initializeTaskPanel } from './task-panel';
 
 // ============ Startup ============
 
 async function main() {
     // Initialize terminal and mount to DOM
     initializeTerminal();
+
+    // Initialize task panel (subscribes to TaskManager)
+    initializeTaskPanel();
 
     // Show welcome banner
     showWelcome(terminal);

@@ -37,4 +37,32 @@ describe('System Prompt', () => {
         expect(SYSTEM_PROMPT).toContain('|');
         expect(SYSTEM_PROMPT).toContain('&&');
     });
+
+    it('should document task_write tool', () => {
+        expect(SYSTEM_PROMPT).toContain('task_write');
+        expect(SYSTEM_PROMPT).toContain('pending');
+        expect(SYSTEM_PROMPT).toContain('in_progress');
+        expect(SYSTEM_PROMPT).toContain('completed');
+    });
+
+    it('should include task management guidance', () => {
+        expect(SYSTEM_PROMPT).toContain('Task Management');
+        expect(SYSTEM_PROMPT).toContain('When to Use task_write');
+        expect(SYSTEM_PROMPT).toContain('When NOT to Use task_write');
+    });
+
+    it('should include coding guidelines', () => {
+        expect(SYSTEM_PROMPT).toContain('Coding Guidelines');
+        expect(SYSTEM_PROMPT).toContain('over-engineering');
+    });
+
+    it('should include professional objectivity', () => {
+        expect(SYSTEM_PROMPT).toContain('Professional Objectivity');
+        expect(SYSTEM_PROMPT).toContain('technical accuracy');
+    });
+
+    it('should include parallel tool guidance', () => {
+        expect(SYSTEM_PROMPT).toContain('parallel');
+        expect(SYSTEM_PROMPT).toContain('sequentially');
+    });
 });

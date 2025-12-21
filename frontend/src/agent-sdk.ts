@@ -230,6 +230,44 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
         });
     }
 
+    // Add frontend-only task_write tool (no WASM roundtrip needed)
+    tools['task_write'] = dynamicTool({
+        description: 'Manage task list for tracking multi-step work. Updates the task display shown to the user. Use frequently to plan complex tasks and show progress.',
+        inputSchema: jsonSchema({
+            type: 'object',
+            properties: {
+                tasks: {
+                    type: 'array',
+                    description: 'Array of task objects with id, content, and status',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', description: 'Unique task identifier' },
+                            content: { type: 'string', description: 'Task description' },
+                            status: { type: 'string', description: 'pending, in_progress, or completed' },
+                        },
+                        required: ['content', 'status'],
+                    },
+                },
+            },
+            required: ['tasks'],
+        }),
+        execute: async (args: unknown) => {
+            const { tasks } = args as { tasks: Array<{ id?: string; content: string; status: string }> };
+            console.log('[Agent] task_write called with', tasks.length, 'tasks');
+
+            // Import dynamically to avoid circular dependency
+            const { getTaskManager } = await import('./task-manager');
+            getTaskManager().setTasks(tasks.map(t => ({
+                id: t.id || crypto.randomUUID(),
+                content: t.content,
+                status: t.status as 'pending' | 'in_progress' | 'completed',
+            })));
+
+            return JSON.stringify({ message: `Task list updated: ${tasks.length} tasks` });
+        },
+    });
+
     return tools;
 }
 

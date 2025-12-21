@@ -35,6 +35,11 @@
       font-size: 12px;
       color: #4ade80;
     }
+    #main-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
     #terminal-container {
       flex: 1;
       padding: 8px;
@@ -43,6 +48,67 @@
     #terminal {
       height: 100%;
     }
+    #task-panel {
+      width: 280px;
+      background: #0d1117;
+      border-left: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #task-panel.hidden {
+      display: none;
+    }
+    #task-panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #333;
+      font-size: 13px;
+      font-weight: 600;
+      color: #c9d1d9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #task-panel-header .task-count {
+      font-size: 11px;
+      color: #8b949e;
+      font-weight: normal;
+    }
+    #task-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .task-item {
+      padding: 8px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .task-item .icon {
+      flex-shrink: 0;
+      width: 16px;
+      text-align: center;
+    }
+    .task-item.pending .icon { color: #8b949e; }
+    .task-item.in_progress .icon { color: #d29922; }
+    .task-item.completed .icon { color: #3fb950; }
+    .task-item.completed .content { 
+      color: #8b949e;
+      text-decoration: line-through;
+    }
+    .task-item .content {
+      color: #c9d1d9;
+      flex: 1;
+    }
+    #task-empty {
+      padding: 24px 16px;
+      text-align: center;
+      color: #8b949e;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -50,8 +116,19 @@
     <h1>🤖 Web Agent</h1>
     <span class="status" id="status">Ready</span>
   </div>
-  <div id="terminal-container">
-    <div id="terminal"></div>
+  <div id="main-container">
+    <div id="terminal-container">
+      <div id="terminal"></div>
+    </div>
+    <div id="task-panel" class="hidden">
+      <div id="task-panel-header">
+        <span>Tasks</span>
+        <span class="task-count" id="task-count">0 tasks</span>
+      </div>
+      <div id="task-list">
+        <div id="task-empty">No active tasks</div>
+      </div>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
