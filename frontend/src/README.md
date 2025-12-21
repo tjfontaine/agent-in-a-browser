@@ -62,9 +62,9 @@ src/
 │
 └── wasm/                   # WASM runtime
     ├── ts-runtime.ts       # TypeScript runtime loader
-    ├── browser-fs-impl.ts  # OPFS file system
+    ├── opfs-filesystem-impl.ts  # OPFS file system
     ├── wasi-http-impl.ts   # WASI HTTP implementation
-    ├── browser-http-impl.ts # Browser HTTP bridge
+    ├── clocks-impl.js      # Custom clocks for sync blocking
     └── mcp-server/         # Generated WASM MCP server
 ```
 

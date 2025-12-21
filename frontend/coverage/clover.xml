@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1766351453292" clover="3.2.0">
+  <project timestamp="1766351453292" name="All files">
+    <metrics statements="221" coveredstatements="197" conditionals="97" coveredconditionals="78" methods="28" coveredmethods="21" elements="346" coveredelements="296" complexity="0" loc="221" ncloc="221" packages="3" files="7" classes="7"/>
+    <package name="src">
+      <metrics statements="187" coveredstatements="165" conditionals="91" coveredconditionals="73" methods="26" coveredmethods="19"/>
+      <file name="command-parser.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/command-parser.ts">
+        <metrics statements="60" coveredstatements="58" conditionals="40" coveredconditionals="36" methods="3" coveredmethods="3"/>
+        <line num="36" count="21" type="stmt"/>
+        <line num="39" count="21" type="cond" truecount="2" falsecount="0"/>
+        <line num="40" count="3" type="stmt"/>
+        <line num="44" count="18" type="stmt"/>
+        <line num="46" count="18" type="cond" truecount="2" falsecount="0"/>
+        <line num="47" count="1" type="stmt"/>
+        <line num="50" count="17" type="stmt"/>
+        <line num="51" count="17" type="stmt"/>
+        <line num="54" count="17" type="stmt"/>
+        <line num="55" count="17" type="stmt"/>
+        <line num="57" count="17" type="stmt"/>
+        <line num="58" count="17" type="stmt"/>
+        <line num="59" count="15" type="stmt"/>
+        <line num="61" count="15" type="cond" truecount="2" falsecount="0"/>
+        <line num="62" count="4" type="stmt"/>
+        <line num="64" count="4" type="cond" truecount="4" falsecount="0"/>
+        <line num="65" count="3" type="stmt"/>
+        <line num="66" count="3" type="stmt"/>
+        <line num="69" count="1" type="stmt"/>
+        <line num="70" count="1" type="stmt"/>
+        <line num="72" count="11" type="cond" truecount="4" falsecount="0"/>
+        <line num="74" count="1" type="stmt"/>
+        <line num="75" count="1" type="cond" truecount="2" falsecount="2"/>
+        <line num="76" count="0" type="stmt"/>
+        <line num="77" count="0" type="stmt"/>
+        <line num="79" count="1" type="stmt"/>
+        <line num="80" count="1" type="stmt"/>
+        <line num="83" count="10" type="stmt"/>
+        <line num="84" count="10" type="stmt"/>
+        <line num="88" count="17" type="stmt"/>
+        <line num="101" count="18" type="stmt"/>
+        <line num="102" count="18" type="stmt"/>
+        <line num="103" count="18" type="stmt"/>
+        <line num="104" count="18" type="stmt"/>
+        <line num="106" count="18" type="stmt"/>
+        <line num="107" count="226" type="stmt"/>
+        <line num="109" count="226" type="cond" truecount="2" falsecount="0"/>
+        <line num="110" count="24" type="cond" truecount="2" falsecount="0"/>
+        <line num="112" count="2" type="stmt"/>
+        <line num="113" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="114" count="2" type="stmt"/>
+        <line num="115" count="2" type="stmt"/>
+        <line num="118" count="22" type="stmt"/>
+        <line num="120" count="202" type="cond" truecount="4" falsecount="0"/>
+        <line num="122" count="2" type="stmt"/>
+        <line num="123" count="2" type="stmt"/>
+        <line num="124" count="200" type="cond" truecount="2" falsecount="0"/>
+        <line num="126" count="18" type="cond" truecount="1" falsecount="1"/>
+        <line num="127" count="18" type="stmt"/>
+        <line num="128" count="18" type="stmt"/>
+        <line num="131" count="182" type="stmt"/>
+        <line num="136" count="18" type="cond" truecount="2" falsecount="0"/>
+        <line num="137" count="15" type="stmt"/>
+        <line num="140" count="18" type="stmt"/>
+        <line num="158" count="2" type="stmt"/>
+        <line num="172" count="3" type="stmt"/>
+        <line num="173" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="175" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="176" count="1" type="stmt"/>
+        <line num="178" count="1" type="stmt"/>
+      </file>
+      <file name="constants.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/constants.ts">
+        <metrics statements="3" coveredstatements="3" conditionals="2" coveredconditionals="2" methods="0" coveredmethods="0"/>
+        <line num="8" count="1" type="stmt"/>
+        <line num="14" count="1" type="cond" truecount="2" falsecount="0"/>
+        <line num="17" count="1" type="stmt"/>
+      </file>
+      <file name="system-prompt.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/system-prompt.ts">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="7" count="1" type="stmt"/>
+      </file>
+      <file name="tui.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/tui.ts">
+        <metrics statements="85" coveredstatements="77" conditionals="31" coveredconditionals="24" methods="14" coveredmethods="10"/>
+        <line num="7" count="1" type="stmt"/>
+        <line num="36" count="1" type="stmt"/>
+        <line num="40" count="1" type="stmt"/>
+        <line num="41" count="1" type="stmt"/>
+        <line num="43" count="1" type="stmt"/>
+        <line num="44" count="2" type="stmt"/>
+        <line num="46" count="1" type="stmt"/>
+        <line num="57" count="3" type="stmt"/>
+        <line num="59" count="3" type="stmt"/>
+        <line num="60" count="3" type="stmt"/>
+        <line num="63" count="3" type="stmt"/>
+        <line num="64" count="3" type="stmt"/>
+        <line num="65" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="66" count="2" type="stmt"/>
+        <line num="71" count="3" type="stmt"/>
+        <line num="72" count="3" type="stmt"/>
+        <line num="73" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="74" count="2" type="stmt"/>
+        <line num="78" count="3" type="stmt"/>
+        <line num="85" count="0" type="stmt"/>
+        <line num="95" count="2" type="stmt"/>
+        <line num="97" count="2" type="stmt"/>
+        <line num="98" count="6" type="stmt"/>
+        <line num="102" count="6" type="cond" truecount="4" falsecount="0"/>
+        <line num="104" count="2" type="stmt"/>
+        <line num="105" count="2" type="stmt"/>
+        <line num="106" count="2" type="stmt"/>
+        <line num="108" count="1" type="stmt"/>
+        <line num="109" count="1" type="stmt"/>
+        <line num="110" count="1" type="stmt"/>
+        <line num="112" count="1" type="stmt"/>
+        <line num="113" count="1" type="stmt"/>
+        <line num="114" count="1" type="stmt"/>
+        <line num="116" count="2" type="stmt"/>
+        <line num="117" count="2" type="stmt"/>
+        <line num="120" count="6" type="stmt"/>
+        <line num="122" count="2" type="stmt"/>
+        <line num="126" count="1" type="stmt"/>
+        <line num="131" count="3" type="stmt"/>
+        <line num="132" count="3" type="stmt"/>
+        <line num="135" count="3" type="stmt"/>
+        <line num="136" count="3" type="stmt"/>
+        <line num="140" count="3" type="stmt"/>
+        <line num="141" count="3" type="stmt"/>
+        <line num="144" count="3" type="stmt"/>
+        <line num="146" count="3" type="stmt"/>
+        <line num="147" count="0" type="stmt"/>
+        <line num="149" count="0" type="stmt"/>
+        <line num="154" count="0" type="stmt"/>
+        <line num="158" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="159" count="2" type="stmt"/>
+        <line num="160" count="2" type="stmt"/>
+        <line num="164" count="2" type="stmt"/>
+        <line num="165" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="166" count="1" type="stmt"/>
+        <line num="171" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="172" count="1" type="stmt"/>
+        <line num="173" count="1" type="stmt"/>
+        <line num="175" count="1" type="stmt"/>
+        <line num="176" count="1" type="stmt"/>
+        <line num="182" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="185" count="3" type="stmt"/>
+        <line num="186" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="187" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="188" count="2" type="stmt"/>
+        <line num="190" count="3" type="stmt"/>
+        <line num="193" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="194" count="2" type="stmt"/>
+        <line num="195" count="2" type="stmt"/>
+        <line num="197" count="2" type="stmt"/>
+        <line num="198" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="199" count="2" type="stmt"/>
+        <line num="202" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="203" count="0" type="stmt"/>
+        <line num="210" count="1" type="stmt"/>
+        <line num="211" count="1" type="stmt"/>
+        <line num="212" count="1" type="stmt"/>
+        <line num="215" count="1" type="stmt"/>
+        <line num="216" count="1" type="stmt"/>
+        <line num="217" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="218" count="1" type="stmt"/>
+        <line num="224" count="1" type="stmt"/>
+        <line num="229" count="0" type="stmt"/>
+        <line num="230" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="231" count="0" type="stmt"/>
+      </file>
+      <file name="worker-fetch.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/worker-fetch.ts">
+        <metrics statements="38" coveredstatements="26" conditionals="18" coveredconditionals="11" methods="9" coveredmethods="6"/>
+        <line num="7" count="7" type="stmt"/>
+        <line num="8" count="6" type="cond" truecount="2" falsecount="0"/>
+        <line num="9" count="6" type="stmt"/>
+        <line num="10" count="6" type="stmt"/>
+        <line num="12" count="6" type="cond" truecount="2" falsecount="0"/>
+        <line num="13" count="1" type="stmt"/>
+        <line num="16" count="5" type="stmt"/>
+        <line num="17" count="5" type="stmt"/>
+        <line num="18" count="1" type="stmt"/>
+        <line num="19" count="1" type="stmt"/>
+        <line num="22" count="5" type="stmt"/>
+        <line num="26" count="0" type="stmt"/>
+        <line num="27" count="0" type="stmt"/>
+        <line num="30" count="5" type="stmt"/>
+        <line num="32" count="5" type="stmt"/>
+        <line num="33" count="3" type="stmt"/>
+        <line num="35" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="37" count="2" type="stmt"/>
+        <line num="38" count="2" type="stmt"/>
+        <line num="41" count="2" type="stmt"/>
+        <line num="43" count="2" type="stmt"/>
+        <line num="44" count="0" type="stmt"/>
+        <line num="45" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="46" count="0" type="stmt"/>
+        <line num="47" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="48" count="0" type="stmt"/>
+        <line num="49" count="0" type="stmt"/>
+        <line num="50" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="51" count="0" type="stmt"/>
+        <line num="52" count="0" type="stmt"/>
+        <line num="57" count="0" type="stmt"/>
+        <line num="61" count="2" type="stmt"/>
+        <line num="66" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="67" count="1" type="stmt"/>
+        <line num="68" count="1" type="stmt"/>
+        <line num="69" count="1" type="stmt"/>
+        <line num="73" count="5" type="stmt"/>
+        <line num="74" count="5" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.commands">
+      <metrics statements="28" coveredstatements="26" conditionals="6" coveredconditionals="5" methods="1" coveredmethods="1"/>
+      <file name="router.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/commands/router.ts">
+        <metrics statements="28" coveredstatements="26" conditionals="6" coveredconditionals="5" methods="1" coveredmethods="1"/>
+        <line num="25" count="9" type="stmt"/>
+        <line num="27" count="9" type="cond" truecount="2" falsecount="0"/>
+        <line num="28" count="1" type="stmt"/>
+        <line num="29" count="1" type="stmt"/>
+        <line num="30" count="1" type="stmt"/>
+        <line num="33" count="8" type="stmt"/>
+        <line num="35" count="8" type="cond" truecount="3" falsecount="1"/>
+        <line num="37" count="2" type="stmt"/>
+        <line num="38" count="2" type="stmt"/>
+        <line num="39" count="2" type="stmt"/>
+        <line num="40" count="2" type="stmt"/>
+        <line num="41" count="2" type="stmt"/>
+        <line num="45" count="0" type="stmt"/>
+        <line num="46" count="0" type="stmt"/>
+        <line num="49" count="3" type="stmt"/>
+        <line num="50" count="3" type="stmt"/>
+        <line num="51" count="3" type="stmt"/>
+        <line num="52" count="3" type="stmt"/>
+        <line num="53" count="3" type="stmt"/>
+        <line num="54" count="3" type="stmt"/>
+        <line num="55" count="3" type="stmt"/>
+        <line num="56" count="3" type="stmt"/>
+        <line num="57" count="3" type="stmt"/>
+        <line num="58" count="3" type="stmt"/>
+        <line num="59" count="3" type="stmt"/>
+        <line num="62" count="3" type="stmt"/>
+        <line num="63" count="3" type="stmt"/>
+        <line num="64" count="3" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.terminal">
+      <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+      <file name="welcome.ts" path="/Users/tjfontaine/Development/web-agent/frontend/src/terminal/welcome.ts">
+        <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+        <line num="13" count="6" type="stmt"/>
+        <line num="14" count="6" type="stmt"/>
+        <line num="15" count="6" type="stmt"/>
+        <line num="16" count="6" type="stmt"/>
+        <line num="17" count="6" type="stmt"/>
+        <line num="18" count="6" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>

@@ -39,16 +39,17 @@ A WebAssembly-based MCP (Model Context Protocol) server that provides TypeScript
 This crate builds as a **WASI Preview 2 Component** targeting `wasm32-wasip2`. The component:
 
 - **Exports**: `wasi:http/incoming-handler@0.2.4` (receives MCP requests via HTTP)
-- **Imports**: Custom browser interfaces for sync file/HTTP operations
+- **Imports**: Standard WASI interfaces (bridged to browser APIs via TypeScript shims)
 
-### Custom WIT Interfaces
+### Browser WASI Bridges
 
-Standard WASI filesystem and HTTP interfaces don't work directly in browsers. We define custom interfaces in `wit/world.wit`:
+Standard WASI interfaces are bridged to browser APIs via TypeScript shims in `frontend/src/wasm/`:
 
-| Interface | Purpose | Host Implementation |
-|-----------|---------|---------------------|
-| `browser-fs` | Sync file operations | `frontend/src/wasm/browser-fs-impl.ts` → OPFS |
-| `browser-http` | Sync HTTP requests | `frontend/src/wasm/browser-http-impl.ts` → XMLHttpRequest |
+| WASI Interface | Browser Bridge | Implementation |
+|----------------|----------------|----------------|
+| `wasi:filesystem/*` | `opfs-filesystem-impl.ts` | OPFS via SyncAccessHandle |
+| `wasi:http/outgoing-handler` | `wasi-http-impl.ts` | Sync XMLHttpRequest |
+| `wasi:clocks/*` | `clocks-impl.js` | Custom Pollable with busy-wait |
 
 ### MCP Tools Provided
 
@@ -59,6 +60,7 @@ Standard WASI filesystem and HTTP interfaces don't work directly in browsers. We
 | `write_file` | Write content to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
+| `shell_eval` | Evaluate shell commands (cd, ls, cat, echo, etc.) |
 
 ## Project Structure
 
@@ -76,8 +78,11 @@ runtime/
 │   ├── loader.rs           # Module loader (CDN + local files)
 │   ├── resolver.rs         # Import specifier resolution
 │   ├── transpiler.rs       # SWC TypeScript → JavaScript
-│   ├── http_client.rs      # Outgoing HTTP via browser-http
-│   └── opfs.rs             # File operations via browser-fs
+│   ├── http_client.rs      # Outgoing HTTP via WASI HTTP
+│   └── shell/              # Shell command implementation
+│       ├── mod.rs          # Shell infrastructure
+│       ├── commands/       # Built-in commands (ls, cat, cd, etc.)
+│       └── pipeline.rs     # Command pipeline execution
 │
 ├── wit/
 │   ├── world.wit           # Component world definition

@@ -103,7 +103,7 @@ web-agent/
 │   │   ├── mcp_server.rs    # JSON-RPC types
 │   │   └── ...
 │   └── wit/                 # WASI interface definitions
-│       ├── world.wit        # Custom browser-fs/http interfaces
+│       ├── world.wit        # Component world (pure WASI interfaces)
 │       └── deps/            # WASI dependencies
 │
 ├── frontend/                # ← Browser UI + agent
@@ -114,8 +114,8 @@ web-agent/
 │   │   └── wasm/            # ← Host bridges + generated code
 │   │       ├── README.md    # Bridge layer docs
 │   │       ├── mcp-server/  # jco-transpiled WASM (generated)
-│   │       ├── browser-fs-impl.ts
-│   │       └── browser-http-impl.ts
+│   │       ├── opfs-filesystem-impl.ts
+│   │       └── wasi-http-impl.ts
 │   └── vite.config.ts
 │
 └── backend/                 # API proxy server
@@ -133,6 +133,7 @@ The WASM runtime provides these tools to the AI agent:
 | `write_file` | Write file to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
+| `shell_eval` | Evaluate shell commands (cd, ls, cat, echo, etc.) |
 
 ## Docker
 

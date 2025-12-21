@@ -163,7 +163,11 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm install
 
       - name: Run Rust tests
@@ -172,8 +176,9 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npm test || echo "No tests yet"
+        run: npm test
 
-      - name: Run backend tests
-        working-directory: backend
-        run: npm test || echo "No tests yet"
+      - name: Run frontend test coverage
+        working-directory: frontend
+        run: npm run test:coverage
+
