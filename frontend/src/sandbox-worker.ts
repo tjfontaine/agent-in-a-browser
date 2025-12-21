@@ -209,8 +209,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', id, message: e.message });
     }
 };
-
-// Start
-initialize().catch(err => {
-    self.postMessage({ type: 'error', message: `Init failed: ${err.message}` });
-});
