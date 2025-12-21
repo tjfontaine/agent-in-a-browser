@@ -1,14 +1,16 @@
-// @ts-ignore
 import { streams } from '@bytecodealliance/preview2-shim/io';
 
-// @ts-ignore
-const { InputStream, OutputStream } = streams as any;
+// @ts-expect-error - preview2-shim exports this as type-only but it's a runtime value
+const { InputStream, OutputStream } = streams as unknown as { InputStream: new (config: unknown) => unknown; OutputStream: new (config: unknown) => unknown };
+
+// Type for WASM Result-like return values
+type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 
 /**
  * Create an InputStream from a byte array
  * This allows the WASM component to read the request body
  */
-export function createInputStreamFromBytes(bytes: Uint8Array): any {
+export function createInputStreamFromBytes(bytes: Uint8Array): unknown {
     let offset = 0;
 
     return new InputStream({
@@ -112,10 +114,10 @@ export class FutureTrailers {
 }
 
 export class IncomingBody {
-    private _stream: any;
+    private _stream: unknown;
     private _consumed: boolean = false;
 
-    constructor(streamOrBytes: any | Uint8Array) {
+    constructor(streamOrBytes: unknown | Uint8Array) {
         if (streamOrBytes instanceof Uint8Array) {
             this._stream = createInputStreamFromBytes(streamOrBytes);
         } else {
@@ -127,7 +129,7 @@ export class IncomingBody {
      * Get the body stream. Throws if already consumed.
      * JCO wraps the return in Result automatically.
      */
-    stream(): any {
+    stream(): unknown {
         if (this._consumed) {
             throw new Error('Body stream already consumed');
         }
@@ -135,7 +137,7 @@ export class IncomingBody {
         return this._stream;
     }
 
-    static finish(body: IncomingBody): FutureTrailers {
+    static finish(_body: IncomingBody): FutureTrailers {
         return new FutureTrailers();
     }
 }
@@ -188,18 +190,18 @@ export class IncomingRequest {
 }
 
 export class OutgoingBody {
-    private _stream: any;
+    private _stream: unknown;
     public _onFinish?: () => void;
 
-    constructor(stream: any) {
+    constructor(stream: unknown) {
         this._stream = stream;
     }
 
-    write(): any {
+    write(): unknown {
         return this._stream;
     }
 
-    static finish(body: OutgoingBody, trailers?: Fields) {
+    static finish(body: OutgoingBody, _trailers?: Fields) {
         if (body._onFinish) {
             body._onFinish();
         }
@@ -293,10 +295,10 @@ export class OutgoingResponse {
 }
 
 export class ResponseOutparam {
-    private _callback: (response: any) => void;
+    private _callback: (response: WasmResult<OutgoingResponse>) => void;
     private _response: OutgoingResponse | null = null;
 
-    constructor(callback: (response: any) => void) {
+    constructor(callback: (response: WasmResult<OutgoingResponse>) => void) {
         this._callback = callback;
     }
 
@@ -307,7 +309,7 @@ export class ResponseOutparam {
         return this._response;
     }
 
-    static set(param: ResponseOutparam, response: { tag: 'ok', val: OutgoingResponse } | { tag: 'err', val: any }) {
+    static set(param: ResponseOutparam, response: WasmResult<OutgoingResponse>) {
         if (response.tag === 'ok') {
             param._response = response.val;
         }
@@ -352,7 +354,7 @@ export function createJsonRpcRequest(body: string): IncomingRequest {
  * We store it directly instead of using Promise.then() which is async.
  */
 export class FutureIncomingResponse {
-    private _result: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } | null = null;
+    private _result: WasmResult<IncomingResponse> | null = null;
 
     constructor(resolvedData: { status: number; headers: [string, Uint8Array][]; body: Uint8Array }) {
         // Store result synchronously since XHR is synchronous
@@ -365,7 +367,7 @@ export class FutureIncomingResponse {
         this._result = { tag: 'ok', val: new IncomingResponse(resolvedData.status, headers, body) };
     }
 
-    subscribe(): any {
+    subscribe(): { ready: () => boolean } {
         // Return a pollable that's immediately ready
         return { ready: () => true };
     }
@@ -376,7 +378,7 @@ export class FutureIncomingResponse {
      * - { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } }: success
      * - { tag: 'ok', val: { tag: 'err', val: ErrorCode } }: HTTP error
      */
-    get(): { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } | { tag: 'err', val: any } } | undefined {
+    get(): { tag: 'ok', val: WasmResult<IncomingResponse> } | undefined {
         if (this._result === null) {
             return undefined; // Not ready
         }

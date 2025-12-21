@@ -28,7 +28,7 @@ export function initializeSandbox(): Promise<void> {
     return new Promise((resolve, reject) => {
         const handler = (event: MessageEvent) => {
             console.log('[Sandbox] Received message from worker:', event.data);
-            const { type, id } = event.data;
+            const { type, id: _id } = event.data;
 
             if (type === 'ready') {
                 // Worker is loaded and ready, now send init
@@ -55,7 +55,7 @@ export function initializeSandbox(): Promise<void> {
  * Legacy callbacks - retained as no-ops or for partial compatibility if needed,
  * but mostly deprecated as the worker no longer emits these events via postMessage.
  */
-export function setSandboxCallbacks(callbacks: any): void {
+export function setSandboxCallbacks(_callbacks: unknown): void {
     // No-op
 }
 

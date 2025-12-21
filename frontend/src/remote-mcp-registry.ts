@@ -12,7 +12,6 @@ import {
     removeToken,
     hasValidToken,
     discoverOAuthEndpoints,
-    createOAuthProvider,
     type StoredToken
 } from './oauth-pkce';
 
@@ -236,7 +235,7 @@ export class RemoteMCPRegistry {
             saveRegistry(this.servers);
 
             return true;
-        } catch (e) {
+        } catch (_e) {
             // No OAuth metadata - might not need auth
             return false;
         }
@@ -261,8 +260,9 @@ export class RemoteMCPRegistry {
             this.updateServer(id, { authType: 'oauth' });
             saveRegistry(this.servers);
             return token;
-        } catch (e: any) {
-            this.updateServer(id, { status: 'error', error: e.message });
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            this.updateServer(id, { status: 'error', error: message });
             throw e;
         }
     }
@@ -284,7 +284,7 @@ export class RemoteMCPRegistry {
 
         try {
             // Build transport config based on auth type
-            let transportConfig: any = {
+            const transportConfig: { type: 'http'; url: string; headers?: Record<string, string> } = {
                 type: 'http' as const,
                 url: server.url,
             };
@@ -310,13 +310,15 @@ export class RemoteMCPRegistry {
                 transport: transportConfig,
             });
 
-            // List tools
             const tools = await client.tools();
-            const toolList: McpToolInfo[] = Object.entries(tools).map(([name, tool]) => ({
-                name,
-                description: (tool as any).description,
-                inputSchema: (tool as any).parameters,
-            }));
+            const toolList: McpToolInfo[] = Object.entries(tools).map(([name, tool]) => {
+                const t = tool as { description?: string; parameters?: Record<string, unknown> };
+                return {
+                    name,
+                    description: t.description,
+                    inputSchema: t.parameters,
+                };
+            });
 
             console.log('[RemoteMCP] Connected, tools:', toolList.map(t => t.name));
 
@@ -329,14 +331,15 @@ export class RemoteMCPRegistry {
                 error: undefined,
             });
 
-        } catch (e: any) {
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
             console.error('[RemoteMCP] Connection failed:', e);
 
             // Check if it's an auth error (401)
-            if (e.message?.includes('401') || e.message?.includes('Unauthorized')) {
+            if (message.includes('401') || message.includes('Unauthorized')) {
                 this.updateServer(id, { status: 'auth_required', error: 'Authentication required' });
             } else {
-                this.updateServer(id, { status: 'error', error: e.message });
+                this.updateServer(id, { status: 'error', error: message });
             }
 
             throw e;

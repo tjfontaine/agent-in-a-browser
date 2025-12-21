@@ -36,7 +36,8 @@ describe('MCP Types', () => {
                 },
             };
             expect(tool.name).toBe('read_file');
-            expect(tool.inputSchema.properties.path.type).toBe('string');
+            const properties = tool.inputSchema.properties as Record<string, { type: string }>;
+            expect(properties.path.type).toBe('string');
         });
     });
 

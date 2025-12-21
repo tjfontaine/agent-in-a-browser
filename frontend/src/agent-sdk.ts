@@ -9,10 +9,9 @@
 
 import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, type CoreMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { type MCPTransport } from '@ai-sdk/mcp';
 import { z } from 'zod';
 import { fetchFromSandbox } from './agent/sandbox';
-import type { JsonRpcRequest, JsonRpcResponse, McpTool } from './mcp-client';
+import type { McpTool } from './mcp-client';
 import { getRemoteMCPRegistry } from './remote-mcp-registry';
 
 export interface AgentConfig {
@@ -49,7 +48,7 @@ let mcpInitialized = false;
 /**
  * Send an MCP JSON-RPC request via POST
  */
-async function mcpRequest(method: string, params?: any): Promise<any> {
+async function mcpRequest(method: string, params?: Record<string, unknown>): Promise<{ result?: Record<string, unknown>; error?: { message: string } }> {
     const id = Date.now();
     const request = {
         jsonrpc: '2.0',
@@ -112,10 +111,10 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
         throw new Error(`Failed to list tools: ${toolsResult.error.message}`);
     }
 
-    cachedTools = (toolsResult.result?.tools || []).map((t: any) => ({
+    cachedTools = (toolsResult.result?.tools as Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> || []).map((t) => ({
         name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema
+        description: t.description || '',
+        inputSchema: t.inputSchema || {}
     }));
 
     mcpInitialized = true;
@@ -132,7 +131,7 @@ export async function initializeWasmMcp(): Promise<McpTool[]> {
 async function callMcpToolStreaming(
     name: string,
     args: Record<string, unknown>,
-    onProgress?: (data: string) => void
+    _onProgress?: (data: string) => void
 ): Promise<string> {
     console.log('[MCP Tool Call] Tool:', name);
 
@@ -148,19 +147,21 @@ async function callMcpToolStreaming(
         }
 
         const result = response.result;
-
-        // Format result
-        const content = result.content || [];
+        if (!result) {
+            return 'No result';
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const content = (result as any).content as Array<{ type: string; text?: string }> || [];
         const textContent = content
-            .filter((c: any) => c.type === 'text')
-            .map((c: any) => c.text)
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text || '')
             .join('\n');
 
         console.log('[MCP Tool Call] Result:', textContent.substring(0, 100) + '...');
         return textContent;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[MCP Tool Call] Error:', error);
-        return `Error: ${error.message}`;
+        return `Error: ${error instanceof Error ? error.message : String(error)}`;
     }
 }
 
@@ -168,17 +169,19 @@ async function callMcpToolStreaming(
  * Convert MCP tools to Vercel AI SDK tools
  * Uses Zod schemas to properly parse and validate tool arguments
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: Record<string, any> = {};
 
     for (const mcpTool of mcpTools) {
-        const properties = mcpTool.inputSchema?.properties || {};
-        const required = mcpTool.inputSchema?.required || [];
+        const properties = (mcpTool.inputSchema?.properties || {}) as Record<string, unknown>;
+        const required = (mcpTool.inputSchema?.required || []) as string[];
 
         // Build Zod schema from MCP inputSchema properties
         const schemaProps: Record<string, z.ZodTypeAny> = {};
 
-        for (const [key, propSchema] of Object.entries(properties) as [string, any][]) {
+        for (const [key, propSchema] of Object.entries(properties) as [string, { type?: string; description?: string }][]) {
             let zodType: z.ZodTypeAny;
 
             switch (propSchema.type) {
@@ -215,7 +218,8 @@ function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
 
         const inputSchemaObj = {
             type: 'object' as const,
-            properties: properties,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            properties: properties as any,
             required: required,
         };
 
@@ -349,6 +353,7 @@ export class WasmAgent {
 
         // Merge remote tools into our tool set
         for (const [name, tool] of Object.entries(remoteTools)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.tools[name] = tool as any;
         }
 
@@ -407,22 +412,25 @@ export class WasmAgent {
                         callbacks.onText?.(chunk.text);
                     }
                 },
-                onStepFinish: async ({ text, toolCalls, toolResults }) => {
+                onStepFinish: async ({ text: _text, toolCalls, toolResults }) => {
                     stepCount++;
                     console.log('[Agent] Step finished:', stepCount);
                     callbacks.onStepFinish?.(stepCount);
 
                     // Emit tool calls as they complete
                     for (const toolCall of toolCalls || []) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const input = (toolCall as any).input || (toolCall as any).args || {};
                         callbacks.onToolCall?.(toolCall.toolName, input);
                     }
 
                     // Emit tool results
                     for (const toolResult of toolResults || []) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const output = (toolResult as any).output ?? (toolResult as any).result ?? '';
                         const resultStr = typeof output === 'string' ? output : JSON.stringify(output);
                         // Check if result indicates error
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const isError = resultStr.startsWith('Error:') || (toolResult as any).isError;
                         callbacks.onToolResult?.(toolResult.toolName, resultStr, !isError);
                     }
@@ -443,9 +451,9 @@ export class WasmAgent {
             callbacks.onFinish?.(stepCount);
             console.log('[Agent] Stream complete, steps:', stepCount);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Agent] Stream error:', error);
-            callbacks.onError?.(error);
+            callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
         }
     }
 
@@ -470,9 +478,9 @@ export class WasmAgent {
                 stopWhen: stepCountIs(this.config.maxSteps!),
                 system: this.config.systemPrompt,
                 messages: this.messages,
-                onStepFinish: async ({ text, toolCalls, toolResults }) => {
+                onStepFinish: async ({ text: _text, toolCalls, toolResults: _toolResults }) => {
                     console.log('[Agent] Step finished:', {
-                        hasText: !!text,
+                        hasText: !!_text,
                         toolCalls: toolCalls?.length || 0
                     });
                 },
@@ -487,6 +495,7 @@ export class WasmAgent {
 
                 // Emit tool calls and results (dynamic tools use 'input' not 'args')
                 for (const toolCall of step.toolCalls || []) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const input = (toolCall as any).input || (toolCall as any).args;
                     yield {
                         type: 'tool_use',
@@ -497,6 +506,7 @@ export class WasmAgent {
 
                 // Dynamic tools use 'output' not 'result'
                 for (const toolResult of step.toolResults || []) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const output = (toolResult as any).output || (toolResult as any).result;
                     yield {
                         type: 'tool_result',
@@ -515,9 +525,10 @@ export class WasmAgent {
             }
 
             yield { type: 'done', steps: result.steps.length };
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
             console.error('[Agent] Error:', error);
-            yield { type: 'error', error: error.message || 'Unknown error' };
+            yield { type: 'error', error: message || 'Unknown error' };
         }
     }
 

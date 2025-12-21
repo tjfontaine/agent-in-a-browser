@@ -11,7 +11,7 @@ import { setStatus } from '../agent/status';
 
 // ============ State ============
 
-let currentReadline: Readline | null = null;
+let _currentReadline: Readline | null = null;
 
 // ============ Ctrl+C Handler ============
 
@@ -19,7 +19,7 @@ let currentReadline: Readline | null = null;
  * Setup the Ctrl+C handler for cancellation.
  */
 export function setupCtrlCHandler(readline: Readline): void {
-    currentReadline = readline;
+    _currentReadline = readline;
 
     readline.setCtrlCHandler(() => {
         if (isAgentBusy()) {

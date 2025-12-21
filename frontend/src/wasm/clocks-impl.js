@@ -1,3 +1,4 @@
+/* global performance, console */
 /**
  * Custom WASI clocks implementation for browser environments.
  * 

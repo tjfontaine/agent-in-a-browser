@@ -35,7 +35,7 @@ const C = {
 // ============ Minimalist Drawing ============
 const DIVIDER = '─';
 
-export function drawBox(term: Terminal, title: string, content: string[], width = 60): void {
+export function drawBox(term: Terminal, title: string, content: string[], _width = 60): void {
     // Minimalist header
     term.write(`\r\n${C.bold}${title}${C.reset}\r\n`);
     term.write(`${C.dim}${DIVIDER.repeat(title.length)}${C.reset}\r\n`);

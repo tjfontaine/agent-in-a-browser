@@ -79,7 +79,8 @@ function setupCtrlWHandler(): void {
             ev.preventDefault();
 
             // Access readline's internal state (not publicly typed but available at runtime)
-            const state = (readline as any).state;
+            const rl = readline as unknown as { state?: { line?: { buf: string; pos: number }; editBackspace: (n: number) => void } };
+            const state = rl.state;
             if (state && state.line) {
                 const line = state.line;
                 const buf: string = line.buf;

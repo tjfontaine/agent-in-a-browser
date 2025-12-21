@@ -34,7 +34,7 @@ describe('WorkerFetch', () => {
         mockChannel = createMockMessageChannel();
 
         // Mock global MessageChannel
-        vi.stubGlobal('MessageChannel', function (this: any) {
+        vi.stubGlobal('MessageChannel', function (this: { port1: MockMessagePort; port2: MockMessagePort }) {
             this.port1 = mockChannel.port1;
             this.port2 = mockChannel.port2;
         });

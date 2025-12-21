@@ -5,7 +5,7 @@
  */
 
 import { Terminal } from '@xterm/xterm';
-import { getRemoteMCPRegistry, type RemoteMCPServer } from '../remote-mcp-registry';
+import { getRemoteMCPRegistry } from '../remote-mcp-registry';
 
 // State references - will be set during initialization
 let mcpInitialized = false;
@@ -81,8 +81,9 @@ export async function handleMcpCommand(
                         const updated = registry.getServer(server.id);
                         term.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
                     }
-                } catch (e: any) {
-                    term.write(`\x1b[31m✗ Failed: ${e.message}\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\x1b[31m✗ Failed: ${msg}\x1b[0m\r\n`);
                 }
                 break;
             }
@@ -98,8 +99,9 @@ export async function handleMcpCommand(
                 try {
                     await registry.removeServer(id);
                     term.write(`\r\n\x1b[32m✓ Removed server: ${id}\x1b[0m\r\n`);
-                } catch (e: any) {
-                    term.write(`\r\n\x1b[31m✗ ${e.message}\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\r\n\x1b[31m✗ ${msg}\x1b[0m\r\n`);
                 }
                 break;
             }
@@ -141,8 +143,9 @@ export async function handleMcpCommand(
                     await registry.connectServer(id);
                     const updated = registry.getServer(id);
                     term.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
-                } catch (e: any) {
-                    term.write(`\x1b[31m✗ Authentication failed: ${e.message}\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\x1b[31m✗ Authentication failed: ${msg}\x1b[0m\r\n`);
                 }
                 break;
             }
@@ -161,8 +164,9 @@ export async function handleMcpCommand(
                     await registry.connectServer(id);
                     const server = registry.getServer(id);
                     term.write(`\x1b[32m✓ Connected! ${server?.tools.length || 0} tools available\x1b[0m\r\n`);
-                } catch (e: any) {
-                    term.write(`\x1b[31m✗ Connection failed: ${e.message}\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\x1b[31m✗ Connection failed: ${msg}\x1b[0m\r\n`);
                 }
                 break;
             }
@@ -178,8 +182,9 @@ export async function handleMcpCommand(
                 try {
                     await registry.disconnectServer(id);
                     term.write(`\r\n\x1b[32m✓ Disconnected: ${id}\x1b[0m\r\n`);
-                } catch (e: any) {
-                    term.write(`\r\n\x1b[31m✗ ${e.message}\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\r\n\x1b[31m✗ ${msg}\x1b[0m\r\n`);
                 }
                 break;
             }
@@ -192,8 +197,9 @@ export async function handleMcpCommand(
                 term.write(`\r\n\x1b[31mUnknown /mcp subcommand: ${subcommand}\x1b[0m\r\n`);
                 term.write('\x1b[90mAvailable: add, remove, auth, connect, disconnect, list\x1b[0m\r\n');
         }
-    } catch (e: any) {
-        term.write(`\r\n\x1b[31mError: ${e.message}\x1b[0m\r\n`);
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        term.write(`\r\n\x1b[31mError: ${msg}\x1b[0m\r\n`);
     }
 
     showPrompt();

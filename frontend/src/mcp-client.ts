@@ -10,7 +10,7 @@ export interface McpServerInfo {
 export interface McpTool {
     name: string;
     description: string;
-    inputSchema: Record<string, any>;
+    inputSchema: Record<string, unknown>;
 }
 
 export interface McpToolResult {
@@ -22,16 +22,16 @@ export interface JsonRpcRequest {
     jsonrpc: string;
     id: string | number;
     method: string;
-    params?: Record<string, any>;
+    params?: Record<string, unknown>;
 }
 
 export interface JsonRpcResponse {
     jsonrpc: string;
     id?: string | number;
-    result?: any;
+    result?: unknown;
     error?: {
         code: number;
         message: string;
-        data?: any;
+        data?: unknown;
     };
 }

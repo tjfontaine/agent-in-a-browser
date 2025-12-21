@@ -24,7 +24,7 @@ let abortController: AbortController | null = null;
 /**
  * Debug logging - goes to browser console.
  */
-function debug(...args: any[]): void {
+function debug(...args: unknown[]): void {
     console.log('[Agent]', new Date().toISOString().slice(11, 23), ...args);
 }
 
@@ -173,6 +173,7 @@ async function runAgentLoopWithSDK(
             },
             onToolCall: (name, input) => {
                 // Show tool execution spinner
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const args = (input as any).path || (input as any).command || (input as any).code || '';
                 const argsDisplay = typeof args === 'string'
                     ? (args.length > 30 ? args.substring(0, 27) + '...' : args)
@@ -220,15 +221,16 @@ async function runAgentLoopWithSDK(
         abortController = null;
         showPrompt();
         setStatus('Ready', '#3fb950');
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as { name?: string; message?: string };
         // Don't show error if user cancelled
-        if (error.name === 'AbortError' || cancelRequested) {
+        if (err.name === 'AbortError' || cancelRequested) {
             debug('Request aborted by user');
             if (state.toolSpinner) state.toolSpinner.stop();
             abortController = null;
             return;
         }
-        term.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31mError: ${err.message || String(error)}\x1b[0m\r\n`);
         setStatus('Error', '#ff7b72');
         abortController = null;
         showPrompt();

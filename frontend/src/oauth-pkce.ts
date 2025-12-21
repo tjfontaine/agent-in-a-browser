@@ -128,7 +128,7 @@ export async function discoverProtectedResource(
         if (response.ok) {
             return await response.json();
         }
-    } catch (e) {
+    } catch (_e) {
         console.log('[OAuth] Path-specific PRM not found, trying root');
     }
 
@@ -175,7 +175,7 @@ export async function discoverAuthServer(
                 console.log('[OAuth] Found auth server metadata:', metadata.issuer);
                 return metadata;
             }
-        } catch (e) {
+        } catch (_e) {
             // Continue to next URL
         }
     }
@@ -315,7 +315,7 @@ export function waitForCallback(popup: Window): Promise<string> {
                     popup.close();
                     resolve(currentUrl);
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Cross-origin access - popup is still on external site
             }
         }, 500);
@@ -594,7 +594,7 @@ export async function authenticateWithServer(
     }
 
     // Initiate OAuth flow
-    const { popup, state } = await initiateAuthFlow(mcpServerUrl, clientId);
+    const { popup, state: _state } = await initiateAuthFlow(mcpServerUrl, clientId);
 
     // Wait for callback
     const callbackUrl = await waitForCallback(popup);

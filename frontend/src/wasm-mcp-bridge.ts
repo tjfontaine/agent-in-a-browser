@@ -13,8 +13,15 @@ import {
     createIncomingRequest,
     Fields,
     ResponseOutparam,
-    OutgoingResponse
+    IncomingRequest,
 } from './wasm/wasi-http-impl.js';
+
+// Type for WASM response objects
+interface WasmResponse {
+    statusCode(): number;
+    headers(): { entries(): [string, Uint8Array][] };
+    _bodyChunks?: Uint8Array[];
+}
 
 // Re-export types for consumers
 export type { JsonRpcRequest, JsonRpcResponse } from './mcp-client';
@@ -46,7 +53,7 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
     console.log('[WasmBridge] Headers converted');
 
     // 2. Prepare request
-    let incomingRequest: any;
+    let incomingRequest: IncomingRequest;
     if (req.body) {
         const text = await req.text();
         console.log('[WasmBridge] Request body:', text.substring(0, 200));
@@ -58,7 +65,7 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
 
     // 3. Create response outparam and call handler
     return new Promise((resolve, reject) => {
-        let wasmResponse: any = null;
+        let wasmResponse: WasmResponse | null = null;
 
         const responseOutparam = new ResponseOutparam((result) => {
             console.log('[WasmBridge] ResponseOutparam callback:', result);
@@ -71,7 +78,9 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
 
         console.log('[WasmBridge] Calling incomingHandler.handle...');
         try {
-            incomingHandler.handle(incomingRequest, responseOutparam);
+            // Cast to any because our IncomingRequest is compatible at runtime with the WASM-generated type
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            incomingHandler.handle(incomingRequest as any, responseOutparam);
         } catch (error) {
             console.error('[WasmBridge] Error in handle:', error);
             reject(error);

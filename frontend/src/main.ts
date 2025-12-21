@@ -75,9 +75,10 @@ async function main() {
                 showPrompt
             );
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
         setStatus('Error', '#ff7b72');
-        terminal.write(`\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+        terminal.write(`\x1b[31mError: ${message}\x1b[0m\r\n`);
         console.error('Startup error:', error);
     }
 }

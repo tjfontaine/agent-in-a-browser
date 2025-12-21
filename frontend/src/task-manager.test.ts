@@ -2,7 +2,7 @@
  * Tests for Task Manager
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getTaskManager, resetTaskManager, type Task } from './task-manager';
+import { getTaskManager, resetTaskManager } from './task-manager';
 
 describe('TaskManager', () => {
     beforeEach(() => {
@@ -26,7 +26,7 @@ describe('TaskManager', () => {
         it('defaults status to pending', () => {
             const manager = getTaskManager();
             manager.setTasks([
-                { id: '1', content: 'Test', status: undefined as any },
+                { id: '1', content: 'Test', status: undefined as unknown as 'pending' },
             ]);
             expect(manager.getTasks()[0].status).toBe('pending');
         });

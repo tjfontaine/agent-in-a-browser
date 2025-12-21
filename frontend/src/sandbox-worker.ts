@@ -163,15 +163,15 @@ self.onmessage = async (event: MessageEvent) => {
                             }
                             port.postMessage({ type: 'chunk', chunk: value }, [value.buffer]);
                         }
-                    } catch (readError: any) {
-                        port.postMessage({ type: 'error', error: readError.message });
+                    } catch (readError: unknown) {
+                        port.postMessage({ type: 'error', error: readError instanceof Error ? readError.message : String(readError) });
                     } finally {
                         reader.releaseLock();
                         port.close();
                     }
 
-                } catch (error: any) {
-                    port.postMessage({ type: 'error', error: error.message });
+                } catch (error: unknown) {
+                    port.postMessage({ type: 'error', error: error instanceof Error ? error.message : String(error) });
                     port.close();
                 }
                 break;
@@ -180,8 +180,8 @@ self.onmessage = async (event: MessageEvent) => {
             default:
                 self.postMessage({ type: 'error', id, message: `Unknown message type: ${type}` });
         }
-    } catch (e: any) {
-        self.postMessage({ type: 'error', id, message: e.message });
+    } catch (e: unknown) {
+        self.postMessage({ type: 'error', id, message: e instanceof Error ? e.message : String(e) });
     }
 };
 

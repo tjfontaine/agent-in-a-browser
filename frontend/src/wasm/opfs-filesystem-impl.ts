@@ -8,10 +8,10 @@
  * This replaces @bytecodealliance/preview2-shim/filesystem for browser workers.
  */
 
-// @ts-ignore
 import { streams } from '@bytecodealliance/preview2-shim/io';
-// @ts-ignore
-const { InputStream, OutputStream } = streams as any;
+
+// @ts-expect-error - preview2-shim exports this as type-only but it's a runtime value
+const { InputStream, OutputStream } = streams as unknown as { InputStream: new (config: unknown) => unknown; OutputStream: new (config: unknown) => unknown };
 
 
 // ============================================================
@@ -23,7 +23,7 @@ interface TreeEntry {
     size?: number;
 }
 
-let directoryTree: TreeEntry = { dir: {} };
+const directoryTree: TreeEntry = { dir: {} };
 let opfsRoot: FileSystemDirectoryHandle | null = null;
 let initialized = false;
 
@@ -64,7 +64,7 @@ export async function initFilesystem(): Promise<void> {
 async function scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry, basePath: string = ''): Promise<void> {
     if (!tree.dir) tree.dir = {};
 
-    for await (const [name, child] of (handle as any).entries()) {
+    for await (const [name, child] of (handle as unknown as { entries(): AsyncIterableIterator<[string, FileSystemHandle]> }).entries()) {
         const fullPath = basePath ? `${basePath}/${name}` : name;
 
         if (child.kind === 'directory') {
@@ -368,7 +368,7 @@ class Descriptor {
     /**
      * Read via stream - returns proper WASI InputStream resource
      */
-    readViaStream(_offset: bigint): any {
+    readViaStream(_offset: bigint): unknown {
         const path = this.path;
         let offset = Number(_offset);
 
@@ -434,7 +434,7 @@ class Descriptor {
     /**
      * Write via stream - returns proper WASI OutputStream resource
      */
-    writeViaStream(_offset: bigint): any {
+    writeViaStream(_offset: bigint): unknown {
         const path = this.path;
         let offset = Number(_offset);
         const entry = this.treeEntry;
