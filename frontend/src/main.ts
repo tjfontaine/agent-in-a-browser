@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Spinner, renderToolOutput } from './tui';
 import { WasmAgent } from './agent-sdk';
+import { getRemoteMCPRegistry, type RemoteMCPServer } from './remote-mcp-registry';
 
 const API_URL = 'http://localhost:3001';
 
@@ -233,7 +234,9 @@ async function sendMessage(userMessage: string): Promise<void> {
 }
 
 function handleSlashCommand(command: string): void {
-    const cmd = command.slice(1).toLowerCase();
+    const parts = command.slice(1).split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1);
 
     switch (cmd) {
         case 'clear':
@@ -250,34 +253,267 @@ function handleSlashCommand(command: string): void {
             });
             return;
         case 'mcp':
-            terminal.write('\r\n\x1b[36m┌─ MCP Status ─────────────────────────\x1b[0m\r\n');
-            terminal.write(`\x1b[36m│\x1b[0m Initialized: ${mcpInitialized ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
-            terminal.write(`\x1b[36m│\x1b[0m Agent SDK:   ${agent ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
-            if (mcpServerInfo) {
-                terminal.write(`\x1b[36m│\x1b[0m\r\n`);
-                terminal.write(`\x1b[36m│\x1b[0m \x1b[1m${mcpServerInfo.name}\x1b[0m v${mcpServerInfo.version}\r\n`);
-                terminal.write(`\x1b[36m│\x1b[0m Tools (${mcpToolsList.length}):\r\n`);
-                for (const tool of mcpToolsList) {
-                    const desc = tool.description ? ` - ${tool.description.substring(0, 50)}${tool.description.length > 50 ? '...' : ''}` : '';
-                    terminal.write(`\x1b[36m│\x1b[0m   \x1b[33m${tool.name}\x1b[0m\x1b[90m${desc}\x1b[0m\r\n`);
-                }
-            }
-            terminal.write('\x1b[36m└──────────────────────────────────────\x1b[0m\r\n');
-            if (!agent && !ANTHROPIC_API_KEY) {
-                terminal.write('\r\n\x1b[33mSet VITE_ANTHROPIC_API_KEY to enable Agent SDK\x1b[0m\r\n');
-            }
-            break;
+            handleMcpCommand(args);
+            return;
         case 'help':
             terminal.write('\r\n\x1b[36mCommands:\x1b[0m\r\n');
-            terminal.write('  /clear - Clear conversation\r\n');
-            terminal.write('  /files - List files in sandbox\r\n');
-            terminal.write('  /mcp   - Show MCP status\r\n');
-            terminal.write('  /help  - Show this help\r\n');
+            terminal.write('  /clear          - Clear conversation\r\n');
+            terminal.write('  /files          - List files in sandbox\r\n');
+            terminal.write('  /mcp            - Show MCP status\r\n');
+            terminal.write('  /mcp add <url>  - Add remote MCP server\r\n');
+            terminal.write('  /mcp remove <id> - Remove remote server\r\n');
+            terminal.write('  /mcp auth <id> [client_id] - Authenticate with OAuth\r\n');
+            terminal.write('  /mcp connect <id> - Connect to remote server\r\n');
+            terminal.write('  /help           - Show this help\r\n');
             break;
         default:
             terminal.write(`\r\n\x1b[31mUnknown command: ${command} \x1b[0m\r\n`);
     }
     showPrompt();
+}
+
+/**
+ * Handle /mcp subcommands for remote server management
+ */
+async function handleMcpCommand(args: string[]): Promise<void> {
+    const subcommand = args[0]?.toLowerCase();
+    const registry = getRemoteMCPRegistry();
+
+    if (!subcommand) {
+        // Show status (default behavior)
+        showMcpStatus();
+        showPrompt();
+        return;
+    }
+
+    try {
+        switch (subcommand) {
+            case 'add': {
+                const url = args[1];
+                if (!url) {
+                    terminal.write('\r\n\x1b[31mUsage: /mcp add <url>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                terminal.write(`\r\n\x1b[90mAdding server: ${url}...\x1b[0m\r\n`);
+
+                try {
+                    const server = await registry.addServer({ url });
+                    terminal.write(`\x1b[32m✓ Added server: ${server.name} (${server.id})\x1b[0m\r\n`);
+
+                    // Check if auth is required
+                    terminal.write('\x1b[90mChecking authentication requirements...\x1b[0m\r\n');
+                    const authRequired = await registry.checkAuthRequired(server.id);
+
+                    if (authRequired) {
+                        terminal.write('\x1b[33m⚠ OAuth authentication required\x1b[0m\r\n');
+                        terminal.write(`\x1b[90mRun: /mcp auth ${server.id} <client_id>\x1b[0m\r\n`);
+                    } else {
+                        // Try to connect
+                        terminal.write('\x1b[90mConnecting...\x1b[0m\r\n');
+                        await registry.connectServer(server.id);
+                        const updated = registry.getServer(server.id);
+                        terminal.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
+                    }
+                } catch (e: any) {
+                    terminal.write(`\x1b[31m✗ Failed: ${e.message}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
+            case 'remove': {
+                const id = args[1];
+                if (!id) {
+                    terminal.write('\r\n\x1b[31mUsage: /mcp remove <id>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                try {
+                    await registry.removeServer(id);
+                    terminal.write(`\r\n\x1b[32m✓ Removed server: ${id}\x1b[0m\r\n`);
+                } catch (e: any) {
+                    terminal.write(`\r\n\x1b[31m✗ ${e.message}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
+            case 'auth': {
+                const id = args[1];
+                const clientId = args[2];
+                if (!id) {
+                    terminal.write('\r\n\x1b[31mUsage: /mcp auth <id> [client_id]\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                const server = registry.getServer(id);
+                if (!server) {
+                    terminal.write(`\r\n\x1b[31m✗ Server not found: ${id}\x1b[0m\r\n`);
+                    showPrompt();
+                    return;
+                }
+
+                const effectiveClientId = clientId || server.oauthClientId;
+                if (!effectiveClientId) {
+                    terminal.write('\r\n\x1b[31m✗ OAuth client ID required\x1b[0m\r\n');
+                    terminal.write('\x1b[90mUsage: /mcp auth <id> <client_id>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                terminal.write(`\r\n\x1b[90mOpening OAuth popup for ${server.name}...\x1b[0m\r\n`);
+                terminal.write('\x1b[33m⚠ Please complete authentication in the popup window\x1b[0m\r\n');
+
+                try {
+                    await registry.authenticateServer(id, effectiveClientId);
+                    terminal.write('\x1b[32m✓ Authentication successful!\x1b[0m\r\n');
+
+                    // Auto-connect after auth
+                    terminal.write('\x1b[90mConnecting...\x1b[0m\r\n');
+                    await registry.connectServer(id);
+                    const updated = registry.getServer(id);
+                    terminal.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
+                } catch (e: any) {
+                    terminal.write(`\x1b[31m✗ Authentication failed: ${e.message}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
+            case 'connect': {
+                const id = args[1];
+                if (!id) {
+                    terminal.write('\r\n\x1b[31mUsage: /mcp connect <id>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                terminal.write(`\r\n\x1b[90mConnecting to ${id}...\x1b[0m\r\n`);
+
+                try {
+                    await registry.connectServer(id);
+                    const server = registry.getServer(id);
+                    terminal.write(`\x1b[32m✓ Connected! ${server?.tools.length || 0} tools available\x1b[0m\r\n`);
+                } catch (e: any) {
+                    terminal.write(`\x1b[31m✗ Connection failed: ${e.message}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
+            case 'disconnect': {
+                const id = args[1];
+                if (!id) {
+                    terminal.write('\r\n\x1b[31mUsage: /mcp disconnect <id>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                try {
+                    await registry.disconnectServer(id);
+                    terminal.write(`\r\n\x1b[32m✓ Disconnected: ${id}\x1b[0m\r\n`);
+                } catch (e: any) {
+                    terminal.write(`\r\n\x1b[31m✗ ${e.message}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
+            case 'list':
+                showMcpStatus();
+                break;
+
+            default:
+                terminal.write(`\r\n\x1b[31mUnknown /mcp subcommand: ${subcommand}\x1b[0m\r\n`);
+                terminal.write('\x1b[90mAvailable: add, remove, auth, connect, disconnect, list\x1b[0m\r\n');
+        }
+    } catch (e: any) {
+        terminal.write(`\r\n\x1b[31mError: ${e.message}\x1b[0m\r\n`);
+    }
+
+    showPrompt();
+}
+
+/**
+ * Display MCP status including local and remote servers
+ */
+function showMcpStatus(): void {
+    const registry = getRemoteMCPRegistry();
+    const remoteServers = registry.getServers();
+
+    terminal.write('\r\n\x1b[36m┌─ MCP Status ─────────────────────────\x1b[0m\r\n');
+    terminal.write(`\x1b[36m│\x1b[0m Initialized: ${mcpInitialized ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
+    terminal.write(`\x1b[36m│\x1b[0m Agent SDK:   ${agent ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'}\r\n`);
+
+    // Local WASM MCP Server
+    if (mcpServerInfo) {
+        terminal.write(`\x1b[36m│\x1b[0m\r\n`);
+        terminal.write(`\x1b[36m│\x1b[0m \x1b[1m📦 Local: ${mcpServerInfo.name}\x1b[0m v${mcpServerInfo.version}\r\n`);
+        terminal.write(`\x1b[36m│\x1b[0m Tools (${mcpToolsList.length}):\r\n`);
+        for (const tool of mcpToolsList) {
+            const desc = tool.description ? ` - ${tool.description.substring(0, 40)}${tool.description.length > 40 ? '...' : ''}` : '';
+            terminal.write(`\x1b[36m│\x1b[0m   \x1b[33m${tool.name}\x1b[0m\x1b[90m${desc}\x1b[0m\r\n`);
+        }
+    }
+
+    // Remote MCP Servers
+    if (remoteServers.length > 0) {
+        terminal.write(`\x1b[36m│\x1b[0m\r\n`);
+        terminal.write(`\x1b[36m│\x1b[0m \x1b[1m🌐 Remote Servers (${remoteServers.length}):\x1b[0m\r\n`);
+
+        for (const server of remoteServers) {
+            const statusIcon = getStatusIcon(server.status);
+            const statusColor = getStatusColor(server.status);
+
+            terminal.write(`\x1b[36m│\x1b[0m\r\n`);
+            terminal.write(`\x1b[36m│\x1b[0m   ${statusIcon} \x1b[1m${server.name}\x1b[0m \x1b[90m(${server.id})\x1b[0m\r\n`);
+            terminal.write(`\x1b[36m│\x1b[0m     URL: \x1b[90m${server.url}\x1b[0m\r\n`);
+            terminal.write(`\x1b[36m│\x1b[0m     Auth: \x1b[90m${server.authType}\x1b[0m  Status: ${statusColor}${server.status}\x1b[0m\r\n`);
+
+            if (server.error) {
+                terminal.write(`\x1b[36m│\x1b[0m     \x1b[31mError: ${server.error}\x1b[0m\r\n`);
+            }
+
+            if (server.status === 'connected' && server.tools.length > 0) {
+                terminal.write(`\x1b[36m│\x1b[0m     Tools (${server.tools.length}):\r\n`);
+                for (const tool of server.tools.slice(0, 5)) {
+                    const desc = tool.description ? ` - ${tool.description.substring(0, 30)}...` : '';
+                    terminal.write(`\x1b[36m│\x1b[0m       \x1b[33m${tool.name}\x1b[0m\x1b[90m${desc}\x1b[0m\r\n`);
+                }
+                if (server.tools.length > 5) {
+                    terminal.write(`\x1b[36m│\x1b[0m       \x1b[90m...and ${server.tools.length - 5} more\x1b[0m\r\n`);
+                }
+            }
+        }
+    } else {
+        terminal.write(`\x1b[36m│\x1b[0m\r\n`);
+        terminal.write(`\x1b[36m│\x1b[0m \x1b[90mNo remote servers. Use /mcp add <url> to add one.\x1b[0m\r\n`);
+    }
+
+    terminal.write('\x1b[36m└──────────────────────────────────────\x1b[0m\r\n');
+
+    if (!agent && !ANTHROPIC_API_KEY) {
+        terminal.write('\r\n\x1b[33mSet VITE_ANTHROPIC_API_KEY to enable Agent SDK\x1b[0m\r\n');
+    }
+}
+
+function getStatusIcon(status: string): string {
+    switch (status) {
+        case 'connected': return '\x1b[32m●\x1b[0m';
+        case 'connecting': return '\x1b[33m◐\x1b[0m';
+        case 'auth_required': return '\x1b[33m🔒\x1b[0m';
+        case 'error': return '\x1b[31m✗\x1b[0m';
+        default: return '\x1b[90m○\x1b[0m';
+    }
+}
+
+function getStatusColor(status: string): string {
+    switch (status) {
+        case 'connected': return '\x1b[32m';
+        case 'connecting': return '\x1b[33m';
+        case 'auth_required': return '\x1b[33m';
+        case 'error': return '\x1b[31m';
+        default: return '\x1b[90m';
+    }
 }
 
 async function runAgentLoop(userMessage: string): Promise<void> {

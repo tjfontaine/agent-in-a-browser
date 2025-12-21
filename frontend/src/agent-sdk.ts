@@ -13,6 +13,7 @@ import { experimental_createMCPClient as createMCPClient, type MCPTransport } fr
 import { z } from 'zod';
 import { callWasmMcpServer } from './wasm-mcp-bridge';
 import type { JsonRpcRequest, JsonRpcResponse, McpTool } from './mcp-client';
+import { getRemoteMCPRegistry } from './remote-mcp-registry';
 
 export interface AgentConfig {
     model?: string;
@@ -330,9 +331,16 @@ export class WasmAgent {
 
         console.log('[Agent] Initializing...');
 
-        // Initialize WASM MCP and get tools
+        // Initialize WASM MCP and get local tools
         this.mcpTools = await initializeWasmMcp();
         this.tools = createAiSdkTools(this.mcpTools);
+
+        // Subscribe to remote registry changes to auto-refresh tools
+        const registry = getRemoteMCPRegistry();
+        registry.subscribe(() => this.refreshTools());
+
+        // Merge any already-connected remote tools
+        this.mergeRemoteTools();
 
         // Create Anthropic provider
         this.anthropic = createAnthropic({
@@ -342,6 +350,32 @@ export class WasmAgent {
 
         this.initialized = true;
         console.log('[Agent] Ready with', Object.keys(this.tools).length, 'tools');
+    }
+
+    /**
+     * Refresh tools (called when remote registry changes)
+     */
+    refreshTools(): void {
+        // Rebuild local tools
+        this.tools = createAiSdkTools(this.mcpTools);
+        // Merge remote tools
+        this.mergeRemoteTools();
+        console.log('[Agent] Refreshed tools, now have', Object.keys(this.tools).length, 'tools');
+    }
+
+    /**
+     * Merge tools from connected remote MCP servers
+     */
+    private mergeRemoteTools(): void {
+        const registry = getRemoteMCPRegistry();
+        const remoteTools = registry.getAggregatedTools();
+
+        // Merge remote tools into our tool set
+        for (const [name, tool] of Object.entries(remoteTools)) {
+            this.tools[name] = tool as any;
+        }
+
+        console.log('[Agent] Merged', Object.keys(remoteTools).length, 'remote tools');
     }
 
     /**
