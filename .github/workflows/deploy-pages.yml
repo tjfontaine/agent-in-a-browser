@@ -34,6 +34,19 @@ jobs:
       - name: Install cargo-component
         run: cargo install cargo-component --locked
 
+      - name: Install wit-deps
+        run: cargo install wit-deps --locked
+
+      - name: Cache WIT dependencies
+        uses: actions/cache@v4
+        with:
+          path: runtime/wit/deps
+          key: wit-deps-${{ hashFiles('runtime/wit/deps.toml') }}
+        
+      - name: Update WIT dependencies
+        run: wit-deps update
+        working-directory: runtime
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
