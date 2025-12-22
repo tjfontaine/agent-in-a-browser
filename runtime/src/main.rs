@@ -137,7 +137,7 @@ impl TsRuntimeMcp {
     // MCP Tools - these are auto-registered by #[mcp_tool_router]
     // ============================================================
 
-    #[mcp_tool(description = "Execute TypeScript or JavaScript code and return the output. Use console.log() to produce output.")]
+    #[mcp_tool(description = "Execute JavaScript/TypeScript code in an embedded QuickJS runtime. SYNTAX: Use standard JavaScript - NOT shell syntax. Use semicolons, proper quotes, and valid JS expressions. OUTPUT: Use console.log() for output; the return value of the last expression is also returned. APIS: console.log/warn/error, fetch(url, {method, headers, body}) returning Promise with ok/status/text()/json(), fs.readFile/writeFile/readDir, path.join/dirname/basename. ASYNC: await works at top level. EXAMPLE: const res = await fetch('https://api.example.com'); const data = await res.json(); console.log(data);")]
     fn run_typescript(&mut self, code: String) -> ToolResult {
         if code.is_empty() {
             return ToolResult::error("No code provided");

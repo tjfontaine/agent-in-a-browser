@@ -73,13 +73,52 @@ Use \`task_write\` to track multi-step work. The task panel helps users understa
 
 # Available Tools
 
+## run_typescript (IMPORTANT - Read Carefully)
+Execute JavaScript/TypeScript in an embedded QuickJS runtime.
+
+**CRITICAL: This is JavaScript, NOT shell syntax!**
+- Use semicolons to terminate statements
+- Use proper JavaScript string quotes (single or double)
+- Use console.log() for output
+- Top-level await is supported
+
+**Available APIs:**
+- console.log(), console.warn(), console.error()
+- fetch(url, options) - returns Promise<Response>
+  - Response: ok, status, statusText, headers, text(), json()
+- fs.readFile(path), fs.writeFile(path, data), fs.readDir(path)
+- path.join(), path.dirname(), path.basename()
+
+**CORRECT Examples:**
+\`\`\`javascript
+// Simple fetch
+const res = await fetch("https://api.example.com/data");
+const data = await res.json();
+console.log(data);
+
+// POST with headers
+const response = await fetch("https://api.stripe.com/v1/customers", {
+  method: "GET",
+  headers: {
+    "Authorization": "Bearer sk_test_xxx",
+    "Content-Type": "application/x-www-form-urlencoded"
+  }
+});
+console.log(await response.json());
+
+// File operations
+const content = fs.readFile("/data/config.json");
+console.log(content);
+\`\`\`
+
+**WRONG - Common mistakes:**
+- \`curl https://...\` (that's shell, not JS)
+- Missing semicolons between statements
+- Using shell-style variable assignment \`VAR=value\`
+
 ## shell_eval
 Execute shell commands. Supports pipes and chain operators.
 Run \`help\` to list commands, \`help <command>\` for usage.
-
-## run_typescript  
-Execute JavaScript/TypeScript code. Use console.log() for output.
-Standard fetch() API is available.
 
 ## File Tools
 - **read_file** / **write_file**: OPFS file operations
@@ -89,9 +128,25 @@ Standard fetch() API is available.
 ## Shell Commands (via shell_eval)
 Text: sed, cut, tr, grep, sort, uniq, head, tail, wc
 Files: ls, cat, find, diff, cp, mv, rm, mkdir, touch
-Network: curl
+Network: curl (for simple HTTP requests)
 JSON: jq
+TypeScript: tsc, tsx
 Pipeline: xargs
+
+### tsc - TypeScript Transpiler
+Transpile TypeScript files to JavaScript.
+\`\`\`
+tsc file.ts           # Output JS to stdout
+tsc -o out.js file.ts # Write JS to file
+\`\`\`
+
+### tsx - TypeScript Executor  
+Transpile and show JavaScript (use run_typescript for execution).
+\`\`\`
+tsx file.ts           # Show transpiled JS
+tsx -e "code"         # Transpile inline code
+\`\`\`
+Note: tsx shows the transpiled output. For actual execution, use run_typescript.
 
 ## task_write
 Manage task list. Pass JSON array: \`[{"content": "Task", "status": "pending"}]\`
@@ -100,3 +155,4 @@ Status: \`pending\`, \`in_progress\`, \`completed\`
 # Environment
 - Files persist in OPFS (Origin Private File System)
 - All tools operate on the same filesystem`;
+
