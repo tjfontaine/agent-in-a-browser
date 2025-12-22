@@ -163,6 +163,146 @@ impl MiscCommands {
             0
         })
     }
+
+    /// curl - transfer data from URLs
+    #[shell_command(
+        name = "curl",
+        usage = "curl [-X METHOD] [-H HEADER] [-d DATA] [-o FILE] [-s] URL",
+        description = "Transfer data from or to a server"
+    )]
+    fn cmd_curl(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("curl") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            
+            let mut method = "GET".to_string();
+            let mut headers: Vec<(String, String)> = Vec::new();
+            let mut data: Option<String> = None;
+            let mut output_file: Option<String> = None;
+            let mut silent = false;
+            let mut url: Option<String> = None;
+            
+            // Manual argument parsing for complex options
+            let mut i = 0;
+            while i < remaining.len() {
+                let arg = &remaining[i];
+                match arg.as_str() {
+                    "-X" | "--request" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            method = remaining[i].clone();
+                        }
+                    }
+                    "-H" | "--header" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            let header = &remaining[i];
+                            if let Some(colon_pos) = header.find(':') {
+                                let name = header[..colon_pos].trim().to_string();
+                                let value = header[colon_pos + 1..].trim().to_string();
+                                headers.push((name, value));
+                            }
+                        }
+                    }
+                    "-d" | "--data" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            data = Some(remaining[i].clone());
+                            if method == "GET" {
+                                method = "POST".to_string();
+                            }
+                        }
+                    }
+                    "-o" | "--output" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            output_file = Some(remaining[i].clone());
+                        }
+                    }
+                    "-s" | "--silent" => {
+                        silent = true;
+                    }
+                    s if !s.starts_with('-') => {
+                        url = Some(s.to_string());
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            
+            let url = match url {
+                Some(u) => u,
+                None => {
+                    let _ = stderr.write_all(b"curl: no URL specified\n").await;
+                    return 1;
+                }
+            };
+            
+            // Build headers JSON
+            let headers_json = if headers.is_empty() {
+                None
+            } else {
+                let pairs: Vec<String> = headers.iter()
+                    .map(|(k, v)| format!("\"{}\":\"{}\"", k, v))
+                    .collect();
+                Some(format!("{{{}}}", pairs.join(",")))
+            };
+            
+            // Make HTTP request using our existing http_client
+            match crate::http_client::fetch_request(
+                &method,
+                &url,
+                headers_json.as_deref(),
+                data.as_deref(),
+            ) {
+                Ok(response) => {
+                    if let Some(out_path) = output_file {
+                        let path = if out_path.starts_with('/') {
+                            out_path
+                        } else {
+                            format!("{}/{}", cwd, out_path)
+                        };
+                        if let Err(e) = std::fs::write(&path, &response.body) {
+                            let msg = format!("curl: {}: {}\n", path, e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                            return 1;
+                        }
+                    } else {
+                        let _ = stdout.write_all(response.body.as_bytes()).await;
+                        if !response.body.ends_with('\n') {
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                    }
+                    
+                    if !silent && !response.ok {
+                        let msg = format!("curl: HTTP {}\n", response.status);
+                        let _ = stderr.write_all(msg.as_bytes()).await;
+                    }
+                    
+                    if response.ok { 0 } else { 22 } // curl uses 22 for HTTP errors
+                }
+                Err(e) => {
+                    if !silent {
+                        let msg = format!("curl: {}\n", e);
+                        let _ = stderr.write_all(msg.as_bytes()).await;
+                    }
+                    1
+                }
+            }
+        })
+    }
 }
 
 /// Convert days since Unix epoch to year, month, day

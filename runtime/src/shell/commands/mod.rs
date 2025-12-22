@@ -8,6 +8,7 @@
 mod core;
 mod env;
 mod file;
+mod json;
 mod misc;
 mod path;
 mod text;
@@ -15,6 +16,7 @@ mod text;
 pub use self::core::CoreCommands;
 pub use self::env::EnvCommands;
 pub use self::file::FileCommands;
+pub use self::json::JsonCommands;
 pub use self::misc::MiscCommands;
 pub use self::path::PathCommands;
 pub use self::text::TextCommands;
@@ -70,6 +72,7 @@ impl ShellCommands {
             .or_else(|| PathCommands::get_command(name))
             .or_else(|| EnvCommands::get_command(name))
             .or_else(|| MiscCommands::get_command(name))
+            .or_else(|| JsonCommands::get_command(name))
     }
     
     /// Get help text for a command.
@@ -80,6 +83,7 @@ impl ShellCommands {
             .or_else(|| PathCommands::show_help(name))
             .or_else(|| EnvCommands::show_help(name))
             .or_else(|| MiscCommands::show_help(name))
+            .or_else(|| JsonCommands::show_help(name))
     }
     
     /// List all available commands.
@@ -91,6 +95,7 @@ impl ShellCommands {
         cmds.extend_from_slice(PathCommands::list_commands());
         cmds.extend_from_slice(EnvCommands::list_commands());
         cmds.extend_from_slice(MiscCommands::list_commands());
+        cmds.extend_from_slice(JsonCommands::list_commands());
         cmds.sort();
         cmds
     }
@@ -145,6 +150,15 @@ mod tests {
         assert!(commands.contains(&"sort"));
         assert!(commands.contains(&"basename"));
         assert!(commands.contains(&"env"));
+        // New commands
+        assert!(commands.contains(&"sed"));
+        assert!(commands.contains(&"cut"));
+        assert!(commands.contains(&"tr"));
+        assert!(commands.contains(&"find"));
+        assert!(commands.contains(&"diff"));
+        assert!(commands.contains(&"curl"));
+        assert!(commands.contains(&"jq"));
+        assert!(commands.contains(&"xargs"));
     }
     
     #[test]

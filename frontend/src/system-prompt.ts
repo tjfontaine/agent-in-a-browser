@@ -86,6 +86,13 @@ Standard fetch() API is available.
 - **list**: Directory listing
 - **grep**: Pattern search
 
+## Shell Commands (via shell_eval)
+Text: sed, cut, tr, grep, sort, uniq, head, tail, wc
+Files: ls, cat, find, diff, cp, mv, rm, mkdir, touch
+Network: curl
+JSON: jq
+Pipeline: xargs
+
 ## task_write
 Manage task list. Pass JSON array: \`[{"content": "Task", "status": "pending"}]\`
 Status: \`pending\`, \`in_progress\`, \`completed\`
