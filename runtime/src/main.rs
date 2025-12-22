@@ -528,7 +528,11 @@ impl Guest for Component {
 
         let mut request_bytes = Vec::new();
         loop {
-            match stream.blocking_read(65536) {
+            // Use poll-based reading to avoid condvar panic in WASM
+            let pollable = stream.subscribe();
+            pollable.block();
+            
+            match stream.read(65536) {
                 Ok(bytes) if bytes.is_empty() => break,
                 Ok(bytes) => request_bytes.extend(bytes),
                 Err(_) => break,
@@ -581,8 +585,14 @@ impl Guest for Component {
         ResponseOutparam::set(outparam, Ok(resp));
 
         let out = body.write().expect("write stream");
-        out.blocking_write_and_flush(response_body.as_bytes())
-            .expect("write");
+        // Use poll-based writing to avoid condvar panic in WASM
+        let response_bytes = response_body.as_bytes();
+        let pollable = out.subscribe();
+        pollable.block();
+        out.write(response_bytes).expect("write");
+        let flush_pollable = out.subscribe();
+        flush_pollable.block();
+        out.flush().expect("flush");
         drop(out);
         OutgoingBody::finish(body, None).unwrap();
     }
