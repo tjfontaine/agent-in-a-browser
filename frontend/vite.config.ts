@@ -4,8 +4,8 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
 export default defineConfig(({ mode }) => ({
-    // GitHub Pages deploys to /agent-in-a-browser/
-    base: mode === 'production' ? '/agent-in-a-browser/' : '/',
+    // Custom domain: agent.atxconsulting.com (no subpath needed)
+    base: '/',
     plugins: [
         react({
             babel: {
