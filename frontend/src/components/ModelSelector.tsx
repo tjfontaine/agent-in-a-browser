@@ -9,11 +9,12 @@ import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Select } from '@inkjs/ui';
 import {
-    AVAILABLE_MODELS,
+    getModelsForCurrentProvider,
     getCurrentModel,
     setCurrentModel,
     getCurrentModelInfo,
-} from '../model-config';
+    getCurrentProvider,
+} from '../provider-config';
 
 const colors = {
     cyan: '#39c5cf',
@@ -29,6 +30,8 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ onExit, onSelect }: ModelSelectorProps) {
     const currentModelId = getCurrentModel();
+    const provider = getCurrentProvider();
+    const models = getModelsForCurrentProvider();
 
     // Handle escape to exit
     useInput((_input, key) => {
@@ -50,7 +53,7 @@ export function ModelSelector({ onExit, onSelect }: ModelSelectorProps) {
     };
 
     // Build options for select
-    const options = AVAILABLE_MODELS.map(m => {
+    const options = models.map(m => {
         const isCurrent = m.id === currentModelId;
         const aliases = m.aliases.join(', ');
         return {
@@ -63,7 +66,7 @@ export function ModelSelector({ onExit, onSelect }: ModelSelectorProps) {
 
     return (
         <Box flexDirection="column" paddingY={1}>
-            <Text color={colors.cyan} bold>🤖 Select AI Model</Text>
+            <Text color={colors.cyan} bold>🤖 Select {provider.name} Model</Text>
             <Text color={colors.dim}>
                 Current: {currentInfo?.name || currentModelId}
             </Text>
@@ -82,3 +85,4 @@ export function ModelSelector({ onExit, onSelect }: ModelSelectorProps) {
 }
 
 export default ModelSelector;
+

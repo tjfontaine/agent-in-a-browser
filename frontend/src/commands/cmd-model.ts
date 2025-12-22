@@ -14,25 +14,29 @@ import {
     getCurrentModel,
     getCurrentModelInfo,
     setCurrentModel,
-    AVAILABLE_MODELS,
+    getModelsForCurrentProvider,
     getAvailableModelIds,
-} from '../model-config';
+    getCurrentProvider,
+} from '../provider-config';
 
 /**
  * Display the current model and available options
  */
 function showModelStatus(ctx: CommandContext): void {
+    const provider = getCurrentProvider();
     const current = getCurrentModelInfo();
     const aliases = current?.aliases.join(', ') || '';
+    const models = getModelsForCurrentProvider();
 
     ctx.output('system', '', undefined);
     ctx.output('system', '┌─ Model Configuration ───────────────────────┐', colors.cyan);
-    ctx.output('system', `│ Current: ${current?.name || 'Unknown'}`, colors.cyan);
-    ctx.output('system', `│ Alias:   ${aliases}`, colors.dim);
+    ctx.output('system', `│ Provider: ${provider.name}`, colors.cyan);
+    ctx.output('system', `│ Model:    ${current?.name || 'Unknown'}`, colors.cyan);
+    ctx.output('system', `│ Alias:    ${aliases}`, colors.dim);
     ctx.output('system', '│', colors.cyan);
     ctx.output('system', '│ Available models:', colors.cyan);
 
-    for (const model of AVAILABLE_MODELS) {
+    for (const model of models) {
         const indicator = model.id === getCurrentModel() ? '●' : '○';
         const color = model.id === getCurrentModel() ? colors.green : colors.dim;
         const modelAliases = model.aliases.join(', ');
@@ -42,6 +46,7 @@ function showModelStatus(ctx: CommandContext): void {
 
     ctx.output('system', '│', colors.cyan);
     ctx.output('system', '│ Usage: /model or /model <alias>', colors.dim);
+    ctx.output('system', '│ Switch provider: /provider', colors.dim);
     ctx.output('system', '└──────────────────────────────────────────────┘', colors.cyan);
     ctx.output('system', '', undefined);
 }
@@ -66,8 +71,8 @@ function switchModel(ctx: CommandContext, modelId: string): void {
         ctx.output('error', `Unknown model: ${modelId}`, colors.red);
         ctx.output('system', '', undefined);
         ctx.output('system', 'Available models:', colors.dim);
-        for (const model of AVAILABLE_MODELS) {
-            ctx.output('system', `  • ${model.id}`, colors.dim);
+        for (const model of getModelsForCurrentProvider()) {
+            ctx.output('system', `  • ${model.id} (${model.aliases.join(', ')})`, colors.dim);
         }
         ctx.output('system', '', undefined);
     }

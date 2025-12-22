@@ -16,9 +16,16 @@ import { SplitLayout, focusAuxPanel } from './components/SplitLayout';
 import { AuxiliaryPanel } from './components/AuxiliaryPanel';
 import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
 import { ModelSelector } from './components/ModelSelector';
+import { ProviderSelector } from './components/ProviderSelector';
+import { SecretInput } from './components/SecretInput';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
-import { getCurrentModelInfo } from './model-config';
+import {
+    getCurrentProvider,
+    getConfigSummary,
+    setApiKey,
+    subscribeToChanges,
+} from './provider-config';
 import 'ink-web/css';
 import 'xterm/css/xterm.css';
 
@@ -41,29 +48,43 @@ const OutputLine = memo(function OutputLine({ output }: { output: AgentOutput })
     );
 });
 
+// Overlay mode types
+type OverlayMode = 'none' | 'model-selector' | 'provider-selector' | 'secret-input';
+
+interface SecretInputState {
+    providerId: string;
+    providerName: string;
+}
+
 // Terminal content component - rendered inside InkXterm
 function TerminalContent({
     outputs,
     isReady,
     isBusy,
     queueLength,
-    showModelSelector,
+    overlayMode,
+    secretInputState,
     onSubmit,
     getCompletions,
     onCancel,
-    onModelSelectorClose,
+    onOverlayClose,
     onModelSelected,
+    onProviderSelected,
+    onSecretSubmit,
 }: {
     outputs: AgentOutput[];
     isReady: boolean;
     isBusy: boolean;
     queueLength: number;
-    showModelSelector: boolean;
+    overlayMode: OverlayMode;
+    secretInputState: SecretInputState | null;
     onSubmit: (value: string) => void;
     getCompletions: (input: string) => string[];
     onCancel: () => void;
-    onModelSelectorClose: () => void;
+    onOverlayClose: () => void;
     onModelSelected: (modelId: string) => void;
+    onProviderSelected: (providerId: string) => void;
+    onSecretSubmit: (value: string) => void;
 }) {
 
 
@@ -124,11 +145,23 @@ function TerminalContent({
                 </Box>
             )}
 
-            {/* Model selector overlay OR prompt at bottom */}
-            {showModelSelector ? (
+            {/* Overlay components OR prompt at bottom */}
+            {overlayMode === 'model-selector' ? (
                 <ModelSelector
-                    onExit={onModelSelectorClose}
+                    onExit={onOverlayClose}
                     onSelect={onModelSelected}
+                />
+            ) : overlayMode === 'provider-selector' ? (
+                <ProviderSelector
+                    onExit={onOverlayClose}
+                    onSelect={onProviderSelected}
+                />
+            ) : overlayMode === 'secret-input' && secretInputState ? (
+                <SecretInput
+                    label={`Enter API key for ${secretInputState.providerName}`}
+                    placeholder="Paste your API key here..."
+                    onSubmit={onSecretSubmit}
+                    onCancel={onOverlayClose}
                 />
             ) : (
                 /* Prompt at bottom - ALWAYS visible when ready (can queue while busy) */
@@ -165,8 +198,16 @@ export default function App() {
 
     const initialized = useRef(false);
     const [terminalMounted, setTerminalMounted] = useState(false);
-    const [showModelSelector, setShowModelSelector] = useState(false);
-    const [currentModel, setCurrentModel] = useState(getCurrentModelInfo());
+    const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
+    const [secretInputState, setSecretInputState] = useState<SecretInputState | null>(null);
+    const [configSummary, setConfigSummary] = useState(getConfigSummary());
+
+    // Subscribe to provider/model changes
+    useEffect(() => {
+        return subscribeToChanges(() => {
+            setConfigSummary(getConfigSummary());
+        });
+    }, []);
 
     // Initialize on mount (only once)
     useEffect(() => {
@@ -203,12 +244,26 @@ export default function App() {
         if (input.startsWith('/')) {
             // Special case: /model with no args shows interactive selector
             if (input.trim() === '/model') {
-                setShowModelSelector(true);
+                setOverlayMode('model-selector');
+                return;
+            }
+            // Special case: /provider with no args shows interactive selector
+            if (input.trim() === '/provider' || input.trim() === '/p') {
+                setOverlayMode('provider-selector');
                 return;
             }
 
             const ctx = {
-                output: addOutput,
+                output: (type: 'text' | 'tool-start' | 'tool-result' | 'error' | 'system', content: string, color?: string) => {
+                    // Check for secret input signal
+                    if (content.startsWith('__SHOW_SECRET_INPUT__:')) {
+                        const parts = content.split(':');
+                        setSecretInputState({ providerId: parts[1], providerName: parts[2] });
+                        setOverlayMode('secret-input');
+                        return;
+                    }
+                    addOutput(type, content, color);
+                },
                 clearHistory,
                 sendMessage,
             };
@@ -224,14 +279,32 @@ export default function App() {
         }
     }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);
 
-    // Handle model selection - just update local state (useAgent handles the message)
-    const handleModelSelected = useCallback((_modelId: string) => {
-        setCurrentModel(getCurrentModelInfo());
+    // Handle overlay close
+    const handleOverlayClose = useCallback(() => {
+        setOverlayMode('none');
+        setSecretInputState(null);
     }, []);
 
-    const handleModelSelectorClose = useCallback(() => {
-        setShowModelSelector(false);
+    // Handle model selection
+    const handleModelSelected = useCallback((_modelId: string) => {
+        setConfigSummary(getConfigSummary());
     }, []);
+
+    // Handle provider selection
+    const handleProviderSelected = useCallback((_providerId: string) => {
+        setConfigSummary(getConfigSummary());
+        addOutput('system', `🔄 Switched to ${getCurrentProvider().name}`, colors.cyan);
+    }, [addOutput]);
+
+    // Handle secret input
+    const handleSecretSubmit = useCallback((value: string) => {
+        if (secretInputState) {
+            setApiKey(secretInputState.providerId, value);
+            addOutput('system', `🔑 API key set for ${secretInputState.providerName}`, colors.green);
+        }
+        setOverlayMode('none');
+        setSecretInputState(null);
+    }, [secretInputState, addOutput]);
 
     return (
         <AuxiliaryPanelProvider>
@@ -249,7 +322,8 @@ export default function App() {
                         🤖 Web Agent
                     </span>
                     <span style={{ fontSize: '12px', color: '#8b949e' }}>
-                        {currentModel?.aliases[0] || 'haiku'}
+                        {configSummary.provider.aliases[0]}:{configSummary.model?.aliases[0] || 'default'}
+                        {configSummary.hasKey ? ' 🔑' : configSummary.provider.requiresKey ? ' ⚠️' : ''}
                     </span>
                     <span style={{ fontSize: '12px', color: status.color }}>
                         {status.text}
@@ -268,12 +342,15 @@ export default function App() {
                                         isReady={isReady}
                                         isBusy={isBusy}
                                         queueLength={messageQueue.length}
-                                        showModelSelector={showModelSelector}
+                                        overlayMode={overlayMode}
+                                        secretInputState={secretInputState}
                                         onSubmit={handleSubmit}
                                         getCompletions={getCommandCompletions}
                                         onCancel={cancelRequest}
-                                        onModelSelectorClose={handleModelSelectorClose}
+                                        onOverlayClose={handleOverlayClose}
                                         onModelSelected={handleModelSelected}
+                                        onProviderSelected={handleProviderSelected}
+                                        onSecretSubmit={handleSecretSubmit}
                                     />
                                 </InkXterm>
                             }

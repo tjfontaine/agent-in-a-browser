@@ -17,6 +17,7 @@
     "dependencies": {
         "@ai-sdk/anthropic": "^2.0.56",
         "@ai-sdk/mcp": "^0.0.12",
+        "@ai-sdk/openai": "^2.0.88",
         "@anthropic-ai/sdk": "^0.32.1",
         "@inkjs/ui": "^2.0.0",
         "@xterm/addon-fit": "^0.10.0",
