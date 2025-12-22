@@ -96,6 +96,7 @@ function TerminalContent({
                 flexDirection="column"
                 flexGrow={1}
                 overflow="hidden"
+                justifyContent="flex-start"
             >
                 {visibleOutputs.map((output) => (
                     <OutputLine key={output.id} output={output} />
@@ -143,9 +144,17 @@ export default function App() {
     const initialized = useRef(false);
     const [terminalMounted, setTerminalMounted] = useState(false);
 
-    // Initialize on mount (only once)
+    // Delay terminal mount to allow container dimensions to be calculated
     useEffect(() => {
-        if (initialized.current) return;
+        // WORKAROUND: Delay terminal mount to mitigate xterm.js issue #5011
+        // https://github.com/xtermjs/xterm.js/issues/5011
+        const timer = setTimeout(() => setTerminalMounted(true), 200);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Initialize after terminal is mounted (only once)
+    useEffect(() => {
+        if (!terminalMounted || initialized.current) return;
         initialized.current = true;
 
         // Show welcome banner
@@ -158,16 +167,7 @@ export default function App() {
 
         // Start initialization
         initialize();
-
-        // WORKAROUND: Delay terminal mount to mitigate xterm.js issue #5011
-        // https://github.com/xtermjs/xterm.js/issues/5011
-        // The xterm Viewport tries to access dimensions before the DOM element
-        // is fully rendered, causing "Cannot read dimensions of undefined" errors.
-        // 200ms delay gives the container time to establish its dimensions.
-        // The errors are harmless but noisy in the console.
-        const timer = setTimeout(() => setTerminalMounted(true), 200);
-        return () => clearTimeout(timer);
-    }, [initialize, addOutput]);
+    }, [terminalMounted, initialize, addOutput]);
 
     // Handle user input - queues if agent is busy
     const handleSubmit = useCallback(async (input: string) => {
