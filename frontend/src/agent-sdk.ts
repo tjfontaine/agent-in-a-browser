@@ -328,11 +328,18 @@ export class WasmAgent {
         // Create Anthropic provider
         // Use same origin if no explicit baseURL - Vite proxy will forward to backend
         const baseURL = this.config.baseURL || window.location.origin;
-        console.log('[Agent] Creating Anthropic provider with baseURL:', baseURL);
+        const isDirectAnthropicCall = baseURL.includes('anthropic.com');
+        console.log('[Agent] Creating Anthropic provider with baseURL:', baseURL,
+            isDirectAnthropicCall ? '(direct browser access)' : '(via proxy)');
 
         this.anthropic = createAnthropic({
-            apiKey: this.config.apiKey || 'dummy-key', // Key handled by proxy
+            apiKey: this.config.apiKey || 'dummy-key',
             baseURL,
+            // Enable direct browser access when calling Anthropic API directly
+            // This adds the required CORS header for "bring your own API key" scenarios
+            headers: isDirectAnthropicCall ? {
+                'anthropic-dangerous-direct-browser-access': 'true',
+            } : undefined,
         });
 
         this.initialized = true;
