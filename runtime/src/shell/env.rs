@@ -16,8 +16,8 @@ impl ShellEnv {
     /// Create a new shell environment with default values.
     pub fn new() -> Self {
         Self {
-            // Use "." for current directory - works better with WASI preopened dirs
-            cwd: PathBuf::from("."),
+            // Use "/" for root directory - consistent with absolute paths in the VFS
+            cwd: PathBuf::from("/"),
             env_vars: HashMap::new(),
         }
     }
@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn test_shell_env_default() {
         let env = ShellEnv::new();
-        assert_eq!(env.cwd, PathBuf::from("."));
+        assert_eq!(env.cwd, PathBuf::from("/"));
         assert!(env.env_vars.is_empty());
     }
 

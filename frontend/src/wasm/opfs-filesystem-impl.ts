@@ -147,6 +147,32 @@ export function closeAllHandles(): void {
     syncHandleCache.clear();
 }
 
+/**
+ * Close all sync handles that are under a path prefix.
+ * Used before removing a directory to release file locks.
+ */
+function closeHandlesUnderPath(pathPrefix: string): void {
+    const prefix = pathPrefix.endsWith('/') ? pathPrefix : pathPrefix + '/';
+    const toRemove: string[] = [];
+
+    for (const [cachedPath, handle] of syncHandleCache) {
+        // Check if this path is under the prefix
+        if (cachedPath.startsWith(prefix) || cachedPath === pathPrefix) {
+            try {
+                handle.close();
+                console.log('[opfs-fs] Closed handle for:', cachedPath);
+            } catch (e) {
+                console.warn('[opfs-fs] Failed to close handle:', cachedPath, e);
+            }
+            toRemove.push(cachedPath);
+        }
+    }
+
+    for (const path of toRemove) {
+        syncHandleCache.delete(path);
+    }
+}
+
 // ============================================================
 // TREE NAVIGATION
 // ============================================================
@@ -666,6 +692,10 @@ class Descriptor {
         if (!entry.dir) {
             throw 'not-directory';
         }
+
+        // Close all sync handles for files in this directory tree
+        // This is necessary because OPFS won't allow deletion while handles are open
+        closeHandlesUnderPath(normalizedPath);
 
         // Remove from OPFS (async)
         this.removeOpfsEntry(normalizedPath, true);
