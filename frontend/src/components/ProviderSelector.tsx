@@ -117,16 +117,41 @@ export function ProviderSelector({ onExit, onSelect }: ProviderSelectorProps) {
         onExit();
     };
 
-    // Build provider options
-    const providerOptions = providers.map(p => {
-        const isCurrent = p.id === currentProvider.id;
-        const keyStatus = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '✓');
-        const aliases = p.aliases.join(', ');
-        return {
-            label: `${isCurrent ? '●' : '○'} ${p.name} (${aliases}) ${keyStatus}`,
-            value: p.id,
-        };
-    });
+    // Build provider options - with "Configure current" at top
+    const providerOptions = [
+        // Add "Configure current provider" option at top
+        {
+            label: `⚙️  Configure ${currentProvider.name} (current)`,
+            value: `__configure__${currentProvider.id}`,
+        },
+        // Then all providers
+        ...providers.map(p => {
+            const isCurrent = p.id === currentProvider.id;
+            const keyStatus = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '✓');
+            const aliases = p.aliases.join(', ');
+            return {
+                label: `${isCurrent ? '●' : '○'} ${p.name} (${aliases}) ${keyStatus}`,
+                value: p.id,
+            };
+        }),
+    ];
+
+    // Handle selection - check for configure action
+    const handleMenuSelect = (value: string) => {
+        if (value.startsWith('__configure__')) {
+            // Configure current provider - skip to URL step
+            const providerId = value.replace('__configure__', '');
+            const provider = providers.find(p => p.id === providerId);
+            if (provider) {
+                setSelectedProvider(provider);
+                setCustomUrl(getProviderBaseURL(providerId) || provider.baseURL || '');
+                setApiKeyValue(getApiKey(providerId) || '');
+                setStep('configure-url');
+            }
+        } else {
+            handleProviderSelect(value);
+        }
+    };
 
     // Render based on current step
     if (step === 'select-provider') {
@@ -142,8 +167,8 @@ export function ProviderSelector({ onExit, onSelect }: ProviderSelectorProps) {
                 <Box marginTop={1}>
                     <Select
                         options={providerOptions}
-                        defaultValue={currentProvider.id}
-                        onChange={handleProviderSelect}
+                        defaultValue={`__configure__${currentProvider.id}`}
+                        onChange={handleMenuSelect}
                     />
                 </Box>
                 <Box marginTop={1}>
