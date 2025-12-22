@@ -15,8 +15,10 @@ import { Spinner } from './components/ui/Spinner';
 import { SplitLayout, focusAuxPanel } from './components/SplitLayout';
 import { AuxiliaryPanel } from './components/AuxiliaryPanel';
 import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
+import { ModelSelector } from './components/ModelSelector';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
+import { getCurrentModelInfo } from './model-config';
 import 'ink-web/css';
 import 'xterm/css/xterm.css';
 
@@ -45,17 +47,23 @@ function TerminalContent({
     isReady,
     isBusy,
     queueLength,
+    showModelSelector,
     onSubmit,
     getCompletions,
     onCancel,
+    onModelSelectorClose,
+    onModelSelected,
 }: {
     outputs: AgentOutput[];
     isReady: boolean;
     isBusy: boolean;
     queueLength: number;
+    showModelSelector: boolean;
     onSubmit: (value: string) => void;
     getCompletions: (input: string) => string[];
     onCancel: () => void;
+    onModelSelectorClose: () => void;
+    onModelSelected: (modelId: string) => void;
 }) {
 
 
@@ -116,16 +124,24 @@ function TerminalContent({
                 </Box>
             )}
 
-            {/* Prompt at bottom - ALWAYS visible when ready (can queue while busy) */}
-            {isReady && (
-                <TextInput
-                    onSubmit={onSubmit}
-                    prompt={isBusy ? "📋 " : "❯ "}
-                    promptColor={isBusy ? colors.dim : colors.cyan}
-                    placeholder={placeholder}
-                    focus={true}
-                    getCompletions={getCompletions}
+            {/* Model selector overlay OR prompt at bottom */}
+            {showModelSelector ? (
+                <ModelSelector
+                    onExit={onModelSelectorClose}
+                    onSelect={onModelSelected}
                 />
+            ) : (
+                /* Prompt at bottom - ALWAYS visible when ready (can queue while busy) */
+                isReady && (
+                    <TextInput
+                        onSubmit={onSubmit}
+                        prompt={isBusy ? "📋 " : "❯ "}
+                        promptColor={isBusy ? colors.dim : colors.cyan}
+                        placeholder={placeholder}
+                        focus={true}
+                        getCompletions={getCompletions}
+                    />
+                )
             )}
         </Box>
     );
@@ -149,6 +165,8 @@ export default function App() {
 
     const initialized = useRef(false);
     const [terminalMounted, setTerminalMounted] = useState(false);
+    const [showModelSelector, setShowModelSelector] = useState(false);
+    const [currentModel, setCurrentModel] = useState(getCurrentModelInfo());
 
     // Initialize on mount (only once)
     useEffect(() => {
@@ -183,6 +201,12 @@ export default function App() {
 
         // Handle slash commands via command handler (always immediate)
         if (input.startsWith('/')) {
+            // Special case: /model with no args shows interactive selector
+            if (input.trim() === '/model') {
+                setShowModelSelector(true);
+                return;
+            }
+
             const ctx = {
                 output: addOutput,
                 clearHistory,
@@ -200,6 +224,15 @@ export default function App() {
         }
     }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);
 
+    // Handle model selection - just update local state (useAgent handles the message)
+    const handleModelSelected = useCallback((_modelId: string) => {
+        setCurrentModel(getCurrentModelInfo());
+    }, []);
+
+    const handleModelSelectorClose = useCallback(() => {
+        setShowModelSelector(false);
+    }, []);
+
     return (
         <AuxiliaryPanelProvider>
             <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -214,6 +247,9 @@ export default function App() {
                 }}>
                     <span style={{ fontSize: '16px', fontWeight: 500, color: '#9d4edd' }}>
                         🤖 Web Agent
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#8b949e' }}>
+                        {currentModel?.aliases[0] || 'haiku'}
                     </span>
                     <span style={{ fontSize: '12px', color: status.color }}>
                         {status.text}
@@ -232,9 +268,12 @@ export default function App() {
                                         isReady={isReady}
                                         isBusy={isBusy}
                                         queueLength={messageQueue.length}
+                                        showModelSelector={showModelSelector}
                                         onSubmit={handleSubmit}
                                         getCompletions={getCommandCompletions}
                                         onCancel={cancelRequest}
+                                        onModelSelectorClose={handleModelSelectorClose}
+                                        onModelSelected={handleModelSelected}
                                     />
                                 </InkXterm>
                             }

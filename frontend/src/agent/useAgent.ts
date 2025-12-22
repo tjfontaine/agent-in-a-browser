@@ -11,6 +11,7 @@ import { initializeWasmMcp, WasmAgent } from '../agent-sdk';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
 import { API_URL, ANTHROPIC_API_KEY } from '../constants';
 import { SYSTEM_PROMPT } from '../system-prompt';
+import { getCurrentModel, getCurrentModelInfo, subscribeToModelChanges } from '../model-config';
 
 // Output types for TUI
 export interface AgentOutput {
@@ -126,14 +127,17 @@ export function useAgent(): UseAgentReturn {
             addOutput('system', `✓ MCP Server ready: ${serverInfo.name} v${serverInfo.version}`, colors.green);
             addOutput('system', `  ${tools.length} tools available`, colors.dim);
 
-            // Initialize agent
+            // Initialize agent with current model
+            const modelId = getCurrentModel();
+            const modelInfo = getCurrentModelInfo();
             agentRef.current = new WasmAgent({
-                model: 'claude-sonnet-4-5',
+                model: modelId,
                 baseURL: API_URL,
                 apiKey: ANTHROPIC_API_KEY,
                 systemPrompt: SYSTEM_PROMPT,
                 maxSteps: 15,
             });
+            addOutput('system', `  Model: ${modelInfo?.name || modelId}`, colors.dim);
             addOutput('system', '✓ Agent ready', colors.green);
             addOutput('system', '', undefined);
 
@@ -294,6 +298,25 @@ export function useAgent(): UseAgentReturn {
             sendMessage(nextMessage);
         }
     }, [isBusy, messageQueue, isReady, sendMessage]);
+
+    // Subscribe to model changes and recreate agent when model switches
+    useEffect(() => {
+        const unsubscribe = subscribeToModelChanges((newModelId) => {
+            if (isReady && agentRef.current) {
+                const modelInfo = getCurrentModelInfo();
+                // Recreate agent with new model
+                agentRef.current = new WasmAgent({
+                    model: newModelId,
+                    baseURL: API_URL,
+                    apiKey: ANTHROPIC_API_KEY,
+                    systemPrompt: SYSTEM_PROMPT,
+                    maxSteps: 15,
+                });
+                addOutput('system', `🔄 Model switched to ${modelInfo?.name || newModelId}`, colors.cyan);
+            }
+        });
+        return unsubscribe;
+    }, [isReady, addOutput]);
 
     return {
         status,

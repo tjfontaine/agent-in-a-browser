@@ -14,6 +14,8 @@ export const helpCommand: CommandDef = {
         ctx.output('system', '  /help              - Show this help');
         ctx.output('system', '  /clear             - Clear conversation');
         ctx.output('system', '  /files [path]      - List files in sandbox');
+        ctx.output('system', '  /model [id]        - View/switch AI model');
+        ctx.output('system', '  /panel [show|hide] - Toggle auxiliary panel');
         ctx.output('system', '', undefined);
         ctx.output('system', 'MCP Commands:', colors.cyan);
         ctx.output('system', '  /mcp               - Show MCP status');
