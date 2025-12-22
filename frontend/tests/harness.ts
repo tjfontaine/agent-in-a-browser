@@ -92,69 +92,147 @@ async function runTests() {
         await mcpRequest('initialized', {});
         log('MCP Initialized', 'success');
 
-        // Test 1: run_typescript with console.log
-        log('Test 1: run_typescript with console.log');
-        let res = await callMcpTool('run_typescript', { code: 'console.log("Hello MCP")' });
+        // Test 1: tsx inline with console.log
+        log('Test 1: tsx inline with console.log');
+        let res = await callMcpTool('shell_eval', { command: `tsx -e "console.log('Hello MCP')"` });
         if (res.success && res.output.includes('Hello MCP')) {
             log('Test 1 Passed', 'success');
         } else {
             log(`Test 1 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 2: run_typescript with fetch
-        log('Test 2: run_typescript with fetch');
-        res = await callMcpTool('run_typescript', {
-            code: `
-                const r = await fetch('https://jsonplaceholder.typicode.com/todos/1'); 
-                console.log('Status:', r.status);
-            `
+        // Test 2: tsx with top-level await
+        log('Test 2: tsx with top-level await');
+        res = await callMcpTool('shell_eval', {
+            command: 'tsx -e "const x = await Promise.resolve(42); console.log(x)"'
         });
-        if (res.success && res.output.includes('Status: 200')) {
+        if (res.success && res.output.includes('42')) {
             log('Test 2 Passed', 'success');
         } else {
             log(`Test 2 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 3: write_file and read_file
-        log('Test 3: write_file and read_file');
-        await callMcpTool('write_file', { path: '/test.txt', content: 'hello mcp' });
-        res = await callMcpTool('read_file', { path: '/test.txt' });
-        if (res.success && res.output === 'hello mcp') {
+        // Test 3: tsx TypeScript type annotations get stripped
+        log('Test 3: tsx TypeScript type annotations');
+        res = await callMcpTool('shell_eval', {
+            command: 'tsx -e "const add = (a: number, b: number): number => a + b; console.log(add(2, 3))"'
+        });
+        if (res.success && res.output.includes('5')) {
             log('Test 3 Passed', 'success');
         } else {
             log(`Test 3 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 4: list directory
-        log('Test 4: list directory');
-        res = await callMcpTool('list', { path: '/' });
-        if (res.success && res.output.includes('test.txt')) {
+        // Test 4: tsx file execution
+        log('Test 4: tsx file execution');
+        await callMcpTool('write_file', {
+            path: '/data/test-script.ts',
+            content: 'const msg: string = "File works!"; console.log(msg);'
+        });
+        res = await callMcpTool('shell_eval', { command: 'tsx /data/test-script.ts' });
+        if (res.success && res.output.includes('File works!')) {
             log('Test 4 Passed', 'success');
         } else {
             log(`Test 4 Failed: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 5: grep
-        log('Test 5: grep');
-        res = await callMcpTool('grep', { pattern: 'hello', path: '/' });
-        if (res.success && res.output.includes('/test.txt')) {
-            log('Test 5 Passed', 'success');
+        // Test 5: tsx error - missing file
+        log('Test 5: tsx error - missing file');
+        res = await callMcpTool('shell_eval', { command: 'tsx /nonexistent.ts' });
+        if (!res.success || res.output.includes('No such file') || res.error?.includes('No such file')) {
+            log('Test 5 Passed (error expected)', 'success');
         } else {
-            log(`Test 5 Failed: ${JSON.stringify(res)}`, 'error');
+            log(`Test 5 Failed - expected error: ${JSON.stringify(res)}`, 'error');
         }
 
-        // Test 6: TypeScript type annotations
-        log('Test 6: TypeScript type annotations');
-        res = await callMcpTool('run_typescript', {
-            code: `
-                const add = (a: number, b: number): number => a + b;
-                console.log('Sum:', add(2, 3));
-            `
-        });
-        if (res.success && res.output.includes('Sum: 5')) {
-            log('Test 6 Passed', 'success');
+        // Test 6: tsx error - syntax error shows diagnostics
+        log('Test 6: tsx error - syntax error diagnostics');
+        res = await callMcpTool('shell_eval', { command: 'tsx -e "const x = {"' });
+        if (!res.success || res.output.includes('error') || res.error) {
+            log('Test 6 Passed (error expected)', 'success');
         } else {
-            log(`Test 6 Failed: ${JSON.stringify(res)}`, 'error');
+            log(`Test 6 Failed - expected error: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 7: tsx with no code
+        log('Test 7: tsx with no code');
+        res = await callMcpTool('shell_eval', { command: 'tsx' });
+        if (!res.success || res.output.includes('no code') || res.error?.includes('no code')) {
+            log('Test 7 Passed (error expected)', 'success');
+        } else {
+            log(`Test 7 Failed - expected error: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 8: tsx arithmetic expression
+        log('Test 8: tsx arithmetic');
+        res = await callMcpTool('shell_eval', { command: 'tsx -e "console.log(1 + 2 * 3)"' });
+        if (res.success && res.output.includes('7')) {
+            log('Test 8 Passed', 'success');
+        } else {
+            log(`Test 8 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 9: write_file and read_file (existing test)
+        log('Test 9: write_file and read_file');
+        await callMcpTool('write_file', { path: '/test.txt', content: 'hello mcp' });
+        res = await callMcpTool('read_file', { path: '/test.txt' });
+        if (res.success && res.output === 'hello mcp') {
+            log('Test 9 Passed', 'success');
+        } else {
+            log(`Test 9 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 10: list directory
+        log('Test 10: list directory');
+        res = await callMcpTool('list', { path: '/' });
+        if (res.success && res.output.includes('test.txt')) {
+            log('Test 10 Passed', 'success');
+        } else {
+            log(`Test 10 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 11: grep
+        log('Test 11: grep');
+        res = await callMcpTool('grep', { pattern: 'hello', path: '/' });
+        if (res.success && res.output.includes('/test.txt')) {
+            log('Test 11 Passed', 'success');
+        } else {
+            log(`Test 11 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 12: edit_file - successful edit
+        log('Test 12: edit_file successful');
+        await callMcpTool('write_file', { path: '/edit-test.txt', content: 'line one\nline two\nline three' });
+        res = await callMcpTool('edit_file', { path: '/edit-test.txt', old_str: 'line two', new_str: 'LINE TWO EDITED' });
+        if (res.success && res.output.includes('Edited')) {
+            // Verify the edit
+            const verify = await callMcpTool('read_file', { path: '/edit-test.txt' });
+            if (verify.success && verify.output.includes('LINE TWO EDITED') && !verify.output.includes('line two')) {
+                log('Test 12 Passed', 'success');
+            } else {
+                log(`Test 12 Failed - edit not applied: ${JSON.stringify(verify)}`, 'error');
+            }
+        } else {
+            log(`Test 12 Failed: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 13: edit_file - old_str not found
+        log('Test 13: edit_file not found');
+        res = await callMcpTool('edit_file', { path: '/edit-test.txt', old_str: 'nonexistent text', new_str: 'replacement' });
+        if (!res.success && res.error?.includes('not found')) {
+            log('Test 13 Passed', 'success');
+        } else {
+            log(`Test 13 Failed - expected error: ${JSON.stringify(res)}`, 'error');
+        }
+
+        // Test 14: edit_file - multiple matches
+        log('Test 14: edit_file multiple matches');
+        await callMcpTool('write_file', { path: '/multi.txt', content: 'foo bar foo' });
+        res = await callMcpTool('edit_file', { path: '/multi.txt', old_str: 'foo', new_str: 'FOO' });
+        if (!res.success && res.error?.includes('2 times')) {
+            log('Test 14 Passed', 'success');
+        } else {
+            log(`Test 14 Failed - expected multiple match error: ${JSON.stringify(res)}`, 'error');
         }
 
         log('All tests completed.');

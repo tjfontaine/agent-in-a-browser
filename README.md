@@ -128,12 +128,13 @@ The WASM runtime provides these tools to the AI agent:
 
 | Tool | Description |
 |------|-------------|
-| `run_typescript` | Execute TypeScript/JavaScript code |
+| `shell_eval` | Evaluate shell commands (tsx, ls, cat, curl, etc.) |
 | `read_file` | Read file from virtual filesystem (OPFS) |
 | `write_file` | Write file to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
-| `shell_eval` | Evaluate shell commands (cd, ls, cat, echo, etc.) |
+
+Shell commands include `tsx` for TypeScript/JavaScript execution.
 
 ## Docker
 

@@ -13,7 +13,7 @@ describe('System Prompt', () => {
 
     it('should mention available tools', () => {
         expect(SYSTEM_PROMPT).toContain('shell_eval');
-        expect(SYSTEM_PROMPT).toContain('run_typescript');
+        expect(SYSTEM_PROMPT).toContain('tsx');
         expect(SYSTEM_PROMPT).toContain('read_file');
         expect(SYSTEM_PROMPT).toContain('write_file');
         expect(SYSTEM_PROMPT).toContain('list');
@@ -35,7 +35,7 @@ describe('System Prompt', () => {
     });
 
     it('should mention shell pipes and chaining', () => {
-        expect(SYSTEM_PROMPT).toContain('pipes');
+        expect(SYSTEM_PROMPT).toContain('Pipes');
         expect(SYSTEM_PROMPT).toContain('chain operators');
     });
 

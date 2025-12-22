@@ -55,12 +55,13 @@ Standard WASI interfaces are bridged to browser APIs via TypeScript shims in `fr
 
 | Tool | Description |
 |------|-------------|
-| `run_typescript` | Execute TypeScript/JavaScript code |
+| `shell_eval` | Evaluate shell commands (tsx, ls, cat, curl, etc.) |
 | `read_file` | Read file content from virtual filesystem |
 | `write_file` | Write content to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
-| `shell_eval` | Evaluate shell commands (cd, ls, cat, echo, etc.) |
+
+The `tsx` shell command executes TypeScript/JavaScript in an embedded QuickJS runtime.
 
 ## Project Structure
 

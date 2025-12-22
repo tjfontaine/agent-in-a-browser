@@ -178,15 +178,11 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
 
     // Create a low-level sync fetch function that accepts options
     let sync_fetch_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
-        eprintln!("[__syncFetch__] Called with {} args", args.0.len());
-        
         // Get URL from first argument
         let url = args.0.first().and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
         
         // Get options JSON from second argument (method, headers, body)
         let options_json = args.0.get(1).and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
-        
-        eprintln!("[__syncFetch__] URL: {:?}, options: {:?}", url, options_json);
 
         match url {
             Some(url_str) => {
@@ -205,8 +201,6 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
                     ("GET".to_string(), None, None)
                 };
                 
-                eprintln!("[__syncFetch__] Making {} request to: {}", method, url_str);
-                
                 // Make the synchronous HTTP request
                 let result = crate::http_client::fetch_request(
                     &method,
@@ -217,7 +211,6 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
                 
                 match result {
                     Ok(response) => {
-                        eprintln!("[__syncFetch__] Got response: status={}, ok={}", response.status, response.ok);
                         // Return JSON with headers array for reconstruction
                         serde_json::json!({
                             "ok": response.ok,
@@ -240,7 +233,6 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
                 }
             }
             None => {
-                eprintln!("[__syncFetch__] No URL provided");
                 serde_json::json!({
                     "ok": false,
                     "status": 0,

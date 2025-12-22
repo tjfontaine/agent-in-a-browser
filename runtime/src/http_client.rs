@@ -65,8 +65,6 @@ fn read_body(
 
 /// Perform a synchronous HTTP GET request
 pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
-    eprintln!("[http_client] fetch_sync: {}", url);
-
     let (scheme, authority, path) = parse_url(url)?;
 
     // Build headers
@@ -96,8 +94,6 @@ pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
             let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
             let body = read_body(body_handle)?;
 
-            eprintln!("[http_client] Got response: status={}, body_len={}", status, body.len());
-
             return Ok(FetchResponse { status, ok, body });
         }
     }
@@ -110,8 +106,6 @@ pub fn fetch_request(
     headers_json: Option<&str>,
     body: Option<&str>,
 ) -> Result<FetchResponse, String> {
-    eprintln!("[http_client] fetch_request: {} {}", method, url);
-
     let (scheme, authority, path) = parse_url(url)?;
 
     // Build headers
@@ -179,8 +173,6 @@ pub fn fetch_request(
             // Read body
             let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
             let response_body = read_body(body_handle)?;
-
-            eprintln!("[http_client] Got response: status={}, body_len={}", status, response_body.len());
 
             return Ok(FetchResponse { 
                 status, 

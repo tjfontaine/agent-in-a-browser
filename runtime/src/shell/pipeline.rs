@@ -140,6 +140,76 @@ enum ChainOp {
     Seq,
 }
 
+/// Resolve a path relative to cwd if not absolute
+fn resolve_path(cwd: &str, path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else if cwd == "/" || cwd.is_empty() {
+        format!("/{}", path)
+    } else {
+        format!("{}/{}", cwd, path)
+    }
+}
+
+/// I/O redirections for a command
+#[derive(Debug, Clone, Default)]
+struct Redirects {
+    /// stdout redirect: (path, append?)
+    stdout: Option<(String, bool)>,
+    /// stderr redirect: path or special ">&1" for merge
+    stderr: Option<String>,
+    /// stdin redirect: path
+    stdin: Option<String>,
+}
+
+/// Parse redirections from tokens, returning (cmd_args, redirects)
+fn parse_redirects(tokens: Vec<String>) -> (Vec<String>, Redirects) {
+    let mut args = Vec::new();
+    let mut redirects = Redirects::default();
+    
+    let mut iter = tokens.into_iter().peekable();
+    while let Some(tok) = iter.next() {
+        if tok == ">" {
+            // stdout overwrite
+            if let Some(path) = iter.next() {
+                redirects.stdout = Some((path, false));
+            }
+        } else if tok == ">>" {
+            // stdout append
+            if let Some(path) = iter.next() {
+                redirects.stdout = Some((path, true));
+            }
+        } else if tok == "<" {
+            // stdin
+            if let Some(path) = iter.next() {
+                redirects.stdin = Some(path);
+            }
+        } else if tok == "2>&1" {
+            // merge stderr to stdout
+            redirects.stderr = Some(">&1".to_string());
+        } else if tok == "2>" {
+            // stderr to file
+            if let Some(path) = iter.next() {
+                redirects.stderr = Some(path);
+            }
+        } else if tok.starts_with(">") && tok.len() > 1 {
+            // >file (no space)
+            redirects.stdout = Some((tok[1..].to_string(), false));
+        } else if tok.starts_with(">>") && tok.len() > 2 {
+            // >>file (no space)
+            redirects.stdout = Some((tok[2..].to_string(), true));
+        } else if tok.starts_with("<") && tok.len() > 1 {
+            // <file (no space)
+            redirects.stdin = Some(tok[1..].to_string());
+        } else {
+            args.push(tok);
+        }
+    }
+    
+    (args, redirects)
+}
+
+
 /// Run a shell pipeline with support for &&, ||, and ; operators.
 /// 
 /// Parses the command line, handles chaining operators, creates pipe chains, 
@@ -243,16 +313,17 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
         return ShellResult::success("");
     }
 
-    // Parse each command
-    let mut commands: Vec<(String, Vec<String>)> = Vec::new();
+    // Parse each command with redirections
+    let mut commands: Vec<(String, Vec<String>, Redirects)> = Vec::new();
     for part in &pipeline_parts {
         let part = part.trim();
         match shlex::split(part) {
             Some(tokens) if !tokens.is_empty() => {
                 let cmd_name = tokens[0].clone();
-                // Expand globs in arguments
-                let args = expand_globs(&tokens[1..], &env.cwd.to_string_lossy());
-                commands.push((cmd_name, args));
+                // Parse redirections first, then expand globs on remaining args
+                let (remaining_tokens, redirects) = parse_redirects(tokens[1..].to_vec());
+                let args = expand_globs(&remaining_tokens, &env.cwd.to_string_lossy());
+                commands.push((cmd_name, args, redirects));
             }
             _ => {
                 return ShellResult::error(format!("Parse error: {}", part), 1);
@@ -261,7 +332,7 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
     }
 
     // Verify all commands exist
-    for (cmd_name, _) in &commands {
+    for (cmd_name, _, _) in &commands {
         if ShellCommands::get_command(cmd_name).is_none() {
             return ShellResult::error(format!("{}: command not found", cmd_name), 127);
         }
@@ -272,11 +343,24 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
 
     // For a single command, we run it directly
     if num_commands == 1 {
-        let (cmd_name, args) = commands.into_iter().next().unwrap();
+        let (cmd_name, args, redirects) = commands.into_iter().next().unwrap();
         let cmd_fn = ShellCommands::get_command(&cmd_name).unwrap();
+        let cwd = env.cwd.to_string_lossy().to_string();
 
-        // Create stdin (empty/closed)
-        let (stdin_reader, stdin_writer) = piper::pipe(PIPE_CAPACITY);
+        // Handle stdin redirect
+        let (stdin_reader, mut stdin_writer) = piper::pipe(PIPE_CAPACITY);
+        if let Some(ref path) = redirects.stdin {
+            let full_path = resolve_path(&cwd, path);
+            match std::fs::read(&full_path) {
+                Ok(content) => {
+                    use futures_lite::io::AsyncWriteExt;
+                    let _ = stdin_writer.write_all(&content).await;
+                }
+                Err(e) => {
+                    return ShellResult::error(format!("{}: {}", path, e), 1);
+                }
+            }
+        }
         drop(stdin_writer);
 
         // Create stdout capture
@@ -288,15 +372,61 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
         // Run command
         let code = cmd_fn(args, env, stdin_reader, stdout_writer, stderr_writer).await;
 
-        // Collect stdout
-        let stdout = drain_reader(stdout_reader).await;
-        let stderr = drain_reader(stderr_reader).await;
+        // Collect stdout and stderr
+        let stdout_bytes = drain_reader(stdout_reader).await;
+        let stderr_bytes = drain_reader(stderr_reader).await;
 
         drop(stderr_tx);
 
+        // Apply stdout redirect
+        let stdout = if let Some((ref path, append)) = redirects.stdout {
+            let full_path = resolve_path(&cwd, path);
+            let result = if append {
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&full_path)
+                    .and_then(|mut f| std::io::Write::write_all(&mut f, &stdout_bytes))
+            } else {
+                std::fs::write(&full_path, &stdout_bytes)
+            };
+            if let Err(e) = result {
+                return ShellResult::error(format!("{}: {}", path, e), 1);
+            }
+            String::new() // Output was redirected, don't show
+        } else {
+            String::from_utf8_lossy(&stdout_bytes).to_string()
+        };
+
+        // Apply stderr redirect
+        let stderr = match &redirects.stderr {
+            Some(s) if s == ">&1" => {
+                // Merge stderr to stdout (for redirects, append to file; otherwise return combined)
+                if redirects.stdout.is_some() {
+                    let (ref path, _) = redirects.stdout.as_ref().unwrap();
+                    let full_path = resolve_path(&cwd, path);
+                    let _ = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&full_path)
+                        .and_then(|mut f| std::io::Write::write_all(&mut f, &stderr_bytes));
+                    String::new()
+                } else {
+                    // Just combine with stdout in output
+                    String::from_utf8_lossy(&stderr_bytes).to_string()
+                }
+            }
+            Some(path) => {
+                let full_path = resolve_path(&cwd, path);
+                let _ = std::fs::write(&full_path, &stderr_bytes);
+                String::new()
+            }
+            None => String::from_utf8_lossy(&stderr_bytes).to_string(),
+        };
+
         return ShellResult {
-            stdout: String::from_utf8_lossy(&stdout).to_string(),
-            stderr: String::from_utf8_lossy(&stderr).to_string(),
+            stdout,
+            stderr,
             code,
         };
     }
@@ -324,7 +454,7 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
     let mut final_code = 0i32;
     let mut all_stderr = Vec::<u8>::new();
 
-    for (cmd_name, args) in commands.into_iter() {
+    for (cmd_name, args, _redirects) in commands.into_iter() {
         let cmd_fn = ShellCommands::get_command(&cmd_name).unwrap();
 
         // Create stdin from previous output

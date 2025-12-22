@@ -73,82 +73,59 @@ Use \`task_write\` to track multi-step work. The task panel helps users understa
 
 # Available Tools
 
-## run_typescript (IMPORTANT - Read Carefully)
-Execute JavaScript/TypeScript in an embedded QuickJS runtime.
-
-**CRITICAL: This is JavaScript, NOT shell syntax!**
-- Use semicolons to terminate statements
-- Use proper JavaScript string quotes (single or double)
-- Use console.log() for output
-- Top-level await is supported
-
-**Available APIs:**
-- console.log(), console.warn(), console.error()
-- fetch(url, options) - returns Promise<Response>
-  - Response: ok, status, statusText, headers
-  - await response.text() - returns Promise<string>
-  - await response.json() - returns Promise<object>
-- fs.promises.readFile(path), fs.promises.writeFile(path, data), fs.promises.readdir(path)
-- path.join(), path.dirname(), path.basename()
-
-**CORRECT Examples:**
-\`\`\`javascript
-// Simple fetch
-const res = await fetch("https://api.example.com/data");
-const data = await res.json();
-console.log(data);
-
-// POST with headers
-const response = await fetch("https://api.stripe.com/v1/customers", {
-  method: "GET",
-  headers: {
-    "Authorization": "Bearer sk_test_xxx",
-    "Content-Type": "application/x-www-form-urlencoded"
-  }
-});
-console.log(await response.json());
-
-// File operations
-const content = await fs.promises.readFile("/data/config.json");
-console.log(content);
-\`\`\`
-
-**WRONG - Common mistakes:**
-- \`curl https://...\` (that's shell, not JS)
-- Missing semicolons between statements
-- Using shell-style variable assignment \`VAR=value\`
-
 ## shell_eval
-Execute shell commands. Supports pipes and chain operators.
+Execute shell commands. Supports:
+- Pipes (\`|\`) and chain operators (\`&&\`, \`||\`, \`;\`)
+- Redirections: \`> file\`, \`>> file\`, \`< file\`, \`2>&1\`
+
 Run \`help\` to list commands, \`help <command>\` for usage.
 
-## File Tools
-- **read_file** / **write_file**: OPFS file operations
-- **list**: Directory listing
-- **grep**: Pattern search
+### tsx - TypeScript/JavaScript Executor
+Execute code in an embedded QuickJS runtime with ESM support.
 
-## Shell Commands (via shell_eval)
-Text: sed, cut, tr, grep, sort, uniq, head, tail, wc
-Files: ls, cat, find, diff, cp, mv, rm, mkdir, touch
-Network: curl (for simple HTTP requests)
-JSON: jq
-TypeScript: tsc, tsx
-Pipeline: xargs
+**Imports (supported):**
+- \`import x from './lib.ts'\` - local file import
+- \`import x from 'lodash'\` - auto-resolves to esm.sh CDN
+- \`import x from 'zod@3'\` - version specifier supported
+
+**Built-in Globals (no import needed):**
+- \`console.log()\`, \`fetch(url)\`, \`fs.promises.*\`, \`path.*\`
+
+**Usage:**
+\`\`\`
+tsx -e "console.log('Hello')"   # Simple inline
+tsx script.ts                   # File-based (preferred)
+\`\`\`
+
+**API Example (file-based):**
+\`\`\`
+write_file { path: "/data/api.ts", content: "const r = await fetch('https://jsonplaceholder.typicode.com/todos/1'); console.log(await r.json());" }
+tsx /data/api.ts
+\`\`\`
 
 ### tsc - TypeScript Transpiler
-Transpile TypeScript files to JavaScript.
+Transpile TypeScript to JavaScript (output only, no execution).
 \`\`\`
 tsc file.ts           # Output JS to stdout
 tsc -o out.js file.ts # Write JS to file
 \`\`\`
 
-### tsx - TypeScript Executor  
-Transpile and show JavaScript (use run_typescript for execution).
-\`\`\`
-tsx file.ts           # Show transpiled JS
-tsx -e "code"         # Transpile inline code
-\`\`\`
-Note: tsx shows the transpiled output. For actual execution, use run_typescript.
+### Other Shell Commands
+Text: sed, cut, tr, grep, sort, uniq, head, tail, wc
+Files: ls, cat, find, diff, cp, mv, rm, mkdir, touch
+Network: curl (for simple HTTP requests)
+JSON: jq
+Pipeline: xargs
+
+## File Tools
+- **read_file** / **write_file**: OPFS file operations
+- **edit_file**: Make targeted edits by replacing exact text
+  - Parameters: \`path\`, \`old_str\`, \`new_str\`
+  - \`old_str\` must match exactly and uniquely in the file
+  - For multiple edits, call edit_file multiple times
+  - Use read_file first to see current content
+- **list**: Directory listing
+- **grep**: Pattern search
 
 ## task_write
 Manage task list. Pass JSON array: \`[{"content": "Task", "status": "pending"}]\`
@@ -157,4 +134,3 @@ Status: \`pending\`, \`in_progress\`, \`completed\`
 # Environment
 - Files persist in OPFS (Origin Private File System)
 - All tools operate on the same filesystem`;
-

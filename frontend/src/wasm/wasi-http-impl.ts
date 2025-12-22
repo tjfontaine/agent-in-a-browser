@@ -222,34 +222,23 @@ export class OutgoingResponse {
         this._onChunk = onChunk;
         this._body = new OutgoingBody(new OutputStream({
             write: (bytes: Uint8Array) => {
-                console.log('[OutgoingResponse] write() called, bytes:', bytes.length);
                 this._bodyChunks.push(bytes);
-                // Emit chunk immediately if streaming callback is set
                 if (this._onChunk) {
-                    console.log('[OutgoingResponse] Calling onChunk');
                     this._onChunk(bytes);
                 }
                 return BigInt(bytes.length);
             },
-            flush: () => {
-                console.log('[OutgoingResponse] flush() called');
-            },
-            blockingFlush: () => {
-                console.log('[OutgoingResponse] blockingFlush() called');
-            },
+            flush: () => { },
+            blockingFlush: () => { },
             blockingWriteAndFlush: (bytes: Uint8Array) => {
-                console.log('[OutgoingResponse] blockingWriteAndFlush() called, bytes:', bytes.length);
                 this._bodyChunks.push(bytes);
-                // Emit chunk immediately if streaming callback is set
                 if (this._onChunk) {
-                    console.log('[OutgoingResponse] Calling onChunk from blockingWriteAndFlush');
                     this._onChunk(bytes);
                 }
             },
             checkWrite: () => BigInt(1024 * 1024)
         }));
         this._body._onFinish = () => {
-            console.log('[OutgoingResponse] _onFinish called');
             if (this._onBodyFinished) {
                 this._onBodyFinished();
             }
@@ -524,8 +513,6 @@ export const outgoingHandler = {
             headers[name] = new TextDecoder().decode(value);
         }
 
-        console.log(`[http] Sync request: ${method} ${url}`);
-
         // Use synchronous XMLHttpRequest
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false); // false = synchronous
@@ -543,8 +530,6 @@ export const outgoingHandler = {
 
         // Send request
         xhr.send(null);
-
-        console.log(`[http] Sync response: ${xhr.status}`);
 
         // Build response
         const responseBody = xhr.responseText

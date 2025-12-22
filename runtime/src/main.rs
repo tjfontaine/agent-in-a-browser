@@ -30,6 +30,9 @@ struct TsRuntimeMcp {
 
 thread_local! {
     static MCP_SERVER: RefCell<Option<TsRuntimeMcp>> = RefCell::new(None);
+    // Separate runtime for tsx shell command execution to avoid RefCell borrow conflicts
+    // (shell commands run within MCP_SERVER borrow, so tsx can't re-borrow)
+    static TSX_RUNTIME: RefCell<Option<TsRuntimeMcp>> = RefCell::new(None);
 }
 
 #[mcp_tool_router]
@@ -59,14 +62,14 @@ impl TsRuntimeMcp {
     fn eval_code(&mut self, code: &str) -> Result<String, String> {
         host_bindings::clear_logs();
 
-        let js_code = if code.contains(": ") || code.contains("<") || code.ends_with(".ts") {
-            transpiler::transpile(code)?
-        } else {
-            code.to_string()
-        };
+        // Always transpile to handle TypeScript
+        let js_code = transpiler::transpile(code)?;
+
+        // Wrap in async IIFE to support top-level await
+        let wrapped = format!("(async () => {{\n{}\n}})();", js_code);
 
         futures_lite::future::block_on(self.context.with(|ctx| {
-            let result = ctx.eval::<rquickjs::Value, _>(js_code.as_bytes());
+            let result = ctx.eval::<rquickjs::Value, _>(wrapped.as_bytes());
             match result.catch(&ctx) {
                 Ok(val) => {
                     // Check if result is a Promise and resolve it
@@ -156,17 +159,6 @@ impl TsRuntimeMcp {
     // ============================================================
     // MCP Tools - these are auto-registered by #[mcp_tool_router]
     // ============================================================
-
-    #[mcp_tool(description = "Execute JavaScript/TypeScript code in an embedded QuickJS runtime. SYNTAX: Use standard JavaScript - NOT shell syntax. Use semicolons, proper quotes, and valid JS expressions. OUTPUT: Use console.log() for output; the return value of the last expression is also returned. APIS: console.log/warn/error, fetch(url, {method, headers, body}) returning Promise with ok/status/text()/json(), fs.readFile/writeFile/readDir, path.join/dirname/basename. ASYNC: await works at top level. EXAMPLE: const res = await fetch('https://api.example.com'); const data = await res.json(); console.log(data);")]
-    fn run_typescript(&mut self, code: String) -> ToolResult {
-        if code.is_empty() {
-            return ToolResult::error("No code provided");
-        }
-        match self.eval_code(&code) {
-            Ok(r) => ToolResult::text(r),
-            Err(e) => ToolResult::error(e),
-        }
-    }
 
     #[mcp_tool(description = "Read the contents of a file at the given path.")]
     fn read_file(&self, path: String) -> ToolResult {
@@ -314,6 +306,71 @@ impl TsRuntimeMcp {
             ))
         }
     }
+
+    #[mcp_tool(description = "Edit a file by replacing old_str with new_str. The old_str must match exactly and uniquely in the file. For multiple edits, call this tool multiple times. Use read_file first to see the current content.")]
+    fn edit_file(&self, path: String, old_str: String, new_str: String) -> ToolResult {
+        use std::fs;
+
+        if path.is_empty() {
+            return ToolResult::error("No path provided");
+        }
+        if old_str.is_empty() {
+            return ToolResult::error("old_str cannot be empty (use write_file for creating new files)");
+        }
+
+        // Read the current file content
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) => return ToolResult::error(format!("Failed to read {}: {}", path, e)),
+        };
+
+        // Count occurrences of old_str
+        let count = content.matches(&old_str).count();
+        
+        if count == 0 {
+            // Provide helpful context about what's in the file
+            let preview_lines: Vec<&str> = content.lines().take(10).collect();
+            let preview = preview_lines.join("\n");
+            return ToolResult::error(format!(
+                "old_str not found in file.\n\nFirst 10 lines of file:\n{}\n\nMake sure old_str matches exactly (including whitespace).",
+                preview
+            ));
+        }
+        
+        if count > 1 {
+            // Find line numbers where matches occur to help user be more specific
+            let mut match_lines = Vec::new();
+            let mut char_pos = 0;
+            for (line_num, line) in content.lines().enumerate() {
+                if line.contains(&old_str) {
+                    match_lines.push(format!("  Line {}: {}", line_num + 1, 
+                        if line.len() > 60 { format!("{}...", &line[..60]) } else { line.to_string() }));
+                }
+                char_pos += line.len() + 1;
+            }
+            return ToolResult::error(format!(
+                "old_str found {} times. Include more context to make it unique.\n\nMatches at:\n{}",
+                count,
+                match_lines.join("\n")
+            ));
+        }
+
+        // Perform the replacement (exactly one match)
+        let new_content = content.replacen(&old_str, &new_str, 1);
+
+        // Write the updated content
+        match fs::write(&path, &new_content) {
+            Ok(()) => {
+                let old_lines = old_str.lines().count();
+                let new_lines = new_str.lines().count();
+                ToolResult::text(format!(
+                    "Edited {}: replaced {} line(s) with {} line(s)",
+                    path, old_lines, new_lines
+                ))
+            }
+            Err(e) => ToolResult::error(format!("Failed to write {}: {}", path, e)),
+        }
+    }
 }
 
 /// Get or create the MCP server instance (thread-local)
@@ -327,6 +384,19 @@ where
             *server_ref = Some(TsRuntimeMcp::new().expect("Failed to create MCP server"));
         }
         f(server_ref.as_mut().unwrap())
+    })
+}
+
+/// Public API for shell commands to execute JavaScript/TypeScript code.
+/// Uses a separate QuickJS runtime (TSX_RUNTIME) to avoid RefCell conflicts
+/// since shell commands run within an MCP_SERVER borrow.
+pub fn eval_js(code: &str) -> Result<String, String> {
+    TSX_RUNTIME.with(|rt| {
+        let mut rt_ref = rt.borrow_mut();
+        if rt_ref.is_none() {
+            *rt_ref = Some(TsRuntimeMcp::new().map_err(|e| format!("Failed to create tsx runtime: {}", e))?);
+        }
+        rt_ref.as_mut().unwrap().eval_code(code)
     })
 }
 

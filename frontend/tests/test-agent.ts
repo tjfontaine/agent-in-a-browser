@@ -88,25 +88,25 @@ async function main() {
     // Test 2: Simple message without tools
     await testDirectApiCall([], 'Say hello in one word');
 
-    // Test 3: Message with run_typescript tool
-    const runTypescriptTool: ToolDef = {
-        name: 'run_typescript',
-        description: 'Execute TypeScript or JavaScript code and return the output',
+    // Test 3: Message with shell_eval tool (tsx)
+    const shellEvalTool: ToolDef = {
+        name: 'shell_eval',
+        description: 'Execute shell commands including tsx for TypeScript/JavaScript',
         input_schema: {
             type: 'object',
             properties: {
-                code: {
+                command: {
                     type: 'string',
-                    description: 'The TypeScript or JavaScript code to execute'
+                    description: 'The shell command to execute'
                 }
             },
-            required: ['code']
+            required: ['command']
         }
     };
 
     await testDirectApiCall(
-        [runTypescriptTool],
-        'Calculate 15 * 23 using the run_typescript tool. Use console.log to output the result.'
+        [shellEvalTool],
+        'Calculate 15 * 23 using the shell_eval tool with tsx. Example: shell_eval with command: tsx -e "console.log(15*23)"'
     );
 
     // Test 4: Check if tool args are passed

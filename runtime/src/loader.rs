@@ -4,20 +4,47 @@ use rquickjs::loader::Loader;
 use rquickjs::module::Declared;
 use rquickjs::{Ctx, Module, Result};
 
+use crate::http_client;
 use crate::transpiler;
 
 /// Hybrid loader that fetches modules from network (for URLs) or filesystem (for local paths).
 pub struct HybridLoader;
 
 impl Loader for HybridLoader {
-    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<Module<'js, Declared>> {
-        // For now, we need to handle this synchronously
-        // In WASI environment, we would need to use blocking calls
-        // or implement a custom async loading mechanism
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js, Declared>> {
+        // Fetch source code
+        let source = if path.starts_with("https://") || path.starts_with("http://") {
+            // Fetch from URL using synchronous WASI HTTP
+            match http_client::fetch_sync(path) {
+                Ok(response) if response.ok => response.body,
+                Ok(response) => {
+                    return Err(rquickjs::Error::new_loading_message(
+                        path,
+                        format!("HTTP {}", response.status),
+                    ));
+                }
+                Err(e) => {
+                    return Err(rquickjs::Error::new_loading_message(path, e));
+                }
+            }
+        } else {
+            // Read from WASI filesystem
+            std::fs::read_to_string(path).map_err(|e| {
+                rquickjs::Error::new_loading_message(path, format!("{}", e))
+            })?
+        };
 
-        // Placeholder: Try to fetch and evaluate the module
-        // In a real implementation, this would be async
-        Err(rquickjs::Error::new_loading(path))
+        // Auto-transpile TypeScript
+        let js_source = if path.ends_with(".ts") || path.ends_with(".tsx") {
+            transpiler::transpile(&source).map_err(|e| {
+                rquickjs::Error::new_loading_message(path, e)
+            })?
+        } else {
+            source
+        };
+
+        // Declare the module
+        Module::declare(ctx.clone(), path, js_source)
     }
 }
 

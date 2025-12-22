@@ -64,9 +64,11 @@ export function createWorkerFetch(worker: Worker): WorkerFetch {
                         headers: new Headers(headers)
                     }));
                 } else if (type === 'error') {
-                    console.error('[WorkerFetch] Error from worker:', payload);
+                    // Error can come as either { error: 'msg' } (from sandbox-worker) or { payload: { error: 'msg' } }
+                    const errorMsg = event.data.error || payload?.error || 'Unknown fetch error';
+                    console.error('[WorkerFetch] Error from worker:', errorMsg);
                     cleanup();
-                    reject(new Error(payload.error));
+                    reject(new Error(errorMsg));
                 }
             };
 

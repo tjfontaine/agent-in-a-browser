@@ -1,6 +1,6 @@
 //! TypeScript to JavaScript transpilation using SWC.
 
-use swc_common::{sync::Lrc, FileName, Mark, SourceMap, GLOBALS};
+use swc_common::{sync::Lrc, FileName, Mark, SourceMap, Spanned, GLOBALS};
 use swc_ecma_ast::{EsVersion, Program};
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
@@ -32,13 +32,11 @@ fn transpile_inner(ts_code: &str) -> Result<String, String> {
     let lexer = Lexer::new(syntax, EsVersion::Es2020, StringInput::from(&*fm), None);
     let mut parser = Parser::new_from(lexer);
 
-    let module = parser
-        .parse_module()
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let module = parser.parse_module().map_err(|e| format_parse_error(ts_code, e))?;
 
     // Check for parse errors
     for err in parser.take_errors() {
-        return Err(format!("Parse error: {:?}", err));
+        return Err(format_parse_error(ts_code, err));
     }
 
     // Apply TypeScript type stripping transform using Pass trait
@@ -76,6 +74,85 @@ fn transpile_inner(ts_code: &str) -> Result<String, String> {
     String::from_utf8(buf).map_err(|e| format!("UTF-8 error: {}", e))
 }
 
+/// Format a parse error with code context and a human-readable description
+fn format_parse_error(source: &str, err: swc_ecma_parser::error::Error) -> String {
+    let span = err.span();
+    let lo = span.lo.0 as usize;
+    
+    // Find line number and column
+    let mut line_num = 1;
+    let mut line_start = 0;
+    let mut col = lo;
+    
+    for (i, c) in source.char_indices() {
+        if i >= lo {
+            col = lo - line_start;
+            break;
+        }
+        if c == '\n' {
+            line_num += 1;
+            line_start = i + 1;
+        }
+    }
+    
+    // Get the problematic line
+    let line_content: &str = source[line_start..]
+        .lines()
+        .next()
+        .unwrap_or("");
+    
+    // Build caret pointer
+    let caret = format!("{}^", " ".repeat(col));
+    
+    // Get human-readable error message
+    let err_msg = format!("{:?}", err);
+    let readable_msg = extract_readable_error(&err_msg);
+    
+    format!(
+        "Parse error at line {}:\n  {}\n  {}\n{}",
+        line_num,
+        line_content,
+        caret,
+        readable_msg
+    )
+}
+
+/// Extract a human-readable message from SWC error debug output
+fn extract_readable_error(err_debug: &str) -> String {
+    // Common TypeScript error codes to human-readable messages
+    if err_debug.contains("TS1109") {
+        return "Expression expected".to_string();
+    } else if err_debug.contains("TS1005") {
+        return "Expected token (likely missing semicolon, comma, or bracket)".to_string();
+    } else if err_debug.contains("TS1002") {
+        return "Unterminated string literal".to_string();
+    } else if err_debug.contains("TS1003") {
+        return "Identifier expected".to_string();
+    } else if err_debug.contains("TS1128") {
+        return "Declaration or statement expected".to_string();
+    } else if err_debug.contains("TS1136") {
+        return "Property assignment expected".to_string();
+    } else if err_debug.contains("TS1160") {
+        return "Tagged template expressions not allowed here".to_string();
+    } else if err_debug.contains("TS2304") {
+        return "Cannot find name".to_string();
+    } else if err_debug.contains("TS1161") {
+        return "Unterminated regular expression literal".to_string();
+    } else if err_debug.contains("Unexpected eof") || err_debug.contains("UnexpectedEof") {
+        return "Unexpected end of file (likely missing closing bracket or quote)".to_string();
+    }
+    
+    // If no known code, return a cleaned-up version
+    if let Some(msg_start) = err_debug.find("message:") {
+        let rest = &err_debug[msg_start + 8..];
+        if let Some(end) = rest.find([',', '}']) {
+            return rest[..end].trim().trim_matches('"').to_string();
+        }
+    }
+    
+    "Syntax error".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +170,15 @@ mod tests {
         let ts = "const greet = (name: string): string => `Hello, ${name}`;";
         let js = transpile(ts).unwrap();
         assert!(!js.contains(": string"), "Got: {}", js);
+    }
+
+    #[test]
+    fn test_parse_error_shows_context() {
+        let ts = "const x = {";  // Missing closing brace
+        let err = transpile(ts).unwrap_err();
+        // Should show line number
+        assert!(err.contains("line"), "Expected line info: {}", err);
+        // Should show the problematic code
+        assert!(err.contains("const x"), "Expected code context: {}", err);
     }
 }

@@ -405,7 +405,7 @@ impl MiscCommands {
     #[shell_command(
         name = "tsx",
         usage = "tsx [-e CODE] [FILE]",
-        description = "Execute TypeScript code or file"
+        description = "Execute TypeScript/JavaScript code or file"
     )]
     fn cmd_tsx(
         args: Vec<String>,
@@ -444,7 +444,10 @@ impl MiscCommands {
                 i += 1;
             }
             
+            // Track source for error messages
+            let source_name: String;
             let ts_code = if let Some(code) = inline_code {
+                source_name = "<inline>".to_string();
                 code
             } else if let Some(file) = input_file {
                 let path = if file.starts_with('/') {
@@ -452,6 +455,7 @@ impl MiscCommands {
                 } else {
                     format!("{}/{}", cwd, file)
                 };
+                source_name = path.clone();
                 
                 match std::fs::read_to_string(&path) {
                     Ok(c) => c,
@@ -466,28 +470,43 @@ impl MiscCommands {
                 return 1;
             };
             
-            // Transpile TypeScript to JavaScript
-            let js_code = match crate::transpiler::transpile(&ts_code) {
-                Ok(js) => js,
-                Err(e) => {
-                    let msg = format!("tsx: transpile error: {}\n", e);
-                    let _ = stderr.write_all(msg.as_bytes()).await;
-                    return 1;
+            // Execute the code using the QuickJS runtime
+            match crate::eval_js(&ts_code) {
+                Ok(output) => {
+                    if !output.is_empty() && output != "undefined" {
+                        let _ = stdout.write_all(output.as_bytes()).await;
+                        if !output.ends_with('\n') {
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                    }
+                    0
                 }
-            };
-            
-            // Execute via MCP server (through thread-local instance)
-            // Note: For shell commands, we output the transpiled JS that can be executed
-            // The run_typescript MCP tool handles actual QuickJS execution
-            // Here we just output what would be executed
-            let _ = stdout.write_all(b"[Transpiled JavaScript]\n").await;
-            let _ = stdout.write_all(js_code.as_bytes()).await;
-            if !js_code.ends_with('\n') {
-                let _ = stdout.write_all(b"\n").await;
+                Err(e) => {
+                    // Format error with source location
+                    let _ = stderr.write_all(format!("tsx: error in {}\n", source_name).as_bytes()).await;
+                    
+                    // Try to extract line info from error message
+                    let err_str = e.to_string();
+                    if err_str.contains("Parse error") || err_str.contains("Evaluation error") {
+                        let _ = stderr.write_all(format!("  {}\n", err_str).as_bytes()).await;
+                        
+                        // Show first few lines of source for context if it's a short snippet
+                        let lines: Vec<&str> = ts_code.lines().take(5).collect();
+                        if !lines.is_empty() && ts_code.len() < 500 {
+                            let _ = stderr.write_all(b"\n  Source:\n").await;
+                            for (i, line) in lines.iter().enumerate() {
+                                let _ = stderr.write_all(format!("  {:>3} | {}\n", i + 1, line).as_bytes()).await;
+                            }
+                            if ts_code.lines().count() > 5 {
+                                let _ = stderr.write_all(b"      ...\n").await;
+                            }
+                        }
+                    } else {
+                        let _ = stderr.write_all(format!("  {}\n", err_str).as_bytes()).await;
+                    }
+                    1
+                }
             }
-            let _ = stdout.write_all(b"\n[Use run_typescript tool for execution]\n").await;
-            
-            0
         })
     }
 }
