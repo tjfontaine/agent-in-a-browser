@@ -267,7 +267,18 @@ export default function App() {
                     addOutput(type, content, color);
                 },
                 clearHistory,
-                sendMessage,
+                // Wrap sendMessage to check API key requirements (same as regular messages)
+                sendMessage: (msg: string) => {
+                    const provider = getCurrentProvider();
+                    if (provider.requiresKey && !hasApiKey(provider.id)) {
+                        addOutput('system', `⚠️ API key required for ${provider.name}`, colors.yellow);
+                        // Store the pending message to dispatch after API key is set
+                        setSecretInputState({ providerId: provider.id, providerName: provider.name, pendingMessage: msg });
+                        setOverlayMode('secret-input');
+                        return;
+                    }
+                    sendMessage(msg);
+                },
             };
             await executeCommand(input, ctx);
             return;
