@@ -8,8 +8,8 @@ This directory contains the browser-based AI agent application.
 ┌─────────────────────────────────────────────────────────────┐
 │  Browser                                                    │
 │  ┌──────────────────┐  ┌───────────────────────────────────┐│
-│  │ Terminal UI      │  │ Agent                             ││
-│  │ (xterm.js)       │  │ - Vercel AI SDK                   ││
+│  │ React App        │  │ Agent (useAgent hook)             ││
+│  │ (ink-web/xterm)  │  │ - Vercel AI SDK                   ││
 │  │                  │  │ - MCP Tool Integration            ││
 │  └────────┬─────────┘  └────────────────┬──────────────────┘│
 │           │                             │                   │
@@ -26,42 +26,47 @@ This directory contains the browser-based AI agent application.
 
 ```text
 src/
-├── main.ts                 # Entry point - orchestrates initialization
+├── main.tsx                # React entry point
+├── App.tsx                 # Main application component
+├── index.css               # Global styles
+│
 ├── types.ts                # Shared type definitions
 ├── constants.ts            # Configuration constants
 ├── system-prompt.ts        # AI agent system prompt
 │
-├── terminal/               # Terminal UI layer
+├── components/             # React components
+│   ├── SplitLayout.tsx     # Main/auxiliary panel layout
+│   ├── AuxiliaryPanel.tsx  # Task/file/output panel
+│   ├── auxiliary-panel-context.tsx
+│   └── ui/                 # Reusable UI components
+│       ├── text-input.tsx  # Terminal text input
+│       ├── Spinner.tsx     # Loading spinner
+│       └── ...
+│
+├── agent/                  # Agent execution
 │   ├── index.ts            # Barrel export
-│   ├── setup.ts            # xterm.js configuration and addons
-│   └── welcome.ts          # Welcome banner
+│   ├── useAgent.ts         # React hook for agent state
+│   ├── loop.ts             # Agent execution loop
+│   ├── sandbox.ts          # Sandbox worker management
+│   └── status.ts           # Status display
 │
 ├── commands/               # Slash command handling
 │   ├── index.ts            # Barrel export
 │   ├── router.ts           # Command routing (/help, /clear, etc.)
 │   └── mcp.ts              # MCP server management commands
 │
-├── agent/                  # Agent execution
-│   ├── index.ts            # Barrel export
-│   ├── loop.ts             # Agent execution loop
-│   ├── sandbox.ts          # Sandbox worker management
-│   └── status.ts           # Status display
-│
-├── input/                  # Input handling
-│   ├── index.ts            # Barrel export
-│   └── prompt-loop.ts      # Readline prompt loop
-│
 ├── tui.ts                  # TUI components (spinners, diffs)
+├── task-manager.ts         # Task state management
 ├── agent-sdk.ts            # Vercel AI SDK integration
 ├── command-parser.ts       # Slash command parser
 ├── mcp-client.ts           # MCP JSON-RPC client
 ├── wasm-mcp-bridge.ts      # WASM MCP bridge
+├── worker-fetch.ts         # Worker-based fetch wrapper
 ├── oauth-pkce.ts           # OAuth 2.1 PKCE authentication
 ├── remote-mcp-registry.ts  # Remote MCP server registry
 ├── sandbox-worker.ts       # Web Worker entry point
 │
 └── wasm/                   # WASM runtime
-    ├── ts-runtime.ts       # TypeScript runtime loader
     ├── opfs-filesystem-impl.ts  # OPFS file system
     ├── wasi-http-impl.ts   # WASI HTTP implementation
     ├── clocks-impl.js      # Custom clocks for sync blocking
@@ -74,19 +79,20 @@ src/
 
 | Module | Responsibility |
 |--------|---------------|
-| `terminal/` | xterm.js setup, welcome banner, key handlers |
+| `App.tsx` | Main React component with terminal UI |
+| `components/` | React components for UI layout |
+| `agent/useAgent.ts` | React hook managing agent state |
 | `commands/` | Slash command parsing and execution |
 | `agent/` | AI agent lifecycle and sandbox communication |
-| `input/` | User input handling and prompt loop |
 
 ### Data Flow
 
-1. User types in terminal
-2. `input/prompt-loop.ts` receives input
+1. User types in terminal (ink-web TextInput)
+2. `App.tsx` handles input via `handleSubmit`
 3. If `/command`, routes to `commands/router.ts`
-4. If message, routes to `agent/loop.ts`
+4. If message, calls `sendMessage` from `useAgent` hook
 5. Agent calls tools via `agent/sandbox.ts` → WASM MCP server
-6. Results rendered via `tui.ts`
+6. Results rendered as React components in terminal
 
 ### Slash Commands
 
@@ -105,6 +111,9 @@ src/
 ```bash
 # Start development server
 npm run dev
+
+# Run tests
+npm test
 
 # Build for production
 npm run build
