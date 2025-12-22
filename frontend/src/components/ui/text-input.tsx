@@ -21,7 +21,6 @@ export interface TextInputProps {
     placeholder?: string;
     prompt?: string;
     promptColor?: string;
-    cursorColor?: string;
     focus?: boolean;
     /** Function to get completions for the current input */
     getCompletions?: CompletionFn;
@@ -38,7 +37,6 @@ export const TextInput = ({
     placeholder = '',
     prompt = '❯ ',
     promptColor = 'cyan',
-    cursorColor = '#58a6ff',
     focus = true,
     getCompletions,
 }: TextInputProps) => {
@@ -264,32 +262,29 @@ export const TextInput = ({
     const atCursor = value[cursorPosition] || ' ';
     const afterCursor = value.slice(cursorPosition + 1);
 
-    // Use ANSI escape codes for cursor to keep it inline during wrap
-    // Use block character when at end of line for visibility
-    const cursorChar = atCursor === ' ' ? '█' : atCursor;
+    // For cursor, always show a space with white background - simpler and consistent
+    // Don't use the block character as it renders inconsistently with inverse
 
     return (
         <Box flexWrap="wrap">
             <Text color={promptColor}>{prompt}</Text>
             {showPlaceholder ? (
                 <>
-                    {focus && <Text inverse> </Text>}
+                    {focus && cursorVisible ? (
+                        <Text backgroundColor="white" color="black"> </Text>
+                    ) : <Text> </Text>}
                     <Text dimColor>{placeholder}</Text>
                 </>
             ) : (
-                <Text>
-                    {beforeCursor}
-                    {focus && cursorVisible ? (() => {
-                        // Convert hex color to RGB for ANSI true color
-                        const hex = cursorColor.replace('#', '');
-                        const r = parseInt(hex.slice(0, 2), 16);
-                        const g = parseInt(hex.slice(2, 4), 16);
-                        const b = parseInt(hex.slice(4, 6), 16);
-                        // ESC[48;2;R;G;Bm = set background color, ESC[30m = black text, ESC[0m = reset
-                        return `\x1b[48;2;${r};${g};${b}m\x1b[30m${cursorChar}\x1b[0m`;
-                    })() : atCursor}
-                    {afterCursor}
-                </Text>
+                <>
+                    <Text>{beforeCursor}</Text>
+                    {focus && cursorVisible ? (
+                        <Text backgroundColor="white" color="black">{atCursor === ' ' ? ' ' : atCursor}</Text>
+                    ) : (
+                        <Text>{atCursor}</Text>
+                    )}
+                    <Text>{afterCursor}</Text>
+                </>
             )}
         </Box>
     );
