@@ -471,7 +471,7 @@ impl MiscCommands {
             };
             
             // Execute the code using the QuickJS runtime
-            match crate::eval_js(&ts_code) {
+            match crate::eval_js_with_source(&ts_code, &source_name) {
                 Ok(output) => {
                     if !output.is_empty() && output != "undefined" {
                         let _ = stdout.write_all(output.as_bytes()).await;

@@ -60,38 +60,127 @@ impl TsRuntimeMcp {
     }
 
     fn eval_code(&mut self, code: &str) -> Result<String, String> {
+        self.eval_code_with_source(code, "<eval>")
+    }
+    
+    fn eval_code_with_source(&mut self, code: &str, source_name: &str) -> Result<String, String> {
         host_bindings::clear_logs();
 
         // Always transpile to handle TypeScript
         let js_code = transpiler::transpile(code)?;
 
-        // Wrap in async IIFE to support top-level await
-        let wrapped = format!("(async () => {{\n{}\n}})();", js_code);
+        // Detect if code has ES module imports
+        let has_imports = js_code.contains("import ") || js_code.contains("import{") 
+            || js_code.contains("import\t") || js_code.contains("import\n");
 
-        futures_lite::future::block_on(self.context.with(|ctx| {
-            let result = ctx.eval::<rquickjs::Value, _>(wrapped.as_bytes());
-            match result.catch(&ctx) {
-                Ok(val) => {
-                    // Check if result is a Promise and resolve it
-                    let resolved_val = if let Ok(promise) = rquickjs::Promise::from_value(val.clone()) {
-                        // Drive the JS job queue until the Promise resolves
+        if has_imports {
+            // Use Module::evaluate for ESM import support
+            futures_lite::future::block_on(self.context.with(|ctx| {
+                let result = rquickjs::Module::evaluate(ctx.clone(), source_name, js_code);
+                match result.catch(&ctx) {
+                    Ok(promise) => {
+                        // Wait for module to finish evaluating
                         match promise.finish::<rquickjs::Value>() {
-                            Ok(resolved) => resolved,
+                            Ok(_) => {
+                                let logs = host_bindings::get_logs();
+                                if logs.is_empty() {
+                                    Ok("(module executed)".to_string())
+                                } else {
+                                    Ok(logs)
+                                }
+                            }
                             Err(e) => {
-                                // Promise rejected or error - return error message
-                                return Err(format!("Promise error: {:?}", e));
+                                // Try to extract exception details using ctx.catch()
+                                Err(Self::format_js_error(&ctx, e, "Module error"))
                             }
                         }
-                    } else {
-                        val
-                    };
-                    
-                    // Format the resolved value
-                    Self::format_value(&ctx, resolved_val)
+                    }
+                    Err(e) => {
+                        // CaughtError contains the exception - format it
+                        Err(format!("Module compile error: {}", e))
+                    }
                 }
-                Err(e) => Err(format!("Evaluation error: {:?}", e)),
+            }))
+        } else {
+            // Script mode for simple code without imports
+            let wrapped = format!("(async () => {{\n{}\n}})();", js_code);
+
+            futures_lite::future::block_on(self.context.with(|ctx| {
+                let result = ctx.eval::<rquickjs::Value, _>(wrapped.as_bytes());
+                match result.catch(&ctx) {
+                    Ok(val) => {
+                        // Check if result is a Promise and resolve it
+                        let resolved_val = if let Ok(promise) = rquickjs::Promise::from_value(val.clone()) {
+                            // Drive the JS job queue until the Promise resolves
+                            match promise.finish::<rquickjs::Value>() {
+                                Ok(resolved) => resolved,
+                                Err(e) => {
+                                    // Promise rejected or error - return error message
+                                    return Err(format!("Promise error: {:?}", e));
+                                }
+                            }
+                        } else {
+                            val
+                        };
+                        
+                        // Format the resolved value
+                        Self::format_value(&ctx, resolved_val)
+                    }
+                    Err(e) => Err(format!("Evaluation error: {:?}", e)),
+                }
+            }))
+        }
+    }
+    
+    /// Format a JavaScript error, extracting exception details if available
+    fn format_js_error<'a>(ctx: &rquickjs::Ctx<'a>, err: rquickjs::Error, prefix: &str) -> String {
+        // Check if there's a caught exception on the context
+        // ctx.catch() returns Value which may be undefined if no exception
+        let exc = ctx.catch();
+        if !exc.is_undefined() {
+            // Try to extract error message and stack
+            if let Some(obj) = exc.as_object() {
+                let mut parts = vec![];
+                
+                // Get error name (e.g., "TypeError", "SyntaxError")
+                if let Ok(name) = obj.get::<_, String>("name") {
+                    parts.push(name);
+                }
+                
+                // Get error message
+                if let Ok(msg) = obj.get::<_, String>("message") {
+                    parts.push(msg);
+                }
+                
+                // Get stack trace
+                if let Ok(stack) = obj.get::<_, String>("stack") {
+                    if !stack.is_empty() {
+                        return format!("{}: {}\nStack: {}", prefix, parts.join(": "), stack);
+                    }
+                }
+                
+                if !parts.is_empty() {
+                    return format!("{}: {}", prefix, parts.join(": "));
+                }
             }
-        }))
+            
+            // Fallback: try to stringify the exception
+            if let Some(s) = exc.as_string() {
+                if let Ok(msg) = s.to_string() {
+                    return format!("{}: {}", prefix, msg);
+                }
+            }
+            
+            return format!("{}: {:?}", prefix, exc);
+        }
+        
+        // No caught exception, use error's Display
+        let error_msg = format!("{}", err);
+        if error_msg.is_empty() || error_msg == "Exception" {
+            format!("{}: {:?}", prefix, err)
+        } else {
+            format!("{}: {}", prefix, error_msg)
+        }
     }
     
     /// Format a JavaScript value as a string for output
@@ -391,12 +480,18 @@ where
 /// Uses a separate QuickJS runtime (TSX_RUNTIME) to avoid RefCell conflicts
 /// since shell commands run within an MCP_SERVER borrow.
 pub fn eval_js(code: &str) -> Result<String, String> {
+    eval_js_with_source(code, "<eval>")
+}
+
+/// Execute JavaScript/TypeScript code with a source path for module resolution.
+/// The source_name is used as the base path when resolving relative imports.
+pub fn eval_js_with_source(code: &str, source_name: &str) -> Result<String, String> {
     TSX_RUNTIME.with(|rt| {
         let mut rt_ref = rt.borrow_mut();
         if rt_ref.is_none() {
             *rt_ref = Some(TsRuntimeMcp::new().map_err(|e| format!("Failed to create tsx runtime: {}", e))?);
         }
-        rt_ref.as_mut().unwrap().eval_code(code)
+        rt_ref.as_mut().unwrap().eval_code_with_source(code, source_name)
     })
 }
 
