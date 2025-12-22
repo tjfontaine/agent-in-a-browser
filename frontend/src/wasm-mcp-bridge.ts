@@ -15,6 +15,7 @@ import {
     ResponseOutparam,
     IncomingRequest,
 } from './wasm/wasi-http-impl.js';
+import { prepareFileForSync } from './wasm/opfs-filesystem-impl.js';
 
 // Type for WASM response objects
 interface WasmResponse {
@@ -27,14 +28,41 @@ interface WasmResponse {
 export type { JsonRpcRequest, JsonRpcResponse } from './mcp-client';
 
 /**
- * Call the WASM MCP server with a Request object
- * 
- * This function:
- * 1. Maps the Web Request to a WASI IncomingRequest
- * 2. Streams the request body to the WASM component
- * 3. Pipes the WASM component's response body to a ReadableStream
- * 4. Returns a standard-like Response structure (status, headers, body stream)
+ * Intercept and prepare file paths for file operations.
+ * Must be called before WASM operations that access files.
  */
+async function prepareFileOperation(body: string): Promise<void> {
+    try {
+        const parsed = JSON.parse(body);
+        // Check if this is a file tool call that needs a sync handle
+        if (parsed.method === 'tools/call') {
+            const toolName = parsed.params?.name;
+            const args = parsed.params?.arguments;
+
+            // Get the path parameter based on tool name
+            let path: string | undefined;
+            switch (toolName) {
+                case 'write_file':
+                case 'read_file':
+                    path = args?.path;
+                    break;
+                case 'grep':
+                    // grep operates on existing files, handle path for the search directory
+                    path = args?.path;
+                    break;
+                // list_directory doesn't need sync handles - it reads the directory tree
+            }
+
+            if (path) {
+                console.log('[WasmBridge] Preparing sync handle for', toolName + ':', path);
+                await prepareFileForSync(path);
+            }
+        }
+    } catch {
+        // Not JSON or not a file tool call, ignore
+    }
+}
+
 /**
  * Call the WASM MCP server with a Request object
  * 
@@ -54,10 +82,15 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
 
     // 2. Prepare request
     let incomingRequest: IncomingRequest;
+    let bodyText = "";
     if (req.body) {
-        const text = await req.text();
-        console.log('[WasmBridge] Request body:', text.substring(0, 200));
-        incomingRequest = createIncomingRequest(req.method, req.url, fields, text);
+        bodyText = await req.text();
+        console.log('[WasmBridge] Request body:', bodyText.substring(0, 200));
+
+        // Intercept file operations to prepare sync handles
+        await prepareFileOperation(bodyText);
+
+        incomingRequest = createIncomingRequest(req.method, req.url, fields, bodyText);
     } else {
         incomingRequest = createIncomingRequest(req.method, req.url, fields, "");
     }

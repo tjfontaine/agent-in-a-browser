@@ -314,7 +314,8 @@ class Descriptor {
     }
 
     private createOpfsFile(path: string): void {
-        // Fire-and-forget async create
+        // Just create the file in OPFS - the sync handle will be prepared
+        // by the bridge before any WASM write operations
         getOpfsFile(path, true).catch(e => {
             console.error('[opfs-fs] Failed to create file in OPFS:', path, e);
         });
@@ -436,12 +437,13 @@ class Descriptor {
      */
     writeViaStream(_offset: bigint): unknown {
         const path = this.path;
+        const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
         const entry = this.treeEntry;
 
-        const handle = syncHandleCache.get(path);
+        const handle = syncHandleCache.get(normalizedPath);
         if (!handle) {
-            console.warn('[opfs-fs] No sync handle for writeViaStream, path:', path);
+            console.warn('[opfs-fs] No sync handle for writeViaStream, path:', normalizedPath);
             throw 'no-entry';
         }
 
