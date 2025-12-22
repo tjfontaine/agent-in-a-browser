@@ -19,7 +19,7 @@ interface SplitLayoutProps {
 }
 
 // Global state - used by /panel command and focus control
-let _auxVisible = true;
+let _auxVisible = false;
 let _setAuxVisible: ((v: boolean) => void) | null = null;
 let _mainPanelRef: HTMLDivElement | null = null;
 let _auxPanelRef: HTMLDivElement | null = null;
@@ -77,7 +77,7 @@ export function SplitLayout({ auxiliaryPanel, mainPanel }: SplitLayoutProps) {
     const mainRef = useRef<HTMLDivElement>(null);
     const auxRef = useRef<HTMLDivElement>(null);
     const [isWide, setIsWide] = useState(true);
-    const [auxVisible, setAuxVisible] = useState(true);
+    const [auxVisible, setAuxVisible] = useState(false);
 
     // Register global control
     useEffect(() => {
