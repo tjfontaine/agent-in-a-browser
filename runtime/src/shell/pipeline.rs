@@ -151,6 +151,131 @@ fn resolve_path(cwd: &str, path: &str) -> String {
     }
 }
 
+/// Check if a command is a special built-in that modifies environment
+fn is_builtin(name: &str) -> bool {
+    matches!(name, "cd" | "pushd" | "popd" | "dirs")
+}
+
+/// Normalize a path (resolve . and ..)
+fn normalize_path(path: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => { parts.pop(); }
+            _ => parts.push(part),
+        }
+    }
+    if parts.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", parts.join("/"))
+    }
+}
+
+/// Handle cd built-in command
+fn handle_cd(args: &[String], env: &mut ShellEnv) -> ShellResult {
+    use std::path::PathBuf;
+    
+    let target = if args.is_empty() || args[0] == "~" {
+        // cd with no args or ~ goes to home (in our case, /)
+        "/".to_string()
+    } else if args[0] == "-" {
+        // cd - goes to previous directory
+        let prev = env.prev_cwd.to_string_lossy().to_string();
+        // Print the directory we're switching to
+        println!("{}", prev);
+        prev
+    } else {
+        // Resolve path relative to cwd
+        resolve_path(&env.cwd.to_string_lossy(), &args[0])
+    };
+    
+    let normalized = normalize_path(&target);
+    
+    // Verify directory exists
+    if let Ok(metadata) = std::fs::metadata(&normalized) {
+        if !metadata.is_dir() {
+            return ShellResult::error(format!("cd: {}: Not a directory", args.get(0).unwrap_or(&"~".to_string())), 1);
+        }
+    } else {
+        return ShellResult::error(format!("cd: {}: No such file or directory", args.get(0).unwrap_or(&"~".to_string())), 1);
+    }
+    
+    // Save current as previous, then update cwd
+    env.prev_cwd = env.cwd.clone();
+    env.cwd = PathBuf::from(normalized);
+    
+    ShellResult::success("")
+}
+
+/// Handle pushd built-in command
+fn handle_pushd(args: &[String], env: &mut ShellEnv) -> ShellResult {
+    use std::path::PathBuf;
+    
+    if args.is_empty() {
+        // pushd with no args swaps top of stack with cwd
+        if let Some(top) = env.dir_stack.pop() {
+            let old_cwd = env.cwd.clone();
+            env.prev_cwd = env.cwd.clone();
+            env.cwd = top;
+            env.dir_stack.push(old_cwd);
+        } else {
+            return ShellResult::error("pushd: no other directory", 1);
+        }
+    } else {
+        // pushd <dir> pushes cwd to stack and changes to <dir>
+        let target = resolve_path(&env.cwd.to_string_lossy(), &args[0]);
+        let normalized = normalize_path(&target);
+        
+        // Verify directory exists
+        if let Ok(metadata) = std::fs::metadata(&normalized) {
+            if !metadata.is_dir() {
+                return ShellResult::error(format!("pushd: {}: Not a directory", args[0]), 1);
+            }
+        } else {
+            return ShellResult::error(format!("pushd: {}: No such file or directory", args[0]), 1);
+        }
+        
+        env.dir_stack.push(env.cwd.clone());
+        env.prev_cwd = env.cwd.clone();
+        env.cwd = PathBuf::from(normalized);
+    }
+    
+    // Print directory stack
+    let dirs = format_dir_stack(env);
+    ShellResult::success(dirs)
+}
+
+/// Handle popd built-in command
+fn handle_popd(_args: &[String], env: &mut ShellEnv) -> ShellResult {
+    if let Some(dir) = env.dir_stack.pop() {
+        env.prev_cwd = env.cwd.clone();
+        env.cwd = dir;
+        let dirs = format_dir_stack(env);
+        ShellResult::success(dirs)
+    } else {
+        ShellResult::error("popd: directory stack empty", 1)
+    }
+}
+
+/// Handle dirs built-in command
+fn handle_dirs(_args: &[String], env: &mut ShellEnv) -> ShellResult {
+    let dirs = format_dir_stack(env);
+    ShellResult::success(dirs)
+}
+
+/// Format directory stack for display
+fn format_dir_stack(env: &ShellEnv) -> String {
+    let mut result = env.cwd.to_string_lossy().to_string();
+    for dir in env.dir_stack.iter().rev() {
+        result.push(' ');
+        result.push_str(&dir.to_string_lossy());
+    }
+    result.push('\n');
+    result
+}
+
 /// I/O redirections for a command
 #[derive(Debug, Clone, Default)]
 struct Redirects {
@@ -331,9 +456,30 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
         }
     }
 
+    // Handle special built-in commands that modify the environment
+    // These must be handled before command dispatch because they mutate env
+    if num_commands == 1 {
+        let (cmd_name, ref args, _) = &commands[0];
+        match cmd_name.as_str() {
+            "cd" => {
+                return handle_cd(args, env);
+            }
+            "pushd" => {
+                return handle_pushd(args, env);
+            }
+            "popd" => {
+                return handle_popd(args, env);
+            }
+            "dirs" => {
+                return handle_dirs(args, env);
+            }
+            _ => {}
+        }
+    }
+
     // Verify all commands exist
     for (cmd_name, _, _) in &commands {
-        if ShellCommands::get_command(cmd_name).is_none() {
+        if !is_builtin(cmd_name) && ShellCommands::get_command(cmd_name).is_none() {
             return ShellResult::error(format!("{}: command not found", cmd_name), 127);
         }
     }
@@ -557,5 +703,217 @@ mod tests {
         let result = futures_lite::future::block_on(run_pipeline("echo one | cat", &mut env));
         assert_eq!(result.code, 0);
         assert_eq!(result.stdout.trim(), "one");
+    }
+
+    #[test]
+    fn test_cd_basic() {
+        let mut env = ShellEnv::new();
+        // Start at /
+        assert_eq!(env.cwd.to_string_lossy(), "/");
+        
+        // cd to /tmp (using test VFS path)
+        let result = futures_lite::future::block_on(run_pipeline("cd /", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/");
+    }
+
+    #[test]
+    fn test_cd_then_pwd() {
+        let mut env = ShellEnv::new();
+        // Create a test directory first
+        let _ = std::fs::create_dir_all("/tmp/test_cd");
+        
+        // cd to /tmp/test_cd
+        let result = futures_lite::future::block_on(run_pipeline("cd /tmp/test_cd", &mut env));
+        assert_eq!(result.code, 0);
+        
+        // pwd should now show /tmp/test_cd
+        let result = futures_lite::future::block_on(run_pipeline("pwd", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "/tmp/test_cd");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir("/tmp/test_cd");
+    }
+
+    #[test]
+    fn test_cd_relative_path() {
+        let mut env = ShellEnv::new();
+        // Create test directories
+        let _ = std::fs::create_dir_all("/tmp/testdir/subdir");
+        
+        // cd to /tmp
+        let result = futures_lite::future::block_on(run_pipeline("cd /tmp", &mut env));
+        assert_eq!(result.code, 0);
+        
+        // cd to relative path testdir
+        let result = futures_lite::future::block_on(run_pipeline("cd testdir", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/testdir");
+        
+        // cd to subdir
+        let result = futures_lite::future::block_on(run_pipeline("cd subdir", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/testdir/subdir");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/testdir");
+    }
+
+    #[test]
+    fn test_cd_dotdot() {
+        let mut env = ShellEnv::new();
+        // Create test directories
+        let _ = std::fs::create_dir_all("/tmp/a/b/c");
+        
+        // cd to /tmp/a/b/c
+        let result = futures_lite::future::block_on(run_pipeline("cd /tmp/a/b/c", &mut env));
+        assert_eq!(result.code, 0);
+        
+        // cd .. should go to /tmp/a/b
+        let result = futures_lite::future::block_on(run_pipeline("cd ..", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/a/b");
+        
+        // cd ../.. should go to /tmp
+        let result = futures_lite::future::block_on(run_pipeline("cd ../..", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/a");
+    }
+
+    #[test]
+    fn test_cd_dash() {
+        let mut env = ShellEnv::new();
+        let _ = std::fs::create_dir_all("/tmp/dir1");
+        let _ = std::fs::create_dir_all("/tmp/dir2");
+        
+        // Start at /
+        futures_lite::future::block_on(run_pipeline("cd /tmp/dir1", &mut env));
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/dir1");
+        
+        // cd to dir2
+        futures_lite::future::block_on(run_pipeline("cd /tmp/dir2", &mut env));
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/dir2");
+        
+        // cd - should go back to dir1
+        futures_lite::future::block_on(run_pipeline("cd -", &mut env));
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/dir1");
+        
+        // cd - again should go back to dir2
+        futures_lite::future::block_on(run_pipeline("cd -", &mut env));
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/dir2");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/dir1");
+        let _ = std::fs::remove_dir_all("/tmp/dir2");
+    }
+
+    #[test]
+    fn test_cd_interleaved_with_commands() {
+        let mut env = ShellEnv::new();
+        let _ = std::fs::create_dir_all("/tmp/cdtest");
+        let _ = std::fs::write("/tmp/cdtest/file.txt", "hello");
+        
+        // cd then pwd
+        futures_lite::future::block_on(run_pipeline("cd /tmp/cdtest", &mut env));
+        let result = futures_lite::future::block_on(run_pipeline("pwd", &mut env));
+        assert_eq!(result.stdout.trim(), "/tmp/cdtest");
+        
+        // Run ls equivalent (cat a known file to verify we're in right dir)
+        let result = futures_lite::future::block_on(run_pipeline("cat file.txt", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "hello");
+        
+        // cd .. then pwd again
+        futures_lite::future::block_on(run_pipeline("cd ..", &mut env));
+        let result = futures_lite::future::block_on(run_pipeline("pwd", &mut env));
+        assert_eq!(result.stdout.trim(), "/tmp");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/cdtest");
+    }
+
+    #[test]
+    fn test_cd_with_chain_operators() {
+        let mut env = ShellEnv::new();
+        let _ = std::fs::create_dir_all("/tmp/chaintest");
+        
+        // cd && pwd should work
+        let result = futures_lite::future::block_on(run_pipeline("cd /tmp/chaintest && pwd", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "/tmp/chaintest");
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/chaintest");
+    }
+
+    #[test]
+    fn test_pushd_popd() {
+        let mut env = ShellEnv::new();
+        let _ = std::fs::create_dir_all("/tmp/pushd1");
+        let _ = std::fs::create_dir_all("/tmp/pushd2");
+        
+        // Start at /
+        assert_eq!(env.cwd.to_string_lossy(), "/");
+        
+        // pushd /tmp/pushd1
+        let result = futures_lite::future::block_on(run_pipeline("pushd /tmp/pushd1", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/pushd1");
+        assert_eq!(env.dir_stack.len(), 1);
+        
+        // pushd /tmp/pushd2
+        let result = futures_lite::future::block_on(run_pipeline("pushd /tmp/pushd2", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/pushd2");
+        assert_eq!(env.dir_stack.len(), 2);
+        
+        // popd should go back to /tmp/pushd1
+        let result = futures_lite::future::block_on(run_pipeline("popd", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/tmp/pushd1");
+        assert_eq!(env.dir_stack.len(), 1);
+        
+        // popd should go back to /
+        let result = futures_lite::future::block_on(run_pipeline("popd", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.cwd.to_string_lossy(), "/");
+        assert_eq!(env.dir_stack.len(), 0);
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/pushd1");
+        let _ = std::fs::remove_dir_all("/tmp/pushd2");
+    }
+
+    #[test]
+    fn test_dirs() {
+        let mut env = ShellEnv::new();
+        let _ = std::fs::create_dir_all("/tmp/dirstest");
+        
+        // dirs with empty stack
+        let result = futures_lite::future::block_on(run_pipeline("dirs", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "/");
+        
+        // pushd and check dirs
+        futures_lite::future::block_on(run_pipeline("pushd /tmp/dirstest", &mut env));
+        let result = futures_lite::future::block_on(run_pipeline("dirs", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("/tmp/dirstest"));
+        assert!(result.stdout.contains("/"));
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all("/tmp/dirstest");
+    }
+
+    #[test]
+    fn test_cd_nonexistent() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("cd /nonexistent/path", &mut env));
+        assert_eq!(result.code, 1);
+        assert!(result.stderr.contains("No such file or directory"));
     }
 }

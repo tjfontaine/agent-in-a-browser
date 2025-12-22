@@ -8,6 +8,10 @@ use std::path::PathBuf;
 pub struct ShellEnv {
     /// Current working directory.
     pub cwd: PathBuf,
+    /// Previous working directory (for cd -).
+    pub prev_cwd: PathBuf,
+    /// Directory stack (for pushd/popd).
+    pub dir_stack: Vec<PathBuf>,
     /// Environment variables.
     pub env_vars: HashMap<String, String>,
 }
@@ -18,6 +22,8 @@ impl ShellEnv {
         Self {
             // Use "/" for root directory - consistent with absolute paths in the VFS
             cwd: PathBuf::from("/"),
+            prev_cwd: PathBuf::from("/"),
+            dir_stack: Vec::new(),
             env_vars: HashMap::new(),
         }
     }
