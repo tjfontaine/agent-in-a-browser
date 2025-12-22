@@ -303,6 +303,193 @@ impl MiscCommands {
             }
         })
     }
+
+    /// tsc - transpile TypeScript to JavaScript
+    #[shell_command(
+        name = "tsc",
+        usage = "tsc [-o FILE] FILE",
+        description = "Transpile TypeScript to JavaScript"
+    )]
+    fn cmd_tsc(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("tsc") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            
+            let mut output_file: Option<String> = None;
+            let mut input_file: Option<String> = None;
+            
+            let mut i = 0;
+            while i < remaining.len() {
+                match remaining[i].as_str() {
+                    "-o" | "--output" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            output_file = Some(remaining[i].clone());
+                        }
+                    }
+                    s if !s.starts_with('-') => {
+                        input_file = Some(s.to_string());
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            
+            let input_file = match input_file {
+                Some(f) => f,
+                None => {
+                    let _ = stderr.write_all(b"tsc: no input file\n").await;
+                    return 1;
+                }
+            };
+            
+            let path = if input_file.starts_with('/') {
+                input_file.clone()
+            } else {
+                format!("{}/{}", cwd, input_file)
+            };
+            
+            let ts_code = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    let msg = format!("tsc: {}: {}\n", path, e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+            
+            let js_code = match crate::transpiler::transpile(&ts_code) {
+                Ok(js) => js,
+                Err(e) => {
+                    let msg = format!("tsc: {}\n", e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+            
+            if let Some(out_path) = output_file {
+                let out = if out_path.starts_with('/') {
+                    out_path
+                } else {
+                    format!("{}/{}", cwd, out_path)
+                };
+                if let Err(e) = std::fs::write(&out, &js_code) {
+                    let msg = format!("tsc: {}: {}\n", out, e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            } else {
+                let _ = stdout.write_all(js_code.as_bytes()).await;
+                if !js_code.ends_with('\n') {
+                    let _ = stdout.write_all(b"\n").await;
+                }
+            }
+            
+            0
+        })
+    }
+
+    /// tsx - execute TypeScript file
+    #[shell_command(
+        name = "tsx",
+        usage = "tsx [-e CODE] [FILE]",
+        description = "Execute TypeScript code or file"
+    )]
+    fn cmd_tsx(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("tsx") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            
+            let mut inline_code: Option<String> = None;
+            let mut input_file: Option<String> = None;
+            
+            let mut i = 0;
+            while i < remaining.len() {
+                match remaining[i].as_str() {
+                    "-e" | "--eval" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            inline_code = Some(remaining[i].clone());
+                        }
+                    }
+                    s if !s.starts_with('-') => {
+                        input_file = Some(s.to_string());
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            
+            let ts_code = if let Some(code) = inline_code {
+                code
+            } else if let Some(file) = input_file {
+                let path = if file.starts_with('/') {
+                    file.clone()
+                } else {
+                    format!("{}/{}", cwd, file)
+                };
+                
+                match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let msg = format!("tsx: {}: {}\n", path, e);
+                        let _ = stderr.write_all(msg.as_bytes()).await;
+                        return 1;
+                    }
+                }
+            } else {
+                let _ = stderr.write_all(b"tsx: no code or file specified\n").await;
+                return 1;
+            };
+            
+            // Transpile TypeScript to JavaScript
+            let js_code = match crate::transpiler::transpile(&ts_code) {
+                Ok(js) => js,
+                Err(e) => {
+                    let msg = format!("tsx: transpile error: {}\n", e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+            
+            // Execute via MCP server (through thread-local instance)
+            // Note: For shell commands, we output the transpiled JS that can be executed
+            // The run_typescript MCP tool handles actual QuickJS execution
+            // Here we just output what would be executed
+            let _ = stdout.write_all(b"[Transpiled JavaScript]\n").await;
+            let _ = stdout.write_all(js_code.as_bytes()).await;
+            if !js_code.ends_with('\n') {
+                let _ = stdout.write_all(b"\n").await;
+            }
+            let _ = stdout.write_all(b"\n[Use run_typescript tool for execution]\n").await;
+            
+            0
+        })
+    }
 }
 
 /// Convert days since Unix epoch to year, month, day

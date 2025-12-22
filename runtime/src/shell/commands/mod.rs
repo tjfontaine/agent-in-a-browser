@@ -159,6 +159,8 @@ mod tests {
         assert!(commands.contains(&"curl"));
         assert!(commands.contains(&"jq"));
         assert!(commands.contains(&"xargs"));
+        assert!(commands.contains(&"tsc"));
+        assert!(commands.contains(&"tsx"));
     }
     
     #[test]
