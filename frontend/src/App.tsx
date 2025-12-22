@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
-import { InkXterm, Box, Text, useStdout, useInput } from 'ink-web';
+import { InkXterm, Box, Text, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
 import { TaskPanel } from './components/TaskPanel';
 import { useAgent, AgentOutput } from './agent/useAgent';
@@ -52,23 +52,13 @@ function TerminalContent({
     getCompletions: (input: string) => string[];
     onCancel: () => void;
 }) {
-    // Get terminal dimensions from Ink's stdout
-    const { stdout } = useStdout();
-    const terminalRows = stdout?.rows ?? 24;
 
-    // Reserve space for prompt (2 lines) and status line when busy
 
-    // Reserve space for prompt (2 lines) and status line when busy
-    const statusRows = isBusy ? 1 : 0;
-    const promptRows = 2;
-    // Add safety buffer (19 lines) to absolutely guarantee no scroll cutoff
-    const safetyBuffer = 19;
-    // contentRows should never be less than 10 to clear the welcome banner!
-    const contentRows = Math.max(10, terminalRows - promptRows - statusRows - safetyBuffer);
 
-    // Show last N outputs only when there's overflow, otherwise show all from top
-    const visibleOutputs = outputs.length > contentRows
-        ? outputs.slice(-contentRows)
+    // Show last 500 outputs for scrollback. xterm handles actual viewport scrolling.
+    const maxScrollback = 500;
+    const visibleOutputs = outputs.length > maxScrollback
+        ? outputs.slice(-maxScrollback)
         : outputs;
 
     // Handle ESC to cancel (more intuitive for browser)
