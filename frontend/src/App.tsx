@@ -24,6 +24,7 @@ import {
     getCurrentProvider,
     getConfigSummary,
     setApiKey,
+    hasApiKey,
     subscribeToChanges,
 } from './provider-config';
 import 'ink-web/css';
@@ -275,6 +276,14 @@ export default function App() {
         if (isBusy) {
             queueMessage(input);
         } else {
+            // Check if API key is required and missing
+            const provider = getCurrentProvider();
+            if (provider.requiresKey && !hasApiKey(provider.id)) {
+                addOutput('system', `⚠️ API key required for ${provider.name}. Use /keys add ${provider.id}`, colors.yellow);
+                setSecretInputState({ providerId: provider.id, providerName: provider.name });
+                setOverlayMode('secret-input');
+                return;
+            }
             sendMessage(input);
         }
     }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);

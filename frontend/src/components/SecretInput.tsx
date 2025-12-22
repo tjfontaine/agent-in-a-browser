@@ -34,6 +34,38 @@ export function SecretInput({ label, placeholder, onSubmit, onCancel }: SecretIn
         return () => clearInterval(interval);
     }, []);
 
+    // Handle paste events (Ctrl+V and browser paste)
+    React.useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            const pastedText = e.clipboardData?.getData('text');
+            if (pastedText) {
+                setValue(prev => prev + pastedText);
+                e.preventDefault();
+            }
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                e.preventDefault();
+                e.stopPropagation();
+                navigator.clipboard.readText().then((text) => {
+                    if (text) {
+                        setValue(prev => prev + text);
+                    }
+                }).catch((err) => {
+                    console.warn('[SecretInput] Clipboard read failed:', err);
+                });
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+            window.removeEventListener('keydown', handleKeyDown, true);
+        };
+    }, []);
+
     useInput((input, key) => {
         if (key.escape) {
             onCancel();
