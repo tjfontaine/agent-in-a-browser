@@ -172,7 +172,7 @@ pub fn install_fs(ctx: &Ctx<'_>) -> Result<()> {
 
 /// Install fetch on the global object.
 /// Provides a standard Web Fetch API-compatible interface.
-/// Note: Returns synchronously (not Promises) but with compatible method signatures.
+/// fetch() returns Promise<Response>, and Response.text()/json() return Promises.
 pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
     let globals = ctx.globals();
 
@@ -311,7 +311,7 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
             }
         };
 
-        // Standard Response class
+        // Standard Response class with Promise-returning methods
         globalThis.Response = class Response {
             constructor(body, init = {}) {
                 this._body = body || '';
@@ -328,22 +328,28 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
             get bodyUsed() { return this._bodyUsed; }
             text() {
                 this._bodyUsed = true;
-                return this._body;
+                // Return Promise for standard API compliance
+                return Promise.resolve(this._body);
             }
             json() {
                 this._bodyUsed = true;
-                return JSON.parse(this._body);
+                // Return Promise for standard API compliance
+                try {
+                    return Promise.resolve(JSON.parse(this._body));
+                } catch (e) {
+                    return Promise.reject(e);
+                }
             }
             arrayBuffer() {
                 this._bodyUsed = true;
                 const encoder = new TextEncoder();
-                return encoder.encode(this._body).buffer;
+                return Promise.resolve(encoder.encode(this._body).buffer);
             }
             blob() {
-                throw new Error('Blob not supported in this environment');
+                return Promise.reject(new Error('Blob not supported in this environment'));
             }
             formData() {
-                throw new Error('FormData not supported in this environment');
+                return Promise.reject(new Error('FormData not supported in this environment'));
             }
             clone() {
                 if (this._bodyUsed) {
@@ -358,59 +364,57 @@ pub fn install_fetch(ctx: &Ctx<'_>) -> Result<()> {
             }
         };
 
-        // Standard fetch function
+        // Standard fetch function - returns Promise<Response>
         globalThis.fetch = function(resource, options = {}) {
-            // Handle Request objects
-            let url = resource;
-            if (typeof resource === 'object' && resource.url) {
-                url = resource.url;
-                options = { ...resource, ...options };
-            }
-            
-            // Build options JSON for Rust
-            const fetchOptions = {
-                method: options.method || 'GET',
-                headers: {},
-                body: options.body
-            };
-            
-            // Convert headers to plain object
-            if (options.headers) {
-                if (options.headers instanceof Headers) {
-                    options.headers.forEach((value, name) => {
-                        fetchOptions.headers[name] = value;
-                    });
-                } else if (Array.isArray(options.headers)) {
-                    options.headers.forEach(([name, value]) => {
-                        fetchOptions.headers[name] = value;
-                    });
-                } else {
-                    fetchOptions.headers = options.headers;
+            return new Promise((resolve, reject) => {
+                try {
+                    // Handle Request objects
+                    let url = resource;
+                    if (typeof resource === 'object' && resource.url) {
+                        url = resource.url;
+                        options = { ...resource, ...options };
+                    }
+                    
+                    // Build options JSON for Rust
+                    const fetchOptions = {
+                        method: options.method || 'GET',
+                        headers: {},
+                        body: options.body
+                    };
+                    
+                    // Convert headers to plain object
+                    if (options.headers) {
+                        if (options.headers instanceof Headers) {
+                            options.headers.forEach((value, name) => {
+                                fetchOptions.headers[name] = value;
+                            });
+                        } else if (Array.isArray(options.headers)) {
+                            options.headers.forEach(([name, value]) => {
+                                fetchOptions.headers[name] = value;
+                            });
+                        } else {
+                            fetchOptions.headers = options.headers;
+                        }
+                    }
+                    
+                    const resultJson = __syncFetch__(url, JSON.stringify(fetchOptions));
+                    const result = JSON.parse(resultJson);
+                    
+                    // Build Headers from response
+                    const responseHeaders = new Headers(result.headers || []);
+                    
+                    // Resolve with standard Response object
+                    resolve(new Response(result.body, {
+                        status: result.status,
+                        statusText: result.statusText,
+                        headers: responseHeaders,
+                        url: url
+                    }));
+                } catch (e) {
+                    // Reject with error for network failures
+                    reject(new TypeError('Network request failed: ' + e.message));
                 }
-            }
-            
-            try {
-                const resultJson = __syncFetch__(url, JSON.stringify(fetchOptions));
-                const result = JSON.parse(resultJson);
-                
-                // Build Headers from response
-                const responseHeaders = new Headers(result.headers || []);
-                
-                // Return standard Response object
-                return new Response(result.body, {
-                    status: result.status,
-                    statusText: result.statusText,
-                    headers: responseHeaders,
-                    url: url
-                });
-            } catch (e) {
-                // Return error Response
-                return new Response('', {
-                    status: 0,
-                    statusText: 'Network error: ' + e.message,
-                    url: url
-                });
-            }
+            });
         };
     "#,
     )?;

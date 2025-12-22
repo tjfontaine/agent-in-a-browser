@@ -85,8 +85,10 @@ Execute JavaScript/TypeScript in an embedded QuickJS runtime.
 **Available APIs:**
 - console.log(), console.warn(), console.error()
 - fetch(url, options) - returns Promise<Response>
-  - Response: ok, status, statusText, headers, text(), json()
-- fs.readFile(path), fs.writeFile(path, data), fs.readDir(path)
+  - Response: ok, status, statusText, headers
+  - await response.text() - returns Promise<string>
+  - await response.json() - returns Promise<object>
+- fs.promises.readFile(path), fs.promises.writeFile(path, data), fs.promises.readdir(path)
 - path.join(), path.dirname(), path.basename()
 
 **CORRECT Examples:**
@@ -107,7 +109,7 @@ const response = await fetch("https://api.stripe.com/v1/customers", {
 console.log(await response.json());
 
 // File operations
-const content = fs.readFile("/data/config.json");
+const content = await fs.promises.readFile("/data/config.json");
 console.log(content);
 \`\`\`
 

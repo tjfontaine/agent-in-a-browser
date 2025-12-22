@@ -69,36 +69,56 @@ impl TsRuntimeMcp {
             let result = ctx.eval::<rquickjs::Value, _>(js_code.as_bytes());
             match result.catch(&ctx) {
                 Ok(val) => {
-                    if val.is_undefined() {
-                        let logs = host_bindings::get_logs();
-                        if logs.is_empty() {
-                            Ok("undefined".to_string())
-                        } else {
-                            Ok(logs)
-                        }
-                    } else if let Some(s) = val.as_string() {
-                        Ok(s.to_string().unwrap_or_default())
-                    } else if let Some(n) = val.as_number() {
-                        Ok(format!("{}", n))
-                    } else if let Some(b) = val.as_bool() {
-                        Ok(format!("{}", b))
-                    } else {
-                        let json_global = ctx.globals();
-                        if let Ok(json_obj) = json_global.get::<_, rquickjs::Object>("JSON") {
-                            if let Ok(stringify) =
-                                json_obj.get::<_, rquickjs::Function>("stringify")
-                            {
-                                if let Ok(result) = stringify.call::<_, String>((val.clone(),)) {
-                                    return Ok(result);
-                                }
+                    // Check if result is a Promise and resolve it
+                    let resolved_val = if let Ok(promise) = rquickjs::Promise::from_value(val.clone()) {
+                        // Drive the JS job queue until the Promise resolves
+                        match promise.finish::<rquickjs::Value>() {
+                            Ok(resolved) => resolved,
+                            Err(e) => {
+                                // Promise rejected or error - return error message
+                                return Err(format!("Promise error: {:?}", e));
                             }
                         }
-                        Ok("[object]".to_string())
-                    }
+                    } else {
+                        val
+                    };
+                    
+                    // Format the resolved value
+                    Self::format_value(&ctx, resolved_val)
                 }
                 Err(e) => Err(format!("Evaluation error: {:?}", e)),
             }
         }))
+    }
+    
+    /// Format a JavaScript value as a string for output
+    fn format_value<'a>(ctx: &rquickjs::Ctx<'a>, val: rquickjs::Value<'a>) -> Result<String, String> {
+        if val.is_undefined() {
+            let logs = host_bindings::get_logs();
+            if logs.is_empty() {
+                Ok("undefined".to_string())
+            } else {
+                Ok(logs)
+            }
+        } else if let Some(s) = val.as_string() {
+            Ok(s.to_string().unwrap_or_default())
+        } else if let Some(n) = val.as_number() {
+            Ok(format!("{}", n))
+        } else if let Some(b) = val.as_bool() {
+            Ok(format!("{}", b))
+        } else {
+            let json_global = ctx.globals();
+            if let Ok(json_obj) = json_global.get::<_, rquickjs::Object>("JSON") {
+                if let Ok(stringify) =
+                    json_obj.get::<_, rquickjs::Function>("stringify")
+                {
+                    if let Ok(result) = stringify.call::<_, String>((val.clone(),)) {
+                        return Ok(result);
+                    }
+                }
+            }
+            Ok("[object]".to_string())
+        }
     }
 
     // Internal helpers - may be used for non-browser-fs implementations in the future
