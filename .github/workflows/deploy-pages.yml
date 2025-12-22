@@ -24,9 +24,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Cache cargo-component binary
+          cache-on-failure: true
           
       - name: Install cargo-component
-        run: cargo install cargo-component
+        run: cargo install cargo-component --locked
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
