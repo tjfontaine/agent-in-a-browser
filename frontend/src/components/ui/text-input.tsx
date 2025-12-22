@@ -21,6 +21,7 @@ export interface TextInputProps {
     placeholder?: string;
     prompt?: string;
     promptColor?: string;
+    cursorColor?: string;
     focus?: boolean;
     /** Function to get completions for the current input */
     getCompletions?: CompletionFn;
@@ -37,13 +38,24 @@ export const TextInput = ({
     placeholder = '',
     prompt = '❯ ',
     promptColor = 'cyan',
+    cursorColor = '#58a6ff',
     focus = true,
     getCompletions,
 }: TextInputProps) => {
     const [internalValue, setInternalValue] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
     const [historyIndex, setHistoryIndex] = useState(-1);
+    const [cursorVisible, setCursorVisible] = useState(true);
     const savedInputRef = useRef('');  // Save input when browsing history
+
+    // Blink cursor effect
+    useEffect(() => {
+        if (!focus) return;
+        const interval = setInterval(() => {
+            setCursorVisible(v => !v);
+        }, 530); // Standard terminal blink rate
+        return () => clearInterval(interval);
+    }, [focus]);
 
     const value = controlledValue !== undefined ? controlledValue : internalValue;
 
@@ -55,25 +67,53 @@ export const TextInput = ({
         setCursorPosition(newCursor !== undefined ? newCursor : newValue.length);
     }, [controlledValue, onChange]);
 
-    // Handle paste events from browser
+    // Handle paste events from browser AND keyboard (Ctrl+V/Cmd+V)
+    // xterm.js intercepts keyboard events before they trigger native paste,
+    // so we need to handle both the paste event and explicit Ctrl+V/Cmd+V
     useEffect(() => {
         if (!focus) return;
+
+        const insertText = (text: string) => {
+            // Insert at cursor position
+            const before = value.slice(0, cursorPosition);
+            const after = value.slice(cursorPosition);
+            const newValue = before + text + after;
+            const newCursor = cursorPosition + text.length;
+            setValue(newValue, newCursor);
+        };
 
         const handlePaste = (e: ClipboardEvent) => {
             const pastedText = e.clipboardData?.getData('text');
             if (pastedText) {
-                // Insert at cursor position
-                const before = value.slice(0, cursorPosition);
-                const after = value.slice(cursorPosition);
-                const newValue = before + pastedText + after;
-                const newCursor = cursorPosition + pastedText.length;
-                setValue(newValue, newCursor);
+                insertText(pastedText);
                 e.preventDefault();
             }
         };
 
+        // Handle Ctrl+V / Cmd+V keyboard events explicitly
+        // This is needed because xterm.js captures the keystroke before paste fires
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Read from clipboard API
+                navigator.clipboard.readText().then((text) => {
+                    if (text) {
+                        insertText(text);
+                    }
+                }).catch((err) => {
+                    console.warn('[TextInput] Clipboard read failed:', err);
+                });
+            }
+        };
+
         window.addEventListener('paste', handlePaste);
-        return () => window.removeEventListener('paste', handlePaste);
+        window.addEventListener('keydown', handleKeyDown, true); // capture phase
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+            window.removeEventListener('keydown', handleKeyDown, true);
+        };
     }, [focus, value, cursorPosition, setValue]);
 
     useInput((inputChar, key) => {
@@ -224,8 +264,12 @@ export const TextInput = ({
     const atCursor = value[cursorPosition] || ' ';
     const afterCursor = value.slice(cursorPosition + 1);
 
+    // Use ANSI escape codes for cursor to keep it inline during wrap
+    // Use block character when at end of line for visibility
+    const cursorChar = atCursor === ' ' ? '█' : atCursor;
+
     return (
-        <Box>
+        <Box flexWrap="wrap">
             <Text color={promptColor}>{prompt}</Text>
             {showPlaceholder ? (
                 <>
@@ -233,11 +277,19 @@ export const TextInput = ({
                     <Text dimColor>{placeholder}</Text>
                 </>
             ) : (
-                <>
-                    <Text>{beforeCursor}</Text>
-                    {focus ? <Text inverse>{atCursor}</Text> : <Text>{atCursor}</Text>}
-                    <Text>{afterCursor}</Text>
-                </>
+                <Text>
+                    {beforeCursor}
+                    {focus && cursorVisible ? (() => {
+                        // Convert hex color to RGB for ANSI true color
+                        const hex = cursorColor.replace('#', '');
+                        const r = parseInt(hex.slice(0, 2), 16);
+                        const g = parseInt(hex.slice(2, 4), 16);
+                        const b = parseInt(hex.slice(4, 6), 16);
+                        // ESC[48;2;R;G;Bm = set background color, ESC[30m = black text, ESC[0m = reset
+                        return `\x1b[48;2;${r};${g};${b}m\x1b[30m${cursorChar}\x1b[0m`;
+                    })() : atCursor}
+                    {afterCursor}
+                </Text>
             )}
         </Box>
     );
