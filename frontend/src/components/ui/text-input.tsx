@@ -5,8 +5,10 @@
  * - Readline keybindings (Ctrl+A/E/W/U/K)
  * - Arrow key cursor navigation
  * - Command history (up/down arrows)
+ * - Ctrl+R for reverse-i-search
  * - Tab completion
  * - Paste support (Ctrl+V / browser paste)
+ * - Persistent history (survives page reloads)
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
@@ -26,9 +28,37 @@ export interface TextInputProps {
     getCompletions?: CompletionFn;
 }
 
-// Shared history across all inputs
-const commandHistory: string[] = [];
-const MAX_HISTORY = 100;
+// History storage key
+const HISTORY_STORAGE_KEY = 'web-agent-command-history';
+const MAX_HISTORY = 1000;
+
+// Load history from localStorage on module init
+function loadHistory(): string[] {
+    try {
+        const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                return parsed.slice(-MAX_HISTORY);
+            }
+        }
+    } catch {
+        // Ignore errors, start fresh
+    }
+    return [];
+}
+
+// Save history to localStorage
+function saveHistory(history: string[]): void {
+    try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(-MAX_HISTORY)));
+    } catch {
+        // Ignore quota errors etc.
+    }
+}
+
+// Shared history across all inputs, loaded from localStorage
+const commandHistory: string[] = loadHistory();
 
 export const TextInput = ({
     value: controlledValue,
@@ -45,6 +75,12 @@ export const TextInput = ({
     const [historyIndex, setHistoryIndex] = useState(-1);
     const [cursorVisible, setCursorVisible] = useState(true);
     const savedInputRef = useRef('');  // Save input when browsing history
+
+    // Reverse-i-search state
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchMatch, setSearchMatch] = useState<string | null>(null);
+    const [searchMatchIndex, setSearchMatchIndex] = useState(-1);
 
     // Blink cursor effect
     useEffect(() => {
@@ -117,6 +153,96 @@ export const TextInput = ({
     useInput((inputChar, key) => {
         if (!focus) return;
 
+        // Handle reverse-i-search mode
+        if (isSearching) {
+            // ESC to cancel search
+            if (key.escape) {
+                setIsSearching(false);
+                setSearchQuery('');
+                setSearchMatch(null);
+                setSearchMatchIndex(-1);
+                return;
+            }
+
+            // Enter to accept current match
+            if (key.return) {
+                if (searchMatch) {
+                    setValue(searchMatch, searchMatch.length);
+                }
+                setIsSearching(false);
+                setSearchQuery('');
+                setSearchMatch(null);
+                setSearchMatchIndex(-1);
+                return;
+            }
+
+            // Ctrl+R again to search further back
+            if (key.ctrl && inputChar === 'r') {
+                if (searchMatchIndex > 0) {
+                    // Search from the entry before the current match
+                    for (let i = searchMatchIndex - 1; i >= 0; i--) {
+                        if (commandHistory[i].toLowerCase().includes(searchQuery.toLowerCase())) {
+                            setSearchMatch(commandHistory[i]);
+                            setSearchMatchIndex(i);
+                            break;
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Backspace in search mode
+            if (key.backspace || key.delete) {
+                const newQuery = searchQuery.slice(0, -1);
+                setSearchQuery(newQuery);
+                // Re-search with shorter query
+                if (newQuery) {
+                    for (let i = commandHistory.length - 1; i >= 0; i--) {
+                        if (commandHistory[i].toLowerCase().includes(newQuery.toLowerCase())) {
+                            setSearchMatch(commandHistory[i]);
+                            setSearchMatchIndex(i);
+                            break;
+                        }
+                    }
+                } else {
+                    setSearchMatch(null);
+                    setSearchMatchIndex(-1);
+                }
+                return;
+            }
+
+            // Regular character input in search mode
+            if (!key.ctrl && !key.meta && inputChar && inputChar.length === 1) {
+                const newQuery = searchQuery + inputChar;
+                setSearchQuery(newQuery);
+                // Search backwards through history
+                let found = false;
+                for (let i = commandHistory.length - 1; i >= 0; i--) {
+                    if (commandHistory[i].toLowerCase().includes(newQuery.toLowerCase())) {
+                        setSearchMatch(commandHistory[i]);
+                        setSearchMatchIndex(i);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    setSearchMatch(null);
+                    setSearchMatchIndex(-1);
+                }
+            }
+            return;
+        }
+
+        // Ctrl+R - Enter reverse-i-search mode
+        if (key.ctrl && inputChar === 'r') {
+            savedInputRef.current = value;
+            setIsSearching(true);
+            setSearchQuery('');
+            setSearchMatch(null);
+            setSearchMatchIndex(-1);
+            return;
+        }
+
         // Submit on Enter
         if (key.return) {
             if (value.trim()) {
@@ -126,6 +252,7 @@ export const TextInput = ({
                     if (commandHistory.length > MAX_HISTORY) {
                         commandHistory.shift();
                     }
+                    saveHistory(commandHistory);
                 }
 
                 onSubmit?.(value);
@@ -256,6 +383,22 @@ export const TextInput = ({
             }
         }
     });
+
+    // Render reverse-i-search mode
+    if (isSearching) {
+        const displayText = searchMatch || '';
+        return (
+            <Box flexWrap="wrap">
+                <Text color="yellow">(reverse-i-search)`</Text>
+                <Text bold>{searchQuery}</Text>
+                <Text color="yellow">': </Text>
+                <Text>{displayText}</Text>
+                {focus && cursorVisible && (
+                    <Text backgroundColor="white" color="black"> </Text>
+                )}
+            </Box>
+        );
+    }
 
     const showPlaceholder = !value && placeholder;
     const beforeCursor = value.slice(0, cursorPosition);

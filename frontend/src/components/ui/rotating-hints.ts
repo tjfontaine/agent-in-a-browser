@@ -12,6 +12,7 @@ export const IDLE_HINTS = [
     'Press 1/2/3 in aux panel to switch tabs',
     '/panel to toggle auxiliary panel',
     'Up/Down for command history',
+    'Ctrl+R for history search',
     'Tab to autocomplete commands',
     '/files to browse OPFS',
     '/clear to clear the screen',
