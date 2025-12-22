@@ -16,7 +16,6 @@
     "docker:run": "docker run -p 8080:8080 web-agent"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "cargo-watch": "^8.5.2"
+    "concurrently": "^8.2.2"
   }
 }
