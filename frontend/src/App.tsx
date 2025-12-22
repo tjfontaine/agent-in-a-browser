@@ -59,7 +59,9 @@ function TerminalContent({
     // Reserve space for prompt (2 lines) and status line when busy
     const statusRows = isBusy ? 1 : 0;
     const promptRows = 2;
-    const contentRows = Math.max(1, terminalRows - promptRows - statusRows);
+    // Add safety buffer (6 lines) for TaskPanel/wrapping/scroll drift
+    const safetyBuffer = 6;
+    const contentRows = Math.max(1, terminalRows - promptRows - statusRows - safetyBuffer);
 
     // Show last N outputs only when there's overflow, otherwise show all from top
     const visibleOutputs = outputs.length > contentRows
