@@ -144,17 +144,9 @@ export default function App() {
     const initialized = useRef(false);
     const [terminalMounted, setTerminalMounted] = useState(false);
 
-    // Delay terminal mount to allow container dimensions to be calculated
+    // Initialize on mount (only once)
     useEffect(() => {
-        // WORKAROUND: Delay terminal mount to mitigate xterm.js issue #5011
-        // https://github.com/xtermjs/xterm.js/issues/5011
-        const timer = setTimeout(() => setTerminalMounted(true), 200);
-        return () => clearTimeout(timer);
-    }, []);
-
-    // Initialize after terminal is mounted (only once)
-    useEffect(() => {
-        if (!terminalMounted || initialized.current) return;
+        if (initialized.current) return;
         initialized.current = true;
 
         // Show welcome banner
@@ -167,7 +159,17 @@ export default function App() {
 
         // Start initialization
         initialize();
-    }, [terminalMounted, initialize, addOutput]);
+
+        // WORKAROUND: Delay terminal mount to mitigate xterm.js issue #5011
+        // https://github.com/xtermjs/xterm.js/issues/5011
+        const timer = setTimeout(() => setTerminalMounted(true), 200);
+        return () => clearTimeout(timer);
+    }, [initialize, addOutput]);
+
+    // Cleanup timer if unmounted
+    useEffect(() => {
+        return () => { };
+    }, []);
 
     // Handle user input - queues if agent is busy
     const handleSubmit = useCallback(async (input: string) => {
