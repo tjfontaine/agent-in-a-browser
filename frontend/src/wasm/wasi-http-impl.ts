@@ -1,7 +1,80 @@
-import { streams } from '@bytecodealliance/preview2-shim/io';
+import { streams, poll } from '@bytecodealliance/preview2-shim/io';
 
+// Get base classes from preview2-shim for inheritance
 // @ts-expect-error - preview2-shim exports this as type-only but it's a runtime value
-const { InputStream, OutputStream } = streams as unknown as { InputStream: new (config: unknown) => unknown; OutputStream: new (config: unknown) => unknown };
+const { InputStream: BaseInputStream, OutputStream: BaseOutputStream } = streams as unknown as {
+    InputStream: new (config: unknown) => { id: number; handler: unknown };
+    OutputStream: new (config: unknown) => { id: number; handler: unknown };
+};
+
+// Get the Pollable class from the io shim
+// @ts-expect-error - Pollable is exported at runtime
+const { Pollable: BasePollable } = poll as { Pollable: new () => { ready(): boolean; block(): void } };
+
+/**
+ * A Pollable that is always ready.
+ * Used for InputStream.subscribe() since our streams are synchronously readable.
+ */
+class ReadyPollable extends BasePollable {
+    ready(): boolean {
+        return true;
+    }
+
+    block(): void {
+        // Already ready, nothing to block on
+    }
+}
+
+// Symbol for dispose
+const symbolDispose = Symbol.dispose || Symbol.for('dispose');
+
+/**
+ * Custom InputStream that properly returns Pollable from subscribe().
+ * The preview2-shim's InputStream.subscribe() returns undefined, breaking WASM.
+ */
+class CustomInputStream extends BaseInputStream {
+    constructor(handler: {
+        read?: (len: bigint) => Uint8Array;
+        blockingRead: (len: bigint) => Uint8Array;
+    }) {
+        super(handler);
+    }
+
+    subscribe(): ReadyPollable {
+        return new ReadyPollable();
+    }
+
+    [symbolDispose](): void {
+        // Cleanup if needed
+    }
+}
+
+/**
+ * Custom OutputStream that properly returns Pollable from subscribe().
+ */
+class CustomOutputStream extends BaseOutputStream {
+    constructor(handler: {
+        write: (buf: Uint8Array) => bigint;
+        blockingWriteAndFlush?: (buf: Uint8Array) => void;
+        flush?: () => void;
+        blockingFlush?: () => void;
+        checkWrite?: () => bigint;
+    }) {
+        super(handler);
+    }
+
+    subscribe(): ReadyPollable {
+        return new ReadyPollable();
+    }
+
+    [symbolDispose](): void {
+        // Cleanup if needed
+    }
+}
+
+// Use our custom classes instead of the broken preview2-shim ones
+const InputStream = CustomInputStream;
+const OutputStream = CustomOutputStream;
 
 // Type for WASM Result-like return values
 type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
@@ -34,9 +107,7 @@ export function createInputStreamFromBytes(bytes: Uint8Array): unknown {
             const chunk = bytes.slice(offset, offset + toRead);
             offset += toRead;
             return chunk;
-        },
-        subscribe(): void { },
-        [Symbol.dispose](): void { }
+        }
     });
 }
 
@@ -109,7 +180,7 @@ export class Fields {
 }
 
 export class FutureTrailers {
-    subscribe() { }
+    subscribe(): unknown { return new ReadyPollable(); }
     get() { return { tag: 'ok', val: undefined }; }
 }
 
@@ -356,9 +427,9 @@ export class FutureIncomingResponse {
         this._result = { tag: 'ok', val: new IncomingResponse(resolvedData.status, headers, body) };
     }
 
-    subscribe(): { ready: () => boolean } {
+    subscribe(): unknown {
         // Return a pollable that's immediately ready
-        return { ready: () => true };
+        return new ReadyPollable();
     }
 
     /**
