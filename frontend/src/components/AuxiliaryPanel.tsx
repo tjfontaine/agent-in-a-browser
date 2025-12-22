@@ -240,7 +240,7 @@ function AuxiliaryPanelContent() {
 
 export function AuxiliaryPanel() {
     return (
-        <InkXterm>
+        <InkXterm focus={false}>
             <AuxiliaryPanelContent />
         </InkXterm>
     );
