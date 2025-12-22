@@ -61,8 +61,8 @@ function TerminalContent({
     // Reserve space for prompt (2 lines) and status line when busy
     const statusRows = isBusy ? 1 : 0;
     const promptRows = 2;
-    // Add safety buffer (15 lines) to absolutely guarantee no scroll cutoff
-    const safetyBuffer = 15;
+    // Add safety buffer (19 lines) to absolutely guarantee no scroll cutoff
+    const safetyBuffer = 19;
     // contentRows should never be less than 10 to clear the welcome banner!
     const contentRows = Math.max(10, terminalRows - promptRows - statusRows - safetyBuffer);
 
