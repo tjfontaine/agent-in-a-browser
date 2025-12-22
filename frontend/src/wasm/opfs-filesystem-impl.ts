@@ -186,6 +186,25 @@ function normalizePath(path: string): string {
     return path.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
 }
 
+function removeTreeEntry(path: string): void {
+    const parts = normalizePath(path).split('/').filter(p => p);
+    if (parts.length === 0) return;
+
+    const name = parts.pop()!;
+    let current = directoryTree;
+
+    for (const part of parts) {
+        if (!current.dir || !current.dir[part]) {
+            return; // Parent doesn't exist
+        }
+        current = current.dir[part];
+    }
+
+    if (current.dir && current.dir[name]) {
+        delete current.dir[name];
+    }
+}
+
 // ============================================================
 // WASI TYPES
 // ============================================================
@@ -514,19 +533,328 @@ class Descriptor {
         return normalizePath(base + subpath);
     }
 
-    // Stub methods for compatibility
-    appendViaStream() { console.log('[opfs-fs] appendViaStream not implemented'); }
-    advise() { }
-    getFlags() { }
-    setSize(_size: bigint) { }
-    setTimes() { }
-    setTimesAt() { }
-    linkAt() { }
-    readlinkAt() { }
-    removeDirectoryAt() { }
-    renameAt() { }
-    symlinkAt() { }
-    unlinkFileAt() { }
+    // Additional methods
+
+    /**
+     * Append via stream - returns OutputStream positioned at end of file
+     */
+    appendViaStream(): unknown {
+        const path = this.path;
+        const normalizedPath = normalizePath(path);
+        const entry = this.treeEntry;
+
+        const handle = syncHandleCache.get(normalizedPath);
+        if (!handle) {
+            console.warn('[opfs-fs] No sync handle for appendViaStream, path:', normalizedPath);
+            throw 'no-entry';
+        }
+
+        // Start at end of file
+        let offset = handle.getSize();
+
+        return new OutputStream({
+            write(buf: Uint8Array): bigint {
+                handle.write(buf, { at: offset });
+                handle.flush();
+                offset += buf.byteLength;
+                entry.size = Math.max(entry.size || 0, offset);
+                return BigInt(buf.byteLength);
+            },
+            blockingWriteAndFlush(buf: Uint8Array): void {
+                handle.write(buf, { at: offset });
+                handle.flush();
+                offset += buf.byteLength;
+                entry.size = Math.max(entry.size || 0, offset);
+            },
+            flush(): void {
+                handle.flush();
+            },
+            blockingFlush(): void {
+                handle.flush();
+            },
+            checkWrite(): bigint {
+                return BigInt(1024 * 1024);
+            },
+            subscribe(): void { },
+            [Symbol.dispose](): void { }
+        });
+    }
+
+    advise() {
+        // Advisory information for access pattern - no-op for OPFS
+    }
+
+    getFlags(): number {
+        // Return default flags (read/write)
+        return 0;
+    }
+
+    /**
+     * Set file size (truncate or extend)
+     */
+    setSize(size: bigint): void {
+        const path = this.path;
+        const normalizedPath = normalizePath(path);
+        console.log('[opfs-fs] setSize:', normalizedPath, 'to', size);
+
+        const handle = syncHandleCache.get(normalizedPath);
+        if (!handle) {
+            console.warn('[opfs-fs] No sync handle for setSize, path:', normalizedPath);
+            throw 'no-entry';
+        }
+
+        handle.truncate(Number(size));
+        handle.flush();
+        this.treeEntry.size = Number(size);
+    }
+
+    /**
+     * Set file timestamps
+     */
+    setTimes(
+        _dataAccessTimestamp?: { seconds: bigint; nanoseconds: number },
+        _dataModificationTimestamp?: { seconds: bigint; nanoseconds: number }
+    ): void {
+        // OPFS doesn't support setting timestamps directly
+        // Just acknowledge the call
+        console.log('[opfs-fs] setTimes: not supported by OPFS, ignoring');
+    }
+
+    /**
+     * Set timestamps for file at path
+     */
+    setTimesAt(
+        _pathFlags: number,
+        _path: string,
+        _dataAccessTimestamp?: { seconds: bigint; nanoseconds: number },
+        _dataModificationTimestamp?: { seconds: bigint; nanoseconds: number }
+    ): void {
+        // OPFS doesn't support setting timestamps
+        console.log('[opfs-fs] setTimesAt: not supported by OPFS, ignoring');
+    }
+
+    /**
+     * Create a hard link - not supported in OPFS
+     */
+    linkAt(
+        _oldPathFlags: number,
+        _oldPath: string,
+        _newDescriptor: Descriptor,
+        _newPath: string
+    ): void {
+        console.warn('[opfs-fs] linkAt: hard links not supported');
+        throw 'not-supported';
+    }
+
+    /**
+     * Read symbolic link - not supported in OPFS
+     */
+    readlinkAt(_path: string): string {
+        console.warn('[opfs-fs] readlinkAt: symbolic links not supported');
+        throw 'not-supported';
+    }
+
+    removeDirectoryAt(subpath: string): void {
+        const fullPath = this.resolvePath(subpath);
+        const normalizedPath = normalizePath(fullPath);
+        console.log('[opfs-fs] removeDirectoryAt:', normalizedPath);
+
+        // Check if directory exists in tree
+        const entry = getTreeEntry(normalizedPath);
+        if (!entry) {
+            throw 'no-entry';
+        }
+        if (!entry.dir) {
+            throw 'not-directory';
+        }
+
+        // Remove from OPFS (async)
+        this.removeOpfsEntry(normalizedPath, true);
+
+        // Remove from tree
+        removeTreeEntry(normalizedPath);
+    }
+
+    renameAt(
+        _oldPathFlags: number,
+        oldPath: string,
+        newDescriptor: Descriptor,
+        newPath: string
+    ): void {
+        const oldFullPath = this.resolvePath(oldPath);
+        const oldNormalized = normalizePath(oldFullPath);
+
+        // Resolve new path relative to new descriptor
+        const newFullPath = newDescriptor.resolvePath(newPath);
+        const newNormalized = normalizePath(newFullPath);
+
+        console.log('[opfs-fs] renameAt:', oldNormalized, '->', newNormalized);
+
+        // Get old entry
+        const oldEntry = getTreeEntry(oldNormalized);
+        if (!oldEntry) {
+            throw 'no-entry';
+        }
+
+        // Check if new path already exists
+        const existingEntry = getTreeEntry(newNormalized);
+        if (existingEntry) {
+            throw 'exist';
+        }
+
+        // For files, handle sync handle
+        if (oldEntry.dir === undefined) {
+            const handle = syncHandleCache.get(oldNormalized);
+            if (handle) {
+                try {
+                    handle.close();
+                } catch (e) {
+                    console.warn('[opfs-fs] Failed to close handle during rename:', oldNormalized, e);
+                }
+                syncHandleCache.delete(oldNormalized);
+            }
+        }
+
+        // Copy entry to new location in tree
+        setTreeEntry(newNormalized, oldEntry);
+
+        // Remove from old location in tree
+        removeTreeEntry(oldNormalized);
+
+        // Move in OPFS (async operation)
+        this.moveInOpfs(oldNormalized, newNormalized, oldEntry.dir !== undefined);
+    }
+
+    private moveInOpfs(oldPath: string, newPath: string, isDirectory: boolean): void {
+        const move = async () => {
+            try {
+                if (isDirectory) {
+                    // For directories, we need to create new and copy recursively, then delete old
+                    // This is complex - for now just log
+                    console.warn('[opfs-fs] Directory rename in OPFS not fully implemented:', oldPath, '->', newPath);
+                    return;
+                }
+
+                // For files: read old content, create new file, write content, delete old
+                const oldParts = oldPath.split('/').filter(p => p && p !== '.');
+                const newParts = newPath.split('/').filter(p => p && p !== '.');
+
+                if (oldParts.length === 0 || newParts.length === 0) return;
+
+                const oldName = oldParts.pop()!;
+                const newName = newParts.pop()!;
+
+                const oldParent = oldParts.length > 0
+                    ? await getOpfsDirectory(oldParts, false)
+                    : opfsRoot;
+
+                const newParent = newParts.length > 0
+                    ? await getOpfsDirectory(newParts, true)
+                    : opfsRoot;
+
+                if (!oldParent || !newParent) {
+                    console.error('[opfs-fs] Cannot find parent directories for move');
+                    return;
+                }
+
+                // Get old file and read content
+                const oldFileHandle = await oldParent.getFileHandle(oldName);
+                const oldFile = await oldFileHandle.getFile();
+                const content = await oldFile.arrayBuffer();
+
+                // Create new file and write
+                const newFileHandle = await newParent.getFileHandle(newName, { create: true });
+                const writable = await newFileHandle.createWritable();
+                await writable.write(content);
+                await writable.close();
+
+                // Acquire sync handle for new file
+                const syncHandle = await newFileHandle.createSyncAccessHandle();
+                syncHandleCache.set(newPath, syncHandle);
+
+                // Delete old file
+                await oldParent.removeEntry(oldName);
+
+                console.log('[opfs-fs] Moved in OPFS:', oldPath, '->', newPath);
+            } catch (e) {
+                console.error('[opfs-fs] Failed to move in OPFS:', oldPath, '->', newPath, e);
+            }
+        };
+
+        move();
+    }
+
+    /**
+     * Create symbolic link - not supported in OPFS
+     */
+    symlinkAt(_oldPath: string, _newPath: string): void {
+        console.warn('[opfs-fs] symlinkAt: symbolic links not supported');
+        throw 'not-supported';
+    }
+
+    unlinkFileAt(subpath: string): void {
+        const fullPath = this.resolvePath(subpath);
+        const normalizedPath = normalizePath(fullPath);
+        console.log('[opfs-fs] unlinkFileAt:', normalizedPath);
+
+        // Check if file exists in tree
+        const entry = getTreeEntry(normalizedPath);
+        if (!entry) {
+            throw 'no-entry';
+        }
+        if (entry.dir !== undefined) {
+            throw 'is-directory';
+        }
+
+        // Close and remove sync handle if cached
+        const handle = syncHandleCache.get(normalizedPath);
+        if (handle) {
+            try {
+                handle.close();
+            } catch (e) {
+                console.warn('[opfs-fs] Failed to close handle during unlink:', normalizedPath, e);
+            }
+            syncHandleCache.delete(normalizedPath);
+        }
+
+        // Remove from OPFS (async)
+        this.removeOpfsEntry(normalizedPath, false);
+
+        // Remove from tree
+        removeTreeEntry(normalizedPath);
+    }
+
+    private removeOpfsEntry(path: string, isDirectory: boolean): void {
+        const parts = path.split('/').filter(p => p && p !== '.');
+        if (parts.length === 0) return;
+
+        const name = parts.pop()!;
+
+        // Get parent directory
+        const getParentAndRemove = async () => {
+            try {
+                const parentDir = parts.length > 0
+                    ? await getOpfsDirectory(parts, false)
+                    : opfsRoot;
+
+                if (!parentDir) {
+                    console.warn('[opfs-fs] No parent directory for removal:', path);
+                    return;
+                }
+
+                if (isDirectory) {
+                    await parentDir.removeEntry(name, { recursive: true });
+                } else {
+                    await parentDir.removeEntry(name);
+                }
+                console.log('[opfs-fs] Removed from OPFS:', path);
+            } catch (e) {
+                console.error('[opfs-fs] Failed to remove from OPFS:', path, e);
+            }
+        };
+
+        getParentAndRemove();
+    }
     isSameObject(other: Descriptor): boolean { return other === this; }
     metadataHash() { return { upper: BigInt(0), lower: BigInt(0) }; }
     metadataHashAt() { return { upper: BigInt(0), lower: BigInt(0) }; }
