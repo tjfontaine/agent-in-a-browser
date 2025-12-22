@@ -40,6 +40,9 @@ fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
 }
 
 /// Read the entire body from an IncomingBody stream
+/// 
+/// Uses poll-based reading instead of blocking_read to avoid condvar panics
+/// in single-threaded WASM environments.
 fn read_body(
     body: crate::bindings::wasi::http::types::IncomingBody,
 ) -> Result<String, String> {
@@ -47,7 +50,14 @@ fn read_body(
 
     let mut bytes = Vec::new();
     loop {
-        match stream.blocking_read(65536) {
+        // Get pollable for this stream
+        let pollable = stream.subscribe();
+        
+        // Block until stream is ready (uses WASI poll, not std condvar)
+        pollable.block();
+        
+        // Now do non-blocking read
+        match stream.read(65536) {
             Ok(chunk) => {
                 if chunk.is_empty() {
                     break;
