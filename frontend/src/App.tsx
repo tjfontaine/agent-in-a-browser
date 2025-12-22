@@ -86,15 +86,15 @@ function TerminalContent({
             height={terminalRows}
             paddingX={1}
         >
-            {/* Content area - fixed height, shows last N lines */}
+            {/* Task panel - fixed at top, outside scrolling area */}
+            <TaskPanel />
+
+            {/* Content area - scrolling, shows last N lines */}
             <Box
                 flexDirection="column"
-                height={contentRows}
+                flexGrow={1}
                 overflow="hidden"
             >
-                {/* Task panel at top */}
-                <TaskPanel />
-
                 {visibleOutputs.map((output) => (
                     <OutputLine key={output.id} output={output} />
                 ))}
