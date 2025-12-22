@@ -310,6 +310,13 @@ export function removeApiKey(providerId: string): void {
 }
 
 /**
+ * Clear/remove an API key (alias for removeApiKey)
+ */
+export function clearApiKey(providerId: string): void {
+    removeApiKey(providerId);
+}
+
+/**
  * Get list of providers with stored keys
  */
 export function getProvidersWithKeys(): string[] {
@@ -328,6 +335,41 @@ export function getProvidersWithKeys(): string[] {
 export function clearAllSecrets(): void {
     secrets.clear();
     notifyListeners();
+}
+
+// ============ Provider Base URL Overrides ============
+
+// Store for per-provider base URL overrides
+const baseURLOverrides: Map<string, string> = new Map();
+
+/**
+ * Set a custom base URL for a provider (memory only)
+ */
+export function setProviderBaseURL(providerId: string, baseURL: string): void {
+    if (baseURL) {
+        baseURLOverrides.set(providerId, baseURL);
+    } else {
+        baseURLOverrides.delete(providerId);
+    }
+    notifyListeners();
+}
+
+/**
+ * Get the base URL for a provider (override or default)
+ */
+export function getProviderBaseURL(providerId: string): string | undefined {
+    return baseURLOverrides.get(providerId);
+}
+
+/**
+ * Get the effective base URL for a provider (override > default > undefined)
+ */
+export function getEffectiveBaseURL(providerId: string): string | undefined {
+    const override = baseURLOverrides.get(providerId);
+    if (override) return override;
+
+    const provider = getProvider(providerId);
+    return provider?.baseURL;
 }
 
 // ============ Backend Proxy ============

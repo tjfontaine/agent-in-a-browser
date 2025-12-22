@@ -17,6 +17,7 @@ import {
     getCurrentProvider,
     getApiKey,
     getBackendProxyURL,
+    getEffectiveBaseURL,
     subscribeToChanges,
 } from '../provider-config';
 
@@ -139,7 +140,7 @@ export function useAgent(): UseAgentReturn {
             const modelId = getCurrentModel();
             const modelInfo = getCurrentModelInfo();
             const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
-            const baseURL = getBackendProxyURL() || API_URL;
+            const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || API_URL;
 
             agentRef.current = new WasmAgent({
                 model: modelId,
@@ -319,7 +320,7 @@ export function useAgent(): UseAgentReturn {
                 const modelId = getCurrentModel();
                 const modelInfo = getCurrentModelInfo();
                 const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
-                const baseURL = getBackendProxyURL() || API_URL;
+                const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || API_URL;
 
                 // Recreate agent with new config
                 agentRef.current = new WasmAgent({
