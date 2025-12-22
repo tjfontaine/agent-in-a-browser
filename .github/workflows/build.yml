@@ -47,7 +47,6 @@ jobs:
         run: cargo component build --release --target wasm32-wasip2
 
       - name: Verify component
-        working-directory: runtime
         run: |
           cargo install wasm-tools --locked
           wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
@@ -56,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wasm-component
-          path: runtime/target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+          path: target/wasm32-wasip2/release/ts-runtime-mcp.wasm
           retention-days: 7
 
   frontend:
@@ -80,7 +79,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-component
-          path: runtime/target/wasm32-wasip2/release/
+          path: target/wasm32-wasip2/release/
 
       - name: Install root dependencies
         run: npm ci

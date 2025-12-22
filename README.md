@@ -189,7 +189,7 @@ cargo test --workspace
 cargo test -p ts-runtime-mcp
 
 # Validate WASM component
-wasm-tools component wit runtime/target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 ```
 
 ## Troubleshooting
