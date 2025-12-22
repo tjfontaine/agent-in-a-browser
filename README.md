@@ -109,7 +109,7 @@ web-agent/
 ├── frontend/                # ← Browser UI + agent
 │   ├── package.json
 │   ├── src/
-│   │   ├── main.ts          # Entry point
+│   │   ├── main.tsx         # React entry point
 │   │   ├── README.md        # Frontend architecture docs
 │   │   └── wasm/            # ← Host bridges + generated code
 │   │       ├── README.md    # Bridge layer docs
@@ -133,8 +133,9 @@ The WASM runtime provides these tools to the AI agent:
 | `write_file` | Write file to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
+| `edit_file` | Find and replace text in files |
 
-Shell commands include `tsx` for TypeScript/JavaScript execution.
+Shell commands include a full busybox-style suite: `tsx`, `tsc`, `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `xargs`, `diff`, and more.
 
 ## Docker
 

@@ -60,6 +60,7 @@ Standard WASI interfaces are bridged to browser APIs via TypeScript shims in `fr
 | `write_file` | Write content to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
+| `edit_file` | Find and replace text in files |
 
 The `tsx` shell command executes TypeScript/JavaScript in an embedded QuickJS runtime.
 

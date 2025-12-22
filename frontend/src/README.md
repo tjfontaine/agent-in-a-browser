@@ -101,10 +101,17 @@ src/
 | `/help` | Show available commands |
 | `/clear` | Clear conversation |
 | `/files` | List files in sandbox |
+| `/provider` | View/switch AI provider |
+| `/model` | View/switch AI model |
+| `/keys` | Manage API keys |
+| `/panel` | Toggle auxiliary panel |
 | `/mcp` | Show MCP server status |
+| `/mcp list` | List servers with IDs |
 | `/mcp add <url>` | Add remote MCP server |
+| `/mcp remove <id>` | Remove remote server |
 | `/mcp auth <id>` | Authenticate with OAuth |
-| `/mcp connect <id>` | Connect to server |
+| `/mcp connect <id>` | Connect to remote server |
+| `/mcp disconnect <id>` | Disconnect from server |
 
 ## Development
 

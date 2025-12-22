@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+    // GitHub Pages deploys to /agent-in-a-browser/
+    base: mode === 'production' ? '/agent-in-a-browser/' : '/',
     plugins: [
         react({
             babel: {
@@ -62,4 +64,4 @@ export default defineConfig({
     build: {
         target: 'esnext',
     },
-});
+}));
