@@ -9,7 +9,11 @@
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { InkXterm, Box, Text, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
-import { TaskPanel } from './components/TaskPanel';
+import { Spinner } from './components/ui/Spinner';
+import { useRotatingHints, IDLE_HINTS, BUSY_HINTS } from './components/ui/rotating-hints';
+import { SplitLayout, focusAuxPanel } from './components/SplitLayout';
+import { AuxiliaryPanel } from './components/AuxiliaryPanel';
+import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
 import 'ink-web/css';
@@ -61,7 +65,7 @@ function TerminalContent({
         ? outputs.slice(-maxScrollback)
         : outputs;
 
-    // Handle ESC to cancel (more intuitive for browser)
+    // Handle ESC to cancel, Ctrl+\ to switch panels
     useInput((_input, key) => {
         if (key.escape && isBusy) {
             onCancel();
@@ -70,12 +74,16 @@ function TerminalContent({
         if (key.ctrl && _input === 'c' && isBusy) {
             onCancel();
         }
+        // Ctrl+\ sends ASCII 28 (File Separator) in terminals
+        if (_input === '\x1c') {
+            focusAuxPanel();
+        }
     });
 
-    // Build status line
-    const statusText = queueLength > 0
-        ? `⏳ Agent working... (${queueLength} queued) [ESC to cancel]`
-        : `⏳ Agent working... [ESC to cancel]`;
+    // Rotating hints for placeholder text
+    const idleHint = useRotatingHints(IDLE_HINTS, 4000);
+    const busyHint = useRotatingHints(BUSY_HINTS, 3000);
+    const placeholder = isBusy ? busyHint : idleHint;
 
     return (
         <Box
@@ -83,9 +91,6 @@ function TerminalContent({
             flexGrow={1}
             paddingX={1}
         >
-            {/* Task panel - fixed at top, outside scrolling area */}
-            <TaskPanel />
-
             {/* Content area - scrolling, shows last N lines */}
             <Box
                 flexDirection="column"
@@ -98,10 +103,14 @@ function TerminalContent({
                 ))}
             </Box>
 
-            {/* Status line when busy */}
+            {/* Status line when busy - animated spinner */}
             {isBusy && (
-                <Box>
-                    <Text color={colors.yellow}>{statusText}</Text>
+                <Box gap={1}>
+                    <Spinner />
+                    <Text color={colors.yellow}>
+                        Agent working...{queueLength > 0 ? ` (${queueLength} queued)` : ''}
+                    </Text>
+                    <Text color={colors.dim}>[ESC to cancel]</Text>
                 </Box>
             )}
 
@@ -111,7 +120,7 @@ function TerminalContent({
                     onSubmit={onSubmit}
                     prompt={isBusy ? "📋 " : "❯ "}
                     promptColor={isBusy ? colors.dim : colors.cyan}
-                    placeholder={isBusy ? "Type to queue..." : "Type a message or /help..."}
+                    placeholder={placeholder}
                     focus={true}
                     getCompletions={getCompletions}
                 />
@@ -190,43 +199,50 @@ export default function App() {
     }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);
 
     return (
-        <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            {/* Header */}
-            <div style={{
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, #16213e 0%, #1a1a2e 100%)',
-                borderBottom: '1px solid #333',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-            }}>
-                <span style={{ fontSize: '16px', fontWeight: 500, color: '#9d4edd' }}>
-                    🤖 Web Agent
-                </span>
-                <span style={{ fontSize: '12px', color: status.color }}>
-                    {status.text}
-                </span>
-            </div>
+        <AuxiliaryPanelProvider>
+            <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+                {/* Header */}
+                <div style={{
+                    padding: '12px 16px',
+                    background: 'linear-gradient(135deg, #16213e 0%, #1a1a2e 100%)',
+                    borderBottom: '1px solid #333',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                }}>
+                    <span style={{ fontSize: '16px', fontWeight: 500, color: '#9d4edd' }}>
+                        🤖 Web Agent
+                    </span>
+                    <span style={{ fontSize: '12px', color: status.color }}>
+                        {status.text}
+                    </span>
+                </div>
 
-            {/* Terminal */}
-            <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-                {terminalMounted ? (
-                    <InkXterm focus>
-                        <TerminalContent
-                            outputs={outputs}
-                            isReady={isReady}
-                            isBusy={isBusy}
-                            queueLength={messageQueue.length}
-                            onSubmit={handleSubmit}
-                            getCompletions={getCommandCompletions}
-                            onCancel={cancelRequest}
+                {/* Split Terminal Layout */}
+                <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+                    {terminalMounted ? (
+                        <SplitLayout
+                            auxiliaryPanel={<AuxiliaryPanel />}
+                            mainPanel={
+                                <InkXterm focus>
+                                    <TerminalContent
+                                        outputs={outputs}
+                                        isReady={isReady}
+                                        isBusy={isBusy}
+                                        queueLength={messageQueue.length}
+                                        onSubmit={handleSubmit}
+                                        getCompletions={getCommandCompletions}
+                                        onCancel={cancelRequest}
+                                    />
+                                </InkXterm>
+                            }
                         />
-                    </InkXterm>
-                ) : (
-                    <div style={{ padding: '12px', color: '#8b949e' }}>Loading terminal...</div>
-                )}
-            </div>
+                    ) : (
+                        <div style={{ padding: '12px', color: '#8b949e' }}>Loading terminal...</div>
+                    )}
+                </div>
 
-        </div>
+            </div>
+        </AuxiliaryPanelProvider>
     );
 }

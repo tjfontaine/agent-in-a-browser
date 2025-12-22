@@ -13,6 +13,7 @@ import { helpCommand } from './cmd-help';
 import { clearCommand } from './cmd-clear';
 import { filesCommand } from './cmd-files';
 import { mcpCommand } from './cmd-mcp';
+import { panelCommand } from './cmd-panel';
 
 // Registry of all commands
 const registry: Map<string, CommandDef> = new Map();
@@ -131,6 +132,7 @@ registerCommand(helpCommand);
 registerCommand(clearCommand);
 registerCommand(filesCommand);
 registerCommand(mcpCommand);
+registerCommand(panelCommand);
 
 // Re-export types for convenience
 export type { CommandDef, CommandContext, OutputFn } from './types';
