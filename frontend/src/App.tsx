@@ -61,7 +61,8 @@ function TerminalContent({
     const promptRows = 2;
     // Add safety buffer (6 lines) for TaskPanel/wrapping/scroll drift
     const safetyBuffer = 6;
-    const contentRows = Math.max(1, terminalRows - promptRows - statusRows - safetyBuffer);
+    // contentRows should never be less than 10 to clear the welcome banner!
+    const contentRows = Math.max(10, terminalRows - promptRows - statusRows - safetyBuffer);
 
     // Show last N outputs only when there's overflow, otherwise show all from top
     const visibleOutputs = outputs.length > contentRows
