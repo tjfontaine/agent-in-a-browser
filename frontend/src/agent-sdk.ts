@@ -326,9 +326,13 @@ export class WasmAgent {
         this.mergeRemoteTools();
 
         // Create Anthropic provider
+        // Use same origin if no explicit baseURL - Vite proxy will forward to backend
+        const baseURL = this.config.baseURL || window.location.origin;
+        console.log('[Agent] Creating Anthropic provider with baseURL:', baseURL);
+
         this.anthropic = createAnthropic({
             apiKey: this.config.apiKey || 'dummy-key', // Key handled by proxy
-            baseURL: this.config.baseURL,
+            baseURL,
         });
 
         this.initialized = true;

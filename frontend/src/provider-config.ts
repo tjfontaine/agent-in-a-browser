@@ -113,8 +113,8 @@ const customProviders: ProviderInfo[] = [];
 // In-memory secrets store (lost on refresh)
 const secrets: Map<string, string> = new Map();
 
-// Backend proxy URL (optional)
-let backendProxyURL: string | null = 'http://localhost:3001';
+// Backend proxy URL - empty string means use same origin (Vite proxy handles forwarding)
+let backendProxyURL: string | null = '';
 
 // Listeners for changes
 type ChangeListener = () => void;

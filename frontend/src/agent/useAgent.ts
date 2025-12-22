@@ -140,7 +140,12 @@ export function useAgent(): UseAgentReturn {
             const modelId = getCurrentModel();
             const modelInfo = getCurrentModelInfo();
             const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
-            const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || API_URL;
+            // Priority: user override > backend proxy > fallback constant
+            // (Direct API calls hit CORS in browser, so prefer proxy)
+            const effectiveUrl = getEffectiveBaseURL(provider.id);
+            const proxyUrl = getBackendProxyURL();
+            const baseURL = effectiveUrl || proxyUrl || API_URL;
+            console.log('[useAgent] URL resolution:', { effectiveUrl, proxyUrl, API_URL, final: baseURL });
 
             agentRef.current = new WasmAgent({
                 model: modelId,
@@ -320,6 +325,7 @@ export function useAgent(): UseAgentReturn {
                 const modelId = getCurrentModel();
                 const modelInfo = getCurrentModelInfo();
                 const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
+                // Priority: user override > backend proxy > fallback constant
                 const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || API_URL;
 
                 // Recreate agent with new config
