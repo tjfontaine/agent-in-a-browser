@@ -90,7 +90,7 @@ function TerminalContent({
     return (
         <Box
             flexDirection="column"
-            height={terminalRows}
+            flexGrow={1}
             paddingX={1}
         >
             {/* Task panel - fixed at top, outside scrolling area */}
