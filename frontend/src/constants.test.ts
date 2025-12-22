@@ -6,12 +6,12 @@ import { API_URL, ANTHROPIC_API_KEY, PROMPT } from './constants';
 
 describe('Constants', () => {
     describe('API_URL', () => {
-        it('should be a valid localhost URL', () => {
-            expect(API_URL).toMatch(/^http:\/\/localhost:\d+$/);
+        it('should be empty string for same-origin proxy', () => {
+            expect(API_URL).toBe('');
         });
 
-        it('should use port 3001', () => {
-            expect(API_URL).toBe('http://localhost:3001');
+        it('should be defined as a string', () => {
+            expect(typeof API_URL).toBe('string');
         });
     });
 

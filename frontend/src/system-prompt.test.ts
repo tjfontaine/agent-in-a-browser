@@ -29,13 +29,14 @@ describe('System Prompt', () => {
         expect(SYSTEM_PROMPT).toContain('concise');
     });
 
-    it('should mention markdown formatting', () => {
-        expect(SYSTEM_PROMPT).toContain('markdown');
+    it('should mention text formatting', () => {
+        expect(SYSTEM_PROMPT).toContain('Plain text only');
+        expect(SYSTEM_PROMPT).toContain('ASCII formatting');
     });
 
     it('should mention shell pipes and chaining', () => {
-        expect(SYSTEM_PROMPT).toContain('|');
-        expect(SYSTEM_PROMPT).toContain('&&');
+        expect(SYSTEM_PROMPT).toContain('pipes');
+        expect(SYSTEM_PROMPT).toContain('chain operators');
     });
 
     it('should document task_write tool', () => {
@@ -48,7 +49,6 @@ describe('System Prompt', () => {
     it('should include task management guidance', () => {
         expect(SYSTEM_PROMPT).toContain('Task Management');
         expect(SYSTEM_PROMPT).toContain('When to Use task_write');
-        expect(SYSTEM_PROMPT).toContain('When NOT to Use task_write');
     });
 
     it('should include coding guidelines', () => {
@@ -56,8 +56,8 @@ describe('System Prompt', () => {
         expect(SYSTEM_PROMPT).toContain('over-engineering');
     });
 
-    it('should include professional objectivity', () => {
-        expect(SYSTEM_PROMPT).toContain('Professional Objectivity');
+    it('should include professional tone', () => {
+        expect(SYSTEM_PROMPT).toContain('direct and professional');
         expect(SYSTEM_PROMPT).toContain('technical accuracy');
     });
 
