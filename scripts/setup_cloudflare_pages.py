@@ -7,7 +7,8 @@
 # ]
 # ///
 """
-Setup Cloudflare Pages project, custom domain, and DNS records.
+Setup Cloudflare Worker deployment (optional - wrangler handles most of this).
+This script cleans up any old Pages configuration and verifies account access.
 Run with: uv run scripts/setup_cloudflare_pages.py
 """
 
@@ -23,46 +24,6 @@ ACCOUNT_ID = os.environ["CLOUDFLARE_ACCOUNT_ID"]
 PROJECT_NAME = "agent-in-a-browser"
 CUSTOM_DOMAIN = "agent.atxconsulting.com"
 BASE_DOMAIN = "atxconsulting.com"
-SUBDOMAIN = "agent"
-
-
-def setup_dns(client: cloudflare.Cloudflare, zone_id: str):
-    """Configure DNS CNAME record for the custom domain."""
-    pages_target = f"{PROJECT_NAME}.pages.dev"
-    
-    print(f"\nChecking DNS records...")
-    records = list(client.dns.records.list(zone_id=zone_id, name=CUSTOM_DOMAIN))
-    
-    cname_record = None
-    for record in records:
-        if record.type == "CNAME" and record.name == CUSTOM_DOMAIN:
-            cname_record = record
-            break
-    
-    if cname_record:
-        if cname_record.content == pages_target:
-            print(f"✓ DNS CNAME already correct: {CUSTOM_DOMAIN} → {pages_target}")
-        else:
-            print(f"  Updating CNAME: {cname_record.content} → {pages_target}")
-            client.dns.records.update(
-                dns_record_id=cname_record.id,
-                zone_id=zone_id,
-                name=SUBDOMAIN,
-                type="CNAME",
-                content=pages_target,
-                proxied=True,
-            )
-            print(f"✓ Updated DNS CNAME: {CUSTOM_DOMAIN} → {pages_target}")
-    else:
-        print(f"  Creating CNAME: {CUSTOM_DOMAIN} → {pages_target}")
-        client.dns.records.create(
-            zone_id=zone_id,
-            name=SUBDOMAIN,
-            type="CNAME",
-            content=pages_target,
-            proxied=True,
-        )
-        print(f"✓ Created DNS CNAME: {CUSTOM_DOMAIN} → {pages_target}")
 
 
 def main():
@@ -70,62 +31,68 @@ def main():
         api_token=os.environ["CLOUDFLARE_API_TOKEN"]
     )
 
-    # Find zone ID for the base domain
-    print(f"Looking up zone for '{BASE_DOMAIN}'...")
-    zones = list(client.zones.list(name=BASE_DOMAIN))
-    if not zones:
-        print(f"❌ Zone not found for {BASE_DOMAIN}. Is this domain on Cloudflare?")
+    # Verify account access
+    print(f"Verifying Cloudflare access...")
+    try:
+        zones = list(client.zones.list(name=BASE_DOMAIN))
+        if zones:
+            print(f"✓ Found zone: {zones[0].name} ({zones[0].id})")
+        else:
+            print(f"❌ Zone not found for {BASE_DOMAIN}")
+            return
+    except Exception as e:
+        print(f"❌ API access failed: {e}")
         return
-    zone_id = zones[0].id
-    print(f"✓ Found zone: {zone_id}")
 
-    # Check if project exists
-    print(f"\nChecking if project '{PROJECT_NAME}' exists...")
+    # Check for old Pages project and remove if exists
+    print(f"\nChecking for old Pages project '{PROJECT_NAME}'...")
     try:
         project = client.pages.projects.get(
             project_name=PROJECT_NAME,
             account_id=ACCOUNT_ID
         )
-        print(f"✓ Project exists: {project.subdomain}")
-    except cloudflare.NotFoundError:
-        print(f"Creating project '{PROJECT_NAME}'...")
-        project = client.pages.projects.create(
-            account_id=ACCOUNT_ID,
-            name=PROJECT_NAME,
-            production_branch="main",
-        )
-        print(f"✓ Created project: {project.subdomain}")
-
-    # Setup DNS CNAME record
-    setup_dns(client, zone_id)
-
-    # List existing Pages domains
-    print(f"\nChecking Pages custom domains...")
-    domains = client.pages.projects.domains.list(
-        project_name=PROJECT_NAME,
-        account_id=ACCOUNT_ID
-    )
-    existing_domains = [d.name for d in domains]
-    print(f"  Existing domains: {existing_domains}")
-
-    # Add custom domain if not present
-    if CUSTOM_DOMAIN not in existing_domains:
-        print(f"Adding custom domain '{CUSTOM_DOMAIN}'...")
-        domain = client.pages.projects.domains.create(
+        print(f"  Found Pages project: {project.subdomain}")
+        
+        # First delete all custom domains
+        domains = list(client.pages.projects.domains.list(
             project_name=PROJECT_NAME,
-            account_id=ACCOUNT_ID,
-            name=CUSTOM_DOMAIN,
+            account_id=ACCOUNT_ID
+        ))
+        for domain in domains:
+            print(f"  Deleting Pages domain: {domain.name}")
+            client.pages.projects.domains.delete(
+                domain_name=domain.name,
+                project_name=PROJECT_NAME,
+                account_id=ACCOUNT_ID
+            )
+        
+        print(f"  Deleting old Pages project (now using Workers)...")
+        client.pages.projects.delete(
+            project_name=PROJECT_NAME,
+            account_id=ACCOUNT_ID
         )
-        print(f"✓ Added domain: {domain.name} (status: {domain.status})")
-    else:
-        print(f"✓ Domain '{CUSTOM_DOMAIN}' already configured")
+        print(f"✓ Deleted old Pages project")
+    except cloudflare.NotFoundError:
+        print(f"✓ No Pages project found (good - using Workers instead)")
 
-    print(f"\n🎉 Setup complete!")
-    print(f"   Project URL: https://{PROJECT_NAME}.pages.dev")
-    print(f"   Custom domain: https://{CUSTOM_DOMAIN}")
-    print(f"\nNext steps:")
-    print(f"  1. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to GitHub secrets")
-    print(f"  2. Push to main to trigger deployment")
+    # Clean up any manually created CNAME records
+    # (wrangler will manage DNS automatically with custom_domain = true)
+    zone_id = zones[0].id
+    print(f"\nChecking DNS records for {CUSTOM_DOMAIN}...")
+    records = list(client.dns.records.list(zone_id=zone_id, name=CUSTOM_DOMAIN))
+    
+    for record in records:
+        if record.type == "CNAME" and "pages.dev" in (record.content or ""):
+            print(f"  Deleting old CNAME: {record.content}")
+            client.dns.records.delete(dns_record_id=record.id, zone_id=zone_id)
+            print(f"✓ Deleted old CNAME (wrangler will create Worker route)")
+
+    print(f"\n🎉 Cleanup complete!")
+    print(f"\nWrangler will automatically:")
+    print(f"  1. Create the Worker")
+    print(f"  2. Set up custom domain: {CUSTOM_DOMAIN}")
+    print(f"  3. Manage DNS records and certificates")
+    print(f"\nNext: Push to main to trigger deployment via GitHub Actions")
 
 
 if __name__ == "__main__":

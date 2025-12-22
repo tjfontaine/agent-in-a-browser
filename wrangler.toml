@@ -1,0 +1,18 @@
+name = "agent-in-a-browser"
+main = "worker/index.js"
+compatibility_date = "2025-12-22"
+workers_dev = false
+account_id = "687f8b8c824af34922f7bb4d1776f1a7"
+
+# Custom Domain - Cloudflare automatically manages DNS and certificates
+routes = [
+  { pattern = "agent.atxconsulting.com", custom_domain = true }
+]
+
+# Static assets configuration - serve from frontend/dist
+assets = { directory = "frontend/dist", binding = "ASSETS", html_handling = "auto-trailing-slash" }
+
+# Observability configuration for better logging
+[observability]
+enabled = true
+head_sampling_rate = 1.0
