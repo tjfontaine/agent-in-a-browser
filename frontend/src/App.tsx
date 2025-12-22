@@ -55,6 +55,7 @@ type OverlayMode = 'none' | 'model-selector' | 'provider-selector' | 'secret-inp
 interface SecretInputState {
     providerId: string;
     providerName: string;
+    pendingMessage?: string; // Message to dispatch after API key is set
 }
 
 // Terminal content component - rendered inside InkXterm
@@ -280,7 +281,8 @@ export default function App() {
             const provider = getCurrentProvider();
             if (provider.requiresKey && !hasApiKey(provider.id)) {
                 addOutput('system', `⚠️ API key required for ${provider.name}. Use /keys add ${provider.id}`, colors.yellow);
-                setSecretInputState({ providerId: provider.id, providerName: provider.name });
+                // Store the pending message to dispatch after API key is set
+                setSecretInputState({ providerId: provider.id, providerName: provider.name, pendingMessage: input });
                 setOverlayMode('secret-input');
                 return;
             }
@@ -310,10 +312,18 @@ export default function App() {
         if (secretInputState) {
             setApiKey(secretInputState.providerId, value);
             addOutput('system', `🔑 API key set for ${secretInputState.providerName}`, colors.green);
+
+            // If there was a pending message, dispatch it now
+            if (secretInputState.pendingMessage) {
+                addOutput('system', `▶️ Sending: ${secretInputState.pendingMessage.substring(0, 50)}${secretInputState.pendingMessage.length > 50 ? '...' : ''}`, colors.dim);
+                // Use setTimeout to ensure state updates have propagated
+                const pendingMsg = secretInputState.pendingMessage;
+                setTimeout(() => sendMessage(pendingMsg), 0);
+            }
         }
         setOverlayMode('none');
         setSecretInputState(null);
-    }, [secretInputState, addOutput]);
+    }, [secretInputState, addOutput, sendMessage]);
 
     return (
         <AuxiliaryPanelProvider>

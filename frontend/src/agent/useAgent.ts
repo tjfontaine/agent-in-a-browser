@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { initializeSandbox } from './sandbox';
 import { initializeWasmMcp, WasmAgent } from '../agent-sdk';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
-import { API_URL, ANTHROPIC_API_KEY } from '../constants';
+import { ANTHROPIC_API_KEY } from '../constants';
 import { SYSTEM_PROMPT } from '../system-prompt';
 import {
     getCurrentModel,
@@ -140,12 +140,12 @@ export function useAgent(): UseAgentReturn {
             const modelId = getCurrentModel();
             const modelInfo = getCurrentModelInfo();
             const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
-            // Priority: user override > backend proxy > fallback constant
-            // (Direct API calls hit CORS in browser, so prefer proxy)
+            // Priority: user override > provider default URL > backend proxy (if enabled)
+            // Direct API calls are the default - proxy is opt-in
             const effectiveUrl = getEffectiveBaseURL(provider.id);
             const proxyUrl = getBackendProxyURL();
-            const baseURL = effectiveUrl || proxyUrl || API_URL;
-            console.log('[useAgent] URL resolution:', { effectiveUrl, proxyUrl, API_URL, final: baseURL });
+            const baseURL = effectiveUrl || proxyUrl || '';
+            console.log('[useAgent] URL resolution:', { effectiveUrl, proxyUrl, final: baseURL });
 
             agentRef.current = new WasmAgent({
                 model: modelId,
@@ -325,8 +325,8 @@ export function useAgent(): UseAgentReturn {
                 const modelId = getCurrentModel();
                 const modelInfo = getCurrentModelInfo();
                 const apiKey = getApiKey(provider.id) || ANTHROPIC_API_KEY;
-                // Priority: user override > backend proxy > fallback constant
-                const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || API_URL;
+                // Priority: user override > provider default URL > backend proxy (if enabled)
+                const baseURL = getEffectiveBaseURL(provider.id) || getBackendProxyURL() || '';
 
                 // Recreate agent with new config
                 agentRef.current = new WasmAgent({

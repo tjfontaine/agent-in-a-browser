@@ -87,7 +87,8 @@ export const BUILT_IN_PROVIDERS: ProviderInfo[] = [
         id: 'anthropic',
         name: 'Anthropic',
         type: 'anthropic',
-        requiresKey: true,  // Key required (backend proxy is optional)
+        baseURL: 'https://api.anthropic.com',  // Direct API by default
+        requiresKey: true,
         models: ANTHROPIC_MODELS,
         aliases: ['claude', 'c'],
     },
@@ -113,8 +114,8 @@ const customProviders: ProviderInfo[] = [];
 // In-memory secrets store (lost on refresh)
 const secrets: Map<string, string> = new Map();
 
-// Backend proxy URL - empty string means use same origin (Vite proxy handles forwarding)
-let backendProxyURL: string | null = '';
+// Backend proxy URL - null means disabled (default: direct API calls)
+let backendProxyURL: string | null = null;
 
 // Listeners for changes
 type ChangeListener = () => void;
