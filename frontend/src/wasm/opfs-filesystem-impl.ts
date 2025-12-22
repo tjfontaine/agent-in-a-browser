@@ -657,7 +657,6 @@ class Descriptor {
     removeDirectoryAt(subpath: string): void {
         const fullPath = this.resolvePath(subpath);
         const normalizedPath = normalizePath(fullPath);
-        console.log('[opfs-fs] removeDirectoryAt:', normalizedPath);
 
         // Check if directory exists in tree
         const entry = getTreeEntry(normalizedPath);
@@ -795,7 +794,6 @@ class Descriptor {
     unlinkFileAt(subpath: string): void {
         const fullPath = this.resolvePath(subpath);
         const normalizedPath = normalizePath(fullPath);
-        console.log('[opfs-fs] unlinkFileAt:', normalizedPath);
 
         // Check if file exists in tree
         const entry = getTreeEntry(normalizedPath);

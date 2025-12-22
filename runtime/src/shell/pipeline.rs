@@ -6,6 +6,129 @@ use super::env::{ShellEnv, ShellResult};
 /// Default pipe capacity in bytes.
 const PIPE_CAPACITY: usize = 4096;
 
+/// Expand glob patterns in arguments.
+/// 
+/// If an argument contains `*` or `?`, it's expanded to matching files
+/// in the given directory. If no matches are found, the pattern is returned as-is.
+fn expand_globs(args: &[String], cwd: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    
+    for arg in args {
+        if arg.contains('*') || arg.contains('?') {
+            // This is a glob pattern - expand it
+            let matches = expand_single_glob(arg, cwd);
+            if matches.is_empty() {
+                // No matches - pass pattern as-is (bash behavior varies, we keep it)
+                result.push(arg.clone());
+            } else {
+                result.extend(matches);
+            }
+        } else {
+            // Not a glob - pass through
+            result.push(arg.clone());
+        }
+    }
+    
+    result
+}
+
+/// Expand a single glob pattern against the filesystem.
+fn expand_single_glob(pattern: &str, cwd: &str) -> Vec<String> {
+    let mut matches = Vec::new();
+    
+    // Handle pattern with directory component
+    let (dir, file_pattern) = if pattern.contains('/') {
+        // Has directory component - split it
+        let last_slash = pattern.rfind('/').unwrap();
+        let dir = &pattern[..last_slash];
+        let file_pat = &pattern[last_slash + 1..];
+        
+        // Resolve directory relative to cwd
+        let full_dir = if dir.starts_with('/') {
+            dir.to_string()
+        } else if cwd == "/" || cwd.is_empty() {
+            format!("/{}", dir)
+        } else {
+            format!("{}/{}", cwd, dir)
+        };
+        (full_dir, file_pat.to_string())
+    } else {
+        // Just a filename pattern - search in cwd
+        let dir = if cwd.is_empty() || cwd == "." {
+            "/".to_string()
+        } else {
+            cwd.to_string()
+        };
+        (dir, pattern.to_string())
+    };
+    
+    // Read directory and match files
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            
+            // Skip hidden files unless pattern starts with .
+            if name.starts_with('.') && !file_pattern.starts_with('.') {
+                continue;
+            }
+            
+            if glob_match(&file_pattern, &name) {
+                // Return path relative to original pattern style
+                if pattern.contains('/') {
+                    // Preserve the directory prefix from the pattern
+                    let prefix = &pattern[..pattern.rfind('/').unwrap() + 1];
+                    matches.push(format!("{}{}", prefix, name));
+                } else {
+                    matches.push(name);
+                }
+            }
+        }
+    }
+    
+    matches.sort();
+    matches
+}
+
+/// Simple glob pattern matching (supports * and ?)
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let mut p_chars = pattern.chars().peekable();
+    let mut t_chars = text.chars().peekable();
+    
+    while let Some(pc) = p_chars.next() {
+        match pc {
+            '*' => {
+                // Match zero or more characters
+                if p_chars.peek().is_none() {
+                    return true; // * at end matches everything
+                }
+                // Try matching rest of pattern at every position
+                let rest_pattern: String = p_chars.collect();
+                let mut remaining: String = t_chars.collect();
+                while !remaining.is_empty() {
+                    if glob_match(&rest_pattern, &remaining) {
+                        return true;
+                    }
+                    remaining = remaining.chars().skip(1).collect();
+                }
+                return glob_match(&rest_pattern, "");
+            }
+            '?' => {
+                // Match exactly one character
+                if t_chars.next().is_none() {
+                    return false;
+                }
+            }
+            c => {
+                if t_chars.next() != Some(c) {
+                    return false;
+                }
+            }
+        }
+    }
+    
+    t_chars.peek().is_none()
+}
+
 /// Operator for chaining commands
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ChainOp {
@@ -127,7 +250,8 @@ async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult 
         match shlex::split(part) {
             Some(tokens) if !tokens.is_empty() => {
                 let cmd_name = tokens[0].clone();
-                let args = tokens[1..].to_vec();
+                // Expand globs in arguments
+                let args = expand_globs(&tokens[1..], &env.cwd.to_string_lossy());
                 commands.push((cmd_name, args));
             }
             _ => {

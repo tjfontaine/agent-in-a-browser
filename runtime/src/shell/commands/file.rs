@@ -371,11 +371,13 @@ impl FileCommands {
             }
             
             if files.is_empty() {
+                eprintln!("[debug] rm: no files after parsing, force={}", force);
                 if !force {
                     let _ = stderr.write_all(b"rm: missing operand\n").await;
                 }
                 return if force { 0 } else { 1 };
             }
+            
             
             let mut exit_code = 0;
             for file in files {
