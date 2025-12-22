@@ -1,16 +1,18 @@
 /**
  * ProviderSelector Component
  * 
- * Interactive multi-step provider setup wizard using @inkjs/ui.
- * Steps:
- * 1. Select provider
- * 2. Configure base URL (optional override)
- * 3. Set API key (if required)
+ * Interactive provider setup with hotkey navigation.
+ * Press keys to navigate directly:
+ *   [u] - Configure URL
+ *   [k] - Configure API key  
+ *   [1-9] - Select provider by number
+ *   [Enter] - Apply and exit
+ *   [Esc] - Cancel
  */
 
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { Select, TextInput } from '@inkjs/ui';
+import { TextInput } from '@inkjs/ui';
 import {
     getAllProviders,
     getCurrentProvider,
@@ -30,9 +32,10 @@ const colors = {
     yellow: '#d29922',
     red: '#ff7b72',
     dim: '#8b949e',
+    magenta: '#bc8cff',
 };
 
-type WizardStep = 'select-provider' | 'configure-url' | 'configure-key' | 'summary';
+type WizardStep = 'menu' | 'configure-url' | 'configure-key';
 
 interface ProviderSelectorProps {
     onExit: () => void;
@@ -40,282 +43,200 @@ interface ProviderSelectorProps {
 }
 
 export function ProviderSelector({ onExit, onSelect }: ProviderSelectorProps) {
-    const [step, setStep] = useState<WizardStep>('select-provider');
-    const [selectedProvider, setSelectedProvider] = useState<ProviderInfo | null>(null);
-    const [customUrl, setCustomUrl] = useState('');
-    const [apiKey, setApiKeyValue] = useState('');
-    const [showKey, setShowKey] = useState(false);
+    const [step, setStep] = useState<WizardStep>('menu');
+    const [workingProvider, setWorkingProvider] = useState<ProviderInfo>(getCurrentProvider());
+    const [_showKey, setShowKey] = useState(false);
 
-    const currentProvider = getCurrentProvider();
     const providers = getAllProviders();
 
-    // Handle escape to exit at any step
+    // Initialize working state
+    const getWorkingUrl = () => getProviderBaseURL(workingProvider.id) || workingProvider.baseURL || '';
+    const getWorkingKey = () => getApiKey(workingProvider.id) || '';
+
+    // Handle keyboard input
     useInput((input, key) => {
+        // Escape to go back or exit
         if (key.escape) {
-            onExit();
+            if (step === 'menu') {
+                onExit();
+            } else {
+                setStep('menu');
+            }
+            return;
         }
-        // Toggle show/hide key in key step
-        if (step === 'configure-key' && input === 't') {
-            setShowKey(prev => !prev);
+
+        // Only handle hotkeys in menu step
+        if (step !== 'menu') {
+            if (step === 'configure-key' && input === 't') {
+                setShowKey(prev => !prev);
+            }
+            return;
+        }
+
+        // Hotkeys for menu
+        const inputLower = input.toLowerCase();
+
+        // [u] - URL configuration
+        if (inputLower === 'u') {
+            setStep('configure-url');
+            return;
+        }
+
+        // [k] - Key configuration
+        if (inputLower === 'k') {
+            setStep('configure-key');
+            return;
+        }
+
+        // [c] - Clear key
+        if (inputLower === 'c') {
+            clearApiKey(workingProvider.id);
+            return;
+        }
+
+        // [Enter] - Apply and exit
+        if (key.return) {
+            setCurrentProvider(workingProvider.id);
+            onSelect?.(workingProvider.id);
+            onExit();
+            return;
+        }
+
+        // [1-9] - Select provider by number
+        const num = parseInt(input, 10);
+        if (num >= 1 && num <= providers.length) {
+            const provider = providers[num - 1];
+            setWorkingProvider(provider);
+            return;
         }
     });
 
-    // Step 1: Select Provider
-    const handleProviderSelect = (providerId: string) => {
-        const provider = providers.find(p => p.id === providerId);
-        if (!provider) return;
-
-        setSelectedProvider(provider);
-        // Pre-fill with existing values
-        setCustomUrl(getProviderBaseURL(providerId) || provider.baseURL || '');
-        setApiKeyValue(getApiKey(providerId) || '');
-        setStep('configure-url');
-    };
-
-    // Step 2: Configure Base URL
+    // Handle URL submission
     const handleUrlSubmit = (value: string) => {
         const url = value.trim();
-        if (selectedProvider) {
-            if (url && url !== selectedProvider.baseURL) {
-                setProviderBaseURL(selectedProvider.id, url);
-            } else if (!url || url === selectedProvider.baseURL) {
-                // Clear override if empty or same as default
-                setProviderBaseURL(selectedProvider.id, '');
-            }
+        if (url && url !== workingProvider.baseURL) {
+            setProviderBaseURL(workingProvider.id, url);
+        } else if (!url || url === workingProvider.baseURL) {
+            setProviderBaseURL(workingProvider.id, '');
         }
-        setStep('configure-key');
+        setStep('menu');
     };
 
-    const _handleUrlSkip = () => {
-        setStep('configure-key');
-    };
-
-    // Step 3: Configure API Key
+    // Handle key submission
     const handleKeySubmit = (value: string) => {
         const key = value.trim();
-        if (selectedProvider) {
-            if (key) {
-                setApiKey(selectedProvider.id, key);
-            }
+        if (key) {
+            setApiKey(workingProvider.id, key);
         }
-        setStep('summary');
+        setStep('menu');
     };
 
-    const _handleKeyClear = () => {
-        if (selectedProvider) {
-            clearApiKey(selectedProvider.id);
-            setApiKeyValue('');
-        }
-    };
+    // Status helpers
+    const currentUrl = getProviderBaseURL(workingProvider.id);
+    const hasKey = hasApiKey(workingProvider.id);
+    const keyInfo = getWorkingKey();
+    const keyPreview = keyInfo ? `...${keyInfo.slice(-4)}` : 'not set';
 
-    // Final: Apply and exit
-    const handleFinish = () => {
-        if (selectedProvider) {
-            setCurrentProvider(selectedProvider.id);
-            onSelect?.(selectedProvider.id);
-        }
-        onExit();
-    };
-
-    // Build provider options - with "Configure current" at top
-    const providerOptions = [
-        // Add "Configure current provider" option at top
-        {
-            label: `⚙️  Configure ${currentProvider.name} (current)`,
-            value: `__configure__${currentProvider.id}`,
-        },
-        // Then all providers
-        ...providers.map(p => {
-            const isCurrent = p.id === currentProvider.id;
-            const keyStatus = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '✓');
-            const aliases = p.aliases.join(', ');
-            return {
-                label: `${isCurrent ? '●' : '○'} ${p.name} (${aliases}) ${keyStatus}`,
-                value: p.id,
-            };
-        }),
-    ];
-
-    // Handle selection - check for configure action
-    const handleMenuSelect = (value: string) => {
-        if (value.startsWith('__configure__')) {
-            // Configure current provider - skip to URL step
-            const providerId = value.replace('__configure__', '');
-            const provider = providers.find(p => p.id === providerId);
-            if (provider) {
-                setSelectedProvider(provider);
-                setCustomUrl(getProviderBaseURL(providerId) || provider.baseURL || '');
-                setApiKeyValue(getApiKey(providerId) || '');
-                setStep('configure-url');
-            }
-        } else {
-            handleProviderSelect(value);
-        }
-    };
-
-    // Render based on current step
-    if (step === 'select-provider') {
+    // ===== MENU STEP =====
+    if (step === 'menu') {
         return (
             <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🌐 Step 1/3: Select AI Provider</Text>
-                <Text color={colors.dim}>
-                    Current: {currentProvider.name}
-                </Text>
-                <Text color={colors.dim}>
-                    (↑↓ to move, Enter to select, ESC to cancel)
-                </Text>
-                <Box marginTop={1}>
-                    <Select
-                        options={providerOptions}
-                        defaultValue={`__configure__${currentProvider.id}`}
-                        onChange={handleMenuSelect}
-                    />
+                <Text color={colors.cyan} bold>🌐 Provider Configuration</Text>
+                <Text color={colors.dim}>Press a key to navigate:</Text>
+
+                {/* Current config display */}
+                <Box marginTop={1} flexDirection="column">
+                    <Text color={colors.magenta} bold>Current Config:</Text>
+                    <Text>  Provider: <Text color={colors.cyan}>{workingProvider.name}</Text></Text>
+                    <Text>  Base URL: <Text color={currentUrl ? colors.yellow : colors.dim}>
+                        {currentUrl || '(default)'}
+                    </Text></Text>
+                    <Text>  API Key:  <Text color={hasKey ? colors.green : (workingProvider.requiresKey ? colors.yellow : colors.dim)}>
+                        {hasKey ? `✓ Set (${keyPreview})` : (workingProvider.requiresKey ? '⚠️ Not set' : 'Optional')}
+                    </Text></Text>
                 </Box>
-                <Box marginTop={1}>
-                    <Text color={colors.dim}>
-                        🔑 = key set, ⚠️ = key needed, ✓ = no key required
-                    </Text>
+
+                {/* Hotkey menu */}
+                <Box marginTop={1} flexDirection="column">
+                    <Text color={colors.magenta} bold>Actions:</Text>
+                    <Text>  <Text color={colors.cyan}>[u]</Text> Configure base URL</Text>
+                    <Text>  <Text color={colors.cyan}>[k]</Text> Set API key</Text>
+                    {hasKey && <Text>  <Text color={colors.cyan}>[c]</Text> Clear API key</Text>}
+                    <Text>  <Text color={colors.green}>[Enter]</Text> Apply & exit</Text>
+                    <Text>  <Text color={colors.dim}>[Esc]</Text> Cancel</Text>
+                </Box>
+
+                {/* Provider selection */}
+                <Box marginTop={1} flexDirection="column">
+                    <Text color={colors.magenta} bold>Switch Provider:</Text>
+                    {providers.map((p, i) => {
+                        const isCurrent = p.id === workingProvider.id;
+                        const keyStatus = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '✓');
+                        return (
+                            <Text key={p.id}>
+                                <Text color={colors.cyan}>[{i + 1}]</Text>
+                                <Text color={isCurrent ? colors.green : colors.dim}>
+                                    {isCurrent ? ' ● ' : ' ○ '}
+                                </Text>
+                                <Text color={isCurrent ? colors.green : undefined}>
+                                    {p.name} {keyStatus}
+                                </Text>
+                            </Text>
+                        );
+                    })}
                 </Box>
             </Box>
         );
     }
 
-    if (step === 'configure-url' && selectedProvider) {
-        const defaultUrl = selectedProvider.baseURL || 'https://api.anthropic.com';
+    // ===== URL STEP =====
+    if (step === 'configure-url') {
+        const defaultUrl = workingProvider.baseURL || 'https://api.anthropic.com';
         return (
             <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🔗 Step 2/3: Configure Base URL</Text>
-                <Text color={colors.dim}>
-                    Provider: {selectedProvider.name}
-                </Text>
-                <Text color={colors.dim}>
-                    Default: {defaultUrl}
-                </Text>
+                <Text color={colors.cyan} bold>🔗 Configure Base URL</Text>
+                <Text color={colors.dim}>Provider: {workingProvider.name}</Text>
+                <Text color={colors.dim}>Default: {defaultUrl}</Text>
                 <Box marginTop={1} flexDirection="column">
-                    <Text>Enter custom URL (or press Enter to use default):</Text>
+                    <Text>Enter URL (blank for default):</Text>
                     <Box marginTop={1}>
+                        <Text color={colors.cyan}>{'> '}</Text>
                         <TextInput
-                            defaultValue={customUrl || defaultUrl}
+                            defaultValue={getWorkingUrl() || defaultUrl}
                             onSubmit={handleUrlSubmit}
-                            placeholder={defaultUrl}
                         />
                     </Box>
                 </Box>
                 <Box marginTop={1}>
-                    <Text color={colors.dim}>
-                        Press Enter to continue, ESC to cancel
-                    </Text>
-                </Box>
-                <Box marginTop={1}>
-                    <Text color={colors.yellow}>
-                        💡 Tip: Use custom URLs for local proxies or OpenAI-compatible APIs
-                    </Text>
+                    <Text color={colors.dim}>[Enter] Save  [Esc] Cancel</Text>
                 </Box>
             </Box>
         );
     }
 
-    if (step === 'configure-key' && selectedProvider) {
-        const existingKey = getApiKey(selectedProvider.id);
-        const maskedKey = apiKey ? '•'.repeat(Math.min(apiKey.length, 20)) + (apiKey.length > 20 ? '...' : '') : '';
-
+    // ===== KEY STEP =====
+    if (step === 'configure-key') {
         return (
             <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🔑 Step 3/3: Configure API Key</Text>
-                <Text color={colors.dim}>
-                    Provider: {selectedProvider.name}
-                </Text>
-                {existingKey && (
-                    <Text color={colors.green}>
-                        ✓ Existing key stored (ends with ...{existingKey.slice(-4)})
-                    </Text>
-                )}
-                {!selectedProvider.requiresKey && (
-                    <Text color={colors.yellow}>
-                        ⓘ This provider works without an API key (uses backend proxy)
-                    </Text>
+                <Text color={colors.cyan} bold>🔑 Configure API Key</Text>
+                <Text color={colors.dim}>Provider: {workingProvider.name}</Text>
+                {hasKey && (
+                    <Text color={colors.green}>Current: ...{keyInfo.slice(-4)}</Text>
                 )}
                 <Box marginTop={1} flexDirection="column">
-                    <Text>
-                        {existingKey ? 'Enter new key to replace, or press Enter to keep:' : 'Enter API key:'}
-                    </Text>
+                    <Text>Enter API key:</Text>
                     <Box marginTop={1}>
-                        {showKey ? (
-                            <TextInput
-                                defaultValue={apiKey}
-                                onSubmit={handleKeySubmit}
-                                placeholder="sk-..."
-                            />
-                        ) : (
-                            <Box>
-                                <Text>{maskedKey || '(paste key here)'}</Text>
-                                <TextInput
-                                    defaultValue=""
-                                    onSubmit={(v) => {
-                                        setApiKeyValue(v);
-                                        handleKeySubmit(v);
-                                    }}
-                                    placeholder=""
-                                />
-                            </Box>
-                        )}
+                        <Text color={colors.cyan}>{'> '}</Text>
+                        <TextInput
+                            defaultValue=""
+                            onSubmit={handleKeySubmit}
+                            placeholder="sk-..."
+                        />
                     </Box>
                 </Box>
                 <Box marginTop={1} flexDirection="column">
-                    <Text color={colors.dim}>
-                        Press Enter to continue, ESC to cancel
-                    </Text>
-                    <Text color={colors.dim}>
-                        Press 't' to toggle show/hide key
-                    </Text>
-                    {existingKey && (
-                        <Text color={colors.dim}>
-                            Type 'clear' and press Enter to remove stored key
-                        </Text>
-                    )}
-                </Box>
-                <Box marginTop={1}>
-                    <Text color={colors.yellow}>
-                        ⚠️ Keys are stored in memory only - lost on page refresh
-                    </Text>
-                </Box>
-            </Box>
-        );
-    }
-
-    if (step === 'summary' && selectedProvider) {
-        const finalUrl = getProviderBaseURL(selectedProvider.id) || selectedProvider.baseURL || 'default';
-        const hasKey = hasApiKey(selectedProvider.id);
-
-        return (
-            <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.green} bold>✓ Provider Configuration Complete</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text>Provider: <Text color={colors.cyan}>{selectedProvider.name}</Text></Text>
-                    <Text>Base URL: <Text color={colors.dim}>{finalUrl}</Text></Text>
-                    <Text>API Key:  <Text color={hasKey ? colors.green : (selectedProvider.requiresKey ? colors.yellow : colors.dim)}>
-                        {hasKey ? '✓ Set' : (selectedProvider.requiresKey ? '⚠️ Not set' : 'Not required')}
-                    </Text></Text>
-                    <Text>Models:   <Text color={colors.dim}>{selectedProvider.models.length} available</Text></Text>
-                </Box>
-                <Box marginTop={1}>
-                    <Text color={colors.dim}>
-                        Press Enter to apply, ESC to cancel
-                    </Text>
-                </Box>
-                <Box marginTop={1}>
-                    <Select
-                        options={[
-                            { label: '✓ Apply and use this provider', value: 'apply' },
-                            { label: '← Back to URL configuration', value: 'back-url' },
-                            { label: '← Back to provider selection', value: 'back-provider' },
-                        ]}
-                        onChange={(choice) => {
-                            if (choice === 'apply') handleFinish();
-                            else if (choice === 'back-url') setStep('configure-url');
-                            else if (choice === 'back-provider') setStep('select-provider');
-                        }}
-                    />
+                    <Text color={colors.dim}>[Enter] Save  [Esc] Cancel</Text>
+                    <Text color={colors.yellow}>⚠️ Stored in memory only (lost on refresh)</Text>
                 </Box>
             </Box>
         );
