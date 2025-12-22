@@ -133,6 +133,7 @@ function TerminalContent({
 // Main App Component
 export default function App() {
     const {
+        status,
         outputs,
         isReady,
         isBusy,
@@ -200,7 +201,24 @@ export default function App() {
 
     return (
         <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            {/* Terminal taking full space */}
+            {/* Header */}
+            <div style={{
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, #16213e 0%, #1a1a2e 100%)',
+                borderBottom: '1px solid #333',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+            }}>
+                <span style={{ fontSize: '16px', fontWeight: 500, color: '#9d4edd' }}>
+                    🤖 Web Agent
+                </span>
+                <span style={{ fontSize: '12px', color: status.color }}>
+                    {status.text}
+                </span>
+            </div>
+
+            {/* Terminal */}
             <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                 {terminalMounted ? (
                     <InkXterm focus>
@@ -219,7 +237,6 @@ export default function App() {
                 )}
             </div>
 
-            {/* Minimal footer if needed, or remove completely. User asked to remove header. */}
         </div>
     );
 }
