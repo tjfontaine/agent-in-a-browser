@@ -35,7 +35,7 @@ jobs:
         run: cargo install cargo-component --locked
 
       - name: Install wit-deps
-        run: cargo install wit-deps --locked
+        run: cargo install wit-deps-cli --locked
 
       - name: Cache WIT dependencies
         uses: actions/cache@v4
