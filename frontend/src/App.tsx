@@ -61,8 +61,10 @@ function TerminalContent({
     const promptRows = 2;
     const contentRows = Math.max(1, terminalRows - promptRows - statusRows);
 
-    // Only show the last N outputs to prevent overflow
-    const visibleOutputs = outputs.slice(-contentRows);
+    // Show last N outputs only when there's overflow, otherwise show all from top
+    const visibleOutputs = outputs.length > contentRows
+        ? outputs.slice(-contentRows)
+        : outputs;
 
     // Handle ESC to cancel (more intuitive for browser)
     useInput((_input, key) => {
