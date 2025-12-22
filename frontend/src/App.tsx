@@ -10,7 +10,8 @@ import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { InkXterm, Box, Text, useInput } from 'ink-web';
 import { TextInput } from './components/ui/text-input';
 import { Spinner } from './components/ui/Spinner';
-import { useRotatingHints, IDLE_HINTS, BUSY_HINTS } from './components/ui/rotating-hints';
+// TEMPORARILY DISABLED - rotating hints cause input issues
+// import { useRotatingHints, IDLE_HINTS, BUSY_HINTS } from './components/ui/rotating-hints';
 import { SplitLayout, focusAuxPanel } from './components/SplitLayout';
 import { AuxiliaryPanel } from './components/AuxiliaryPanel';
 import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
@@ -80,10 +81,11 @@ function TerminalContent({
         }
     });
 
-    // Rotating hints for placeholder text
-    const idleHint = useRotatingHints(IDLE_HINTS, 4000);
-    const busyHint = useRotatingHints(BUSY_HINTS, 3000);
-    const placeholder = isBusy ? busyHint : idleHint;
+    // TEMPORARILY DISABLED: Rotating hints cause re-renders that drop input characters
+    // const idleHint = useRotatingHints(IDLE_HINTS, 6000);
+    // const busyHint = useRotatingHints(BUSY_HINTS, 5000);
+    // const placeholder = isBusy ? busyHint : idleHint;
+    const placeholder = isBusy ? 'Type to queue... [ESC to cancel]' : 'Type a message or /help... [Ctrl+\\\\ to switch panels]';
 
     return (
         <Box
