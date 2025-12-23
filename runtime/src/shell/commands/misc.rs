@@ -1,10 +1,10 @@
 //! Miscellaneous commands: seq, sleep, date
 
 use futures_lite::io::AsyncWriteExt;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn};
+use super::parse_common;
 
 // Import WASI clock bindings
 use crate::bindings::wasi::clocks::monotonic_clock;

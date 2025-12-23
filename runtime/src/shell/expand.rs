@@ -765,6 +765,7 @@ fn parse_arithmetic_expr(expr: &str) -> Result<i64, String> {
 }
 
 /// Expand backtick command substitution
+#[allow(dead_code)] // kept for future backtick expansion support
 pub fn expand_backticks(input: &str, _env: &ShellEnv) -> Result<String, String> {
     let mut result = String::new();
     let mut chars = input.chars().peekable();

@@ -1,10 +1,10 @@
 //! Additional utility commands: printf, read, stat, ln, mktemp, type, which
 
 use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn, ShellCommands};
+use super::{parse_common, ShellCommands};
 
 // Import WASI random bindings for cryptographic randomness
 use crate::bindings::wasi::random::random as wasi_random;
@@ -66,7 +66,7 @@ impl UtilCommands {
         _env: &ShellEnv,
         stdin: piper::Reader,
         mut stdout: piper::Writer,
-        mut stderr: piper::Writer,
+        _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
             let (opts, remaining) = parse_common(&args);

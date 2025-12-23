@@ -88,6 +88,7 @@ pub struct ShellEnv {
     /// Subshell depth (for nested execution)
     pub subshell_depth: usize,
     /// Trap handlers (signal -> command)
+    #[allow(dead_code)] // kept for POSIX shell trap support
     pub traps: HashMap<String, String>,
     /// Shell functions (name -> body)
     pub functions: HashMap<String, String>,
@@ -187,6 +188,7 @@ impl ShellEnv {
     }
 
     /// Get all positional parameters as quoted strings ($@)
+    #[allow(dead_code)] // POSIX shell API
     pub fn all_params(&self) -> &[String] {
         &self.positional_params
     }
@@ -199,6 +201,7 @@ impl ShellEnv {
     }
 
     /// Set a trap handler
+    #[allow(dead_code)] // kept for POSIX trap support
     pub fn set_trap(&mut self, signal: &str, command: Option<&str>) {
         if let Some(cmd) = command {
             self.traps.insert(signal.to_string(), cmd.to_string());
@@ -208,6 +211,7 @@ impl ShellEnv {
     }
 
     /// Get a trap handler
+    #[allow(dead_code)] // kept for POSIX trap support
     pub fn get_trap(&self, signal: &str) -> Option<&String> {
         self.traps.get(signal)
     }

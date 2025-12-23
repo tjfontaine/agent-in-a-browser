@@ -1,10 +1,10 @@
 //! Path manipulation commands: basename, dirname
 
 use futures_lite::io::AsyncWriteExt;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn};
+use super::parse_common;
 
 /// Path manipulation commands.
 pub struct PathCommands;

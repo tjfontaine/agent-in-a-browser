@@ -9,6 +9,7 @@ use std::io::{self, BufRead, Write};
 /// JSON-RPC 2.0 Request
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
+    #[allow(dead_code)] // part of JSON-RPC protocol but validated by serde
     pub jsonrpc: String,
     pub id: Option<serde_json::Value>,
     pub method: String,
@@ -68,6 +69,7 @@ pub struct ServerInfo {
 }
 
 /// MCP Log Level for notifications/message
+#[allow(dead_code)] // part of MCP protocol, used for SSE/streaming
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
@@ -88,6 +90,7 @@ impl Default for LogLevel {
 }
 
 /// MCP Log Message for notifications/message notification
+#[allow(dead_code)] // part of MCP protocol, used for SSE/streaming
 #[derive(Debug, Serialize)]
 pub struct LogMessage {
     pub level: LogLevel,
@@ -96,6 +99,7 @@ pub struct LogMessage {
     pub data: serde_json::Value,
 }
 
+#[allow(dead_code)] // MCP protocol helpers for SSE/streaming
 impl LogMessage {
     /// Create a log message with the given level and data
     pub fn new(level: LogLevel, data: impl Into<serde_json::Value>) -> Self {
@@ -123,6 +127,7 @@ impl LogMessage {
 }
 
 /// JSON-RPC Notification (no id, no response expected)
+#[allow(dead_code)] // part of MCP protocol, used for SSE/streaming
 #[derive(Debug, Serialize)]
 pub struct JsonRpcNotification {
     pub jsonrpc: String,
@@ -130,6 +135,7 @@ pub struct JsonRpcNotification {
     pub params: serde_json::Value,
 }
 
+#[allow(dead_code)] // MCP protocol helpers for SSE/streaming
 impl JsonRpcNotification {
     /// Create a notifications/message notification
     pub fn log_message(message: LogMessage) -> Self {
@@ -269,6 +275,7 @@ impl ToolContent {
     }
     
     /// Create an image content item (base64 encoded)
+    #[allow(dead_code)] // MCP protocol content type
     pub fn image(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
         Self {
             content_type: "image".to_string(),
@@ -282,6 +289,7 @@ impl ToolContent {
     }
 
     /// Create an audio content item (base64 encoded)
+    #[allow(dead_code)] // MCP protocol content type
     pub fn audio(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
         Self {
             content_type: "audio".to_string(),
@@ -295,6 +303,7 @@ impl ToolContent {
     }
 
     /// Create an embedded resource content item
+    #[allow(dead_code)] // MCP protocol content type
     pub fn resource(uri: impl Into<String>, text: impl Into<String>, mime_type: Option<String>) -> Self {
         Self {
             content_type: "resource".to_string(),
@@ -308,6 +317,7 @@ impl ToolContent {
     }
 
     /// Create a resource link (reference without content)
+    #[allow(dead_code)] // MCP protocol content type
     pub fn resource_link(uri: impl Into<String>, name: Option<String>, title: Option<String>) -> Self {
         Self {
             content_type: "resource_link".to_string(),
@@ -323,6 +333,7 @@ impl ToolContent {
 
 impl ToolResult {
     /// Create a successful tool result with content items (rmcp-compatible)
+    #[allow(dead_code)] // MCP protocol helper
     pub fn success(content: Vec<ToolContent>) -> Self {
         Self {
             content,
@@ -353,6 +364,7 @@ impl ToolResult {
     }
     
     /// Create a successful tool result with structured JSON content (rmcp-compatible)
+    #[allow(dead_code)] // MCP protocol helper
     pub fn structured(value: serde_json::Value) -> Self {
         Self {
             content: vec![],
@@ -363,6 +375,7 @@ impl ToolResult {
     }
     
     /// Create an error tool result with structured JSON content (rmcp-compatible)
+    #[allow(dead_code)] // MCP protocol helper
     pub fn structured_error(value: serde_json::Value) -> Self {
         Self {
             content: vec![],
@@ -373,6 +386,7 @@ impl ToolResult {
     }
     
     /// Add metadata to this result
+    #[allow(dead_code)] // MCP protocol helper
     pub fn with_meta(mut self, meta: serde_json::Value) -> Self {
         self.meta = Some(meta);
         self
@@ -387,6 +401,7 @@ pub trait McpServer {
 }
 
 /// Run an MCP server on stdio
+#[allow(dead_code)] // alternative entry point for stdio mode
 pub fn run_stdio_server<S: McpServer>(mut server: S) -> io::Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();

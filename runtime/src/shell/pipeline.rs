@@ -25,6 +25,7 @@ const MAX_SUBSHELL_DEPTH: usize = 16;
 const MAX_LOOP_ITERATIONS: usize = 10000;
 
 /// Maximum output size in bytes
+#[allow(dead_code)] // reserved for future output size limiting
 const MAX_OUTPUT_SIZE: usize = 10 * 1024 * 1024; // 10MB
 
 /// Expand glob patterns in arguments.
@@ -1473,7 +1474,7 @@ fn split_by_chain_ops(cmd_line: &str) -> Vec<(&str, Option<ChainOp>)> {
         }
         
         // Control flow end keywords: done, fi, esac (with word boundary check)
-        if (remaining.starts_with("done") || remaining.starts_with("fi") || remaining.starts_with("esac")) {
+        if remaining.starts_with("done") || remaining.starts_with("fi") || remaining.starts_with("esac") {
             let keyword_len = if remaining.starts_with("done") { 4 } 
                              else if remaining.starts_with("esac") { 4 }
                              else { 2 };
@@ -1857,6 +1858,7 @@ async fn drain_reader(mut reader: piper::Reader) -> Vec<u8> {
 }
 
 /// Run a simple single command (no pipes).
+#[allow(dead_code)] // convenience wrapper for simple commands
 pub async fn run_simple(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
     run_pipeline(cmd_line, env).await
 }

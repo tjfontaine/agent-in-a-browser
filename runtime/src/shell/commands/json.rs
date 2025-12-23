@@ -3,10 +3,10 @@
 use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures_lite::StreamExt;
 use lexopt::prelude::*;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{make_parser, parse_common, CommandFn};
+use super::{make_parser, parse_common};
 
 /// JSON and pipeline commands.
 pub struct JsonCommands;
@@ -133,7 +133,7 @@ impl JsonCommands {
         _env: &ShellEnv,
         stdin: piper::Reader,
         mut stdout: piper::Writer,
-        mut stderr: piper::Writer,
+        _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
             let (opts, remaining) = parse_common(&args);

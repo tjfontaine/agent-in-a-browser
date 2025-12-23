@@ -5,8 +5,8 @@
 use rquickjs::prelude::Rest;
 use rquickjs::{Ctx, Function, Object, Result, Value};
 
-/// Captured console output logs.
-/// These are accumulated during code execution and returned to the host.
+// Captured console output logs.
+// These are accumulated during code execution and returned to the host.
 thread_local! {
     pub static CAPTURED_LOGS: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
 }

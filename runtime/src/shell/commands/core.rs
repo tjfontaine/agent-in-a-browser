@@ -1,11 +1,11 @@
 //! Core shell commands: echo, pwd, true, false, yes, help
 
 use futures_lite::io::AsyncWriteExt;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 use std::io;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn, ShellCommands};
+use super::{parse_common, ShellCommands};
 
 /// Core commands - basic shell utilities.
 pub struct CoreCommands;

@@ -24,6 +24,7 @@ use std::cell::RefCell;
 
 /// The TypeScript Runtime MCP Server (thread-local, single-threaded)
 struct TsRuntimeMcp {
+    #[allow(dead_code)] // held to keep runtime alive
     runtime: AsyncRuntime,
     context: AsyncContext,
 }
@@ -59,6 +60,7 @@ impl TsRuntimeMcp {
         Ok(Self { runtime, context })
     }
 
+    #[allow(dead_code)] // convenience wrapper for eval_code_with_source
     fn eval_code(&mut self, code: &str) -> Result<String, String> {
         self.eval_code_with_source(code, "<eval>")
     }
@@ -429,13 +431,11 @@ impl TsRuntimeMcp {
         if count > 1 {
             // Find line numbers where matches occur to help user be more specific
             let mut match_lines = Vec::new();
-            let mut char_pos = 0;
             for (line_num, line) in content.lines().enumerate() {
                 if line.contains(&old_str) {
                     match_lines.push(format!("  Line {}: {}", line_num + 1, 
                         if line.len() > 60 { format!("{}...", &line[..60]) } else { line.to_string() }));
                 }
-                char_pos += line.len() + 1;
             }
             return ToolResult::error(format!(
                 "old_str found {} times. Include more context to make it unique.\n\nMatches at:\n{}",

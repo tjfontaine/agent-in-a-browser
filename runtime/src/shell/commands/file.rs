@@ -2,10 +2,10 @@
 
 use futures_lite::io::AsyncWriteExt;
 use lexopt::prelude::*;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{make_parser, parse_common, CommandFn};
+use super::{make_parser, parse_common};
 
 /// File manipulation commands.
 pub struct FileCommands;
@@ -555,7 +555,7 @@ impl FileCommands {
         env: &ShellEnv,
         _stdin: piper::Reader,
         mut stdout: piper::Writer,
-        mut stderr: piper::Writer,
+        _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {

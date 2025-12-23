@@ -1,11 +1,10 @@
 //! Encoding and crypto commands: base64, md5sum, sha256sum, xxd
 
 use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use futures_lite::StreamExt;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn};
+use super::parse_common;
 
 /// Encoding commands.
 pub struct EncodingCommands;

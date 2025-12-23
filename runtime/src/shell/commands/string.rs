@@ -2,10 +2,10 @@
 
 use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures_lite::StreamExt;
-use runtime_macros::{shell_command, shell_commands};
+use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
-use super::{parse_common, CommandFn};
+use super::parse_common;
 
 /// Get a random u64 - uses WASI in production, std in tests
 #[cfg(not(test))]
