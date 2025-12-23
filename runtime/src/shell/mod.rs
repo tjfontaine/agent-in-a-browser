@@ -5,7 +5,10 @@
 
 mod commands;
 mod env;
+mod expand;
 mod pipeline;
 
-pub use env::ShellEnv;
+pub use env::{ShellEnv, ShellOptions, ShellResult};
+pub use expand::{expand_braces, expand_string, evaluate_arithmetic};
 pub use pipeline::run_pipeline;
+

@@ -93,6 +93,7 @@ const OutputStream = CustomOutputStream;
 interface TreeEntry {
     dir?: Record<string, TreeEntry>;
     size?: number;
+    mtime?: number; // Unix timestamp in milliseconds
 }
 
 const directoryTree: TreeEntry = { dir: {} };
@@ -143,10 +144,10 @@ async function scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry,
             tree.dir[name] = { dir: {} };
             await scanDirectory(child as FileSystemDirectoryHandle, tree.dir[name], fullPath);
         } else {
-            // Get file size and pre-acquire sync handle
+            // Get file size and mtime, pre-acquire sync handle
             const fileHandle = child as FileSystemFileHandle;
             const file = await fileHandle.getFile();
-            tree.dir[name] = { size: file.size };
+            tree.dir[name] = { size: file.size, mtime: file.lastModified };
 
             // Pre-acquire sync handle for reads
             try {
@@ -312,6 +313,16 @@ const timeZero = {
     nanoseconds: 0,
 };
 
+/**
+ * Convert Unix timestamp in milliseconds to WASI datetime format
+ */
+function msToDatetime(ms: number | undefined): { seconds: bigint; nanoseconds: number } {
+    if (!ms) return timeZero;
+    const seconds = BigInt(Math.floor(ms / 1000));
+    const nanoseconds = (ms % 1000) * 1_000_000;
+    return { seconds, nanoseconds };
+}
+
 class DirectoryEntryStream {
     private idx = 0;
     private entries: Array<[string, TreeEntry]>;
@@ -362,13 +373,15 @@ class Descriptor {
             size = BigInt(this.treeEntry.size);
         }
 
+        const mtime = msToDatetime(this.treeEntry.mtime);
+
         return {
             type,
             linkCount: BigInt(0),
             size,
-            dataAccessTimestamp: timeZero,
-            dataModificationTimestamp: timeZero,
-            statusChangeTimestamp: timeZero,
+            dataAccessTimestamp: mtime,
+            dataModificationTimestamp: mtime,
+            statusChangeTimestamp: mtime,
         };
     }
 
@@ -390,13 +403,15 @@ class Descriptor {
             size = BigInt(entry.size);
         }
 
+        const mtime = msToDatetime(entry.mtime);
+
         return {
             type,
             linkCount: BigInt(0),
             size,
-            dataAccessTimestamp: timeZero,
-            dataModificationTimestamp: timeZero,
-            statusChangeTimestamp: timeZero,
+            dataAccessTimestamp: mtime,
+            dataModificationTimestamp: mtime,
+            statusChangeTimestamp: mtime,
         };
     }
 
@@ -411,8 +426,8 @@ class Descriptor {
         let entry = getTreeEntry(fullPath);
 
         if (!entry && openFlags.create) {
-            // Create new entry
-            entry = openFlags.directory ? { dir: {} } : { size: 0 };
+            // Create new entry with current timestamp
+            entry = openFlags.directory ? { dir: {} } : { size: 0, mtime: Date.now() };
             setTreeEntry(fullPath, entry);
 
             // Create in OPFS (async, but we'll handle sync access later)
@@ -540,9 +555,10 @@ class Descriptor {
         handle.write(buffer, { at: offset });
         handle.flush();
 
-        // Update tree entry size
+        // Update tree entry size and mtime
         const newSize = Math.max(this.treeEntry.size || 0, offset + buffer.byteLength);
         this.treeEntry.size = newSize;
+        this.treeEntry.mtime = Date.now();
 
         return buffer.byteLength;
     }
@@ -569,6 +585,7 @@ class Descriptor {
                 handle.flush();
                 offset += buf.byteLength;
                 entry.size = Math.max(entry.size || 0, offset);
+                entry.mtime = Date.now();
                 return BigInt(buf.byteLength);
             },
             blockingWriteAndFlush(buf: Uint8Array): void {
@@ -576,6 +593,7 @@ class Descriptor {
                 handle.flush();
                 offset += buf.byteLength;
                 entry.size = Math.max(entry.size || 0, offset);
+                entry.mtime = Date.now();
             },
             flush(): void {
                 handle.flush();
@@ -652,6 +670,7 @@ class Descriptor {
                 handle.flush();
                 offset += buf.byteLength;
                 entry.size = Math.max(entry.size || 0, offset);
+                entry.mtime = Date.now();
                 return BigInt(buf.byteLength);
             },
             blockingWriteAndFlush(buf: Uint8Array): void {
@@ -659,6 +678,7 @@ class Descriptor {
                 handle.flush();
                 offset += buf.byteLength;
                 entry.size = Math.max(entry.size || 0, offset);
+                entry.mtime = Date.now();
             },
             flush(): void {
                 handle.flush();
