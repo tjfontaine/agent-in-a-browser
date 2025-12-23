@@ -101,8 +101,8 @@ src/
 | `/help` | Show available commands |
 | `/clear` | Clear conversation |
 | `/files` | List files in sandbox |
-| `/provider` | Configure provider and API keys |
-| `/model` | View/switch AI model |
+| `/provider` | Configure provider, keys, add custom |
+| `/model` | View/switch model, refresh from API |
 | `/panel` | Toggle auxiliary panel |
 | `/mcp` | Show MCP server status |
 | `/mcp list` | List servers with IDs |

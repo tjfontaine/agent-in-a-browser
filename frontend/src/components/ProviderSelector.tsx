@@ -1,18 +1,13 @@
 /**
- * ProviderSelector Component
+ * Provider Selector Component
  * 
- * Interactive provider setup with hotkey navigation.
- * Press keys to navigate directly:
- *   [u] - Configure URL
- *   [k] - Configure API key  
- *   [1-9] - Select provider by number
- *   [Enter] - Apply and exit
- *   [Esc] - Cancel
+ * Interactive provider configuration using @inkjs/ui Select.
+ * Pattern matches McpServerList for consistent UX.
  */
 
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { Select, TextInput } from '@inkjs/ui';
 import {
     getAllProviders,
     getCurrentProvider,
@@ -23,8 +18,12 @@ import {
     clearApiKey,
     setProviderBaseURL,
     getProviderBaseURL,
+    addCustomProvider,
+    removeCustomProvider,
     ProviderInfo,
+    BUILT_IN_PROVIDERS,
 } from '../provider-config';
+import { refreshModels } from '../model-discovery';
 
 const colors = {
     cyan: '#39c5cf',
@@ -35,7 +34,7 @@ const colors = {
     magenta: '#bc8cff',
 };
 
-type WizardStep = 'menu' | 'configure-url' | 'configure-key';
+type ViewMode = 'list' | 'actions' | 'set-key' | 'set-url' | 'add-name' | 'add-url';
 
 interface ProviderSelectorProps {
     onExit: () => void;
@@ -43,206 +42,351 @@ interface ProviderSelectorProps {
 }
 
 export function ProviderSelector({ onExit, onSelect }: ProviderSelectorProps) {
-    const [step, setStep] = useState<WizardStep>('menu');
-    const [workingProvider, setWorkingProvider] = useState<ProviderInfo>(getCurrentProvider());
-    const [_showKey, setShowKey] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [selectedProvider, setSelectedProvider] = useState<ProviderInfo | null>(null);
+    const [message, setMessage] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const providers = getAllProviders();
+    const currentProvider = getCurrentProvider();
 
-    // Initialize working state
-    const getWorkingUrl = () => getProviderBaseURL(workingProvider.id) || workingProvider.baseURL || '';
-    const getWorkingKey = () => getApiKey(workingProvider.id) || '';
+    // State for adding new provider
+    const [newProviderName, setNewProviderName] = useState('');
 
-    // Handle keyboard input
-    useInput((input, key) => {
-        // Escape to go back or exit
+    // Handle escape to go back/exit
+    useInput((_input, key) => {
         if (key.escape) {
-            if (step === 'menu') {
-                onExit();
+            if (viewMode !== 'list') {
+                setViewMode('list');
+                setSelectedProvider(null);
+                setMessage('');
             } else {
-                setStep('menu');
+                onExit();
             }
-            return;
-        }
-
-        // Only handle hotkeys in menu step
-        if (step !== 'menu') {
-            if (step === 'configure-key' && input === 't') {
-                setShowKey(prev => !prev);
-            }
-            return;
-        }
-
-        // Hotkeys for menu
-        const inputLower = input.toLowerCase();
-
-        // [u] - URL configuration
-        if (inputLower === 'u') {
-            setStep('configure-url');
-            return;
-        }
-
-        // [k] - Key configuration
-        if (inputLower === 'k') {
-            setStep('configure-key');
-            return;
-        }
-
-        // [c] - Clear key
-        if (inputLower === 'c') {
-            clearApiKey(workingProvider.id);
-            return;
-        }
-
-        // [Enter] - Apply and exit
-        if (key.return) {
-            setCurrentProvider(workingProvider.id);
-            onSelect?.(workingProvider.id);
-            onExit();
-            return;
-        }
-
-        // [1-9] - Select provider by number
-        const num = parseInt(input, 10);
-        if (num >= 1 && num <= providers.length) {
-            const provider = providers[num - 1];
-            setWorkingProvider(provider);
-            return;
         }
     });
 
-    // Handle URL submission
-    const handleUrlSubmit = (value: string) => {
-        const url = value.trim();
-        if (url && url !== workingProvider.baseURL) {
-            setProviderBaseURL(workingProvider.id, url);
-        } else if (!url || url === workingProvider.baseURL) {
-            setProviderBaseURL(workingProvider.id, '');
+    // Handle provider selection from list
+    const handleProviderSelect = (providerId: string) => {
+        if (providerId === '__add__') {
+            setViewMode('add-name');
+            setNewProviderName('');
+            return;
         }
-        setStep('menu');
+
+        const provider = providers.find(p => p.id === providerId);
+        if (provider) {
+            setSelectedProvider(provider);
+            setViewMode('actions');
+        }
+    };
+
+    // Handle action selection
+    const handleAction = async (action: string) => {
+        if (!selectedProvider) return;
+
+        if (action === 'back') {
+            setViewMode('list');
+            setSelectedProvider(null);
+            setMessage('');
+            return;
+        }
+
+        if (action === 'set-key') {
+            setViewMode('set-key');
+            return;
+        }
+
+        if (action === 'set-url') {
+            setViewMode('set-url');
+            return;
+        }
+
+        if (action === 'clear-key') {
+            clearApiKey(selectedProvider.id);
+            setMessage('✓ API key cleared');
+            setTimeout(() => setMessage(''), 3000);
+            return;
+        }
+
+        if (action === 'use') {
+            setCurrentProvider(selectedProvider.id);
+            setMessage(`✓ Switched to ${selectedProvider.name}`);
+            onSelect?.(selectedProvider.id);
+
+            // Brief delay then exit
+            setTimeout(() => {
+                onExit();
+            }, 500);
+            return;
+        }
+
+        if (action === 'refresh-models') {
+            if (!hasApiKey(selectedProvider.id)) {
+                setMessage('⚠️ Set API key first');
+                setTimeout(() => setMessage(''), 3000);
+                return;
+            }
+
+            setLoading(true);
+            setMessage('Fetching models...');
+            try {
+                const models = await refreshModels(selectedProvider.id);
+                setMessage(`✓ Found ${models.length} models`);
+            } catch (e) {
+                setMessage(`✗ ${e instanceof Error ? e.message : String(e)}`);
+            } finally {
+                setLoading(false);
+                setTimeout(() => setMessage(''), 5000);
+            }
+        }
+
+        if (action === 'remove') {
+            removeCustomProvider(selectedProvider.id);
+            setMessage(`✓ Removed ${selectedProvider.name}`);
+            setViewMode('list');
+            setSelectedProvider(null);
+            setTimeout(() => setMessage(''), 3000);
+        }
     };
 
     // Handle key submission
-    const handleKeySubmit = (value: string) => {
-        const key = value.trim();
-        if (key) {
-            setApiKey(workingProvider.id, key);
+    const handleKeySubmit = (key: string) => {
+        if (!selectedProvider) return;
+
+        if (key.trim()) {
+            setApiKey(selectedProvider.id, key.trim());
+            setMessage('✓ API key saved');
         }
-        setStep('menu');
+        setViewMode('actions');
+        setTimeout(() => setMessage(''), 3000);
     };
 
-    // Status helpers
-    const currentUrl = getProviderBaseURL(workingProvider.id);
-    const hasKey = hasApiKey(workingProvider.id);
-    const keyInfo = getWorkingKey();
-    const keyPreview = keyInfo ? `...${keyInfo.slice(-4)}` : 'not set';
+    // Handle URL submission
+    const handleUrlSubmit = (url: string) => {
+        if (!selectedProvider) return;
 
-    // ===== MENU STEP =====
-    if (step === 'menu') {
-        return (
-            <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🌐 Provider Configuration</Text>
-                <Text color={colors.dim}>Press a key to navigate:</Text>
+        setProviderBaseURL(selectedProvider.id, url.trim());
+        setMessage(url.trim() ? '✓ Base URL saved' : '✓ Using default URL');
+        setViewMode('actions');
+        setTimeout(() => setMessage(''), 3000);
+    };
 
-                {/* Current config display */}
-                <Box marginTop={1} flexDirection="column">
-                    <Text color={colors.magenta} bold>Current Config:</Text>
-                    <Text>  Provider: <Text color={colors.cyan}>{workingProvider.name}</Text></Text>
-                    <Text>  Base URL: <Text color={currentUrl ? colors.yellow : colors.dim}>
-                        {currentUrl || '(default)'}
-                    </Text></Text>
-                    <Text>  API Key:  <Text color={hasKey ? colors.green : (workingProvider.requiresKey ? colors.yellow : colors.dim)}>
-                        {hasKey ? `✓ Set (${keyPreview})` : (workingProvider.requiresKey ? '⚠️ Not set' : 'Optional')}
-                    </Text></Text>
-                </Box>
+    // Handle new provider name submission
+    const handleNewNameSubmit = (name: string) => {
+        if (!name.trim()) return;
+        setNewProviderName(name.trim());
+        setViewMode('add-url');
+    };
 
-                {/* Hotkey menu */}
-                <Box marginTop={1} flexDirection="column">
-                    <Text color={colors.magenta} bold>Actions:</Text>
-                    <Text>  <Text color={colors.cyan}>[u]</Text> Configure base URL</Text>
-                    <Text>  <Text color={colors.cyan}>[k]</Text> Set API key</Text>
-                    {hasKey && <Text>  <Text color={colors.cyan}>[c]</Text> Clear API key</Text>}
-                    <Text>  <Text color={colors.green}>[Enter]</Text> Apply & exit</Text>
-                    <Text>  <Text color={colors.dim}>[Esc]</Text> Cancel</Text>
-                </Box>
+    // Handle new provider URL submission
+    const handleNewUrlSubmit = (url: string) => {
+        if (!url.trim()) {
+            setMessage('⚠️ URL is required');
+            setTimeout(() => setMessage(''), 3000);
+            return;
+        }
 
-                {/* Provider selection */}
-                <Box marginTop={1} flexDirection="column">
-                    <Text color={colors.magenta} bold>Switch Provider:</Text>
-                    {providers.map((p, i) => {
-                        const isCurrent = p.id === workingProvider.id;
-                        const keyStatus = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '✓');
-                        return (
-                            <Text key={p.id}>
-                                <Text color={colors.cyan}>[{i + 1}]</Text>
-                                <Text color={isCurrent ? colors.green : colors.dim}>
-                                    {isCurrent ? ' ● ' : ' ○ '}
-                                </Text>
-                                <Text color={isCurrent ? colors.green : undefined}>
-                                    {p.name} {keyStatus}
-                                </Text>
-                            </Text>
-                        );
-                    })}
-                </Box>
-            </Box>
-        );
-    }
+        try {
+            const id = newProviderName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const provider = addCustomProvider({
+                id,
+                name: newProviderName,
+                baseURL: url.trim(),
+            });
+            setMessage(`✓ Added ${provider.name}`);
+            setSelectedProvider(provider);
+            setViewMode('actions');
+        } catch (e) {
+            setMessage(`✗ ${e instanceof Error ? e.message : String(e)}`);
+            setViewMode('list');
+        }
+        setTimeout(() => setMessage(''), 3000);
+    };
 
-    // ===== URL STEP =====
-    if (step === 'configure-url') {
-        const defaultUrl = workingProvider.baseURL || 'https://api.anthropic.com';
-        return (
-            <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🔗 Configure Base URL</Text>
-                <Text color={colors.dim}>Provider: {workingProvider.name}</Text>
-                <Text color={colors.dim}>Default: {defaultUrl}</Text>
-                <Box marginTop={1} flexDirection="column">
-                    <Text>Enter URL (blank for default):</Text>
+    // Build provider options for Select
+    const providerOptions = [
+        // Add new option first
+        { label: '➕ Add new provider...', value: '__add__' },
+        // Then existing providers
+        ...providers.map(p => {
+            const isCurrent = p.id === currentProvider.id;
+            const statusIcon = isCurrent ? '●' : '○';
+            const keyIcon = hasApiKey(p.id) ? '🔑' : (p.requiresKey ? '⚠️' : '');
+            const isCustom = !BUILT_IN_PROVIDERS.some(bp => bp.id === p.id);
+            return {
+                label: `${statusIcon} ${p.name} ${keyIcon}${isCustom ? ' [custom]' : ''}`,
+                value: p.id,
+            };
+        }),
+    ];
+
+    // Build action options for selected provider
+    const getActionOptions = () => {
+        if (!selectedProvider) return [];
+
+        const hasKey = hasApiKey(selectedProvider.id);
+        const isCurrent = selectedProvider.id === currentProvider.id;
+        const customUrl = getProviderBaseURL(selectedProvider.id);
+        const isCustom = !BUILT_IN_PROVIDERS.some(bp => bp.id === selectedProvider.id);
+
+        return [
+            ...(isCurrent ? [] : [{ label: '✓ Use This Provider', value: 'use' }]),
+            { label: '🔑 Set API Key', value: 'set-key' },
+            ...(hasKey ? [{ label: '🗑 Clear API Key', value: 'clear-key' }] : []),
+            { label: `🔗 Set Base URL${customUrl ? ' ✓' : ''}`, value: 'set-url' },
+            ...(hasKey ? [{ label: '🔄 Refresh Models', value: 'refresh-models' }] : []),
+            ...(isCustom ? [{ label: '🗑 Remove Provider', value: 'remove' }] : []),
+            { label: '← Back', value: 'back' },
+        ];
+    };
+
+    // Get key display for selected provider
+    const getKeyPreview = () => {
+        if (!selectedProvider) return '';
+        const key = getApiKey(selectedProvider.id);
+        if (!key) return 'not set';
+        return `...${key.slice(-4)}`;
+    };
+
+    return (
+        <Box flexDirection="column" paddingY={1}>
+            <Text color={colors.cyan} bold>🌐 AI Providers</Text>
+
+            {viewMode === 'list' && (
+                <Box flexDirection="column">
+                    <Text color={colors.dim}>
+                        (↑↓ to move, Enter to select, ESC to exit)
+                    </Text>
                     <Box marginTop={1}>
-                        <Text color={colors.cyan}>{'> '}</Text>
+                        <Select
+                            options={providerOptions}
+                            onChange={(value) => handleProviderSelect(value as string)}
+                        />
+                    </Box>
+                </Box>
+            )}
+
+            {viewMode === 'actions' && selectedProvider && (
+                <Box flexDirection="column">
+                    <Box marginBottom={1}>
+                        <Text color={colors.yellow} bold>{selectedProvider.name}</Text>
+                        {selectedProvider.id === currentProvider.id && (
+                            <Text color={colors.green}> (current)</Text>
+                        )}
+                    </Box>
+                    <Text color={colors.dim}>Type: {selectedProvider.type}</Text>
+                    <Text color={colors.dim}>
+                        API Key: <Text color={hasApiKey(selectedProvider.id) ? colors.green : colors.yellow}>
+                            {hasApiKey(selectedProvider.id) ? getKeyPreview() : 'not set'}
+                        </Text>
+                    </Text>
+                    {getProviderBaseURL(selectedProvider.id) && (
+                        <Text color={colors.dim}>
+                            URL: {getProviderBaseURL(selectedProvider.id)}
+                        </Text>
+                    )}
+                    <Text color={colors.dim}>{selectedProvider.models.length} models</Text>
+
+                    <Box marginTop={1}>
+                        <Text color={colors.dim}>(ESC to go back)</Text>
+                    </Box>
+                    <Box marginTop={1}>
+                        <Select
+                            options={getActionOptions()}
+                            onChange={(value) => handleAction(value as string)}
+                        />
+                    </Box>
+                </Box>
+            )}
+
+            {viewMode === 'set-key' && selectedProvider && (
+                <Box flexDirection="column">
+                    <Text color={colors.yellow} bold>{selectedProvider.name}</Text>
+                    <Text color={colors.dim}>Enter API key (ESC to cancel):</Text>
+                    {hasApiKey(selectedProvider.id) && (
+                        <Text color={colors.dim}>Current: {getKeyPreview()}</Text>
+                    )}
+                    <Box marginTop={1}>
+                        <Text color={colors.cyan}>Key: </Text>
                         <TextInput
-                            defaultValue={getWorkingUrl() || defaultUrl}
+                            placeholder="sk-... or your-api-key"
+                            defaultValue=""
+                            onSubmit={handleKeySubmit}
+                        />
+                    </Box>
+                    <Box marginTop={1}>
+                        <Text color={colors.yellow}>⚠️ Stored in memory only (lost on refresh)</Text>
+                    </Box>
+                </Box>
+            )}
+
+            {viewMode === 'set-url' && selectedProvider && (
+                <Box flexDirection="column">
+                    <Text color={colors.yellow} bold>{selectedProvider.name}</Text>
+                    <Text color={colors.dim}>Enter base URL (ESC to cancel, blank for default):</Text>
+                    <Text color={colors.dim}>
+                        Default: {selectedProvider.baseURL || 'https://api.openai.com/v1'}
+                    </Text>
+                    <Box marginTop={1}>
+                        <Text color={colors.cyan}>URL: </Text>
+                        <TextInput
+                            placeholder="https://api.example.com"
+                            defaultValue={getProviderBaseURL(selectedProvider.id) || ''}
                             onSubmit={handleUrlSubmit}
                         />
                     </Box>
                 </Box>
-                <Box marginTop={1}>
-                    <Text color={colors.dim}>[Enter] Save  [Esc] Cancel</Text>
-                </Box>
-            </Box>
-        );
-    }
+            )}
 
-    // ===== KEY STEP =====
-    if (step === 'configure-key') {
-        return (
-            <Box flexDirection="column" paddingY={1}>
-                <Text color={colors.cyan} bold>🔑 Configure API Key</Text>
-                <Text color={colors.dim}>Provider: {workingProvider.name}</Text>
-                {hasKey && (
-                    <Text color={colors.green}>Current: ...{keyInfo.slice(-4)}</Text>
-                )}
-                <Box marginTop={1} flexDirection="column">
-                    <Text>Enter API key:</Text>
+            {viewMode === 'add-name' && (
+                <Box flexDirection="column">
+                    <Text color={colors.cyan} bold>Add OpenAI-Compatible Provider</Text>
+                    <Text color={colors.dim}>Enter a name for this provider (ESC to cancel):</Text>
                     <Box marginTop={1}>
-                        <Text color={colors.cyan}>{'> '}</Text>
+                        <Text color={colors.cyan}>Name: </Text>
                         <TextInput
+                            placeholder="Groq, Ollama, Together, etc."
                             defaultValue=""
-                            onSubmit={handleKeySubmit}
-                            placeholder="sk-..."
+                            onSubmit={handleNewNameSubmit}
                         />
                     </Box>
+                    <Box marginTop={1}>
+                        <Text color={colors.dim}>Examples: Groq, Ollama, Together AI, Azure OpenAI</Text>
+                    </Box>
                 </Box>
-                <Box marginTop={1} flexDirection="column">
-                    <Text color={colors.dim}>[Enter] Save  [Esc] Cancel</Text>
-                    <Text color={colors.yellow}>⚠️ Stored in memory only (lost on refresh)</Text>
-                </Box>
-            </Box>
-        );
-    }
+            )}
 
-    return null;
+            {viewMode === 'add-url' && (
+                <Box flexDirection="column">
+                    <Text color={colors.cyan} bold>Add: {newProviderName}</Text>
+                    <Text color={colors.dim}>Enter the base URL (ESC to cancel):</Text>
+                    <Box marginTop={1}>
+                        <Text color={colors.cyan}>URL: </Text>
+                        <TextInput
+                            placeholder="https://api.groq.com/openai/v1"
+                            defaultValue=""
+                            onSubmit={handleNewUrlSubmit}
+                        />
+                    </Box>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text color={colors.dim}>Examples:</Text>
+                        <Text color={colors.dim}>  • https://api.groq.com/openai/v1</Text>
+                        <Text color={colors.dim}>  • http://localhost:11434/v1</Text>
+                        <Text color={colors.dim}>  • https://api.together.xyz/v1</Text>
+                    </Box>
+                </Box>
+            )}
+
+            {message && (
+                <Box marginTop={1}>
+                    <Text color={message.startsWith('✓') ? colors.green : message.startsWith('✗') ? colors.red : colors.yellow}>
+                        {loading ? '⏳ ' : ''}{message}
+                    </Text>
+                </Box>
+            )}
+        </Box>
+    );
 }
 
 export default ProviderSelector;
