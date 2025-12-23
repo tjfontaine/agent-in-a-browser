@@ -81,7 +81,11 @@ We chose [WASI Preview 2](https://github.com/WebAssembly/WASI/blob/main/preview2
 - **Component composition**: We can potentially add more WASM components (e.g., image processing, crypto) without changing the host integration.
 - **`jco transpile`**: The [jco](https://github.com/bytecodealliance/jco) toolchain transpiles WASI P2 components to ES modules with automatic host bindings.
 
-The tradeoff is complexity: WASI P2 requires custom JavaScript shims for browser APIs (OPFS, sync XHR) since there's no native browser WASI runtime yet. We implemented these in `frontend/src/wasm/`.
+The tradeoff is complexity: WASI P2 requires custom JavaScript shims for browser APIs (OPFS, sync XHR) since there's no native browser WASI runtime yet. We implemented these in `frontend/src/wasm/`, including:
+
+- **Lazy OPFS loading**: Directory contents are scanned on-demand using a helper worker and `SharedArrayBuffer` + `Atomics.wait()` for true synchronous blocking. Only the root directory is scanned at startup.
+- **Sync HTTP**: Uses synchronous XMLHttpRequest to block the WASM module during HTTP requests.
+- **Custom Pollables**: Clock and I/O pollables with busy-wait implementations for the browser environment.
 
 ---
 

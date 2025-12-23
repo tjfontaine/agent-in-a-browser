@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => ({
     server: {
         port: 3000,
         headers: {
-            // Required for SharedArrayBuffer (needed for Wasmer-JS)
+            // Required for SharedArrayBuffer (needed for OPFS lazy loading)
             'Cross-Origin-Opener-Policy': 'same-origin',
             'Cross-Origin-Embedder-Policy': 'require-corp',
         },
@@ -70,5 +70,12 @@ export default defineConfig(({ mode }) => ({
     },
     build: {
         target: 'esnext',
+    },
+    preview: {
+        headers: {
+            // Required for SharedArrayBuffer (needed for OPFS lazy loading)
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+        },
     },
 }));

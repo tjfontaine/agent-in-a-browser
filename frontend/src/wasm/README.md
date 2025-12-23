@@ -48,7 +48,8 @@ This directory contains the browser-side infrastructure that connects the WASM M
 
 | File | WASI Interface | Purpose |
 |------|----------------|---------|
-| `opfs-filesystem-impl.ts` | `wasi:filesystem/*` | Sync filesystem via SyncAccessHandle + in-memory directory tree |
+| `opfs-filesystem-impl.ts` | `wasi:filesystem/*` | Sync filesystem via SyncAccessHandle + lazy-loaded directory tree |
+| `opfs-async-helper.ts` | N/A | Helper worker for async OPFS operations (SharedArrayBuffer bridge) |
 | `wasi-http-impl.ts` | `wasi:http/outgoing-handler` | Sync HTTP via XMLHttpRequest |
 | `clocks-impl.js` | `wasi:clocks/*` | Custom Pollable extensions for sync blocking |
 
@@ -62,13 +63,23 @@ Agent → MCP Client → postMessage → Worker → WASM Component → Tool Resu
 
 The AI agent (Vercel AI SDK) sends MCP JSON-RPC requests. The `mcp-client.ts` in the main thread forwards these via `postMessage` to the Web Worker. The worker invokes the WASM component's HTTP handler, which processes the request and returns results.
 
-### 2. File System Bridge
+### 2. File System Bridge (Lazy Loading)
 
 The WASM component uses standard `wasi:filesystem` via `std::fs` in Rust. Our `opfs-filesystem-impl.ts` bridges this to the browser:
 
 1. **SyncAccessHandle** - File I/O via synchronous OPFS handles (Web Worker only)
-2. **In-memory directory tree** - Fast directory operations (mkdir, readdir, stat)
-3. **Session isolation** - Sandbox starts empty, builds state as needed
+2. **Lazy-loaded directory tree** - Directories are scanned on first access, not at startup
+3. **SharedArrayBuffer + Atomics** - True synchronous blocking via helper worker
+4. **Session isolation** - Sandbox starts with minimal state, builds as needed
+
+```text
+┌─────────────────────┐         ┌────────────────────────┐
+│   Sandbox Worker    │         │   Async Helper Worker  │
+│   (runs WASM)       │  SAB    │   (handles async OPFS) │
+│                     │◄───────►│                        │
+│  Atomics.wait()     │         │  Atomics.notify()      │
+└─────────────────────┘         └────────────────────────┘
+```
 
 ### 3. HTTP Bridge
 
