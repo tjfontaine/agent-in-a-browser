@@ -7,14 +7,19 @@ export default {
         // Get the response from the ASSETS binding
         const response = await env.ASSETS.fetch(request);
 
-        // Clone the response so we can modify headers
-        const newResponse = new Response(response.body, response);
+        // Create new headers, copying all originals
+        const headers = new Headers(response.headers);
 
         // Add cross-origin isolation headers for SharedArrayBuffer support
         // Required for the OPFS async helper worker to use Atomics.wait()
-        newResponse.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-        newResponse.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+        headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+        headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
 
-        return newResponse;
+        // Return new response with modified headers
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: headers
+        });
     },
 };
