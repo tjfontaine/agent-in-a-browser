@@ -94,14 +94,125 @@ interface TreeEntry {
     dir?: Record<string, TreeEntry>;
     size?: number;
     mtime?: number; // Unix timestamp in milliseconds
+    _scanned?: boolean; // Has this directory been scanned from OPFS?
 }
 
-const directoryTree: TreeEntry = { dir: {} };
+const directoryTree: TreeEntry = { dir: {}, _scanned: false };
 let opfsRoot: FileSystemDirectoryHandle | null = null;
 let initialized = false;
 
 // Current working directory
 let cwd = '/';
+
+// ============================================================
+// ASYNC HELPER WORKER BRIDGE (SharedArrayBuffer + Atomics)
+// ============================================================
+
+let helperWorker: Worker | null = null;
+let sharedBuffer: SharedArrayBuffer | null = null;
+let controlArray: Int32Array | null = null;
+let dataArray: Uint8Array | null = null;
+let helperReady = false;
+
+// Control array layout (matches opfs-async-helper.ts)
+const CONTROL = {
+    REQUEST_READY: 0,
+    RESPONSE_READY: 1,
+    DATA_LENGTH: 2,
+    SHUTDOWN: 3,
+};
+
+interface OPFSRequest {
+    type: 'scanDirectory' | 'acquireSyncHandle';
+    path: string;
+}
+
+interface DirectoryEntryData {
+    name: string;
+    kind: 'file' | 'directory';
+    size?: number;
+    mtime?: number;
+}
+
+interface OPFSResponse {
+    success: boolean;
+    entries?: DirectoryEntryData[];
+    error?: string;
+}
+
+/**
+ * Synchronously scan a directory via the async helper worker.
+ * Uses Atomics.wait() to block until the helper completes.
+ */
+function syncScanDirectory(path: string): boolean {
+    if (!sharedBuffer || !controlArray || !dataArray || !helperReady) {
+        console.warn('[opfs-fs] Helper not ready, falling back to empty directory');
+        return false;
+    }
+
+    // Prepare request
+    const request: OPFSRequest = { type: 'scanDirectory', path };
+    const requestBytes = new TextEncoder().encode(JSON.stringify(request));
+
+    // Write request to shared buffer
+    dataArray.set(requestBytes);
+    Atomics.store(controlArray, CONTROL.DATA_LENGTH, requestBytes.length);
+
+    // Reset response flag before signaling request
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+
+    // Signal request ready and wake up helper
+    Atomics.store(controlArray, CONTROL.REQUEST_READY, 1);
+    Atomics.notify(controlArray, CONTROL.REQUEST_READY);
+
+    console.log('[opfs-fs] Waiting for helper to scan:', path);
+
+    // Wait for response - THIS BLOCKS SYNCHRONOUSLY
+    const waitResult = Atomics.wait(controlArray, CONTROL.RESPONSE_READY, 0, 30000); // 30s timeout
+
+    if (waitResult === 'timed-out') {
+        console.error('[opfs-fs] Timeout waiting for helper response');
+        return false;
+    }
+
+    // Read response
+    const responseLength = Atomics.load(controlArray, CONTROL.DATA_LENGTH);
+    const responseJson = new TextDecoder().decode(dataArray.slice(0, responseLength));
+
+    // Reset response flag
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+
+    let response: OPFSResponse;
+    try {
+        response = JSON.parse(responseJson);
+    } catch (_e) {
+        console.error('[opfs-fs] Failed to parse response:', responseJson);
+        return false;
+    }
+
+    if (!response.success || !response.entries) {
+        console.warn('[opfs-fs] Helper scan failed:', response.error);
+        return false;
+    }
+
+    // Update tree with scan results
+    const entry = path === '' || path === '/' ? directoryTree : getTreeEntry(path);
+    if (entry && entry.dir !== undefined) {
+        for (const item of response.entries) {
+            if (item.kind === 'directory') {
+                if (!entry.dir[item.name]) {
+                    entry.dir[item.name] = { dir: {}, _scanned: false };
+                }
+            } else {
+                entry.dir[item.name] = { size: item.size, mtime: item.mtime };
+            }
+        }
+        entry._scanned = true;
+        console.log('[opfs-fs] Scanned', path || '/', 'with', response.entries.length, 'entries');
+    }
+
+    return true;
+}
 
 export function _setCwd(path: string) {
     cwd = path;
@@ -112,37 +223,80 @@ export function _getCwd(): string {
 }
 
 /**
- * Initialize the filesystem by scanning OPFS and building the directory tree.
- * Must be called before any filesystem operations.
+ * Initialize the filesystem with lazy loading via SharedArrayBuffer + Atomics.
+ * Creates helper worker for async OPFS operations.
  */
 export async function initFilesystem(): Promise<void> {
     if (initialized) return;
 
     try {
         opfsRoot = await navigator.storage.getDirectory();
-        console.log('[opfs-fs] Scanning OPFS for existing files...');
-        await scanDirectory(opfsRoot, directoryTree);
+        console.log('[opfs-fs] OPFS root acquired, setting up lazy loading...');
+
+        // Create shared buffer for communication with helper worker
+        // 64KB should be plenty for directory listings
+        sharedBuffer = new SharedArrayBuffer(64 * 1024);
+        controlArray = new Int32Array(sharedBuffer, 0, 16);
+        dataArray = new Uint8Array(sharedBuffer, 64);
+
+        // Initialize control flags
+        Atomics.store(controlArray, CONTROL.REQUEST_READY, 0);
+        Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+        Atomics.store(controlArray, CONTROL.SHUTDOWN, 0);
+
+        // Spawn helper worker
+        helperWorker = new Worker(
+            new URL('./opfs-async-helper.ts', import.meta.url),
+            { type: 'module' }
+        );
+
+        // Wait for helper to be ready
+        await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Helper worker timeout')), 5000);
+
+            helperWorker!.onmessage = (e) => {
+                if (e.data.type === 'ready') {
+                    clearTimeout(timeout);
+                    helperReady = true;
+                    resolve();
+                }
+            };
+
+            helperWorker!.onerror = (e) => {
+                clearTimeout(timeout);
+                reject(e);
+            };
+
+            // Send shared buffer to helper
+            helperWorker!.postMessage({ type: 'init', buffer: sharedBuffer });
+        });
+
+        console.log('[opfs-fs] Helper worker ready, scanning root directory...');
+
+        // Scan root directory immediately so ls / works on first try
+        syncScanDirectory('');
+
         initialized = true;
-        console.log('[opfs-fs] Filesystem initialized, tree:', JSON.stringify(directoryTree, null, 2));
+        console.log('[opfs-fs] Filesystem initialized with lazy loading');
     } catch (e) {
         console.error('[opfs-fs] Failed to initialize OPFS:', e);
-        // Continue with empty tree
+        // Fall back to initialized but empty tree
         initialized = true;
     }
 }
 
 /**
- * Recursively scan OPFS directory, populate the tree, and pre-acquire sync handles
+ * Legacy recursive scan - kept for reference, no longer used at startup
  */
-async function scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry, basePath: string = ''): Promise<void> {
+async function _scanDirectory(handle: FileSystemDirectoryHandle, tree: TreeEntry, basePath: string = ''): Promise<void> {
     if (!tree.dir) tree.dir = {};
 
     for await (const [name, child] of (handle as unknown as { entries(): AsyncIterableIterator<[string, FileSystemHandle]> }).entries()) {
         const fullPath = basePath ? `${basePath}/${name}` : name;
 
         if (child.kind === 'directory') {
-            tree.dir[name] = { dir: {} };
-            await scanDirectory(child as FileSystemDirectoryHandle, tree.dir[name], fullPath);
+            tree.dir[name] = { dir: {}, _scanned: false };
+            await _scanDirectory(child as FileSystemDirectoryHandle, tree.dir[name], fullPath);
         } else {
             // Get file size and mtime, pre-acquire sync handle
             const fileHandle = child as FileSystemFileHandle;
@@ -611,6 +765,12 @@ class Descriptor {
         console.log('[opfs-fs] readDirectory called, path:', this.path, 'hasDir:', !!this.treeEntry.dir);
         if (!this.treeEntry.dir) {
             throw 'bad-descriptor';
+        }
+
+        // Lazy scan if this directory hasn't been scanned yet
+        if (!this.treeEntry._scanned) {
+            console.log('[opfs-fs] Directory not scanned, triggering lazy scan:', this.path);
+            syncScanDirectory(this.path);
         }
 
         const entries = Object.entries(this.treeEntry.dir).sort(([a], [b]) => a > b ? 1 : -1);
