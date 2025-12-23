@@ -1,5 +1,7 @@
 # Agent in a Browser
 
+*✨ Lovingly vibed with [Antigravity](https://antigravity.google) ✨*
+
 A fully browser-native AI coding assistant. No server required for execution—just your API key and a browser.
 
 ## What This Is & Why It Exists
