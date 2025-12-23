@@ -16,9 +16,8 @@ export const helpCommand: CommandDef = {
         ctx.output('system', '  /files [path]      - List files in sandbox');
         ctx.output('system', '', undefined);
         ctx.output('system', 'AI Provider:', colors.cyan);
-        ctx.output('system', '  /provider          - View/switch AI provider');
+        ctx.output('system', '  /provider          - Configure provider and API keys');
         ctx.output('system', '  /model             - View/switch AI model');
-        ctx.output('system', '  /keys              - Manage API keys');
         ctx.output('system', '  /panel [show|hide] - Toggle auxiliary panel');
         ctx.output('system', '', undefined);
         ctx.output('system', 'MCP Commands:', colors.cyan);

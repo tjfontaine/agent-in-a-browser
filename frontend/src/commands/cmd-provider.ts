@@ -41,8 +41,7 @@ function showProviderStatus(ctx: CommandContext): void {
     }
 
     ctx.output('system', '│', colors.cyan);
-    ctx.output('system', '│ Usage: /provider <alias> or /provider', colors.dim);
-    ctx.output('system', '│ Keys:  /keys add <provider>', colors.dim);
+    ctx.output('system', '│ Usage: /provider to configure or switch', colors.dim);
     ctx.output('system', '└──────────────────────────────────────────────', colors.cyan);
     ctx.output('system', '', undefined);
 }
@@ -57,7 +56,7 @@ function switchProvider(ctx: CommandContext, idOrAlias: string): void {
         ctx.output('system', `✓ Switched to ${provider.name}`, colors.green);
 
         if (provider.requiresKey && !hasApiKey(provider.id)) {
-            ctx.output('system', `⚠️ No API key set. Use /keys add ${provider.id}`, colors.yellow);
+            ctx.output('system', `⚠️ No API key set. Run /provider and press [k]`, colors.yellow);
         }
         ctx.output('system', '', undefined);
     } else {

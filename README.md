@@ -94,9 +94,8 @@ These commands are available in the terminal:
 | `/help` | Show available commands |
 | `/clear` | Clear conversation history |
 | `/files [path]` | List files in sandbox |
-| `/provider` | View/switch AI provider (interactive selector) |
+| `/provider` | Configure AI provider and API keys |
 | `/model` | View/switch AI model (interactive selector) |
-| `/keys` | Manage API keys |
 | `/panel [show\|hide]` | Toggle auxiliary panel |
 
 ### Remote MCP Servers

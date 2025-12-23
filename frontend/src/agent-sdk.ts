@@ -9,6 +9,7 @@
 
 import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, type CoreMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { fetchFromSandbox } from './agent/sandbox';
 import type { McpTool } from './mcp-client';
@@ -20,6 +21,7 @@ export interface AgentConfig {
     baseURL?: string; // Backend proxy URL
     maxSteps?: number;
     systemPrompt?: string;
+    providerType?: 'anthropic' | 'openai';  // Provider type, defaults to anthropic
 }
 
 /**
@@ -292,7 +294,7 @@ export type AgentMessage =
  */
 export class WasmAgent {
     private config: AgentConfig;
-    private anthropic: ReturnType<typeof createAnthropic> | null = null;
+    private provider: ReturnType<typeof createAnthropic> | ReturnType<typeof createOpenAI> | null = null;
     private tools: Record<string, ReturnType<typeof tool>> = {};
     private mcpTools: McpTool[] = [];
     private initialized = false;
@@ -325,31 +327,44 @@ export class WasmAgent {
         // Merge any already-connected remote tools
         this.mergeRemoteTools();
 
-        // Create Anthropic provider
-        // Use same origin if no explicit baseURL - Vite proxy will forward to backend
-        let baseURL = this.config.baseURL || window.location.origin;
-        const isDirectAnthropicCall = baseURL.includes('anthropic.com');
+        // Create provider based on type
+        const providerType = this.config.providerType || 'anthropic';
+        let baseURL = this.config.baseURL || '';
 
-        // Ensure Anthropic URLs have the /v1 suffix
-        if (isDirectAnthropicCall && !baseURL.includes('/v1')) {
-            baseURL = baseURL.replace(/\/?$/, '/v1');
+        if (providerType === 'openai') {
+            console.log('[Agent] Creating OpenAI provider:', { baseURL: baseURL || 'default' });
+            this.provider = createOpenAI({
+                apiKey: this.config.apiKey || 'dummy-key',
+                baseURL: baseURL || undefined,
+            });
+        } else {
+            // Anthropic provider
+            if (!baseURL) {
+                baseURL = window.location.origin;
+            }
+            const isDirectAnthropicCall = baseURL.includes('anthropic.com');
+
+            // Ensure Anthropic URLs have the /v1 suffix
+            if (isDirectAnthropicCall && !baseURL.includes('/v1')) {
+                baseURL = baseURL.replace(/\/?$/, '/v1');
+            }
+
+            const headers = isDirectAnthropicCall ? {
+                'anthropic-dangerous-direct-browser-access': 'true',
+            } : undefined;
+
+            console.log('[Agent] Creating Anthropic provider:', {
+                baseURL,
+                isDirectAnthropicCall,
+                headers: headers ? Object.keys(headers) : 'none',
+            });
+
+            this.provider = createAnthropic({
+                apiKey: this.config.apiKey || 'dummy-key',
+                baseURL,
+                headers,
+            });
         }
-
-        const headers = isDirectAnthropicCall ? {
-            'anthropic-dangerous-direct-browser-access': 'true',
-        } : undefined;
-
-        console.log('[Agent] Creating Anthropic provider:', {
-            baseURL,
-            isDirectAnthropicCall,
-            headers: headers ? Object.keys(headers) : 'none',
-        });
-
-        this.anthropic = createAnthropic({
-            apiKey: this.config.apiKey || 'dummy-key',
-            baseURL,
-            headers,
-        });
 
         this.initialized = true;
         console.log('[Agent] Ready with', Object.keys(this.tools).length, 'tools');
@@ -410,7 +425,7 @@ export class WasmAgent {
     async stream(prompt: string, callbacks: StreamCallbacks): Promise<void> {
         await this.initialize();
 
-        if (!this.anthropic) {
+        if (!this.provider) {
             callbacks.onError?.(new Error('Agent not initialized'));
             return;
         }
@@ -424,7 +439,7 @@ export class WasmAgent {
             console.log('[Agent] Starting stream with prompt:', prompt.substring(0, 100));
 
             const result = streamText({
-                model: this.anthropic(this.config.model!),
+                model: this.provider(this.config.model!),
                 tools: this.tools,
                 stopWhen: stepCountIs(this.config.maxSteps!),
                 system: this.config.systemPrompt,
@@ -478,6 +493,24 @@ export class WasmAgent {
                         }
                     }
                 },
+                onError: ({ error }) => {
+                    // Handle streaming errors (e.g., model not found, auth errors)
+                    console.error('[Agent] Stream error event:', error);
+                    // Extract message from various error formats
+                    let message = 'Unknown error';
+                    if (error instanceof Error) {
+                        message = error.message;
+                    } else if (typeof error === 'object' && error !== null) {
+                        // Handle API error format: {type: 'error', error: {message: '...'}}
+                        const errorObj = error as Record<string, unknown>;
+                        if (typeof errorObj.message === 'string') {
+                            message = errorObj.message;
+                        } else if (errorObj.error && typeof (errorObj.error as Record<string, unknown>).message === 'string') {
+                            message = (errorObj.error as Record<string, unknown>).message as string;
+                        }
+                    }
+                    callbacks.onError?.(new Error(message));
+                },
             });
 
             // Consume the full stream - this drives execution
@@ -506,7 +539,7 @@ export class WasmAgent {
     async *query(prompt: string): AsyncGenerator<AgentMessage, void, unknown> {
         await this.initialize();
 
-        if (!this.anthropic) {
+        if (!this.provider) {
             yield { type: 'error', error: 'Agent not initialized' };
             return;
         }
@@ -516,7 +549,7 @@ export class WasmAgent {
 
         try {
             const result = await generateText({
-                model: this.anthropic(this.config.model!),
+                model: this.provider(this.config.model!),
                 tools: this.tools,
                 stopWhen: stepCountIs(this.config.maxSteps!),
                 system: this.config.systemPrompt,

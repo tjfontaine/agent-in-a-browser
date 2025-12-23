@@ -302,7 +302,7 @@ export default function App() {
             // Check if API key is required and missing
             const provider = getCurrentProvider();
             if (provider.requiresKey && !hasApiKey(provider.id)) {
-                addOutput('system', `⚠️ API key required for ${provider.name}. Use /keys add ${provider.id}`, colors.yellow);
+                addOutput('system', `⚠️ API key required for ${provider.name}. Run /provider and press [k]`, colors.yellow);
                 // Store the pending message to dispatch after API key is set
                 setSecretInputState({ providerId: provider.id, providerName: provider.name, pendingMessage: input });
                 setOverlayMode('secret-input');

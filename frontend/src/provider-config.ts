@@ -51,9 +51,33 @@ const ANTHROPIC_MODELS: ModelInfo[] = [
 
 const OPENAI_MODELS: ModelInfo[] = [
     {
+        id: 'gpt-5.2',
+        name: 'GPT 5.2',
+        description: 'Latest flagship model',
+        aliases: ['5.2', 'latest'],
+    },
+    {
+        id: 'gpt-5.2-thinking',
+        name: 'GPT 5.2 Thinking',
+        description: 'Deep reasoning mode',
+        aliases: ['5.2-thinking', 'thinking'],
+    },
+    {
+        id: 'gpt-5.1',
+        name: 'GPT 5.1',
+        description: 'Previous flagship',
+        aliases: ['5.1'],
+    },
+    {
+        id: 'gpt-5.1-codex',
+        name: 'GPT 5.1 Codex',
+        description: 'Agentic coding model',
+        aliases: ['codex'],
+    },
+    {
         id: 'gpt-4o',
         name: 'GPT-4o',
-        description: 'Most capable, multimodal',
+        description: 'Multimodal',
         aliases: ['4o'],
     },
     {
@@ -63,22 +87,16 @@ const OPENAI_MODELS: ModelInfo[] = [
         aliases: ['4o-mini', 'mini'],
     },
     {
-        id: 'gpt-4-turbo',
-        name: 'GPT-4 Turbo',
-        description: 'Previous flagship',
-        aliases: ['4-turbo', 'turbo'],
-    },
-    {
         id: 'o1',
         name: 'o1',
         description: 'Advanced reasoning',
         aliases: ['o1'],
     },
     {
-        id: 'o1-mini',
-        name: 'o1-mini',
+        id: 'o3-mini',
+        name: 'o3 Mini',
         description: 'Fast reasoning',
-        aliases: ['o1-mini'],
+        aliases: ['o3-mini'],
     },
 ];
 
@@ -216,10 +234,31 @@ export function removeCustomProvider(id: string): boolean {
 
 // ============ Model Functions ============
 
+// Import from model-discovery (lazy to avoid circular deps)
+let getCachedModelsFn: ((providerId: string) => ModelInfo[]) | null = null;
+
 /**
- * Get models for current provider
+ * Set the cached models getter (called from model-discovery.ts)
+ */
+export function setModelCacheGetter(fn: (providerId: string) => ModelInfo[]): void {
+    getCachedModelsFn = fn;
+}
+
+/**
+ * Get models for current provider (cached if available, else defaults)
  */
 export function getModelsForCurrentProvider(): ModelInfo[] {
+    const providerId = currentProviderId;
+
+    // Check for cached models first
+    if (getCachedModelsFn) {
+        const cached = getCachedModelsFn(providerId);
+        if (cached.length > 0) {
+            return cached;
+        }
+    }
+
+    // Fall back to default models
     return getCurrentProvider().models;
 }
 
@@ -264,6 +303,15 @@ export function setCurrentModel(idOrAlias: string): boolean {
         notifyListeners();
     }
     return true;
+}
+
+/**
+ * Set a custom model ID directly (bypasses validation)
+ * Use for new/unlisted models
+ */
+export function setCustomModel(modelId: string): void {
+    currentModelId = modelId;
+    notifyListeners();
 }
 
 /**

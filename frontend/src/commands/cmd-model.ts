@@ -4,9 +4,11 @@
  * View and switch the AI model used by the agent.
  * 
  * Usage:
- *   /model           - Show current model and list available models
- *   /model <id>      - Switch to a different model
- *   /model list      - List all available models
+ *   /model              - Show current model and list available models
+ *   /model <id>         - Switch to a different model
+ *   /model list         - List all available models
+ *   /model refresh      - Fetch latest models from provider API
+ *   /model set <name>   - Use any model ID directly
  */
 
 import { CommandDef, CommandContext, colors } from './types';
@@ -14,10 +16,13 @@ import {
     getCurrentModel,
     getCurrentModelInfo,
     setCurrentModel,
+    setCustomModel,
     getModelsForCurrentProvider,
     getAvailableModelIds,
     getCurrentProvider,
+    getApiKey,
 } from '../provider-config';
+import { refreshModels } from '../model-discovery';
 
 /**
  * Display the current model and available options
@@ -45,8 +50,9 @@ function showModelStatus(ctx: CommandContext): void {
     }
 
     ctx.output('system', '│', colors.cyan);
-    ctx.output('system', '│ Usage: /model or /model <alias>', colors.dim);
-    ctx.output('system', '│ Switch provider: /provider', colors.dim);
+    ctx.output('system', '│ Usage: /model <alias> to switch', colors.dim);
+    ctx.output('system', '│        /model refresh to fetch from API', colors.dim);
+    ctx.output('system', '│        /model set <name> for custom models', colors.dim);
     ctx.output('system', '└──────────────────────────────────────────────┘', colors.cyan);
     ctx.output('system', '', undefined);
 }
@@ -89,6 +95,50 @@ export const modelCommand: CommandDef = {
             description: 'List all available models',
             handler: async (ctx: CommandContext) => {
                 showModelStatus(ctx);
+            },
+        },
+        {
+            name: 'refresh',
+            description: 'Fetch latest models from provider API',
+            handler: async (ctx: CommandContext) => {
+                const provider = getCurrentProvider();
+
+                if (!getApiKey(provider.id)) {
+                    ctx.output('error', `No API key set for ${provider.name}. Run /provider and press [k].`, colors.red);
+                    return;
+                }
+
+                ctx.output('system', `Fetching models from ${provider.name}...`, colors.dim);
+
+                try {
+                    const models = await refreshModels(provider.id);
+                    ctx.output('system', `✓ Found ${models.length} models:`, colors.green);
+                    for (const model of models.slice(0, 10)) {
+                        ctx.output('system', `  • ${model.id} - ${model.name}`, colors.dim);
+                    }
+                    if (models.length > 10) {
+                        ctx.output('system', `  ... and ${models.length - 10} more`, colors.dim);
+                    }
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    ctx.output('error', `Failed to fetch models: ${msg}`, colors.red);
+                }
+            },
+        },
+        {
+            name: 'set',
+            description: 'Set a custom model ID',
+            handler: async (ctx: CommandContext, args: string[]) => {
+                const modelId = args[0];
+                if (!modelId) {
+                    ctx.output('error', 'Usage: /model set <model-id>', colors.red);
+                    ctx.output('system', 'Example: /model set gpt-5.3-preview', colors.dim);
+                    return;
+                }
+
+                setCustomModel(modelId);
+                ctx.output('system', `✓ Model set to: ${modelId}`, colors.green);
+                ctx.output('system', '⚠ Note: This bypasses validation. Make sure the model exists.', colors.yellow);
             },
         },
     ],

@@ -153,6 +153,7 @@ export function useAgent(): UseAgentReturn {
                 apiKey,
                 systemPrompt: SYSTEM_PROMPT,
                 maxSteps: 15,
+                providerType: provider.type,
             });
             addOutput('system', `  Provider: ${provider.name}`, colors.dim);
             addOutput('system', `  Model: ${modelInfo?.name || modelId}`, colors.dim);
@@ -335,6 +336,7 @@ export function useAgent(): UseAgentReturn {
                     apiKey,
                     systemPrompt: SYSTEM_PROMPT,
                     maxSteps: 15,
+                    providerType: provider.type,
                 });
                 addOutput('system', `🔄 Switched to ${provider.name}:${modelInfo?.name || modelId}`, colors.cyan);
             }
