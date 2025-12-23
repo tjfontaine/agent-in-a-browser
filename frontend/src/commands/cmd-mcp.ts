@@ -94,17 +94,21 @@ export const mcpCommand: CommandDef = {
         },
         {
             name: 'auth',
-            description: 'Authenticate with OAuth',
-            usage: '/mcp auth <id> [client-id]',
+            description: 'Authenticate with OAuth (auto-registers if server supports DCR)',
+            usage: '/mcp auth <id> [--client-id <id>]',
             handler: async (ctx, args) => {
                 const registry = getRemoteMCPRegistry();
                 const id = args[0];
                 const clientId = args[1];
                 if (!id) {
-                    ctx.output('error', 'Usage: /mcp auth <id> [client-id]', colors.red);
+                    ctx.output('error', 'Usage: /mcp auth <id> [--client-id <id>]', colors.red);
+                    ctx.output('system', 'Client ID is optional - will use Dynamic Client Registration if supported', colors.dim);
                     return;
                 }
                 ctx.output('system', 'Opening OAuth popup...', colors.dim);
+                if (!clientId) {
+                    ctx.output('system', 'No client ID provided - will attempt Dynamic Client Registration', colors.dim);
+                }
                 await registry.authenticateServer(id, clientId);
                 ctx.output('system', '✓ Authentication successful!', colors.green);
             },

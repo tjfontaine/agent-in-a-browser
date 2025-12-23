@@ -105,9 +105,45 @@ export async function handleMcpCommand(
 
                     if (authRequired) {
                         term.write('\x1b[33m⚠ OAuth authentication required\x1b[0m\r\n');
-                        term.write(`\x1b[90mRun: /mcp auth ${server.id} <client_id>\x1b[0m\r\n`);
+                        term.write('\x1b[90mAttempting automatic OAuth flow (Dynamic Client Registration)...\x1b[0m\r\n');
+                        term.write('\x1b[33m⚠ Please complete authentication in the popup window\x1b[0m\r\n');
+
+                        try {
+                            // Auto-trigger OAuth - DCR will handle getting a client_id
+                            await registry.authenticateServer(server.id);
+                            term.write('\x1b[32m✓ Authentication successful!\x1b[0m\r\n');
+
+                            // Auto-connect after auth
+                            term.write('\x1b[90mConnecting...\x1b[0m\r\n');
+                            await registry.connectServer(server.id);
+                            const updated = registry.getServer(server.id);
+                            term.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
+                        } catch (authError: unknown) {
+                            const authMsg = authError instanceof Error ? authError.message : String(authError);
+
+                            // Check if this is a CORS error
+                            const isCorsError = authMsg.includes('CORS') ||
+                                authMsg.includes('Failed to fetch') ||
+                                authMsg.includes('NetworkError') ||
+                                authMsg.includes('net::ERR_FAILED');
+
+                            if (isCorsError) {
+                                term.write('\x1b[31m✗ OAuth blocked by CORS policy\x1b[0m\r\n');
+                                term.write('\x1b[33m⚠ Browser-based OAuth is not supported by this server\x1b[0m\r\n');
+                                term.write('\x1b[90mUse API key authentication instead:\x1b[0m\r\n');
+                                term.write(`\x1b[36m  /mcp token ${server.id} <your-api-key>\x1b[0m\r\n`);
+
+                                // Check if it's Stripe
+                                if (server.url.includes('stripe.com')) {
+                                    term.write('\x1b[90mGet your Stripe API key from: https://dashboard.stripe.com/apikeys\x1b[0m\r\n');
+                                }
+                            } else {
+                                term.write(`\x1b[31m✗ Authentication failed: ${authMsg}\x1b[0m\r\n`);
+                                term.write(`\x1b[90mYou can retry with: /mcp auth ${server.id}\x1b[0m\r\n`);
+                            }
+                        }
                     } else {
-                        // Try to connect
+                        // Try to connect directly
                         term.write('\x1b[90mConnecting...\x1b[0m\r\n');
                         await registry.connectServer(server.id);
                         const updated = registry.getServer(server.id);
@@ -155,15 +191,13 @@ export async function handleMcpCommand(
                     return;
                 }
 
+                // Use provided clientId or stored one, or let DCR handle it
                 const effectiveClientId = clientId || server.oauthClientId;
-                if (!effectiveClientId) {
-                    term.write('\r\n\x1b[31m✗ OAuth client ID required\x1b[0m\r\n');
-                    term.write('\x1b[90mUsage: /mcp auth <id> --client-id <your-client-id>\x1b[0m\r\n');
-                    showPrompt();
-                    return;
-                }
 
                 term.write(`\r\n\x1b[90mOpening OAuth popup for ${server.name}...\x1b[0m\r\n`);
+                if (!effectiveClientId) {
+                    term.write('\x1b[90mNo client ID provided - will attempt Dynamic Client Registration\x1b[0m\r\n');
+                }
                 term.write('\x1b[33m⚠ Please complete authentication in the popup window\x1b[0m\r\n');
 
                 try {
@@ -221,13 +255,47 @@ export async function handleMcpCommand(
                 break;
             }
 
+            case 'token': {
+                const id = args[0];
+                const token = args[1];
+                if (!id) {
+                    term.write('\r\n\x1b[31mUsage: /mcp token <id> <api-key>\x1b[0m\r\n');
+                    term.write('\x1b[90mSet a bearer token (API key) for authentication.\x1b[0m\r\n');
+                    term.write('\x1b[90mThis is an alternative to OAuth for servers like Stripe.\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                if (!token) {
+                    term.write('\r\n\x1b[31m✗ API key/token required\x1b[0m\r\n');
+                    term.write('\x1b[90mUsage: /mcp token <id> <api-key>\x1b[0m\r\n');
+                    showPrompt();
+                    return;
+                }
+
+                try {
+                    registry.setBearerToken(id, token);
+                    term.write(`\r\n\x1b[32m✓ Bearer token set for: ${id}\x1b[0m\r\n`);
+
+                    // Auto-connect after setting token
+                    term.write('\x1b[90mConnecting...\x1b[0m\r\n');
+                    await registry.connectServer(id);
+                    const updated = registry.getServer(id);
+                    term.write(`\x1b[32m✓ Connected! ${updated?.tools.length || 0} tools available\x1b[0m\r\n`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    term.write(`\x1b[31m✗ ${msg}\x1b[0m\r\n`);
+                }
+                break;
+            }
+
             case 'list':
                 showMcpStatus(term);
                 break;
 
             default:
                 term.write(`\r\n\x1b[31mUnknown /mcp subcommand: ${subcommand}\x1b[0m\r\n`);
-                term.write('\x1b[90mAvailable: add, remove, auth, connect, disconnect, list\x1b[0m\r\n');
+                term.write('\x1b[90mAvailable: add, remove, auth, token, connect, disconnect, list\x1b[0m\r\n');
         }
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);

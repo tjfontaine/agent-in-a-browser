@@ -109,6 +109,58 @@ function base64UrlEncode(buffer: Uint8Array): string {
         .replace(/=+$/, '');
 }
 
+// ============ Well-Known Server Metadata Cache ============
+
+/**
+ * Cache of well-known MCP server OAuth metadata.
+ * Used to bypass CORS issues with servers that don't set Access-Control-Allow-Origin
+ * on their OAuth discovery endpoints.
+ */
+interface WellKnownServerConfig {
+    resource: ProtectedResourceMetadata;
+    authServer: AuthServerMetadata;
+}
+
+const WELL_KNOWN_SERVERS: Record<string, WellKnownServerConfig> = {
+    // Stripe MCP Server - their discovery endpoints don't have CORS headers
+    'mcp.stripe.com': {
+        resource: {
+            resource: 'https://mcp.stripe.com',
+            authorization_servers: ['https://access.stripe.com/mcp'],
+            scopes_supported: ['mcp'],
+        },
+        authServer: {
+            issuer: 'https://access.stripe.com/mcp',
+            authorization_endpoint: 'https://access.stripe.com/mcp/oauth2/authorize',
+            token_endpoint: 'https://access.stripe.com/mcp/oauth2/token',
+            registration_endpoint: 'https://access.stripe.com/mcp/oauth2/register',
+            response_types_supported: ['code'],
+            scopes_supported: ['mcp'],
+            code_challenge_methods_supported: ['S256'],
+        },
+    },
+};
+
+/**
+ * Check if a server URL matches a well-known server
+ * Matches on hostname only, ignoring path variations
+ */
+function getWellKnownConfig(mcpServerUrl: string): WellKnownServerConfig | null {
+    try {
+        const url = new URL(mcpServerUrl);
+        const hostname = url.hostname;
+
+        // Direct match
+        if (WELL_KNOWN_SERVERS[hostname]) {
+            return WELL_KNOWN_SERVERS[hostname];
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 // ============ Discovery ============
 
 /**
@@ -118,6 +170,13 @@ function base64UrlEncode(buffer: Uint8Array): string {
 export async function discoverProtectedResource(
     mcpServerUrl: string
 ): Promise<ProtectedResourceMetadata> {
+    // Check well-known cache first (bypasses CORS issues)
+    const wellKnown = getWellKnownConfig(mcpServerUrl);
+    if (wellKnown) {
+        console.log('[OAuth] Using cached metadata for well-known server:', mcpServerUrl);
+        return wellKnown.resource;
+    }
+
     const url = new URL(mcpServerUrl);
 
     // Try path-specific metadata first
@@ -189,6 +248,13 @@ export async function discoverAuthServer(
 export async function discoverOAuthEndpoints(
     mcpServerUrl: string
 ): Promise<{ resource: ProtectedResourceMetadata; authServer: AuthServerMetadata }> {
+    // Check well-known cache first (bypasses CORS issues)
+    const wellKnown = getWellKnownConfig(mcpServerUrl);
+    if (wellKnown) {
+        console.log('[OAuth] Using cached OAuth endpoints for well-known server');
+        return wellKnown;
+    }
+
     // Step 1: Discover protected resource metadata
     const resource = await discoverProtectedResource(mcpServerUrl);
     console.log('[OAuth] Protected resource:', resource);
@@ -544,6 +610,38 @@ export interface DynamicClientResponse {
     client_secret_expires_at?: number;
 }
 
+const CLIENT_ID_STORAGE_PREFIX = 'mcp_client_id_';
+
+/**
+ * Get stored client ID for a server URL
+ */
+export function getStoredClientId(serverUrl: string): string | null {
+    const key = getClientIdKey(serverUrl);
+    return localStorage.getItem(key);
+}
+
+/**
+ * Store client ID for a server URL
+ */
+export function saveClientId(serverUrl: string, clientId: string): void {
+    const key = getClientIdKey(serverUrl);
+    localStorage.setItem(key, clientId);
+}
+
+/**
+ * Generate storage key for client ID
+ */
+function getClientIdKey(serverUrl: string): string {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(serverUrl);
+    let hash = 0;
+    for (const byte of data) {
+        hash = ((hash << 5) - hash) + byte;
+        hash = hash & hash;
+    }
+    return `${CLIENT_ID_STORAGE_PREFIX}${Math.abs(hash).toString(36)}`;
+}
+
 /**
  * Dynamically register a client with the authorization server
  */
@@ -555,6 +653,8 @@ export async function registerClient(
         throw new Error('Authorization server does not support dynamic client registration');
     }
 
+    console.log('[OAuth] Registering client at:', authServer.registration_endpoint);
+
     const response = await fetch(authServer.registration_endpoint, {
         method: 'POST',
         headers: {
@@ -562,7 +662,7 @@ export async function registerClient(
         },
         body: JSON.stringify({
             ...config,
-            grant_types: config.grant_types || ['authorization_code'],
+            grant_types: config.grant_types || ['authorization_code', 'refresh_token'],
             response_types: config.response_types || ['code'],
             token_endpoint_auth_method: config.token_endpoint_auth_method || 'none',
         }),
@@ -573,7 +673,58 @@ export async function registerClient(
         throw new Error(`Client registration failed: ${response.status} - ${error}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('[OAuth] Client registered successfully, client_id:', result.client_id);
+    return result;
+}
+
+/**
+ * Get or register a client ID for an MCP server.
+ * If no clientId is provided and the server supports DCR, auto-register.
+ */
+export async function getOrRegisterClientId(
+    mcpServerUrl: string,
+    authServer: AuthServerMetadata,
+    providedClientId?: string
+): Promise<string> {
+    // Use provided client ID if available
+    if (providedClientId) {
+        console.log('[OAuth] Using provided client ID');
+        saveClientId(mcpServerUrl, providedClientId);
+        return providedClientId;
+    }
+
+    // Check for stored client ID
+    const storedClientId = getStoredClientId(mcpServerUrl);
+    if (storedClientId) {
+        console.log('[OAuth] Using stored client ID');
+        return storedClientId;
+    }
+
+    // Check if server supports Dynamic Client Registration
+    if (!authServer.registration_endpoint) {
+        throw new Error(
+            'No client ID provided and server does not support Dynamic Client Registration. ' +
+            'Please provide a client ID with --client-id <id>'
+        );
+    }
+
+    // Auto-register via DCR
+    console.log('[OAuth] No client ID found, attempting Dynamic Client Registration...');
+
+    const redirectUri = `${window.location.origin}${CALLBACK_PATH}`;
+    const clientResponse = await registerClient(authServer, {
+        client_name: 'Agent in a Browser',
+        redirect_uris: [redirectUri],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+    });
+
+    // Store the registered client ID
+    saveClientId(mcpServerUrl, clientResponse.client_id);
+
+    return clientResponse.client_id;
 }
 
 // ============ High-Level API ============
@@ -581,10 +732,13 @@ export async function registerClient(
 /**
  * Complete OAuth flow for an MCP server
  * Returns a token that can be used for API calls
+ * 
+ * @param mcpServerUrl - The MCP server URL
+ * @param clientId - Optional client ID. If not provided and server supports DCR, will auto-register.
  */
 export async function authenticateWithServer(
     mcpServerUrl: string,
-    clientId: string
+    clientId?: string
 ): Promise<StoredToken> {
     // Check for existing valid token
     const existingToken = getToken(mcpServerUrl);
@@ -593,12 +747,18 @@ export async function authenticateWithServer(
         return existingToken;
     }
 
+    // Discover OAuth endpoints first to check for DCR support
+    const { authServer } = await discoverOAuthEndpoints(mcpServerUrl);
+
+    // Get or register client ID
+    const effectiveClientId = await getOrRegisterClientId(mcpServerUrl, authServer, clientId);
+
     // Initiate OAuth flow
-    const { popup, state: _state } = await initiateAuthFlow(mcpServerUrl, clientId);
+    const { popup, state: _state } = await initiateAuthFlow(mcpServerUrl, effectiveClientId);
 
     // Wait for callback
     const callbackUrl = await waitForCallback(popup);
 
     // Handle callback and get tokens
-    return await handleOAuthCallback(callbackUrl, clientId);
+    return await handleOAuthCallback(callbackUrl, effectiveClientId);
 }

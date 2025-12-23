@@ -40,6 +40,8 @@ export interface RemoteMCPServer {
     };
     // OAuth configuration (discovered or configured)
     oauthClientId?: string;
+    // Bearer token for API key auth (alternative to OAuth)
+    bearerToken?: string;
 }
 
 export interface ServerConfig {
@@ -243,21 +245,21 @@ export class RemoteMCPRegistry {
 
     /**
      * Initiate OAuth flow for a server
+     * If no clientId is provided and server supports DCR, will auto-register
      */
     async authenticateServer(id: string, clientId?: string): Promise<StoredToken> {
         const server = this.servers.get(id);
         if (!server) throw new Error(`Server not found: ${id}`);
 
+        // Use provided clientId, or stored one, or let DCR handle it
         const effectiveClientId = clientId || server.oauthClientId;
-        if (!effectiveClientId) {
-            throw new Error('OAuth client ID required. Use /mcp auth <id> <client_id>');
-        }
 
-        this.updateServer(id, { status: 'connecting', oauthClientId: effectiveClientId });
+        this.updateServer(id, { status: 'connecting' });
 
         try {
+            // authenticateWithServer now handles DCR automatically if no clientId
             const token = await authenticateWithServer(server.url, effectiveClientId);
-            this.updateServer(id, { authType: 'oauth' });
+            this.updateServer(id, { authType: 'oauth', oauthClientId: effectiveClientId });
             saveRegistry(this.servers);
             return token;
         } catch (e: unknown) {
@@ -265,6 +267,38 @@ export class RemoteMCPRegistry {
             this.updateServer(id, { status: 'error', error: message });
             throw e;
         }
+    }
+
+    /**
+     * Set a bearer token (API key) for a server.
+     * This is an alternative to OAuth for servers that support API key auth.
+     */
+    setBearerToken(id: string, token: string): void {
+        const server = this.servers.get(id);
+        if (!server) throw new Error(`Server not found: ${id}`);
+
+        this.updateServer(id, {
+            bearerToken: token,
+            authType: 'bearer',
+            status: 'disconnected',
+            error: undefined,
+        });
+        saveRegistry(this.servers);
+        console.log('[RemoteMCP] Bearer token set for:', id);
+    }
+
+    /**
+     * Clear bearer token for a server
+     */
+    clearBearerToken(id: string): void {
+        const server = this.servers.get(id);
+        if (!server) throw new Error(`Server not found: ${id}`);
+
+        this.updateServer(id, {
+            bearerToken: undefined,
+            authType: 'none',
+        });
+        saveRegistry(this.servers);
     }
 
     /**
@@ -289,8 +323,14 @@ export class RemoteMCPRegistry {
                 url: server.url,
             };
 
-            if (server.authType === 'oauth') {
-                // Check for valid token
+            // Check for bearer token first (API key auth)
+            if (server.bearerToken) {
+                console.log('[RemoteMCP] Using bearer token auth');
+                transportConfig.headers = {
+                    Authorization: `Bearer ${server.bearerToken}`,
+                };
+            } else if (server.authType === 'oauth') {
+                // Check for valid OAuth token
                 if (!hasValidToken(server.url)) {
                     this.updateServer(id, { status: 'auth_required' });
                     throw new Error('OAuth authentication required. Use /mcp auth ' + id);

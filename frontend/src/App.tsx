@@ -18,6 +18,7 @@ import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
 import { ModelSelector } from './components/ModelSelector';
 import { ProviderSelector } from './components/ProviderSelector';
 import { SecretInput } from './components/SecretInput';
+import { McpServerList } from './components/mcp-server-list';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
 import {
@@ -50,7 +51,7 @@ const OutputLine = memo(function OutputLine({ output }: { output: AgentOutput })
 });
 
 // Overlay mode types
-type OverlayMode = 'none' | 'model-selector' | 'provider-selector' | 'secret-input';
+type OverlayMode = 'none' | 'model-selector' | 'provider-selector' | 'secret-input' | 'mcp-selector';
 
 interface SecretInputState {
     providerId: string;
@@ -87,6 +88,7 @@ function TerminalContent({
     onModelSelected: (modelId: string) => void;
     onProviderSelected: (providerId: string) => void;
     onSecretSubmit: (value: string) => void;
+    onMcpAction?: (action: string, serverId: string) => Promise<void>;
 }) {
 
 
@@ -157,6 +159,10 @@ function TerminalContent({
                 <ProviderSelector
                     onExit={onOverlayClose}
                     onSelect={onProviderSelected}
+                />
+            ) : overlayMode === 'mcp-selector' ? (
+                <McpServerList
+                    onExit={onOverlayClose}
                 />
             ) : overlayMode === 'secret-input' && secretInputState ? (
                 <SecretInput
@@ -252,6 +258,11 @@ export default function App() {
             // Special case: /provider with no args shows interactive selector
             if (input.trim() === '/provider' || input.trim() === '/p') {
                 setOverlayMode('provider-selector');
+                return;
+            }
+            // Special case: /mcp with no args shows interactive selector
+            if (input.trim() === '/mcp') {
+                setOverlayMode('mcp-selector');
                 return;
             }
 

@@ -17,11 +17,15 @@ export default defineConfig(({ mode }) => ({
         // Polyfill Node.js core modules for browser compatibility
         nodePolyfills({
             // Include specific polyfills needed by ink-web
-            include: ['buffer', 'process', 'util', 'stream', 'events'],
+            include: ['buffer', 'process', 'stream', 'events'],
             globals: {
                 Buffer: true,
                 global: true,
                 process: true,
+            },
+            // Override util with our custom polyfill that includes isDeepStrictEqual
+            overrides: {
+                util: path.resolve(__dirname, './src/polyfills/util-polyfill.ts'),
             },
         }),
     ],
@@ -30,6 +34,9 @@ export default defineConfig(({ mode }) => ({
             // Required for ink-web: redirect ink imports to ink-web
             ink: 'ink-web',
             '@': path.resolve(__dirname, './src'),
+            // Custom util polyfill that adds isDeepStrictEqual for @inkjs/ui
+            'node:util': path.resolve(__dirname, './src/polyfills/util-polyfill.ts'),
+            'util': path.resolve(__dirname, './src/polyfills/util-polyfill.ts'),
         },
     },
     server: {
