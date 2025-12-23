@@ -2,6 +2,8 @@
 
 *✨ Lovingly vibed with [Antigravity](https://antigravity.google) ✨*
 
+**🚀 Try it now: [agent.atxconsulting.com](https://agent.atxconsulting.com)** — hosted on Cloudflare Pages (static assets only, no backend processing)
+
 A fully browser-native AI coding assistant. No server required for execution—just your API key and a browser.
 
 ## What This Is & Why It Exists
