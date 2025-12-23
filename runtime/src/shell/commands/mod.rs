@@ -12,6 +12,7 @@ mod file;
 mod json;
 mod misc;
 mod path;
+mod string;
 mod test;
 mod text;
 mod util;
@@ -23,6 +24,7 @@ pub use self::file::FileCommands;
 pub use self::json::JsonCommands;
 pub use self::misc::MiscCommands;
 pub use self::path::PathCommands;
+pub use self::string::StringCommands;
 pub use self::test::TestCommands;
 pub use self::text::TextCommands;
 pub use self::util::UtilCommands;
@@ -68,8 +70,6 @@ pub fn parse_common(args: &[String]) -> (CommonOpts, Vec<String>) {
 pub struct ShellCommands;
 
 impl ShellCommands {
-    /// Get a command function by name.
-    /// Searches all command categories.
     pub fn get_command(name: &str) -> Option<CommandFn> {
         // Try each category in order
         CoreCommands::get_command(name)
@@ -82,9 +82,9 @@ impl ShellCommands {
             .or_else(|| TestCommands::get_command(name))
             .or_else(|| UtilCommands::get_command(name))
             .or_else(|| EncodingCommands::get_command(name))
+            .or_else(|| StringCommands::get_command(name))
     }
     
-    /// Get help text for a command.
     pub fn show_help(name: &str) -> Option<&'static str> {
         CoreCommands::show_help(name)
             .or_else(|| FileCommands::show_help(name))
@@ -96,9 +96,9 @@ impl ShellCommands {
             .or_else(|| TestCommands::show_help(name))
             .or_else(|| UtilCommands::show_help(name))
             .or_else(|| EncodingCommands::show_help(name))
+            .or_else(|| StringCommands::show_help(name))
     }
     
-    /// List all available commands.
     pub fn list_commands() -> Vec<&'static str> {
         let mut cmds = Vec::new();
         cmds.extend_from_slice(CoreCommands::list_commands());
@@ -111,6 +111,7 @@ impl ShellCommands {
         cmds.extend_from_slice(TestCommands::list_commands());
         cmds.extend_from_slice(UtilCommands::list_commands());
         cmds.extend_from_slice(EncodingCommands::list_commands());
+        cmds.extend_from_slice(StringCommands::list_commands());
         cmds.sort();
         cmds
     }

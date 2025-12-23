@@ -771,6 +771,221 @@ impl FileCommands {
             if has_diff { 1 } else { 0 }
         })
     }
+
+    /// file - determine file type
+    #[shell_command(
+        name = "file",
+        usage = "file FILE...",
+        description = "Determine file type"
+    )]
+    fn cmd_file(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("file") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            if remaining.is_empty() {
+                let _ = stderr.write_all(b"file: missing operand\n").await;
+                return 1;
+            }
+
+            for file in &remaining {
+                let path = if file.starts_with('/') {
+                    file.clone()
+                } else {
+                    format!("{}/{}", cwd, file)
+                };
+
+                let file_type = detect_file_type(&path);
+                let _ = stdout.write_all(format!("{}: {}\n", file, file_type).as_bytes()).await;
+            }
+
+            0
+        })
+    }
+
+    /// realpath - resolve canonical path
+    #[shell_command(
+        name = "realpath",
+        usage = "realpath PATH...",
+        description = "Print resolved absolute path"
+    )]
+    fn cmd_realpath(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("realpath") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            if remaining.is_empty() {
+                let _ = stderr.write_all(b"realpath: missing operand\n").await;
+                return 1;
+            }
+
+            let mut exit_code = 0;
+            for path in &remaining {
+                let resolved = resolve_canonical_path(&cwd, path);
+                if std::fs::metadata(&resolved).is_ok() {
+                    let _ = stdout.write_all(format!("{}\n", resolved).as_bytes()).await;
+                } else {
+                    let _ = stderr.write_all(format!("realpath: {}: No such file or directory\n", path).as_bytes()).await;
+                    exit_code = 1;
+                }
+            }
+
+            exit_code
+        })
+    }
+
+    /// du - disk usage
+    #[shell_command(
+        name = "du",
+        usage = "du [-s] [-h] [PATH...]",
+        description = "Estimate file space usage"
+    )]
+    fn cmd_du(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("du") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut summary_only = false;
+            let mut human_readable = false;
+            let mut paths: Vec<String> = Vec::new();
+
+            for arg in &remaining {
+                match arg.as_str() {
+                    "-s" => summary_only = true,
+                    "-h" => human_readable = true,
+                    "-sh" | "-hs" => {
+                        summary_only = true;
+                        human_readable = true;
+                    }
+                    _ => paths.push(arg.clone()),
+                }
+            }
+
+            if paths.is_empty() {
+                paths.push(".".to_string());
+            }
+
+            for path in &paths {
+                let full_path = if path.starts_with('/') {
+                    path.clone()
+                } else {
+                    format!("{}/{}", cwd, path)
+                };
+
+                match calculate_disk_usage(&full_path, summary_only, human_readable, &mut stdout).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        let _ = stderr.write_all(format!("du: {}: {}\n", path, e).as_bytes()).await;
+                    }
+                }
+            }
+
+            0
+        })
+    }
+
+    /// readlink - print symlink target
+    #[shell_command(
+        name = "readlink",
+        usage = "readlink [-f] LINK...",
+        description = "Print symbolic link target"
+    )]
+    fn cmd_readlink(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("readlink") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut canonicalize = false;
+            let mut files: Vec<String> = Vec::new();
+
+            for arg in &remaining {
+                if arg == "-f" {
+                    canonicalize = true;
+                } else {
+                    files.push(arg.clone());
+                }
+            }
+
+            if files.is_empty() {
+                let _ = stderr.write_all(b"readlink: missing operand\n").await;
+                return 1;
+            }
+
+            for file in &files {
+                let path = if file.starts_with('/') {
+                    file.clone()
+                } else {
+                    format!("{}/{}", cwd, file)
+                };
+
+                if canonicalize {
+                    // Return canonical path
+                    let resolved = resolve_canonical_path(&cwd, file);
+                    let _ = stdout.write_all(format!("{}\n", resolved).as_bytes()).await;
+                } else {
+                    // Read symlink target
+                    match std::fs::read_link(&path) {
+                        Ok(target) => {
+                            let _ = stdout.write_all(format!("{}\n", target.display()).as_bytes()).await;
+                        }
+                        Err(_) => {
+                            // Not a symlink - print nothing (like GNU readlink)
+                        }
+                    }
+                }
+            }
+
+            0
+        })
+    }
 }
 
 /// Simple glob pattern matching (supports * and ?)
@@ -811,6 +1026,210 @@ fn glob_match(pattern: &str, text: &str) -> bool {
     }
     
     t_chars.peek().is_none()
+}
+
+/// Detect file type by examining magic bytes and metadata
+fn detect_file_type(path: &str) -> String {
+    let metadata = match std::fs::metadata(path) {
+        Ok(m) => m,
+        Err(_) => return "cannot open (No such file or directory)".to_string(),
+    };
+
+    if metadata.is_dir() {
+        return "directory".to_string();
+    }
+
+    if metadata.is_symlink() {
+        return "symbolic link".to_string();
+    }
+
+    // Try to read magic bytes
+    if let Ok(data) = std::fs::read(path) {
+        if data.is_empty() {
+            return "empty".to_string();
+        }
+
+        // Check magic signatures
+        if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return "PNG image data".to_string();
+        }
+        if data.starts_with(b"\xff\xd8\xff") {
+            return "JPEG image data".to_string();
+        }
+        if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+            return "GIF image data".to_string();
+        }
+        if data.starts_with(b"RIFF") && data.len() > 8 && &data[8..12] == b"WEBP" {
+            return "WebP image data".to_string();
+        }
+        if data.starts_with(b"%PDF") {
+            return "PDF document".to_string();
+        }
+        if data.starts_with(b"PK\x03\x04") {
+            // Could be ZIP, DOCX, XLSX, JAR, etc.
+            return "Zip archive data".to_string();
+        }
+        if data.starts_with(b"\x1f\x8b") {
+            return "gzip compressed data".to_string();
+        }
+        if data.len() > 262 && &data[257..262] == b"ustar" {
+            return "POSIX tar archive".to_string();
+        }
+        if data.starts_with(b"{\n") || data.starts_with(b"{\r\n") || data.starts_with(b"{\"") {
+            return "JSON data".to_string();
+        }
+        if data.starts_with(b"<!DOCTYPE html") || data.starts_with(b"<!doctype html") || data.starts_with(b"<html") {
+            return "HTML document".to_string();
+        }
+        if data.starts_with(b"<?xml") {
+            return "XML document".to_string();
+        }
+        if data.starts_with(b"#!/") || data.starts_with(b"#!") {
+            // Script
+            let first_line = data.split(|&b| b == b'\n').next().unwrap_or(&[]);
+            let line_str = String::from_utf8_lossy(first_line);
+            if line_str.contains("python") {
+                return "Python script, ASCII text executable".to_string();
+            }
+            if line_str.contains("node") || line_str.contains("deno") || line_str.contains("bun") {
+                return "JavaScript/TypeScript script, ASCII text executable".to_string();
+            }
+            if line_str.contains("bash") || line_str.contains("sh") {
+                return "Bourne-Again shell script, ASCII text executable".to_string();
+            }
+            return "script, ASCII text executable".to_string();
+        }
+        if data.starts_with(b"\x00asm") {
+            return "WebAssembly binary".to_string();
+        }
+        if data.starts_with(b"\x7fELF") {
+            return "ELF executable".to_string();
+        }
+        if data.starts_with(b"\xca\xfe\xba\xbe") || data.starts_with(b"\xcf\xfa\xed\xfe") {
+            return "Mach-O executable".to_string();
+        }
+
+        // Check if it's text
+        let sample = &data[..data.len().min(8192)];
+        let is_text = sample.iter().all(|&b| {
+            b == b'\n' || b == b'\r' || b == b'\t' || (b >= 0x20 && b < 0x7f) || b >= 0x80
+        });
+
+        if is_text {
+            // Try to determine text type
+            let text = String::from_utf8_lossy(sample);
+            if text.contains("function") && (text.contains("const ") || text.contains("let ") || text.contains("var ")) {
+                return "JavaScript source, ASCII text".to_string();
+            }
+            if text.contains("fn ") && text.contains("let ") && text.contains("->") {
+                return "Rust source, ASCII text".to_string();
+            }
+            if text.contains("def ") && text.contains(":") && text.contains("import ") {
+                return "Python source, ASCII text".to_string();
+            }
+            return "ASCII text".to_string();
+        }
+
+        return "data".to_string();
+    }
+
+    "cannot determine".to_string()
+}
+
+/// Resolve a path to its canonical form
+fn resolve_canonical_path(cwd: &str, path: &str) -> String {
+    let abs_path = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("{}/{}", cwd, path)
+    };
+
+    // Normalize the path
+    let mut parts: Vec<&str> = Vec::new();
+    for part in abs_path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => { parts.pop(); }
+            _ => parts.push(part),
+        }
+    }
+
+    if parts.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", parts.join("/"))
+    }
+}
+
+/// Calculate disk usage recursively
+async fn calculate_disk_usage(
+    path: &str,
+    summary_only: bool,
+    human_readable: bool,
+    stdout: &mut piper::Writer,
+) -> Result<u64, String> {
+    use futures_lite::io::AsyncWriteExt;
+    
+    let metadata = std::fs::metadata(path)
+        .map_err(|e| e.to_string())?;
+
+    if metadata.is_file() {
+        let size = metadata.len();
+        if !summary_only {
+            let display = format_size(size, human_readable);
+            let _ = stdout.write_all(format!("{}\t{}\n", display, path).as_bytes()).await;
+        }
+        return Ok(size);
+    }
+
+    if !metadata.is_dir() {
+        return Ok(0);
+    }
+
+    let mut total: u64 = 0;
+    
+    for entry in std::fs::read_dir(path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+        let entry_str = entry_path.to_string_lossy().to_string();
+        
+        // Recursive call using Box::pin for async recursion
+        total += Box::pin(calculate_disk_usage(
+            &entry_str,
+            true, // Always summarize children
+            human_readable,
+            stdout,
+        )).await?;
+    }
+
+    if !summary_only {
+        let display = format_size(total, human_readable);
+        let _ = stdout.write_all(format!("{}\t{}\n", display, path).as_bytes()).await;
+    }
+
+    Ok(total)
+}
+
+/// Format size for display
+fn format_size(bytes: u64, human_readable: bool) -> String {
+    if !human_readable {
+        // Return size in 1K blocks
+        return ((bytes + 1023) / 1024).to_string();
+    }
+
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+
+    if bytes >= GB {
+        format!("{:.1}G", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1}M", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1}K", bytes as f64 / KB as f64)
+    } else {
+        format!("{}B", bytes)
+    }
 }
 
 #[cfg(test)]

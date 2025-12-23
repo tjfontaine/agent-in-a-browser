@@ -73,6 +73,8 @@ pub struct ShellEnv {
     pub variables: HashMap<String, String>,
     /// Read-only variables.
     pub readonly: HashSet<String>,
+    /// Local variables (function scope).
+    pub local_vars: HashMap<String, String>,
     /// Positional parameters ($1, $2, etc.)
     pub positional_params: Vec<String>,
     /// Last command exit code ($?)
@@ -87,6 +89,10 @@ pub struct ShellEnv {
     pub subshell_depth: usize,
     /// Trap handlers (signal -> command)
     pub traps: HashMap<String, String>,
+    /// Shell functions (name -> body)
+    pub functions: HashMap<String, String>,
+    /// Are we in a function scope?
+    pub in_function: bool,
 }
 
 impl ShellEnv {
@@ -100,6 +106,7 @@ impl ShellEnv {
             env_vars: HashMap::new(),
             variables: HashMap::new(),
             readonly: HashSet::new(),
+            local_vars: HashMap::new(),
             positional_params: Vec::new(),
             last_exit_code: 0,
             session_id: SESSION_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -107,12 +114,16 @@ impl ShellEnv {
             script_name: "shell".to_string(),
             subshell_depth: 0,
             traps: HashMap::new(),
+            functions: HashMap::new(),
+            in_function: false,
         }
     }
 
-    /// Get a variable value (checks variables first, then env_vars)
+    /// Get a variable value (checks local_vars first, then variables, then env_vars)
     pub fn get_var(&self, name: &str) -> Option<&String> {
-        self.variables.get(name).or_else(|| self.env_vars.get(name))
+        self.local_vars.get(name)
+            .or_else(|| self.variables.get(name))
+            .or_else(|| self.env_vars.get(name))
     }
 
     /// Set a variable value

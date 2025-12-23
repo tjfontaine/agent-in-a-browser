@@ -15,7 +15,7 @@ impl CoreCommands {
     /// echo - output arguments
     #[shell_command(
         name = "echo", 
-        usage = "echo [STRING]...", 
+        usage = "echo [-e] [-n] [STRING]...", 
         description = "Display line of text"
     )]
     fn cmd_echo(
@@ -33,12 +33,53 @@ impl CoreCommands {
                     return 0;
                 }
             }
-            let output = remaining.join(" ");
+            
+            // Parse echo-specific flags
+            let mut interpret_escapes = false;
+            let mut trailing_newline = true;
+            let mut args_to_print: Vec<&str> = Vec::new();
+            
+            for arg in &remaining {
+                if arg == "-e" {
+                    interpret_escapes = true;
+                } else if arg == "-n" {
+                    trailing_newline = false;
+                } else if arg == "-E" {
+                    interpret_escapes = false;
+                } else if arg.starts_with('-') && arg.chars().skip(1).all(|c| c == 'e' || c == 'n' || c == 'E') {
+                    // Combined flags like -en
+                    for c in arg.chars().skip(1) {
+                        match c {
+                            'e' => interpret_escapes = true,
+                            'n' => trailing_newline = false,
+                            'E' => interpret_escapes = false,
+                            _ => {}
+                        }
+                    }
+                } else {
+                    args_to_print.push(arg);
+                }
+            }
+            
+            let mut output = args_to_print.join(" ");
+            
+            // Handle escape sequences if -e is specified
+            if interpret_escapes {
+                output = output
+                    .replace("\\n", "\n")
+                    .replace("\\t", "\t")
+                    .replace("\\r", "\r")
+                    .replace("\\\\", "\\")
+                    .replace("\\0", "\0");
+            }
+            
             if stdout.write_all(output.as_bytes()).await.is_err() {
                 return 1;
             }
-            if stdout.write_all(b"\n").await.is_err() {
-                return 1;
+            if trailing_newline {
+                if stdout.write_all(b"\n").await.is_err() {
+                    return 1;
+                }
             }
             0
         })
