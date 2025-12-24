@@ -468,6 +468,9 @@ pub struct ShellEnv {
     pub break_level: usize,
     /// Continue level requested (0 = no continue, 1 = continue innermost, etc.)
     pub continue_level: usize,
+    
+    /// Command aliases (name -> expansion)
+    pub aliases: HashMap<String, String>,
 
     // Legacy compatibility fields (to avoid breaking existing code)
     /// Alias for exported variables lookup
@@ -501,6 +504,8 @@ impl ShellEnv {
             loop_depth: 0,
             break_level: 0,
             continue_level: 0,
+            // Aliases
+            aliases: HashMap::new(),
             // Legacy compatibility
             env_vars: HashMap::new(),
             local_vars: HashMap::new(),

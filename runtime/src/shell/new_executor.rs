@@ -371,6 +371,166 @@ async fn execute_simple(
         "dirs" => return handle_dirs(&expanded_args, env),
         "pwd" => return ShellResult::success(format!("{}\n", env.cwd.to_string_lossy())),
         
+        // eval - execute arguments as shell command
+        "eval" => {
+            if expanded_args.is_empty() {
+                return ShellResult::success("");
+            }
+            // Join all arguments into a single command string
+            let cmd_string = expanded_args.join(" ");
+            // Parse and execute
+            return match super::parser::parse_command(&cmd_string) {
+                Ok(parsed) if !parsed.is_empty() => {
+                    Box::pin(execute_sequence(&parsed, env, stdin)).await
+                }
+                Ok(_) => ShellResult::success(""),
+                Err(e) => ShellResult::error(format!("eval: {}", e), 1),
+            };
+        }
+        
+        // alias - define or display aliases
+        "alias" => {
+            if expanded_args.is_empty() {
+                // List all aliases
+                let mut output = String::new();
+                for (name, value) in &env.aliases {
+                    output.push_str(&format!("alias {}='{}'\n", name, value));
+                }
+                return ShellResult::success(output);
+            }
+            
+            for arg in &expanded_args {
+                if let Some(eq_pos) = arg.find('=') {
+                    // Define alias: alias name=value
+                    let name = &arg[..eq_pos];
+                    let value = &arg[eq_pos + 1..];
+                    // Remove surrounding quotes if present
+                    let value = value.trim_matches(|c| c == '\'' || c == '"');
+                    env.aliases.insert(name.to_string(), value.to_string());
+                } else {
+                    // Display specific alias
+                    if let Some(value) = env.aliases.get(arg) {
+                        return ShellResult::success(format!("alias {}='{}'\n", arg, value));
+                    } else {
+                        return ShellResult::error(format!("alias: {}: not found", arg), 1);
+                    }
+                }
+            }
+            return ShellResult::success("");
+        }
+        
+        // unalias - remove aliases
+        "unalias" => {
+            if expanded_args.is_empty() {
+                return ShellResult::error("unalias: usage: unalias name [name ...]", 1);
+            }
+            
+            for arg in &expanded_args {
+                if arg == "-a" {
+                    // Remove all aliases
+                    env.aliases.clear();
+                } else {
+                    env.aliases.remove(arg);
+                }
+            }
+            return ShellResult::success("");
+        }
+        
+        // getopts - parse positional parameters
+        "getopts" => {
+            // getopts optstring name [args]
+            // Sets name to the option found, OPTARG to its argument
+            // Returns 0 if option found, 1 if end of options
+            if expanded_args.len() < 2 {
+                return ShellResult::error("getopts: usage: getopts optstring name [args]", 1);
+            }
+            
+            let optstring = &expanded_args[0];
+            let name = &expanded_args[1];
+            
+            // Get args to parse (either from args or positional params)
+            let args_to_parse: Vec<String> = if expanded_args.len() > 2 {
+                expanded_args[2..].to_vec()
+            } else {
+                env.positional_params.clone()
+            };
+            
+            // Get current OPTIND (1-based index)
+            let optind: usize = env.get_var("OPTIND")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1);
+            
+            // Check if we've exhausted arguments
+            if optind > args_to_parse.len() {
+                let _ = env.set_var(name, "?");
+                return ShellResult { code: 1, stdout: String::new(), stderr: String::new() };
+            }
+            
+            let arg = &args_to_parse[optind - 1];
+            
+            // Check if this is an option
+            if !arg.starts_with('-') || arg == "-" || arg == "--" {
+                let _ = env.set_var(name, "?");
+                if arg == "--" {
+                    let _ = env.set_var("OPTIND", &(optind + 1).to_string());
+                }
+                return ShellResult { code: 1, stdout: String::new(), stderr: String::new() };
+            }
+            
+            // Parse the option (skip the -)
+            let opt_char = arg.chars().nth(1).unwrap_or('?');
+            
+            // Check if option is in optstring
+            if let Some(pos) = optstring.find(opt_char) {
+                let _ = env.set_var(name, &opt_char.to_string());
+                
+                // Check if option takes an argument (followed by : in optstring)
+                let needs_arg = optstring.chars().nth(pos + 1) == Some(':');
+                
+                if needs_arg {
+                    // Argument can be attached (-oarg) or next arg (-o arg)
+                    if arg.len() > 2 {
+                        // Attached argument
+                        let optarg = &arg[2..];
+                        let _ = env.set_var("OPTARG", optarg);
+                        let _ = env.set_var("OPTIND", &(optind + 1).to_string());
+                    } else if optind < args_to_parse.len() {
+                        // Next argument
+                        let optarg = &args_to_parse[optind];
+                        let _ = env.set_var("OPTARG", optarg);
+                        let _ = env.set_var("OPTIND", &(optind + 2).to_string());
+                    } else {
+                        // Missing argument
+                        let _ = env.set_var(name, "?");
+                        let _ = env.set_var("OPTARG", "");
+                        return ShellResult::error(
+                            format!("getopts: option requires an argument -- {}", opt_char),
+                            1,
+                        );
+                    }
+                } else {
+                    let _ = env.set_var("OPTARG", "");
+                    let _ = env.set_var("OPTIND", &(optind + 1).to_string());
+                }
+                
+                return ShellResult::success("");
+            } else {
+                // Unknown option
+                let _ = env.set_var(name, "?");
+                let _ = env.set_var("OPTARG", &opt_char.to_string());
+                let _ = env.set_var("OPTIND", &(optind + 1).to_string());
+                
+                // Silent error if optstring starts with :
+                if !optstring.starts_with(':') {
+                    return ShellResult::error(
+                        format!("getopts: illegal option -- {}", opt_char),
+                        0,
+                    );
+                }
+                return ShellResult::success("");
+            }
+        }
+        
         _ => {}
     }
     

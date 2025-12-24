@@ -1033,6 +1033,80 @@ mod tests {
     // ========================================================================
 
     #[test]
+    fn test_eval_builtin() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("CMD", "echo hello");
+        let result = futures_lite::future::block_on(run_pipeline("eval $CMD", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("hello"));
+    }
+
+    #[test]
+    fn test_eval_complex() {
+        let mut env = ShellEnv::new();
+        // Test that eval can execute a command constructed from variables
+        let _ = env.set_var("A", "echo");
+        let _ = env.set_var("B", "world");
+        let result = futures_lite::future::block_on(run_pipeline(
+            "eval $A $B",
+            &mut env
+        ));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("world"));
+    }
+
+    #[test]
+    fn test_alias_define() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("alias ll='ls -la'", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(env.aliases.contains_key("ll"));
+        assert_eq!(env.aliases.get("ll").unwrap(), "ls -la");
+    }
+
+    #[test]
+    fn test_alias_list() {
+        let mut env = ShellEnv::new();
+        env.aliases.insert("ll".to_string(), "ls -la".to_string());
+        let result = futures_lite::future::block_on(run_pipeline("alias", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("ll"));
+        assert!(result.stdout.contains("ls -la"));
+    }
+
+    #[test]
+    fn test_unalias() {
+        let mut env = ShellEnv::new();
+        env.aliases.insert("ll".to_string(), "ls -la".to_string());
+        let result = futures_lite::future::block_on(run_pipeline("unalias ll", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(!env.aliases.contains_key("ll"));
+    }
+
+    #[test]
+    fn test_getopts_basic() {
+        let mut env = ShellEnv::new();
+        env.positional_params = vec!["-a".to_string(), "-b".to_string()];
+        let _ = env.set_var("OPTIND", "1");
+        
+        let result = futures_lite::future::block_on(run_pipeline("getopts ab opt", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.get_var("opt").unwrap(), "a");
+    }
+
+    #[test]
+    fn test_getopts_with_arg() {
+        let mut env = ShellEnv::new();
+        env.positional_params = vec!["-f".to_string(), "file.txt".to_string()];
+        let _ = env.set_var("OPTIND", "1");
+        
+        let result = futures_lite::future::block_on(run_pipeline("getopts f: opt", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(env.get_var("opt").unwrap(), "f");
+        assert_eq!(env.get_var("OPTARG").unwrap(), "file.txt");
+    }
+
+    #[test]
     fn test_printf_command() {
         let mut env = ShellEnv::new();
         let result = futures_lite::future::block_on(run_pipeline("printf 'Hello %s!' world", &mut env));
