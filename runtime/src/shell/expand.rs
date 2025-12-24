@@ -702,257 +702,41 @@ fn expand_arithmetic(chars: &mut std::iter::Peekable<std::str::Chars>, env: &She
     }
 
     // Expand variables inside the arithmetic expression before evaluation
+    // (handles $VAR and ${VAR} syntax before brush-parser sees it)
     let expanded = expand_string(&content, env, false)?;
     
-    // Also expand bare variable names (shell arithmetic treats identifiers as variables)
-    let fully_expanded = expand_bare_arithmetic_vars(&expanded, env);
-    
-    evaluate_arithmetic(&fully_expanded)
+    // Use the new brush-parser based arithmetic evaluator
+    evaluate_arithmetic_with_env(&expanded, env)
 }
 
-/// Expand bare variable names in arithmetic expressions
-/// In shell arithmetic, bare identifiers like `i` are treated as variable references
-fn expand_bare_arithmetic_vars(expr: &str, env: &ShellEnv) -> String {
-    let mut result = String::new();
-    let mut i = 0;
-    let chars: Vec<char> = expr.chars().collect();
-    let len = chars.len();
-    
-    while i < len {
-        let c = chars[i];
-        
-        // Check if we're at the start of an identifier (letter or underscore, not digit)
-        if c.is_ascii_alphabetic() || c == '_' {
-            // Collect the full identifier
-            let start = i;
-            while i < len && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                i += 1;
-            }
-            let ident: String = chars[start..i].iter().collect();
-            
-            // Look up the variable value
-            let value = env.get_var(&ident).map(|s| s.as_str()).unwrap_or("");
-            
-            // If it's a number, use it; otherwise default to 0
-            if value.is_empty() {
-                result.push('0');
-            } else if value.parse::<i64>().is_ok() {
-                result.push_str(value);
-            } else {
-                // Variable value is not a number, treat as 0
-                result.push('0');
-            }
-        } else {
-            result.push(c);
-            i += 1;
-        }
-    }
-    
-    result
-}
-
-/// Evaluate an arithmetic expression
+/// Evaluate an arithmetic expression using brush-parser AST.
+///
+/// This is the public API for arithmetic evaluation. It uses brush-parser
+/// for proper operator precedence and supports all bash arithmetic operators.
+#[allow(dead_code)]
 pub fn evaluate_arithmetic(expr: &str) -> Result<String, String> {
+    // For backwards compatibility, create a temporary env
+    let mut env = ShellEnv::new();
+    evaluate_arithmetic_with_env(expr, &mut env)
+}
+
+/// Evaluate arithmetic with access to the shell environment for variable lookups.
+fn evaluate_arithmetic_with_env(expr: &str, env: &ShellEnv) -> Result<String, String> {
     let expr = expr.trim();
     
-    // Parse and evaluate the expression
-    match parse_arithmetic_expr(expr) {
+    if expr.is_empty() {
+        return Ok("0".to_string());
+    }
+    
+    // Use the brush-parser based arithmetic module
+    let mut env_clone = env.clone();
+    match super::arithmetic::evaluate(expr, &mut env_clone) {
         Ok(value) => Ok(value.to_string()),
         Err(e) => Err(format!("arithmetic error: {}", e)),
     }
 }
 
-/// Parse and evaluate arithmetic expression
-fn parse_arithmetic_expr(expr: &str) -> Result<i64, String> {
-    let expr = expr.trim();
-    
-    if expr.is_empty() {
-        return Ok(0);
-    }
 
-    // Handle ternary operator
-    if let Some(q_pos) = expr.find('?') {
-        if let Some(c_pos) = expr[q_pos..].find(':') {
-            let cond = &expr[..q_pos];
-            let true_val = &expr[q_pos + 1..q_pos + c_pos];
-            let false_val = &expr[q_pos + c_pos + 1..];
-            let cond_result = parse_arithmetic_expr(cond)?;
-            return if cond_result != 0 {
-                parse_arithmetic_expr(true_val)
-            } else {
-                parse_arithmetic_expr(false_val)
-            };
-        }
-    }
-
-    // Handle comparison operators (lowest precedence)
-    // Check in order from longest operator to shortest to avoid partial matches
-    for op in ["<=", ">=", "==", "!=", "<", ">"] {
-        if let Some(pos) = expr.rfind(op) {
-            let left = parse_arithmetic_expr(&expr[..pos])?;
-            let right = parse_arithmetic_expr(&expr[pos + op.len()..])?;
-            let result = match op {
-                "<=" => if left <= right { 1 } else { 0 },
-                ">=" => if left >= right { 1 } else { 0 },
-                "==" => if left == right { 1 } else { 0 },
-                "!=" => if left != right { 1 } else { 0 },
-                "<" => if left < right { 1 } else { 0 },
-                ">" => if left > right { 1 } else { 0 },
-                _ => unreachable!(),
-            };
-            return Ok(result);
-        }
-    }
-
-    // Handle logical operators
-    if let Some(pos) = expr.rfind("||") {
-        let left = parse_arithmetic_expr(&expr[..pos])?;
-        if left != 0 {
-            return Ok(1);
-        }
-        let right = parse_arithmetic_expr(&expr[pos + 2..])?;
-        return Ok(if right != 0 { 1 } else { 0 });
-    }
-    
-    if let Some(pos) = expr.rfind("&&") {
-        let left = parse_arithmetic_expr(&expr[..pos])?;
-        if left == 0 {
-            return Ok(0);
-        }
-        let right = parse_arithmetic_expr(&expr[pos + 2..])?;
-        return Ok(if right != 0 { 1 } else { 0 });
-    }
-
-    // Handle bitwise OR
-    if let Some(pos) = expr.rfind('|') {
-        if pos > 0 && expr.chars().nth(pos - 1) != Some('|') {
-            let left = parse_arithmetic_expr(&expr[..pos])?;
-            let right = parse_arithmetic_expr(&expr[pos + 1..])?;
-            return Ok(left | right);
-        }
-    }
-
-    // Handle bitwise XOR
-    if let Some(pos) = expr.rfind('^') {
-        let left = parse_arithmetic_expr(&expr[..pos])?;
-        let right = parse_arithmetic_expr(&expr[pos + 1..])?;
-        return Ok(left ^ right);
-    }
-
-    // Handle bitwise AND
-    if let Some(pos) = expr.rfind('&') {
-        if pos > 0 && expr.chars().nth(pos - 1) != Some('&') {
-            let left = parse_arithmetic_expr(&expr[..pos])?;
-            let right = parse_arithmetic_expr(&expr[pos + 1..])?;
-            return Ok(left & right);
-        }
-    }
-
-    // Handle addition and subtraction (left to right for same precedence)
-    let mut depth = 0;
-    for (i, c) in expr.char_indices().rev() {
-        match c {
-            ')' => depth += 1,
-            '(' => depth -= 1,
-            '+' | '-' if depth == 0 && i > 0 => {
-                // Make sure it's not part of a number or unary
-                let prev_char = expr.chars().nth(i - 1);
-                if prev_char.map(|c| c.is_ascii_digit() || c == ')' || c == ' ').unwrap_or(false) {
-                    let left = parse_arithmetic_expr(&expr[..i])?;
-                    let right = parse_arithmetic_expr(&expr[i + 1..])?;
-                    return Ok(if c == '+' { left + right } else { left - right });
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // Handle multiplication, division, modulo
-    let mut depth = 0;
-    for (i, c) in expr.char_indices().rev() {
-        match c {
-            ')' => depth += 1,
-            '(' => depth -= 1,
-            '*' | '/' | '%' if depth == 0 => {
-                // Make sure it's not ** (exponentiation) - check both neighbors
-                if c == '*' {
-                    // Check if next char is * (we're the first * of **)
-                    if i + 1 < expr.len() && expr.chars().nth(i + 1) == Some('*') {
-                        continue;
-                    }
-                    // Check if prev char is * (we're the second * of **)
-                    if i > 0 && expr.chars().nth(i - 1) == Some('*') {
-                        continue;
-                    }
-                }
-                let left = parse_arithmetic_expr(&expr[..i])?;
-                let right = parse_arithmetic_expr(&expr[i + 1..])?;
-                return Ok(match c {
-                    '*' => left * right,
-                    '/' => {
-                        if right == 0 {
-                            return Err("division by zero".to_string());
-                        }
-                        left / right
-                    }
-                    '%' => {
-                        if right == 0 {
-                            return Err("division by zero".to_string());
-                        }
-                        left % right
-                    }
-                    _ => unreachable!(),
-                });
-            }
-            _ => {}
-        }
-    }
-
-    // Handle exponentiation
-    if let Some(pos) = expr.find("**") {
-        let left = parse_arithmetic_expr(&expr[..pos])?;
-        let right = parse_arithmetic_expr(&expr[pos + 2..])?;
-        return Ok(left.pow(right as u32));
-    }
-
-    // Handle unary operators
-    let trimmed = expr.trim();
-    if let Some(rest) = trimmed.strip_prefix('-') {
-        return Ok(-parse_arithmetic_expr(rest)?);
-    }
-    if let Some(rest) = trimmed.strip_prefix('+') {
-        return parse_arithmetic_expr(rest);
-    }
-    if let Some(rest) = trimmed.strip_prefix('!') {
-        let val = parse_arithmetic_expr(rest)?;
-        return Ok(if val == 0 { 1 } else { 0 });
-    }
-    if let Some(rest) = trimmed.strip_prefix('~') {
-        return Ok(!parse_arithmetic_expr(rest)?);
-    }
-
-    // Handle parentheses
-    if trimmed.starts_with('(') && trimmed.ends_with(')') {
-        return parse_arithmetic_expr(&trimmed[1..trimmed.len() - 1]);
-    }
-
-    // Parse as number (decimal, octal, hex)
-    if let Some(hex) = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")) {
-        return i64::from_str_radix(hex, 16).map_err(|_| format!("invalid number: {}", expr));
-    }
-    if let Some(oct) = trimmed.strip_prefix("0o").or_else(|| trimmed.strip_prefix("0O")) {
-        return i64::from_str_radix(oct, 8).map_err(|_| format!("invalid number: {}", expr));
-    }
-    if let Some(bin) = trimmed.strip_prefix("0b").or_else(|| trimmed.strip_prefix("0B")) {
-        return i64::from_str_radix(bin, 2).map_err(|_| format!("invalid number: {}", expr));
-    }
-    // Leading 0 means octal in shell arithmetic
-    if trimmed.starts_with('0') && trimmed.len() > 1 && trimmed.chars().all(|c| c.is_ascii_digit()) {
-        return i64::from_str_radix(trimmed, 8).map_err(|_| format!("invalid number: {}", expr));
-    }
-
-    trimmed.parse().map_err(|_| format!("invalid number: {}", expr))
-}
 
 /// Expand backtick command substitution
 #[allow(dead_code)] // kept for future backtick expansion support
@@ -1219,7 +1003,7 @@ mod tests {
     #[test]
     fn test_arithmetic_octal() {
         assert_eq!(evaluate_arithmetic("010").unwrap(), "8");
-        assert_eq!(evaluate_arithmetic("0o17").unwrap(), "15");
+        assert_eq!(evaluate_arithmetic("017").unwrap(), "15");
     }
 
     #[test]

@@ -239,6 +239,7 @@ impl Default for ShellVariable {
 
 impl ShellVariable {
     /// Create a new variable with a string value.
+    #[allow(dead_code)]
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             value: ShellValue::String(value.into()),
@@ -247,6 +248,7 @@ impl ShellVariable {
     }
 
     /// Create an indexed array variable.
+    #[allow(dead_code)]
     pub fn indexed_array(values: Vec<String>) -> Self {
         Self {
             value: ShellValue::indexed_array_from_vec(values),
@@ -278,6 +280,7 @@ impl ShellVariable {
     }
 
     /// Get the value as a string.
+    #[allow(dead_code)]
     pub fn as_string(&self) -> String {
         self.value.as_string()
     }
@@ -546,6 +549,7 @@ impl ShellEnv {
     }
 
     /// Set a variable with full control.
+    #[allow(dead_code)]
     pub fn set_variable(&mut self, name: &str, var: ShellVariable) -> Result<(), String> {
         // Check readonly
         if let Some(existing) = self.variables.get(name) {
@@ -575,6 +579,7 @@ impl ShellEnv {
     }
 
     /// Declare a variable with specific type (for declare builtin).
+    #[allow(dead_code)]
     pub fn declare_variable(
         &mut self,
         name: &str,
@@ -665,6 +670,7 @@ impl ShellEnv {
     }
 
     /// Get a variable value as String (owned, preferred method).
+    #[allow(dead_code)]
     pub fn get_var_value(&self, name: &str) -> Option<String> {
         // Check local_vars first
         if let Some(v) = self.local_vars.get(name) {
@@ -712,6 +718,7 @@ impl ShellEnv {
     }
 
     /// Export a variable to the environment.
+    #[allow(dead_code)]
     pub fn export_var(&mut self, name: &str, value: Option<&str>) -> Result<(), String> {
         if self.readonly.contains(name) {
             return Err(format!("{}: readonly variable", name));
@@ -757,6 +764,7 @@ impl ShellEnv {
     }
 
     /// Mark a variable as readonly.
+    #[allow(dead_code)]
     pub fn set_readonly(&mut self, name: &str, value: Option<&str>) -> Result<(), String> {
         if let Some(v) = value {
             self.set_var(name, v)?;
@@ -804,6 +812,7 @@ impl ShellEnv {
     }
 
     /// Get all array values: ${arr[@]}
+    #[allow(dead_code)]
     pub fn get_array_values(&self, name: &str) -> Vec<String> {
         self.variables
             .get(name)
@@ -812,6 +821,7 @@ impl ShellEnv {
     }
 
     /// Get all array keys: ${!arr[@]}
+    #[allow(dead_code)]
     pub fn get_array_keys(&self, name: &str) -> Vec<String> {
         self.variables
             .get(name)
@@ -820,6 +830,7 @@ impl ShellEnv {
     }
 
     /// Get array length: ${#arr[@]}
+    #[allow(dead_code)]
     pub fn get_array_length(&self, name: &str) -> usize {
         self.variables
             .get(name)
@@ -828,6 +839,7 @@ impl ShellEnv {
     }
 
     /// Set array from values: arr=(val1 val2 val3)
+    #[allow(dead_code)]
     pub fn set_indexed_array(&mut self, name: &str, values: Vec<String>) -> Result<(), String> {
         if self.readonly.contains(name) {
             return Err(format!("{}: readonly variable", name));
@@ -872,12 +884,14 @@ impl ShellEnv {
     // ========================================================================
 
     /// Enter a function scope (push local variable frame).
+    #[allow(dead_code)]
     pub fn enter_function_scope(&mut self) {
         self.in_function = true;
         self.local_scopes.push(HashSet::new());
     }
 
     /// Exit a function scope (pop local variable frame).
+    #[allow(dead_code)]
     pub fn exit_function_scope(&mut self) {
         if let Some(scope) = self.local_scopes.pop() {
             // Remove local variables from this scope
@@ -889,6 +903,7 @@ impl ShellEnv {
     }
 
     /// Set a local variable (function-scoped).
+    #[allow(dead_code)]
     pub fn set_local_var(&mut self, name: &str, value: &str) -> Result<(), String> {
         if !self.in_function {
             return Err("local: can only be used in a function".to_string());
@@ -935,11 +950,13 @@ impl ShellEnv {
     // ========================================================================
 
     /// List all exported variables.
+    #[allow(dead_code)]
     pub fn list_exports(&self) -> impl Iterator<Item = (&String, &String)> {
         self.env_vars.iter()
     }
 
     /// List all variables (for `set` with no args).
+    #[allow(dead_code)]
     pub fn list_all_variables(&self) -> impl Iterator<Item = (&String, &ShellVariable)> {
         self.variables.iter()
     }
