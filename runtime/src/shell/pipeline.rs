@@ -907,7 +907,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Brace range expansion {1..3} is a bash extension, not POSIX sh
     fn test_range_expansion_pipeline() {
         let mut env = ShellEnv::new();
         let result = futures_lite::future::block_on(run_pipeline("echo {1..3}", &mut env));

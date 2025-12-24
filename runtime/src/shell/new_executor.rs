@@ -224,15 +224,20 @@ async fn execute_simple(
     // Process any command substitution markers in the name
     let expanded_name = super::pipeline::execute_command_substitutions(&expanded_name, env).await;
     
-    // Expand arguments
+    // Expand arguments (with brace expansion first, then variable expansion)
     let mut expanded_args = Vec::new();
     for arg in args {
-        let expanded = match expand::expand_string(arg, env, false) {
-            Ok(s) => s,
-            Err(e) => return ShellResult::error(e, 1),
-        };
-        let final_exp = super::pipeline::execute_command_substitutions(&expanded, env).await;
-        expanded_args.push(final_exp);
+        // First do brace expansion (before variable substitution)
+        let brace_expanded = expand::expand_braces(arg);
+        
+        for be in brace_expanded {
+            let expanded = match expand::expand_string(&be, env, false) {
+                Ok(s) => s,
+                Err(e) => return ShellResult::error(e, 1),
+            };
+            let final_exp = super::pipeline::execute_command_substitutions(&expanded, env).await;
+            expanded_args.push(final_exp);
+        }
     }
     
     // Set temporary environment variables (or permanent if no command)
@@ -273,8 +278,8 @@ async fn execute_simple(
         // Unset
         "unset" => {
             for arg in &expanded_args {
-                env.variables.remove(arg);
-                env.env_vars.remove(arg);
+                // Ignore readonly errors for unset (just silently fail)
+                let _ = env.unset_var(arg);
             }
             return ShellResult::success("");
         }

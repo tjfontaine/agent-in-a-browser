@@ -83,6 +83,7 @@ base64 = "0.22" # Base64 encoding/decoding
 wasi = "0.14"
 wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
 brush-parser = "0.3.0"
+itertools = "0.14"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

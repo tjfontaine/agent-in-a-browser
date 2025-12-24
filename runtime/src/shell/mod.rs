@@ -3,6 +3,7 @@
 //! Provides a library-OS style shell for executing shell commands
 //! with pipe support, exposed as an MCP tool.
 
+mod braceexpansion;
 mod commands;
 mod env;
 mod expand;
