@@ -74,6 +74,10 @@ shlex = "1"              # Command line parsing
 pin-project-lite = "0.2" # Pin projection for async
 lexopt = "0.3"           # Minimal argument parsing
 
+# Encoding/crypto - replacing handwritten implementations
+md-5 = "0.10"   # MD5 hashing
+sha2 = "0.10"   # SHA256 hashing  
+base64 = "0.22" # Base64 encoding/decoding
 
 # WASI bindings for http handler
 wasi = "0.14"
