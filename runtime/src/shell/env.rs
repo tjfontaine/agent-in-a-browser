@@ -46,6 +46,7 @@ impl Default for ShellValue {
     }
 }
 
+#[allow(dead_code)] // Public API methods for shell value manipulation
 impl ShellValue {
     /// Check if this is an array type.
     pub fn is_array(&self) -> bool {
@@ -245,27 +246,10 @@ impl ShellVariable {
         }
     }
 
-    /// Create a new exported variable.
-    pub fn exported(value: impl Into<String>) -> Self {
-        Self {
-            value: ShellValue::String(value.into()),
-            exported: true,
-            ..Default::default()
-        }
-    }
-
     /// Create an indexed array variable.
     pub fn indexed_array(values: Vec<String>) -> Self {
         Self {
             value: ShellValue::indexed_array_from_vec(values),
-            ..Default::default()
-        }
-    }
-
-    /// Create an associative array variable.
-    pub fn associative_array(values: BTreeMap<String, String>) -> Self {
-        Self {
-            value: ShellValue::AssociativeArray(values),
             ..Default::default()
         }
     }
@@ -363,6 +347,7 @@ impl ShellOptions {
     }
 
     /// Parse a set option string (e.g., "-e", "-x", "+e")
+    #[allow(dead_code)] // Reserved for `set` builtin enhancements
     pub fn parse_option(&mut self, opt: &str) -> Result<(), String> {
         let (enable, flag) = if let Some(f) = opt.strip_prefix('-') {
             (true, f)
@@ -442,6 +427,7 @@ pub struct ShellEnv {
     /// All shell variables (with full attributes).
     variables: HashMap<String, ShellVariable>,
     /// Local variable scope stack (for function calls).
+    #[allow(dead_code)] // Used indirectly via local_scopes methods, value never read directly
     local_scopes: Vec<HashSet<String>>,
 
     /// Positional parameters ($1, $2, etc.)
@@ -521,11 +507,32 @@ impl ShellEnv {
     // ========================================================================
 
     /// Get a variable by name (full ShellVariable).
+    /// If the variable is a nameref, follows the reference to the target.
     pub fn get_variable(&self, name: &str) -> Option<&ShellVariable> {
-        self.variables.get(name)
+        self.resolve_nameref(name, 0)
+    }
+    
+    /// Resolve nameref chain (with recursion limit to prevent infinite loops).
+    fn resolve_nameref(&self, name: &str, depth: usize) -> Option<&ShellVariable> {
+        if depth > 10 {
+            return None; // Prevent infinite nameref loops
+        }
+        
+        let var = self.variables.get(name)?;
+        
+        if var.nameref {
+            // The value contains the name of the target variable
+            let target_name = var.value.as_string();
+            if !target_name.is_empty() {
+                return self.resolve_nameref(&target_name, depth + 1);
+            }
+        }
+        
+        Some(var)
     }
 
     /// Get a variable mutably.
+    #[allow(dead_code)] // Public API for mutable variable access
     pub fn get_variable_mut(&mut self, name: &str) -> Option<&mut ShellVariable> {
         self.variables.get_mut(name)
     }
