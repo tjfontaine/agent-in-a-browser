@@ -166,7 +166,7 @@ enum ChainOp {
 /// 
 /// The expand module produces markers like `$__CMD_SUB__:cmd:__END__` which we 
 /// need to execute and replace with their output.
-async fn execute_command_substitutions(input: &str, env: &mut ShellEnv) -> String {
+pub async fn execute_command_substitutions(input: &str, env: &mut ShellEnv) -> String {
     let mut result = input.to_string();
     
     // Look for command substitution markers
@@ -479,7 +479,22 @@ pub async fn run_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
         return ShellResult::error("maximum subshell depth exceeded", 1);
     }
 
-    // Check for control flow constructs first
+    // Try parsing with brush-parser first for ALL commands
+    // This provides proper tokenization and handles complex compositions correctly
+    match super::parser::parse_command(cmd_line) {
+        Ok(parsed_cmds) if !parsed_cmds.is_empty() => {
+            return super::executor::execute_sequence(&parsed_cmds, env).await;
+        }
+        Ok(_) => {
+            // Empty parse result - fall through to old parser
+        }
+        Err(_e) => {
+            // Parse error - fall through to old parser
+            // This handles edge cases brush-parser doesn't support yet
+        }
+    }
+
+    // Fallback: Check for control flow constructs with old parser
     if let Some(result) = try_parse_control_flow(cmd_line, env).await {
         return result;
     }
@@ -1540,7 +1555,7 @@ fn split_by_chain_ops(cmd_line: &str) -> Vec<(&str, Option<ChainOp>)> {
 }
 
 /// Run a single pipeline (handles | only, no &&/||/;)
-async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
+pub async fn run_single_pipeline(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
     let cmd_line = cmd_line.trim();
     
     if cmd_line.is_empty() {
@@ -2708,13 +2723,24 @@ mod tests {
     // flow bodies with arithmetic expressions. The current ad-hoc parsing struggles
     // with complex compositions like `x=0; while ...; do echo $x; x=$((x+1)); done | wc`.
     // A tokenizer-based approach would correctly track semicolons vs operators vs parens.
-    // #[test]
-    // fn test_while_loop_piping() {
-    //     let mut env = ShellEnv::new();
-    //     let result = futures_lite::future::block_on(run_pipeline("x=0; while [ $x -lt 3 ]; do echo $x; x=$((x+1)); done | wc -l", &mut env));
-    //     assert_eq!(result.code, 0);
-    //     assert_eq!(result.stdout.trim(), "3");
-    // }
+    #[test]
+    fn test_while_loop_piping() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("x=0; while [ $x -lt 3 ]; do echo $x; x=$((x+1)); done | wc -l", &mut env));
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "3");
+    }
+
+    #[test]
+    fn test_while_loop_simple() {
+        // Super simple test - just a single statement in body
+        let mut env = ShellEnv::new();
+        env.set_var("x", "0");
+        // Just a single echo, no semicolon
+        let result = futures_lite::future::block_on(run_pipeline("while [ $x -lt 1 ]; do echo $x; x=1; done", &mut env));
+        assert_eq!(result.code, 0, "stderr: {}", result.stderr);
+        assert!(result.stdout.contains("0"), "stdout: {}", result.stdout);
+    }
 
     #[test]
     fn test_if_then_piping() {
