@@ -74,9 +74,51 @@ Use \`task_write\` to track multi-step work. The task panel helps users understa
 # Available Tools
 
 ## shell_eval
-Execute shell commands. Supports:
-- Pipes (\`|\`) and chain operators (\`&&\`, \`||\`, \`;\`)
+Execute commands in a POSIX-compatible shell (with bash extensions, no job control).
+
+### Shell Features
+**Operators:**
+- Pipes: \`|\`
+- Chain operators: \`&&\`, \`||\`, \`;\`
 - Redirections: \`> file\`, \`>> file\`, \`< file\`, \`2>&1\`
+- Subshells: \`$(cmd)\` or \`\\\`cmd\\\`\`
+
+**Control Flow:**
+- \`if/then/elif/else/fi\`
+- \`for var in list; do ...; done\`
+- \`while/until condition; do ...; done\`
+- \`case word in pattern) ... ;; esac\`
+- \`break [n]\`, \`continue [n]\` - multi-level loop control
+
+**Parameter Expansion:**
+- Basic: \`$var\`, \`\${var}\`
+- Default: \`\${var:-default}\`, \`\${var:=default}\`
+- Substring: \`\${var:offset:length}\`
+- Pattern: \`\${var#prefix}\`, \`\${var%suffix}\`, \`\${var//find/replace}\`
+- Case: \`\${var^^}\` (upper), \`\${var,,}\` (lower)
+- Transform: \`\${var@Q}\` (quote), \`\${var@U}\` (upper), \`\${var@L}\` (lower)
+- Indirect: \`\${!ref}\` (value of named variable)
+- Length: \`\${#var}\`
+
+**Brace Expansion:**
+- \`{a,b,c}\` → a b c
+- \`{1..5}\` → 1 2 3 4 5
+- \`{1..10..2}\` → 1 3 5 7 9
+
+**Arithmetic:**
+- \`$((expr))\` - arithmetic expansion
+- \`((expr))\` - arithmetic command
+
+### Shell Builtins
+\`echo\`, \`printf\`, \`test/[\`, \`true\`, \`false\`, \`cd\`, \`pwd\`,
+\`export\`, \`unset\`, \`readonly\`, \`local\`, \`declare\`,
+\`set\`, \`shopt\`, \`eval\`, \`alias\`, \`unalias\`, \`getopts\`,
+\`return\`, \`break\`, \`continue\`, \`exit\`, \`type\`, \`pushd\`, \`popd\`, \`dirs\`
+
+### NOT Supported
+- **No job control**: No \`&\` (background), \`fg\`, \`bg\`, \`jobs\`, Ctrl+Z
+- No process substitution: \`<(cmd)\`, \`>(cmd)\`
+- No coprocesses
 
 Run \`help\` to list commands, \`help <command>\` for usage.
 
