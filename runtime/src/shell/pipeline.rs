@@ -618,6 +618,7 @@ async fn try_parse_control_flow(cmd_line: &str, env: &mut ShellEnv) -> Option<Sh
     let trimmed = cmd_line.trim();
     
     // Handle if/then/else/fi
+    // NOTE: Brush-parser handles if statements; this is kept as fallback for edge cases
     if trimmed.starts_with("if ") || trimmed.starts_with("if\t") {
         let (control_part, pipe_rest) = split_control_flow_and_pipe(trimmed, "fi");
         let result = execute_if(&control_part, env).await;
