@@ -16,6 +16,7 @@ static SESSION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// A shell value - can be a string, indexed array, or associative array.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // Some variants reserved for array expansion feature
 pub enum ShellValue {
     /// A simple string value.
     String(String),
@@ -29,6 +30,7 @@ pub enum ShellValue {
 
 /// The type of an unset shell value.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // Reserved for array types
 pub enum ShellValueUnsetType {
     /// Untyped/scalar.
     Untyped,
@@ -192,18 +194,19 @@ impl ShellValue {
 // Shell Variable (with attributes)
 // ============================================================================
 
-/// Transform to apply when variable is updated.
+/// Transform to apply when variable is updated (brush-parser compatible).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[allow(dead_code)] // Reserved for declare -l/-u implementation
 pub enum ShellVariableTransform {
     #[default]
     None,
-    /// Convert to lowercase on assignment.
+    /// Convert to lowercase on assignment (declare -l).
     Lowercase,
-    /// Convert to uppercase on assignment.
+    /// Convert to uppercase on assignment (declare -u).
     Uppercase,
 }
 
-/// A shell variable with value and attributes.
+/// A shell variable with value and attributes (brush-parser compatible).
 #[derive(Debug, Clone)]
 pub struct ShellVariable {
     /// The value.
@@ -216,7 +219,7 @@ pub struct ShellVariable {
     pub integer: bool,
     /// Transform to apply on update.
     pub transform: ShellVariableTransform,
-    /// Whether this is a nameref (indirect reference).
+    /// Whether this is a nameref (declare -n).
     pub nameref: bool,
 }
 
@@ -575,6 +578,7 @@ impl ShellEnv {
         integer: bool,
         lowercase: bool,
         uppercase: bool,
+        nameref: bool,
     ) -> Result<(), String> {
         let mut var = self
             .variables
@@ -610,6 +614,9 @@ impl ShellEnv {
         }
         if uppercase {
             var.transform = ShellVariableTransform::Uppercase;
+        }
+        if nameref {
+            var.nameref = true;
         }
 
         self.variables.insert(name.to_string(), var);
@@ -1114,7 +1121,7 @@ mod tests {
         let mut env = ShellEnv::new();
 
         // Declare as indexed array
-        env.declare_variable("myarr", true, false, false, false, false, false, false)
+        env.declare_variable("myarr", true, false, false, false, false, false, false, false)
             .unwrap();
         assert!(env
             .get_variable("myarr")
@@ -1122,7 +1129,7 @@ mod tests {
             .unwrap_or(false));
 
         // Declare with export
-        env.declare_variable("myexport", false, false, true, false, false, false, false)
+        env.declare_variable("myexport", false, false, true, false, false, false, false, false)
             .unwrap();
         assert!(env
             .get_variable("myexport")

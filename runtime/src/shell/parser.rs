@@ -62,6 +62,7 @@ pub enum ParsedCommand {
 
 /// A parsed I/O redirection.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Some variants reserved for future redirect implementation
 pub enum ParsedRedirect {
     /// stdin from file
     Read { fd: Option<u32>, target: String },
@@ -104,7 +105,7 @@ pub fn parse_command(input: &str) -> Result<Vec<ParsedCommand>, String> {
 /// Convert a brush-parser Word to a string, extracting text content and stripping quotes
 /// Uses brush_parser::word::parse() to properly handle quoting
 fn word_to_string(word: &ast::Word) -> String {
-    use brush_parser::word::{self, WordPiece};
+    use brush_parser::word;
     
     let options = ParserOptions::default();
     
@@ -633,7 +634,7 @@ fn convert_io_redirect(redir: ast::IoRedirect) -> Option<ParsedRedirect> {
                 content: format!("{}", word),
             })
         }
-        ast::IoRedirect::OutputAndError(word, append) => {
+        ast::IoRedirect::OutputAndError(word, _append) => {
             // &> or &>> redirect both stdout and stderr
             Some(ParsedRedirect::Write {
                 fd: Some(1),

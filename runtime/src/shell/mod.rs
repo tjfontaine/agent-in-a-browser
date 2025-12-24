@@ -12,7 +12,5 @@ pub mod parser;
 pub mod pipeline;
 
 pub use env::ShellEnv;
-pub use new_executor::{run_shell, execute_sequence};
-pub use parser::{parse_command, ParsedCommand, ParsedRedirect};
 pub use pipeline::run_pipeline;
 
