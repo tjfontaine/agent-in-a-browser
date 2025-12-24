@@ -179,9 +179,44 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
                 }
             }
         }
-        // For other complex expressions, just render the base parameter
+        // ${!prefix*} or ${!prefix@} - variable names matching prefix
+        ParameterExpr::VariableNames { prefix, concatenate } => {
+            if *concatenate {
+                format!("${{!{}*}}", prefix)
+            } else {
+                format!("${{!{}@}}", prefix)
+            }
+        }
+        // ${!arr[@]} or ${!arr[*]} - array keys
+        ParameterExpr::MemberKeys { variable_name, concatenate } => {
+            if *concatenate {
+                format!("${{!{}[*]}}", variable_name)
+            } else {
+                format!("${{!{}[@]}}", variable_name)
+            }
+        }
+        // ${#var} - parameter length
+        ParameterExpr::ParameterLength { parameter, .. } => {
+            format!("${{#{}}}", format_parameter(parameter))
+        }
+        // ${var:-default} etc - use default values
+        ParameterExpr::UseDefaultValues { parameter, indirect, test_type, default_value } => {
+            let op = if *indirect { ":-" } else { 
+                match test_type { 
+                    brush_parser::word::ParameterTestType::UnsetOrNull => ":-",
+                    brush_parser::word::ParameterTestType::Unset => "-",
+                }
+            };
+            if let Some(val) = default_value {
+                format!("${{{}{}{}}}", format_parameter(parameter), op, val)
+            } else {
+                format!("${{{}{}}}", format_parameter(parameter), op)
+            }
+        }
+        // For other complex expressions, fall back to debug but wrapped as a shell expansion
         _ => {
-            // Use debug format as fallback for complex expressions
+            // Since Display isn't implemented, we need to handle more cases above
+            // For now, use Debug format which our expand code won't handle gracefully
             format!("${{{:?}}}", expr)
         }
     }
@@ -305,12 +340,48 @@ fn convert_command(cmd: ast::Command) -> Option<ParsedCommand> {
             })
         }
         ast::Command::ExtendedTest(test) => {
+            let args = convert_extended_test_expr(&test.expr);
             Some(ParsedCommand::Simple {
                 name: "[[".to_string(),
-                args: vec![format!("{}", test.expr), "]]".to_string()],
+                args: [args, vec!["]]".to_string()]].concat(),
                 redirects: vec![],
                 env_vars: vec![],
             })
+        }
+    }
+}
+
+/// Convert an ExtendedTestExpr to a list of string tokens.
+fn convert_extended_test_expr(expr: &ast::ExtendedTestExpr) -> Vec<String> {
+    match expr {
+        ast::ExtendedTestExpr::And(left, right) => {
+            let mut tokens = convert_extended_test_expr(left);
+            tokens.push("&&".to_string());
+            tokens.extend(convert_extended_test_expr(right));
+            tokens
+        }
+        ast::ExtendedTestExpr::Or(left, right) => {
+            let mut tokens = convert_extended_test_expr(left);
+            tokens.push("||".to_string());
+            tokens.extend(convert_extended_test_expr(right));
+            tokens
+        }
+        ast::ExtendedTestExpr::Not(inner) => {
+            let mut tokens = vec!["!".to_string()];
+            tokens.extend(convert_extended_test_expr(inner));
+            tokens
+        }
+        ast::ExtendedTestExpr::Parenthesized(inner) => {
+            let mut tokens = vec!["(".to_string()];
+            tokens.extend(convert_extended_test_expr(inner));
+            tokens.push(")".to_string());
+            tokens
+        }
+        ast::ExtendedTestExpr::UnaryTest(pred, word) => {
+            vec![format!("{}", pred), word_to_string(word)]
+        }
+        ast::ExtendedTestExpr::BinaryTest(pred, left, right) => {
+            vec![word_to_string(left), format!("{}", pred), word_to_string(right)]
         }
     }
 }

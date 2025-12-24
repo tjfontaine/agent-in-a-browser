@@ -527,6 +527,14 @@ impl ShellEnv {
         self.variables.get_mut(name)
     }
 
+    /// Get all variable names matching a prefix.
+    pub fn variable_names_with_prefix(&self, prefix: &str) -> Vec<String> {
+        self.variables.keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
+    }
+
     /// Set a variable with full control.
     pub fn set_variable(&mut self, name: &str, var: ShellVariable) -> Result<(), String> {
         // Check readonly

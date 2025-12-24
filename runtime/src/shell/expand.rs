@@ -237,12 +237,44 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
         return Ok(value.len().to_string());
     }
     
-    // ${!var} - indirect expansion (value of variable whose name is in var)
+    // ${!var} - indirect expansion or name expansion
     if content.starts_with('!') && content.len() > 1 {
         let indirect_name = &content[1..];
-        // First get the name from the variable
+        
+        // ${!prefix*} or ${!prefix@} - variable names matching prefix
+        if indirect_name.ends_with('*') || indirect_name.ends_with('@') {
+            let prefix = &indirect_name[..indirect_name.len() - 1];
+            let concatenate = indirect_name.ends_with('*');
+            let mut matching_names = env.variable_names_with_prefix(prefix);
+            matching_names.sort();
+            return Ok(if concatenate {
+                matching_names.join(" ")
+            } else {
+                matching_names.join(" ")
+            });
+        }
+        
+        // ${!arr[@]} or ${!arr[*]} - array keys
+        if indirect_name.ends_with("[@]") || indirect_name.ends_with("[*]") {
+            let var_name = &indirect_name[..indirect_name.len() - 3];
+            if let Some(var) = env.get_variable(var_name) {
+                let keys = match &var.value {
+                    crate::shell::env::ShellValue::IndexedArray(arr) => {
+                        arr.iter().map(|(i, _)| i.to_string()).collect::<Vec<_>>()
+                    }
+                    crate::shell::env::ShellValue::AssociativeArray(arr) => {
+                        arr.keys().cloned().collect::<Vec<_>>()
+                    }
+                    crate::shell::env::ShellValue::String(_) => vec!["0".to_string()],
+                    crate::shell::env::ShellValue::Unset(_) => vec![],
+                };
+                return Ok(keys.join(" "));
+            }
+            return Ok(String::new());
+        }
+        
+        // ${!var} - simple indirect expansion
         if let Some(actual_name) = env.get_var(indirect_name) {
-            // Then get the value of that variable
             return Ok(env.get_var(actual_name).cloned().unwrap_or_default());
         }
         return Ok(String::new());
@@ -1601,6 +1633,19 @@ mod tests {
         let _ = env.set_var("STR", "hello\\nworld");
         let result = expand_string("${STR@E}", &env, false).unwrap();
         assert_eq!(result, "hello\nworld");
+    }
+
+    #[test]
+    fn test_prefix_name_expansion() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("MY_VAR1", "a");
+        let _ = env.set_var("MY_VAR2", "b");
+        let _ = env.set_var("OTHER", "c");
+        let result = expand_string("${!MY_*}", &env, false).unwrap();
+        // Result should contain variable NAMES not values
+        assert!(result.contains("MY_VAR1"));
+        assert!(result.contains("MY_VAR2"));
+        assert!(!result.contains("OTHER"));
     }
 }
 

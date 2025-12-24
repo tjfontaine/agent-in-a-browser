@@ -1107,6 +1107,41 @@ mod tests {
     }
 
     #[test]
+    fn test_variable_prefix_expansion() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("MY_VAR1", "a");
+        let _ = env.set_var("MY_VAR2", "b");
+        let _ = env.set_var("OTHER", "c");
+        
+        let result = futures_lite::future::block_on(run_pipeline("echo ${!MY_*}", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("MY_VAR1"));
+        assert!(result.stdout.contains("MY_VAR2"));
+        assert!(!result.stdout.contains("OTHER"));
+    }
+
+    #[test]
+    fn test_double_bracket_basic() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("[[ hello == hello ]]", &mut env));
+        assert_eq!(result.code, 0);
+        
+        let result = futures_lite::future::block_on(run_pipeline("[[ hello == world ]]", &mut env));
+        assert_eq!(result.code, 1);
+    }
+
+    #[test]
+    fn test_double_bracket_string_comparison() {
+        let mut env = ShellEnv::new();
+        // String sorting: abc < bcd
+        let result = futures_lite::future::block_on(run_pipeline("[[ abc < bcd ]]", &mut env));
+        assert_eq!(result.code, 0);
+        
+        let result = futures_lite::future::block_on(run_pipeline("[[ bcd > abc ]]", &mut env));
+        assert_eq!(result.code, 0);
+    }
+
+    #[test]
     fn test_printf_command() {
         let mut env = ShellEnv::new();
         let result = futures_lite::future::block_on(run_pipeline("printf 'Hello %s!' world", &mut env));

@@ -75,6 +75,44 @@ impl TestCommands {
             if result { 0 } else { 1 }
         })
     }
+
+    /// [[ - extended test expression (bash extension)
+    #[shell_command(
+        name = "[[",
+        usage = "[[ EXPRESSION ]]",
+        description = "Evaluate extended conditional expression (bash extension).\\n\
+        Same as [ but with additional features:\\n\
+        - && and || operators (not -a, -o)\\n\
+        - < and > for string comparison\\n\
+        - == with pattern matching\\n\
+        - =~ for regex matching (planned)"
+    )]
+    pub fn cmd_double_bracket(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, mut remaining) = parse_common(&args);
+            if opts.help {
+                let help = TestCommands::show_help("[[").unwrap_or("");
+                let _ = stdout.write_all(help.as_bytes()).await;
+                return 0;
+            }
+
+            // Check for closing bracket
+            if remaining.last().map(|s| s.as_str()) != Some("]]") {
+                let _ = stderr.write_all(b"[[: missing ']]'\n").await;
+                return 2;
+            }
+            remaining.pop(); // Remove ]]
+
+            let result = evaluate_extended_test_expression(&remaining);
+            if result { 0 } else { 1 }
+        })
+    }
 }
 
 /// Evaluate a test expression
@@ -163,6 +201,97 @@ fn evaluate_test_expression(args: &[String]) -> bool {
                 let right_time = std::fs::metadata(right).and_then(|m| m.modified()).ok();
                 return match (left_time, right_time) {
                     (Some(l), Some(r)) => l < r,
+                    _ => false,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    // Single argument - true if non-empty string
+    if args.len() == 1 {
+        return !args[0].is_empty();
+    }
+
+    false
+}
+
+/// Evaluate an extended test expression ([[ ]])
+/// Supports && and || operators (instead of -a and -o) and < > for string comparison
+fn evaluate_extended_test_expression(args: &[String]) -> bool {
+    if args.is_empty() {
+        return false;
+    }
+
+    // Handle negation
+    if args[0] == "!" {
+        return !evaluate_extended_test_expression(&args[1..]);
+    }
+
+    // Handle parentheses
+    if args[0] == "(" && args.last().map(|s| s.as_str()) == Some(")") {
+        return evaluate_extended_test_expression(&args[1..args.len()-1]);
+    }
+
+    // Look for binary logical operators (lowest precedence)
+    // || has lowest precedence
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "||" {
+            return evaluate_extended_test_expression(&args[..i]) 
+                || evaluate_extended_test_expression(&args[i+1..]);
+        }
+    }
+
+    // && has higher precedence than ||
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "&&" {
+            return evaluate_extended_test_expression(&args[..i]) 
+                && evaluate_extended_test_expression(&args[i+1..]);
+        }
+    }
+
+    // Handle unary operators (same as [)
+    if args.len() >= 2 {
+        match args[0].as_str() {
+            "-e" => return std::fs::metadata(&args[1]).is_ok(),
+            "-f" => return std::fs::metadata(&args[1]).map(|m| m.is_file()).unwrap_or(false),
+            "-d" => return std::fs::metadata(&args[1]).map(|m| m.is_dir()).unwrap_or(false),
+            "-r" => return std::fs::metadata(&args[1]).is_ok(),
+            "-w" => return std::fs::metadata(&args[1]).is_ok(),
+            "-x" => return std::fs::metadata(&args[1]).is_ok(),
+            "-s" => return std::fs::metadata(&args[1]).map(|m| m.len() > 0).unwrap_or(false),
+            "-z" => return args[1].is_empty(),
+            "-n" => return !args[1].is_empty(),
+            "-L" | "-h" => return std::fs::symlink_metadata(&args[1]).map(|m| m.file_type().is_symlink()).unwrap_or(false),
+            _ => {}
+        }
+    }
+
+    // Handle binary operators
+    if args.len() >= 3 {
+        let left = &args[0];
+        let op = &args[1];
+        let right = &args[2];
+
+        match op.as_str() {
+            "=" | "==" => return left == right,
+            "!=" => return left != right,
+            // Extended: string comparison with < and >
+            "<" => return left < right,
+            ">" => return left > right,
+            // Numeric operators (same as [)
+            "-eq" => return left.parse::<i64>().ok() == right.parse::<i64>().ok(),
+            "-ne" => return left.parse::<i64>().ok() != right.parse::<i64>().ok(),
+            "-lt" => return left.parse::<i64>().unwrap_or(0) < right.parse::<i64>().unwrap_or(0),
+            "-le" => return left.parse::<i64>().unwrap_or(0) <= right.parse::<i64>().unwrap_or(0),
+            "-gt" => return left.parse::<i64>().unwrap_or(0) > right.parse::<i64>().unwrap_or(0),
+            "-ge" => return left.parse::<i64>().unwrap_or(0) >= right.parse::<i64>().unwrap_or(0),
+            "-nt" | "-ot" => {
+                // Same as evaluate_test_expression
+                let left_time = std::fs::metadata(left).and_then(|m| m.modified()).ok();
+                let right_time = std::fs::metadata(right).and_then(|m| m.modified()).ok();
+                return match (left_time, right_time) {
+                    (Some(l), Some(r)) => if op == "-nt" { l > r } else { l < r },
                     _ => false,
                 };
             }
