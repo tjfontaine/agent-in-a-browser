@@ -653,18 +653,9 @@ async fn try_parse_control_flow(cmd_line: &str, env: &mut ShellEnv) -> Option<Sh
     }
     
     // Handle function definition: name() { body } or function name { body }
+    // NOTE: This is the ONLY thing brush-parser can't handle, so this fallback is essential
     if let Some(result) = try_parse_function_def(trimmed, env) {
         return Some(result);
-    }
-    
-    // Handle return builtin (for functions)
-    if trimmed == "return" || trimmed.starts_with("return ") {
-        return Some(handle_return(trimmed, env));
-    }
-    
-    // Handle local builtin (for functions)
-    if trimmed.starts_with("local ") {
-        return Some(handle_local(trimmed, env));
     }
     
     // Handle source/. builtin
@@ -712,46 +703,7 @@ fn try_parse_function_def(cmd_line: &str, env: &mut ShellEnv) -> Option<ShellRes
     None
 }
 
-/// Handle return builtin
-fn handle_return(cmd_line: &str, env: &ShellEnv) -> ShellResult {
-    if !env.in_function {
-        return ShellResult::error("return: can only `return' from a function", 1);
-    }
-    
-    let code = if cmd_line == "return" {
-        env.last_exit_code
-    } else {
-        cmd_line[7..].trim().parse().unwrap_or(0)
-    };
-    
-    ShellResult {
-        stdout: String::new(),
-        stderr: String::new(),
-        code,
-    }
-}
-
-/// Handle local builtin
-fn handle_local(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
-    if !env.in_function {
-        return ShellResult::error("local: can only be used in a function", 1);
-    }
-    
-    let assignments = &cmd_line[6..].trim();
-    
-    for assignment in assignments.split_whitespace() {
-        if let Some(eq_pos) = assignment.find('=') {
-            let name = &assignment[..eq_pos];
-            let value = &assignment[eq_pos + 1..];
-            env.local_vars.insert(name.to_string(), value.to_string());
-        } else {
-            // Just declare the local variable with empty value
-            env.local_vars.insert(assignment.to_string(), String::new());
-        }
-    }
-    
-    ShellResult::success("")
-}
+// NOTE: handle_return and handle_local removed - executor handles these now
 
 /// Execute source/. builtin
 async fn execute_source(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
@@ -1176,28 +1128,10 @@ fn parse_case_construct(cmd_line: &str) -> Result<(String, Vec<(String, String)>
 }
 
 /// Try to parse and execute a variable assignment
+/// NOTE: Builtins (export, readonly, unset, set) are now handled by brush-parser + executor
+/// This only handles simple VAR=value assignments as fallback
 async fn try_parse_assignment(cmd_line: &str, env: &mut ShellEnv) -> Option<ShellResult> {
     let trimmed = cmd_line.trim();
-    
-    // Handle export VAR=value or export VAR
-    if let Some(rest) = trimmed.strip_prefix("export ") {
-        return Some(handle_export(rest.trim(), env));
-    }
-    
-    // Handle readonly VAR=value
-    if let Some(rest) = trimmed.strip_prefix("readonly ") {
-        return Some(handle_readonly(rest.trim(), env));
-    }
-    
-    // Handle unset VAR
-    if let Some(rest) = trimmed.strip_prefix("unset ") {
-        return Some(handle_unset(rest.trim(), env));
-    }
-    
-    // Handle set command for shell options
-    if trimmed.starts_with("set ") || trimmed == "set" {
-        return Some(handle_set(trimmed, env));
-    }
     
     // Check for simple assignment VAR=value (no command)
     if let Some(eq_pos) = trimmed.find('=') {
@@ -1290,128 +1224,8 @@ fn parse_assignment_value(s: &str) -> Option<(String, &str)> {
     let idx = s.len() - remaining.len();
     Some((value, &s[idx..]))
 }
-
-/// Handle export command
-fn handle_export(args: &str, env: &mut ShellEnv) -> ShellResult {
-    if args.is_empty() {
-        // export with no args - list exported variables
-        let mut output = String::new();
-        for (k, v) in &env.env_vars {
-            output.push_str(&format!("export {}={:?}\n", k, v));
-        }
-        return ShellResult::success(output);
-    }
-    
-    for arg in args.split_whitespace() {
-        if let Some(eq_pos) = arg.find('=') {
-            let name = &arg[..eq_pos];
-            let value = &arg[eq_pos + 1..];
-            if let Err(e) = env.export_var(name, Some(value)) {
-                return ShellResult::error(e, 1);
-            }
-        } else {
-            // Export existing variable
-            if let Err(e) = env.export_var(arg, None) {
-                return ShellResult::error(e, 1);
-            }
-        }
-    }
-    
-    ShellResult::success("")
-}
-
-/// Handle readonly command
-fn handle_readonly(args: &str, env: &mut ShellEnv) -> ShellResult {
-    if args.is_empty() {
-        // readonly with no args - list readonly variables
-        let mut output = String::new();
-        for name in &env.readonly {
-            if let Some(val) = env.get_var(name) {
-                output.push_str(&format!("readonly {}={:?}\n", name, val));
-            } else {
-                output.push_str(&format!("readonly {}\n", name));
-            }
-        }
-        return ShellResult::success(output);
-    }
-    
-    for arg in args.split_whitespace() {
-        if let Some(eq_pos) = arg.find('=') {
-            let name = &arg[..eq_pos];
-            let value = &arg[eq_pos + 1..];
-            if let Err(e) = env.set_readonly(name, Some(value)) {
-                return ShellResult::error(e, 1);
-            }
-        } else {
-            if let Err(e) = env.set_readonly(arg, None) {
-                return ShellResult::error(e, 1);
-            }
-        }
-    }
-    
-    ShellResult::success("")
-}
-
-/// Handle unset command
-fn handle_unset(args: &str, env: &mut ShellEnv) -> ShellResult {
-    for name in args.split_whitespace() {
-        if let Err(e) = env.unset_var(name) {
-            return ShellResult::error(e, 1);
-        }
-    }
-    ShellResult::success("")
-}
-
-/// Handle set command
-fn handle_set(cmd_line: &str, env: &mut ShellEnv) -> ShellResult {
-    let args: Vec<&str> = cmd_line.split_whitespace().skip(1).collect();
-    
-    if args.is_empty() {
-        // set with no args - list all variables
-        let mut output = String::new();
-        for (k, v) in &env.variables {
-            output.push_str(&format!("{}={:?}\n", k, v));
-        }
-        return ShellResult::success(output);
-    }
-    
-    let mut i = 0;
-    while i < args.len() {
-        let arg = args[i];
-        
-        if arg == "-o" || arg == "+o" {
-            let enable = arg.starts_with('-');
-            i += 1;
-            if let Some(opt) = args.get(i) {
-                if let Err(e) = env.options.parse_long_option(opt, enable) {
-                    return ShellResult::error(e, 1);
-                }
-            } else {
-                return ShellResult::error("set: option name required", 1);
-            }
-        } else if arg.starts_with('-') || arg.starts_with('+') {
-            // Parse short options like -e, -x, +e, etc.
-            for c in arg.chars().skip(1) {
-                let opt_str = format!("{}{}", if arg.starts_with('-') { '-' } else { '+' }, c);
-                if let Err(e) = env.options.parse_option(&opt_str) {
-                    return ShellResult::error(e, 1);
-                }
-            }
-        } else if arg == "--" {
-            // Set positional parameters
-            env.positional_params = args[i + 1..].iter().map(|s| s.to_string()).collect();
-            break;
-        } else {
-            // Set positional parameters
-            env.positional_params = args[i..].iter().map(|s| s.to_string()).collect();
-            break;
-        }
-        
-        i += 1;
-    }
-    
-    ShellResult::success("")
-}
+// NOTE: handle_export, handle_readonly, handle_unset, handle_set removed
+// These builtins are now handled by brush-parser + executor
 
 /// Split command line by chain operators (&&, ||, ;)
 /// Returns Vec of (segment, preceding_operator)
