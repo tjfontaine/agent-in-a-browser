@@ -36,7 +36,7 @@ describe('System Prompt', () => {
 
     it('should mention shell pipes and chaining', () => {
         expect(SYSTEM_PROMPT).toContain('Pipes');
-        expect(SYSTEM_PROMPT).toContain('chain operators');
+        expect(SYSTEM_PROMPT).toContain('Chain operators');
     });
 
     it('should document task_write tool', () => {
