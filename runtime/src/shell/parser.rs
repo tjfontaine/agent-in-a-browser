@@ -101,6 +101,128 @@ pub fn parse_command(input: &str) -> Result<Vec<ParsedCommand>, String> {
     }
 }
 
+/// Convert a brush-parser Word to a string, extracting text content and stripping quotes
+/// Uses brush_parser::word::parse() to properly handle quoting
+fn word_to_string(word: &ast::Word) -> String {
+    use brush_parser::word::{self, WordPiece};
+    
+    let options = ParserOptions::default();
+    
+    // Parse the word string into pieces
+    match word::parse(&word.value, &options) {
+        Ok(pieces) => {
+            let mut result = String::new();
+            for piece_with_source in pieces {
+                result.push_str(&wordpiece_to_string(&piece_with_source.piece));
+            }
+            result
+        }
+        Err(_) => {
+            // Fallback to raw value if parsing fails
+            word.value.clone()
+        }
+    }
+}
+
+/// Convert a single WordPiece to string
+fn wordpiece_to_string(piece: &brush_parser::word::WordPiece) -> String {
+    use brush_parser::word::WordPiece;
+    
+    match piece {
+        WordPiece::Text(s) => s.clone(),
+        WordPiece::SingleQuotedText(s) => s.clone(),  // Already unquoted by parser
+        WordPiece::AnsiCQuotedText(s) => s.clone(),
+        WordPiece::DoubleQuotedSequence(seq) => {
+            seq.iter().map(|p| wordpiece_to_string(&p.piece)).collect()
+        }
+        WordPiece::GettextDoubleQuotedSequence(seq) => {
+            seq.iter().map(|p| wordpiece_to_string(&p.piece)).collect()
+        }
+        WordPiece::TildePrefix(s) => format!("~{}", s),
+        WordPiece::CommandSubstitution(s) => format!("$({})", s),
+        WordPiece::BackquotedCommandSubstitution(s) => format!("$({})", s),
+        WordPiece::EscapeSequence(s) => {
+            // Strip the backslash from escape sequences
+            if s.starts_with('\\') && s.len() >= 2 {
+                s[1..].to_string()
+            } else {
+                s.clone()
+            }
+        }
+        WordPiece::ParameterExpansion(param) => {
+            // Render parameter expansion for later expansion by our shell
+            format_parameter_expansion(param)
+        }
+        WordPiece::ArithmeticExpression(expr) => format!("$(({}))",expr.value),
+    }
+}
+
+/// Format a parameter expansion as a shell-compatible string
+fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> String {
+    use brush_parser::word::{ParameterExpr, Parameter};
+    
+    match expr {
+        ParameterExpr::Parameter { parameter, indirect } => {
+            if *indirect {
+                let param_str = format_parameter(parameter);
+                format!("${{!{}}}", param_str)
+            } else {
+                // For simple named parameters, use $VAR format
+                // For complex ones, use ${VAR} format
+                match parameter {
+                    Parameter::Named(name) => format!("${}", name),
+                    Parameter::Positional(n) => format!("${}", n),
+                    _ => {
+                        let param_str = format_parameter(parameter);
+                        format!("${{{}}}", param_str)
+                    }
+                }
+            }
+        }
+        // For other complex expressions, just render the base parameter
+        _ => {
+            // Use debug format as fallback for complex expressions
+            format!("${{{:?}}}", expr)
+        }
+    }
+}
+
+/// Format a parameter reference
+fn format_parameter(param: &brush_parser::word::Parameter) -> String {
+    use brush_parser::word::Parameter;
+    
+    match param {
+        Parameter::Positional(n) => n.to_string(),
+        Parameter::Special(sp) => format_special_parameter(sp),
+        Parameter::Named(name) => name.clone(),
+        Parameter::NamedWithIndex { name, index } => format!("{}[{}]", name, index),
+        Parameter::NamedWithAllIndices { name, concatenate } => {
+            if *concatenate {
+                format!("{}[*]", name)
+            } else {
+                format!("{}[@]", name)
+            }
+        }
+    }
+}
+
+/// Format a special parameter
+fn format_special_parameter(sp: &brush_parser::word::SpecialParameter) -> String {
+    use brush_parser::word::SpecialParameter;
+    
+    match sp {
+        SpecialParameter::AllPositionalParameters { concatenate } => {
+            if *concatenate { "*".to_string() } else { "@".to_string() }
+        }
+        SpecialParameter::PositionalParameterCount => "#".to_string(),
+        SpecialParameter::LastExitStatus => "?".to_string(),
+        SpecialParameter::CurrentOptionFlags => "-".to_string(),
+        SpecialParameter::ProcessId => "$".to_string(),
+        SpecialParameter::LastBackgroundProcessId => "!".to_string(),
+        SpecialParameter::ShellName => "0".to_string(),
+    }
+}
+
 /// Convert a CompoundList to ParsedCommands.
 fn convert_compound_list(list: ast::CompoundList) -> Vec<ParsedCommand> {
     list.0.into_iter().filter_map(convert_compound_list_item).collect()
@@ -222,9 +344,9 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
                 ast::CommandPrefixOrSuffixItem::Word(w) => {
                     // Word in prefix treated as part of name/args
                     if name.is_empty() {
-                        name = format!("{}", w);
+                        name = word_to_string(&w);
                     } else {
-                        args.push(format!("{}", w));
+                        args.push(word_to_string(&w));
                     }
                 }
                 ast::CommandPrefixOrSuffixItem::ProcessSubstitution(_, _) => {
@@ -236,7 +358,7 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
     
     // Process command word (name)
     if let Some(word) = cmd.word_or_name {
-        name = format!("{}", word);
+        name = word_to_string(&word);
     }
     
     // Process suffix (args and redirects after command)
@@ -253,7 +375,7 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
                     }
                 }
                 ast::CommandPrefixOrSuffixItem::Word(w) => {
-                    args.push(format!("{}", w));
+                    args.push(word_to_string(&w));
                 }
                 ast::CommandPrefixOrSuffixItem::ProcessSubstitution(_, _) => {
                     // Process substitution in suffix - skip for now
@@ -297,7 +419,7 @@ fn convert_compound_command(cmd: ast::CompoundCommand) -> Option<ParsedCommand> 
         }
         ast::CompoundCommand::ForClause(for_clause) => {
             let words = for_clause.values
-                .map(|ws| ws.into_iter().map(|w| format!("{}", w)).collect())
+                .map(|ws| ws.into_iter().map(|w| word_to_string(&w)).collect())
                 .unwrap_or_default();
             let body = convert_do_group(&for_clause.body);
             Some(ParsedCommand::For {
@@ -409,12 +531,12 @@ fn convert_io_redirect(redir: ast::IoRedirect) -> Option<ParsedRedirect> {
         ast::IoRedirect::File(fd, kind, target) => {
             let fd_num = fd.map(|f| f as u32);
             let target_str = match target {
-                ast::IoFileRedirectTarget::Filename(w) => format!("{}", w),
+                ast::IoFileRedirectTarget::Filename(w) => word_to_string(&w),
                 ast::IoFileRedirectTarget::Fd(n) => n.to_string(),
                 ast::IoFileRedirectTarget::ProcessSubstitution(kind, cmd) => {
                     format!("{:?}({})", kind, cmd)
                 }
-                ast::IoFileRedirectTarget::Duplicate(w) => format!("{}", w),
+                ast::IoFileRedirectTarget::Duplicate(w) => word_to_string(&w),
             };
             
             match kind {
