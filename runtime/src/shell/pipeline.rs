@@ -990,6 +990,44 @@ mod tests {
         assert_eq!(result.code, 1);
     }
 
+    #[test]
+    fn test_break_in_loop() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline(
+            "for x in 1 2 3 4 5; do echo $x; if [ $x = 3 ]; then break; fi; done",
+            &mut env
+        ));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("1"));
+        assert!(result.stdout.contains("2"));
+        assert!(result.stdout.contains("3"));
+        assert!(!result.stdout.contains("4"));
+        assert!(!result.stdout.contains("5"));
+    }
+
+    #[test]
+    fn test_continue_in_loop() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline(
+            "for x in 1 2 3 4 5; do if [ $x = 3 ]; then continue; fi; echo $x; done",
+            &mut env
+        ));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("1"));
+        assert!(result.stdout.contains("2"));
+        assert!(!result.stdout.contains("3")); // skipped by continue
+        assert!(result.stdout.contains("4"));
+        assert!(result.stdout.contains("5"));
+    }
+
+    #[test]
+    fn test_break_outside_loop() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("break", &mut env));
+        assert_eq!(result.code, 1);
+        assert!(result.stderr.contains("only meaningful in a loop"));
+    }
+
     // ========================================================================
     // New Commands Integration
     // ========================================================================

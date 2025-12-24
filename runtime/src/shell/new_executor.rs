@@ -337,6 +337,33 @@ async fn execute_simple(
             return ShellResult { code, stdout: String::new(), stderr: String::new() };
         }
         
+        // Loop control builtins
+        "break" => {
+            if env.loop_depth == 0 {
+                return ShellResult::error("break: only meaningful in a loop", 1);
+            }
+            // Parse optional level (default 1)
+            let level: usize = expanded_args.first()
+                .and_then(|a| a.parse().ok())
+                .unwrap_or(1)
+                .max(1);  // At least 1
+            env.break_level = level.min(env.loop_depth);  // Cap at current depth
+            return ShellResult::success("");
+        }
+        
+        "continue" => {
+            if env.loop_depth == 0 {
+                return ShellResult::error("continue: only meaningful in a loop", 1);
+            }
+            // Parse optional level (default 1)
+            let level: usize = expanded_args.first()
+                .and_then(|a| a.parse().ok())
+                .unwrap_or(1)
+                .max(1);  // At least 1
+            env.continue_level = level.min(env.loop_depth);  // Cap at current depth
+            return ShellResult::success("");
+        }
+        
         // Directory builtins
         "cd" => return handle_cd(&expanded_args, env),
         "pushd" => return handle_pushd(&expanded_args, env),
@@ -667,7 +694,10 @@ async fn execute_for(
         }
     }
     
-    for word in expanded_words {
+    // Enter loop scope
+    env.loop_depth += 1;
+    
+    'outer: for word in expanded_words {
         let _ = env.set_var(var, &word);
         
         for cmd in body {
@@ -675,8 +705,37 @@ async fn execute_for(
             combined_stdout.push_str(&result.stdout);
             combined_stderr.push_str(&result.stderr);
             last_code = result.code;
+            
+            // Check for break
+            if env.break_level > 0 {
+                env.break_level -= 1;
+                if env.break_level == 0 {
+                    // Break this loop
+                    break 'outer;
+                } else {
+                    // Propagate break to outer loop
+                    env.loop_depth -= 1;
+                    return ShellResult { stdout: combined_stdout, stderr: combined_stderr, code: last_code };
+                }
+            }
+            
+            // Check for continue
+            if env.continue_level > 0 {
+                env.continue_level -= 1;
+                if env.continue_level == 0 {
+                    // Continue this loop
+                    continue 'outer;
+                } else {
+                    // Propagate continue to outer loop
+                    env.loop_depth -= 1;
+                    return ShellResult { stdout: combined_stdout, stderr: combined_stderr, code: last_code };
+                }
+            }
         }
     }
+    
+    // Exit loop scope
+    env.loop_depth -= 1;
     
     ShellResult {
         stdout: combined_stdout,
@@ -696,7 +755,10 @@ async fn execute_while(
     let mut combined_stderr = String::new();
     let mut last_code = 0;
     
-    loop {
+    // Enter loop scope
+    env.loop_depth += 1;
+    
+    'outer: loop {
         // Evaluate condition
         let mut cond_result = ShellResult::success("");
         for cmd in condition {
@@ -713,8 +775,37 @@ async fn execute_while(
             combined_stdout.push_str(&result.stdout);
             combined_stderr.push_str(&result.stderr);
             last_code = result.code;
+            
+            // Check for break
+            if env.break_level > 0 {
+                env.break_level -= 1;
+                if env.break_level == 0 {
+                    // Break this loop
+                    break 'outer;
+                } else {
+                    // Propagate break to outer loop
+                    env.loop_depth -= 1;
+                    return ShellResult { stdout: combined_stdout, stderr: combined_stderr, code: last_code };
+                }
+            }
+            
+            // Check for continue
+            if env.continue_level > 0 {
+                env.continue_level -= 1;
+                if env.continue_level == 0 {
+                    // Continue this loop
+                    continue 'outer;
+                } else {
+                    // Propagate continue to outer loop
+                    env.loop_depth -= 1;
+                    return ShellResult { stdout: combined_stdout, stderr: combined_stderr, code: last_code };
+                }
+            }
         }
     }
+    
+    // Exit loop scope
+    env.loop_depth -= 1;
     
     ShellResult {
         stdout: combined_stdout,

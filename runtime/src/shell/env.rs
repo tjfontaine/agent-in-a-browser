@@ -460,6 +460,14 @@ pub struct ShellEnv {
     pub functions: HashMap<String, String>,
     /// Are we in a function scope?
     pub in_function: bool,
+    
+    // Loop control
+    /// Current loop nesting depth (0 = not in loop)
+    pub loop_depth: usize,
+    /// Break level requested (0 = no break, 1 = break innermost, etc.)
+    pub break_level: usize,
+    /// Continue level requested (0 = no continue, 1 = continue innermost, etc.)
+    pub continue_level: usize,
 
     // Legacy compatibility fields (to avoid breaking existing code)
     /// Alias for exported variables lookup
@@ -489,6 +497,10 @@ impl ShellEnv {
             traps: HashMap::new(),
             functions: HashMap::new(),
             in_function: false,
+            // Loop control
+            loop_depth: 0,
+            break_level: 0,
+            continue_level: 0,
             // Legacy compatibility
             env_vars: HashMap::new(),
             local_vars: HashMap::new(),
