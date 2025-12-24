@@ -289,6 +289,11 @@ async fn execute_simple(
             return handle_set_builtin(&expanded_args, env);
         }
         
+        // Shopt - shell options (bash extension)
+        "shopt" => {
+            return handle_shopt_builtin(&expanded_args, env);
+        }
+        
         // Readonly
         "readonly" => {
             for arg in &expanded_args {
@@ -491,6 +496,116 @@ fn handle_set_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
         i += 1;
     }
     ShellResult::success("")
+}
+
+/// Handle shopt builtin for bash-style shell options
+fn handle_shopt_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
+    // Parse flags: -s (set), -u (unset), -p (print), -q (query)
+    let mut set_mode = false;
+    let mut unset_mode = false;
+    let mut print_mode = false;
+    let mut query_mode = false;
+    let mut options_to_process: Vec<&str> = Vec::new();
+    
+    for arg in args {
+        if arg == "-s" {
+            set_mode = true;
+        } else if arg == "-u" {
+            unset_mode = true;
+        } else if arg == "-p" {
+            print_mode = true;
+        } else if arg == "-q" {
+            query_mode = true;
+        } else if !arg.starts_with('-') {
+            options_to_process.push(arg);
+        }
+    }
+    
+    // If no options specified, list all options
+    if options_to_process.is_empty() && !set_mode && !unset_mode {
+        let output = format_shopt_options(&env.options, print_mode);
+        return ShellResult::success(output);
+    }
+    
+    // Process each option
+    let mut all_set = true;
+    for opt in &options_to_process {
+        if set_mode {
+            if let Err(e) = env.options.parse_shopt(opt, true) {
+                return ShellResult::error(e, 1);
+            }
+        } else if unset_mode {
+            if let Err(e) = env.options.parse_shopt(opt, false) {
+                return ShellResult::error(e, 1);
+            }
+        } else if query_mode {
+            // Query mode: return 0 if all options are set, 1 otherwise
+            if !is_shopt_set(&env.options, opt) {
+                all_set = false;
+            }
+        } else {
+            // Print mode for specific options
+            let output = format_single_shopt(&env.options, opt, print_mode);
+            return ShellResult::success(output);
+        }
+    }
+    
+    if query_mode {
+        return ShellResult { 
+            code: if all_set { 0 } else { 1 },
+            stdout: String::new(),
+            stderr: String::new(),
+        };
+    }
+    
+    ShellResult::success("")
+}
+
+/// Format all shopt options for display
+fn format_shopt_options(opts: &super::env::ShellOptions, print_format: bool) -> String {
+    let options = [
+        ("extglob", opts.extglob),
+        ("nullglob", opts.nullglob),
+        ("dotglob", opts.dotglob),
+        ("nocasematch", opts.nocasematch),
+        ("nocaseglob", opts.nocaseglob),
+        ("globstar", opts.globstar),
+        ("expand_aliases", opts.expand_aliases),
+    ];
+    
+    let mut output = String::new();
+    for (name, value) in options {
+        if print_format {
+            output.push_str(&format!("shopt {} {}\n", if value { "-s" } else { "-u" }, name));
+        } else {
+            output.push_str(&format!("{}\t{}\n", name, if value { "on" } else { "off" }));
+        }
+    }
+    output
+}
+
+/// Format a single shopt option
+fn format_single_shopt(opts: &super::env::ShellOptions, name: &str, print_format: bool) -> String {
+    let value = is_shopt_set(opts, name);
+    if print_format {
+        format!("shopt {} {}\n", if value { "-s" } else { "-u" }, name)
+    } else {
+        format!("{}\t{}\n", name, if value { "on" } else { "off" })
+    }
+}
+
+/// Check if a shopt option is set
+fn is_shopt_set(opts: &super::env::ShellOptions, name: &str) -> bool {
+    match name {
+        "extglob" => opts.extglob,
+        "nullglob" => opts.nullglob,
+        "dotglob" => opts.dotglob,
+        "nocasematch" => opts.nocasematch,
+        "nocaseglob" => opts.nocaseglob,
+        "globstar" => opts.globstar,
+        "expand_aliases" => opts.expand_aliases,
+        _ => false,
+    }
 }
 
 /// Define a function

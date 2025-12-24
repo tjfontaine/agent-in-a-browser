@@ -892,6 +892,50 @@ mod tests {
         assert!(env.options.pipefail);
     }
 
+    #[test]
+    fn test_shopt_set() {
+        let mut env = ShellEnv::new();
+        assert!(!env.options.extglob);
+        
+        let result = futures_lite::future::block_on(run_pipeline("shopt -s extglob", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(env.options.extglob);
+    }
+
+    #[test]
+    fn test_shopt_unset() {
+        let mut env = ShellEnv::new();
+        env.options.extglob = true;
+        
+        let result = futures_lite::future::block_on(run_pipeline("shopt -u extglob", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(!env.options.extglob);
+    }
+
+    #[test]
+    fn test_shopt_query() {
+        let mut env = ShellEnv::new();
+        env.options.extglob = true;
+        
+        // Querying a set option returns 0
+        let result = futures_lite::future::block_on(run_pipeline("shopt -q extglob", &mut env));
+        assert_eq!(result.code, 0);
+        
+        // Querying an unset option returns 1
+        env.options.extglob = false;
+        let result = futures_lite::future::block_on(run_pipeline("shopt -q extglob", &mut env));
+        assert_eq!(result.code, 1);
+    }
+
+    #[test]
+    fn test_shopt_list() {
+        let mut env = ShellEnv::new();
+        let result = futures_lite::future::block_on(run_pipeline("shopt", &mut env));
+        assert_eq!(result.code, 0);
+        assert!(result.stdout.contains("extglob"));
+        assert!(result.stdout.contains("nullglob"));
+    }
+
     // ========================================================================
     // Brace Expansion Tests in Pipeline
     // ========================================================================

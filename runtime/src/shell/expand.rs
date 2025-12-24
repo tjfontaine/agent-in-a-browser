@@ -229,14 +229,68 @@ fn expand_braced_variable(chars: &mut std::iter::Peekable<std::str::Chars>, env:
 /// Parse and expand the content inside ${...}
 fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, String> {
     // Check for special forms first
+    
+    // ${#var} - length of variable
     if content.starts_with('#') && content.len() > 1 {
-        // ${#var} - length of variable
         let name = &content[1..];
         let value = env.get_var(name).cloned().unwrap_or_default();
         return Ok(value.len().to_string());
     }
+    
+    // ${!var} - indirect expansion (value of variable whose name is in var)
+    if content.starts_with('!') && content.len() > 1 {
+        let indirect_name = &content[1..];
+        // First get the name from the variable
+        if let Some(actual_name) = env.get_var(indirect_name) {
+            // Then get the value of that variable
+            return Ok(env.get_var(actual_name).cloned().unwrap_or_default());
+        }
+        return Ok(String::new());
+    }
+    
+    // ${var@op} - transformation operators
+    if let Some(at_pos) = content.rfind('@') {
+        let name = &content[..at_pos];
+        let transform = &content[at_pos + 1..];
+        if !name.is_empty() && transform.len() == 1 {
+            let value = env.get_var(name).cloned().unwrap_or_default();
+            return apply_transform_operator(&value, transform);
+        }
+    }
+    
+    // ${var:offset} or ${var:offset:length} - substring expansion
+    // Need to check this BEFORE the default/substitute operators that start with :
+    // BUT we must not confuse :- := :+ :? which are default value operators
+    if let Some(colon_pos) = content.find(':') {
+        let name = &content[..colon_pos];
+        let rest = &content[colon_pos + 1..];
+        
+        // Check if this is a default value operator (starts with - = + ?)
+        // These are NOT substring operations
+        let first_char = rest.chars().next();
+        if let Some(c) = first_char {
+            // If it's a default value operator character, fall through to operator handling
+            // Substring expansion starts with a digit, or space followed by negative number
+            if c.is_ascii_digit() {
+                // This is substring expansion ${var:offset} or ${var:offset:length}
+                let value = env.get_var(name).cloned().unwrap_or_default();
+                return apply_substring_expansion(&value, rest);
+            } else if c == ' ' {
+                // Could be ${var: -5} with space before negative
+                let trimmed = rest.trim_start();
+                if trimmed.starts_with('-') && trimmed.len() > 1 {
+                    let second = trimmed.chars().nth(1);
+                    if second.map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        let value = env.get_var(name).cloned().unwrap_or_default();
+                        return apply_substring_expansion(&value, rest);
+                    }
+                }
+            }
+            // Otherwise fall through to operator handling (:-default, etc.)
+        }
+    }
 
-    // Find operator position
+    // Find operator position for default/substitute operations
     let ops = [":-", ":=", ":+", ":?", "-", "=", "+", "?", 
                "##", "#", "%%", "%", "//", "/", "^^", "^", ",,", ","];
     
@@ -258,6 +312,110 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
                 Ok(String::new())
             }
         }
+    }
+}
+
+/// Apply substring expansion ${var:offset} or ${var:offset:length}
+fn apply_substring_expansion(value: &str, spec: &str) -> Result<String, String> {
+    let parts: Vec<&str> = spec.splitn(2, ':').collect();
+    let offset_str = parts[0].trim();
+    
+    // Parse offset (can be negative)
+    let offset: i64 = offset_str.parse()
+        .map_err(|_| format!("bad substring offset: {}", offset_str))?;
+    
+    let len = value.len() as i64;
+    
+    // Calculate actual start position
+    let start = if offset < 0 {
+        // Negative offset counts from end
+        (len + offset).max(0) as usize
+    } else {
+        (offset as usize).min(value.len())
+    };
+    
+    // Get length if specified
+    if parts.len() > 1 {
+        let length_str = parts[1].trim();
+        let length: i64 = length_str.parse()
+            .map_err(|_| format!("bad substring length: {}", length_str))?;
+        
+        if length < 0 {
+            // Negative length means end position from end
+            let end = (len + length).max(start as i64) as usize;
+            Ok(value[start..end].to_string())
+        } else {
+            let end = (start + length as usize).min(value.len());
+            Ok(value[start..end].to_string())
+        }
+    } else {
+        // No length - take rest of string
+        Ok(value[start..].to_string())
+    }
+}
+
+/// Apply transformation operator ${var@op}
+fn apply_transform_operator(value: &str, op: &str) -> Result<String, String> {
+    match op {
+        "Q" => {
+            // Quote value for reuse as input
+            Ok(format!("'{}'", value.replace('\'', "'\\''")))
+        }
+        "E" => {
+            // Expand escape sequences
+            let mut result = String::new();
+            let mut chars = value.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    match chars.next() {
+                        Some('n') => result.push('\n'),
+                        Some('t') => result.push('\t'),
+                        Some('r') => result.push('\r'),
+                        Some('\\') => result.push('\\'),
+                        Some('\'') => result.push('\''),
+                        Some('"') => result.push('"'),
+                        Some(other) => {
+                            result.push('\\');
+                            result.push(other);
+                        }
+                        None => result.push('\\'),
+                    }
+                } else {
+                    result.push(c);
+                }
+            }
+            Ok(result)
+        }
+        "P" => {
+            // Expand as prompt string (simplified - just return value)
+            Ok(value.to_string())
+        }
+        "A" => {
+            // Assignment format - return as assignment statement
+            // We don't have the variable name here, so just return empty
+            Ok(String::new())
+        }
+        "a" => {
+            // Attribute flags - we'd need the variable info
+            Ok(String::new())
+        }
+        "U" => {
+            // Uppercase
+            Ok(value.to_uppercase())
+        }
+        "u" => {
+            // Uppercase first character
+            let mut chars = value.chars();
+            match chars.next() {
+                Some(c) => Ok(c.to_uppercase().chain(chars).collect()),
+                None => Ok(String::new()),
+            }
+        }
+        "L" => {
+            // Lowercase
+            Ok(value.to_lowercase())
+        }
+        _ => Ok(value.to_string()),
     }
 }
 
@@ -1341,6 +1499,108 @@ mod tests {
         let result = expand_string("$HOME", &env, false).unwrap();
         // Special vars are checked first, so we get "/" not "/custom/home"
         assert_eq!(result, "/");
+    }
+
+    // ========================================================================
+    // Substring Expansion Tests
+    // ========================================================================
+
+    #[test]
+    fn test_substring_from_offset() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello world");
+        let result = expand_string("${STR:6}", &env, false).unwrap();
+        assert_eq!(result, "world");
+    }
+
+    #[test]
+    fn test_substring_with_length() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello world");
+        let result = expand_string("${STR:0:5}", &env, false).unwrap();
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_substring_negative_offset() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello world");
+        // Negative offset counts from end
+        let result = expand_string("${STR: -5}", &env, false).unwrap();
+        assert_eq!(result, "world");
+    }
+
+    #[test]
+    fn test_substring_middle() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello world");
+        let result = expand_string("${STR:3:5}", &env, false).unwrap();
+        assert_eq!(result, "lo wo");
+    }
+
+    // ========================================================================
+    // Indirect Expansion Tests
+    // ========================================================================
+
+    #[test]
+    fn test_indirect_expansion() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("ref", "target");
+        let _ = env.set_var("target", "value");
+        let result = expand_string("${!ref}", &env, false).unwrap();
+        assert_eq!(result, "value");
+    }
+
+    #[test]
+    fn test_indirect_expansion_unset() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("ref", "nonexistent");
+        let result = expand_string("${!ref}", &env, false).unwrap();
+        assert_eq!(result, "");
+    }
+
+    // ========================================================================
+    // Transformation Operator Tests
+    // ========================================================================
+
+    #[test]
+    fn test_transform_quote() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello");
+        let result = expand_string("${STR@Q}", &env, false).unwrap();
+        assert_eq!(result, "'hello'");
+    }
+
+    #[test]
+    fn test_transform_uppercase() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello");
+        let result = expand_string("${STR@U}", &env, false).unwrap();
+        assert_eq!(result, "HELLO");
+    }
+
+    #[test]
+    fn test_transform_lowercase() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "HELLO");
+        let result = expand_string("${STR@L}", &env, false).unwrap();
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_transform_capitalize() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello");
+        let result = expand_string("${STR@u}", &env, false).unwrap();
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_transform_escape() {
+        let mut env = ShellEnv::new();
+        let _ = env.set_var("STR", "hello\\nworld");
+        let result = expand_string("${STR@E}", &env, false).unwrap();
+        assert_eq!(result, "hello\nworld");
     }
 }
 
