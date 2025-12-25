@@ -32,6 +32,10 @@ interface ProviderState {
     backendProxyURL: string | null;
 
     // Legacy listeners for backward compatibility
+    // Cache getter for discovered models
+    modelCacheGetter: ((providerId: string) => ModelInfo[]) | null;
+    setModelCacheGetter: (getter: (providerId: string) => ModelInfo[]) => void;
+
     legacyListeners: Set<ChangeListener>;
 
     // Actions
@@ -87,6 +91,12 @@ export const useProviderStore = create<ProviderState>()(
         baseURLOverrides: new Map(),
         backendProxyURL: null,
         legacyListeners: new Set(),
+        modelCacheGetter: null,
+
+        // Cache getter
+        setModelCacheGetter: (getter) => {
+            set({ modelCacheGetter: getter });
+        },
 
         // Provider selection
         setCurrentProvider: (idOrAlias: string) => {
@@ -94,9 +104,15 @@ export const useProviderStore = create<ProviderState>()(
             if (!provider) return false;
 
             if (get().currentProviderId !== provider.id) {
+                // When switching providers, try to set a valid model
+                const p = provider;
+                const getter = get().modelCacheGetter;
+                const cached = getter ? getter(p.id) : [];
+                const allModels = [...p.models, ...cached];
+
                 set({
-                    currentProviderId: provider.id,
-                    currentModelId: provider.models[0]?.id || '',
+                    currentProviderId: p.id,
+                    currentModelId: allModels.length > 0 ? allModels[0].id : '',
                 });
                 get()._notifyLegacyListeners();
             }
@@ -120,13 +136,18 @@ export const useProviderStore = create<ProviderState>()(
         },
 
         addCustomProvider: (config) => {
+            // Ensure at least one model exists
+            const models = config.models && config.models.length > 0 ? config.models : [
+                { id: 'default', name: 'Default Model', description: 'Default model for custom provider', aliases: [] }
+            ];
+
             const provider: ProviderInfo = {
                 id: config.id,
                 name: config.name,
                 type: 'openai',
                 baseURL: config.baseURL,
                 requiresKey: true,
-                models: config.models || [],
+                models: models,
                 aliases: [],
             };
             set(state => ({
@@ -179,7 +200,11 @@ export const useProviderStore = create<ProviderState>()(
         // Base URL
         setProviderBaseURL: (providerId, baseURL) => {
             const overrides = new Map(get().baseURLOverrides);
-            overrides.set(providerId, baseURL.replace(/\/+$/, ''));
+            if (!baseURL) {
+                overrides.delete(providerId);
+            } else {
+                overrides.set(providerId, baseURL.replace(/\/+$/, ''));
+            }
             set({ baseURLOverrides: overrides });
             get()._notifyLegacyListeners();
         },
@@ -218,7 +243,21 @@ export const useProviderStore = create<ProviderState>()(
         },
 
         getModelsForCurrentProvider: () => {
-            return get().getCurrentProvider().models;
+            const provider = get().getCurrentProvider();
+            // Start with static models
+            const models = [...provider.models];
+
+            // Add dynamically discovered models if getter is available
+            if (get().modelCacheGetter) {
+                const cached = get().modelCacheGetter!(provider.id);
+                // Merge, avoiding duplicates by ID
+                for (const m of cached) {
+                    if (!models.some(existing => existing.id === m.id)) {
+                        models.push(m);
+                    }
+                }
+            }
+            return models;
         },
 
         resolveModelId: (idOrAlias) => {
@@ -305,6 +344,7 @@ export const setBackendProxyURL = (url: string | null) => useProviderStore.getSt
 export const getBackendProxyURL = () => useProviderStore.getState().getBackendProxyURL();
 export const isBackendProxyEnabled = () => useProviderStore.getState().isBackendProxyEnabled();
 export const subscribeToChanges = (listener: ChangeListener) => useProviderStore.getState().subscribeToChanges(listener);
+export const setModelCacheGetter = (getter: (providerId: string) => ModelInfo[]) => useProviderStore.getState().setModelCacheGetter(getter);
 
 // Effective base URL (override > default)
 export const getEffectiveBaseURL = (providerId: string): string | undefined => {
@@ -321,6 +361,6 @@ export const getConfigSummary = () => {
         provider,
         model: getCurrentModelInfo(),
         hasKey: hasApiKey(provider.id),
-        usingProxy: isBackendProxyEnabled(),
+        usingProxy: isBackendProxyEnabled() && (provider.id === 'anthropic' || provider.type === 'anthropic'),
     };
 };

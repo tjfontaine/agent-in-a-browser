@@ -47,6 +47,7 @@ export {
     subscribeToChanges,
     getEffectiveBaseURL,
     getConfigSummary,
+    setModelCacheGetter,
 } from './provider-store';
 
 // Legacy secrets store (deprecated - use provider-store instead)
