@@ -33,6 +33,7 @@
         "buffer": "^6.0.3",
         "ink": "^6.5.1",
         "ink-web": "^0.1.11",
+        "json-schema-to-zod": "^2.7.0",
         "react": "^19.2.3",
         "react-compiler-runtime": "^19.0.0-beta-af1b7da-20250417",
         "react-dom": "^19.2.3",

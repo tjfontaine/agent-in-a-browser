@@ -7,24 +7,11 @@
  * Secrets are stored in memory only (lost on refresh for security).
  */
 
-// ============ Types ============
+// Import types from config module
+import type { ModelInfo, ProviderInfo, ChangeListener } from './config/types';
 
-export interface ModelInfo {
-    id: string;
-    name: string;
-    description: string;
-    aliases: string[];
-}
-
-export interface ProviderInfo {
-    id: string;
-    name: string;
-    type: 'anthropic' | 'openai';
-    baseURL?: string;  // Optional custom endpoint
-    requiresKey: boolean;
-    models: ModelInfo[];
-    aliases: string[];
-}
+// Re-export types for backward compatibility
+export type { ModelInfo, ProviderInfo, ChangeListener } from './config/types';
 
 // ============ Built-in Providers ============
 
@@ -136,7 +123,6 @@ const secrets: Map<string, string> = new Map();
 let backendProxyURL: string | null = null;
 
 // Listeners for changes
-type ChangeListener = () => void;
 const listeners: Set<ChangeListener> = new Set();
 
 // ============ Notify ============
