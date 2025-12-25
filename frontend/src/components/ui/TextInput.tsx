@@ -52,6 +52,10 @@ export const TextInput = ({
     const [cursorVisible, setCursorVisible] = useState(true);
     const savedInputRef = useRef('');  // Save input when browsing history
 
+    // Refs for immediate access in callbacks (prevents stale closure bugs)
+    const cursorRef = useRef(cursorPosition);
+    cursorRef.current = cursorPosition;  // Keep in sync
+
     // Reverse-i-search state
     const [isSearching, setIsSearching] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -70,32 +74,64 @@ export const TextInput = ({
     const value = controlledValue !== undefined ? controlledValue : internalValue;
 
     const setValue = useCallback((newValue: string, newCursor?: number) => {
+        const cursor = newCursor !== undefined ? newCursor : newValue.length;
+        cursorRef.current = cursor;  // Update ref immediately for next keystroke
         if (controlledValue === undefined) {
             setInternalValue(newValue);
         }
         onChange?.(newValue);
-        setCursorPosition(newCursor !== undefined ? newCursor : newValue.length);
+        setCursorPosition(cursor);
+    }, [controlledValue, onChange]);
+
+    // Insert character at cursor using functional setState to avoid stale closures
+    const insertAtCursor = useCallback((char: string) => {
+        const cursor = cursorRef.current;
+        if (controlledValue === undefined) {
+            setInternalValue(prev => {
+                const newValue = prev.slice(0, cursor) + char + prev.slice(cursor);
+                cursorRef.current = cursor + char.length;  // Update ref immediately
+                onChange?.(newValue);
+                return newValue;
+            });
+        } else {
+            // Controlled mode - compute from controlled value
+            const newValue = controlledValue.slice(0, cursor) + char + controlledValue.slice(cursor);
+            cursorRef.current = cursor + char.length;
+            onChange?.(newValue);
+        }
+        setCursorPosition(cursor + char.length);
+    }, [controlledValue, onChange]);
+
+    // Delete character before cursor using functional setState
+    const deleteAtCursor = useCallback(() => {
+        const cursor = cursorRef.current;
+        if (cursor <= 0) return;
+        if (controlledValue === undefined) {
+            setInternalValue(prev => {
+                const newValue = prev.slice(0, cursor - 1) + prev.slice(cursor);
+                cursorRef.current = cursor - 1;
+                onChange?.(newValue);
+                return newValue;
+            });
+        } else {
+            const newValue = controlledValue.slice(0, cursor - 1) + controlledValue.slice(cursor);
+            cursorRef.current = cursor - 1;
+            onChange?.(newValue);
+        }
+        setCursorPosition(cursor - 1);
     }, [controlledValue, onChange]);
 
     // Handle paste events from browser AND keyboard (Ctrl+V/Cmd+V)
     // xterm.js intercepts keyboard events before they trigger native paste,
     // so we need to handle both the paste event and explicit Ctrl+V/Cmd+V
+    // Handle paste events - use insertAtCursor which reads from refs
     useEffect(() => {
         if (!focus) return;
-
-        const insertText = (text: string) => {
-            // Insert at cursor position
-            const before = value.slice(0, cursorPosition);
-            const after = value.slice(cursorPosition);
-            const newValue = before + text + after;
-            const newCursor = cursorPosition + text.length;
-            setValue(newValue, newCursor);
-        };
 
         const handlePaste = (e: ClipboardEvent) => {
             const pastedText = e.clipboardData?.getData('text');
             if (pastedText) {
-                insertText(pastedText);
+                insertAtCursor(pastedText);
                 e.preventDefault();
             }
         };
@@ -110,7 +146,7 @@ export const TextInput = ({
                 // Read from clipboard API
                 navigator.clipboard.readText().then((text) => {
                     if (text) {
-                        insertText(text);
+                        insertAtCursor(text);
                     }
                 }).catch((err) => {
                     console.warn('[TextInput] Clipboard read failed:', err);
@@ -124,7 +160,7 @@ export const TextInput = ({
             window.removeEventListener('paste', handlePaste);
             window.removeEventListener('keydown', handleKeyDown, true);
         };
-    }, [focus, value, cursorPosition, setValue]);
+    }, [focus, insertAtCursor]);
 
     useInput((inputChar, key) => {
         if (!focus) return;
@@ -328,17 +364,13 @@ export const TextInput = ({
 
         // Backspace - Delete character before cursor
         if (key.backspace || key.delete) {
-            if (cursorPosition > 0) {
-                const newValue = value.slice(0, cursorPosition - 1) + value.slice(cursorPosition);
-                setValue(newValue, cursorPosition - 1);
-            }
+            deleteAtCursor();
             return;
         }
 
         // Regular character input
         if (!key.ctrl && !key.meta && inputChar && inputChar.length === 1) {
-            const newValue = value.slice(0, cursorPosition) + inputChar + value.slice(cursorPosition);
-            setValue(newValue, cursorPosition + 1);
+            insertAtCursor(inputChar);
             // Reset history browsing on new input
             if (historyIndex !== -1) {
                 setHistoryIndex(-1);
