@@ -1,11 +1,10 @@
 services:
   e2e-test:
     build:
-      context: ..
-      dockerfile: frontend/Dockerfile.e2e
+      context: .
+      dockerfile: Dockerfile.e2e
     environment:
       - CI=true
     volumes:
-      - ../target:/app/target:ro
       - ./test-results:/app/frontend/test-results
       - ./playwright-report:/app/frontend/playwright-report

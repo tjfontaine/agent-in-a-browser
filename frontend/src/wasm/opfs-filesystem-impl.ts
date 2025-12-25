@@ -919,6 +919,7 @@ class Descriptor {
 
     /**
      * Write via stream - returns proper WASI OutputStream resource
+     * Falls back to syncFileOperation when no handle is cached
      */
     writeViaStream(_offset: bigint): unknown {
         const path = this.path;
@@ -927,39 +928,76 @@ class Descriptor {
         const entry = this.treeEntry;
 
         const handle = syncHandleCache.get(normalizedPath);
-        if (!handle) {
-            console.warn('[opfs-fs] No sync handle for writeViaStream, path:', normalizedPath);
-            throw 'no-entry';
+        if (handle) {
+            // Return a proper OutputStream instance (required by WASI)
+            return new OutputStream({
+                write(buf: Uint8Array): bigint {
+                    handle.write(buf, { at: offset });
+                    handle.flush();
+                    offset += buf.byteLength;
+                    entry.size = Math.max(entry.size || 0, offset);
+                    entry.mtime = Date.now();
+                    return BigInt(buf.byteLength);
+                },
+                blockingWriteAndFlush(buf: Uint8Array): void {
+                    handle.write(buf, { at: offset });
+                    handle.flush();
+                    offset += buf.byteLength;
+                    entry.size = Math.max(entry.size || 0, offset);
+                    entry.mtime = Date.now();
+                },
+                flush(): void {
+                    handle.flush();
+                },
+                blockingFlush(): void {
+                    handle.flush();
+                },
+                checkWrite(): bigint {
+                    return BigInt(1024 * 1024); // 1MB available
+                }
+            });
         }
 
-        // Return a proper OutputStream instance (required by WASI)
+        // Fallback: write immediately to OPFS via syncFileOperation
+        console.log('[opfs-fs] No cached handle for stream write, using syncFileOperation:', normalizedPath);
+        let totalWritten = '';
+        const syncPath = normalizedPath;
+        const syncEntry = entry;
+
         return new OutputStream({
             write(buf: Uint8Array): bigint {
-                handle.write(buf, { at: offset });
-                handle.flush();
-                offset += buf.byteLength;
-                entry.size = Math.max(entry.size || 0, offset);
-                entry.mtime = Date.now();
+                const text = new TextDecoder().decode(buf);
+                totalWritten += text;
+                // Write immediately to OPFS - don't buffer
+                const response = syncFileOperation({ type: 'writeFile', path: syncPath, data: totalWritten });
+                if (response.success) {
+                    syncEntry.size = totalWritten.length;
+                    syncEntry.mtime = Date.now();
+                }
                 return BigInt(buf.byteLength);
             },
             blockingWriteAndFlush(buf: Uint8Array): void {
-                handle.write(buf, { at: offset });
-                handle.flush();
-                offset += buf.byteLength;
-                entry.size = Math.max(entry.size || 0, offset);
-                entry.mtime = Date.now();
+                const text = new TextDecoder().decode(buf);
+                totalWritten += text;
+                const response = syncFileOperation({ type: 'writeFile', path: syncPath, data: totalWritten });
+                if (response.success) {
+                    syncEntry.size = totalWritten.length;
+                    syncEntry.mtime = Date.now();
+                }
             },
             flush(): void {
-                handle.flush();
+                // Already persisted on write
             },
             blockingFlush(): void {
-                handle.flush();
+                // Already persisted on write
             },
             checkWrite(): bigint {
                 return BigInt(1024 * 1024); // 1MB available
             }
         });
     }
+
+
 
     readDirectory(): DirectoryEntryStream {
         console.log('[opfs-fs] readDirectory called, path:', this.path, 'hasDir:', !!this.treeEntry.dir);

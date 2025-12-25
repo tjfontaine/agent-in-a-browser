@@ -228,9 +228,7 @@ test.describe('WASM Async FS (fs.promises)', () => {
         }, { timeout: 30000 });
     });
 
-    // TODO: Investigate race condition in async file creation + sync write
-    // The openAt creates the file async, but write happens sync before file exists
-    test.skip('fs.promises.writeFile and readFile work', async ({ page }) => {
+    test('fs.promises.writeFile and readFile work', async ({ page }) => {
         const result = await shellEval(page, `tsx -e "
             await fs.promises.writeFile('/async-test.txt', 'async content');
             const content = await fs.promises.readFile('/async-test.txt');
@@ -239,6 +237,8 @@ test.describe('WASM Async FS (fs.promises)', () => {
         expect(result.success).toBe(true);
         expect(result.output).toContain('async content');
     });
+
+
 
 
     test('fs.promises.readdir works', async ({ page }) => {
