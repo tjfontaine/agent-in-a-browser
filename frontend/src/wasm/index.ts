@@ -35,6 +35,7 @@ export {
     isHelperReady,
     type SyncFileRequest,
     type SyncFileResponse,
+    msToDatetime,
 } from './opfs-sync-bridge';
 
 // Directory tree management
@@ -47,9 +48,7 @@ export {
     normalizePath,
     getOpfsDirectory,
     getOpfsFile,
-    closeAllHandles,
     closeHandlesUnderPath,
-    msToDatetime,
     setCwd,
     getCwd,
     syncScanDirectory,
@@ -64,15 +63,6 @@ export {
     filesystemTypes,
     prepareFileForSync,
     releaseFile,
-    // Deprecated: use opfs-sync-bridge exports instead
-    syncReadFile as _legacySyncReadFile,
-    syncWriteFile as _legacySyncWriteFile,
-    syncExists as _legacySyncExists,
-    syncStat as _legacySyncStat,
-    syncMkdir as _legacySyncMkdir,
-    syncRmdir as _legacySyncRmdir,
-    syncUnlink as _legacySyncUnlink,
-    closeAllHandles as _legacyCloseAllHandles,
     _setCwd,
     _getCwd,
 } from './opfs-filesystem-impl';

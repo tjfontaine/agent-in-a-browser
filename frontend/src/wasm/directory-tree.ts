@@ -303,21 +303,4 @@ export function closeHandlesUnderPath(pathPrefix: string): void {
     }
 }
 
-// ============================================================
-// WASI HELPERS
-// ============================================================
 
-const timeZero = {
-    seconds: BigInt(0),
-    nanoseconds: 0,
-};
-
-/**
- * Convert Unix timestamp in milliseconds to WASI datetime format
- */
-export function msToDatetime(ms: number | undefined): { seconds: bigint; nanoseconds: number } {
-    if (!ms) return timeZero;
-    const seconds = BigInt(Math.floor(ms / 1000));
-    const nanoseconds = (ms % 1000) * 1_000_000;
-    return { seconds, nanoseconds };
-}
