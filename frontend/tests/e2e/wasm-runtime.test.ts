@@ -218,8 +218,8 @@ test.describe('WASM Encoding Module', () => {
     });
 });
 
-// TODO: Re-enable after sync fs implementation is complete
-test.describe.skip('WASM Async FS (fs.promises)', () => {
+test.describe('WASM Async FS (fs.promises)', () => {
+
     test.beforeEach(async ({ page }) => {
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {

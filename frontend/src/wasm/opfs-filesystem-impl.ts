@@ -755,92 +755,167 @@ class Descriptor {
 
     /**
      * Read file content - uses SyncAccessHandle for OPFS persistence
+     * Falls back to syncFileOperation when no handle is cached
      */
     read(length: number, _offset: bigint): [Uint8Array, boolean] {
         const offset = Number(_offset);
         const path = this.path;
+        const normalizedPath = normalizePath(path);
 
         // Get cached sync handle
-        const handle = syncHandleCache.get(path);
-        if (!handle) {
-            console.warn('[opfs-fs] No sync handle for read, path:', path);
-            return [new Uint8Array(0), true];
+        const handle = syncHandleCache.get(normalizedPath);
+        if (handle) {
+            const size = handle.getSize();
+            const readLength = Math.min(length, size - offset);
+            const buffer = new Uint8Array(readLength);
+            handle.read(buffer, { at: offset });
+            const eof = offset + readLength >= size;
+            return [buffer, eof];
         }
 
-        const size = handle.getSize();
-        const readLength = Math.min(length, size - offset);
-        const buffer = new Uint8Array(readLength);
+        // Fallback: use sync helper to read file via Atomics
+        console.log('[opfs-fs] No cached handle, using syncFileOperation for:', normalizedPath);
+        try {
+            const response = syncFileOperation({ type: 'readFile', path: normalizedPath });
+            if (!response.success || response.data === undefined) {
+                console.warn('[opfs-fs] Read failed:', response.error);
+                return [new Uint8Array(0), true];
+            }
 
-        handle.read(buffer, { at: offset });
-
-        const eof = offset + readLength >= size;
-        return [buffer, eof];
+            const fullData = new TextEncoder().encode(response.data);
+            const sliceStart = Math.min(offset, fullData.length);
+            const sliceEnd = Math.min(offset + length, fullData.length);
+            const slicedData = fullData.slice(sliceStart, sliceEnd);
+            const eof = sliceEnd >= fullData.length;
+            return [slicedData, eof];
+        } catch (e) {
+            console.error('[opfs-fs] syncFileOperation read error:', e);
+            return [new Uint8Array(0), true];
+        }
     }
+
 
     /**
      * Read via stream - returns proper WASI InputStream resource
+     * Falls back to syncFileOperation when no handle is cached
      */
     readViaStream(_offset: bigint): unknown {
         const path = this.path;
+        const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
 
-        const handle = syncHandleCache.get(path);
-        if (!handle) {
-            console.warn('[opfs-fs] No sync handle for readViaStream, path:', path);
+        const handle = syncHandleCache.get(normalizedPath);
+        if (handle) {
+            const size = handle.getSize();
+
+            // Return a proper InputStream instance (required by WASI)
+            return new InputStream({
+                read(len: bigint): Uint8Array {
+                    if (offset >= size) {
+                        return new Uint8Array(0);
+                    }
+                    const readLen = Math.min(Number(len), size - offset);
+                    const buffer = new Uint8Array(readLen);
+                    handle.read(buffer, { at: offset });
+                    offset += readLen;
+                    return buffer;
+                },
+                blockingRead(len: bigint): Uint8Array {
+                    if (offset >= size) {
+                        return new Uint8Array(0);
+                    }
+                    const readLen = Math.min(Number(len), size - offset);
+                    const buffer = new Uint8Array(readLen);
+                    handle.read(buffer, { at: offset });
+                    offset += readLen;
+                    return buffer;
+                }
+            });
+        }
+
+        // Fallback: read entire file via sync helper, then stream from memory
+        console.log('[opfs-fs] No cached handle for stream, using syncFileOperation:', normalizedPath);
+        let fileData: Uint8Array | null = null;
+        try {
+            const response = syncFileOperation({ type: 'readFile', path: normalizedPath });
+            if (!response.success || response.data === undefined) {
+                throw 'no-entry';
+            }
+            fileData = new TextEncoder().encode(response.data);
+        } catch (e) {
+            console.error('[opfs-fs] readViaStream sync fallback error:', e);
             throw 'no-entry';
         }
 
-        const size = handle.getSize();
+        const size = fileData.length;
+        const data = fileData;
 
-        // Return a proper InputStream instance (required by WASI)
         return new InputStream({
             read(len: bigint): Uint8Array {
                 if (offset >= size) {
                     return new Uint8Array(0);
                 }
                 const readLen = Math.min(Number(len), size - offset);
-                const buffer = new Uint8Array(readLen);
-                handle.read(buffer, { at: offset });
+                const result = data.slice(offset, offset + readLen);
                 offset += readLen;
-                return buffer;
+                return result;
             },
             blockingRead(len: bigint): Uint8Array {
                 if (offset >= size) {
                     return new Uint8Array(0);
                 }
                 const readLen = Math.min(Number(len), size - offset);
-                const buffer = new Uint8Array(readLen);
-                handle.read(buffer, { at: offset });
+                const result = data.slice(offset, offset + readLen);
                 offset += readLen;
-                return buffer;
+                return result;
             }
         });
     }
 
+
     /**
      * Write file content - uses SyncAccessHandle for OPFS persistence
+     * Falls back to syncFileOperation when no handle is cached
      */
     write(buffer: Uint8Array, _offset: bigint): number {
         const offset = Number(_offset);
         const path = this.path;
+        const normalizedPath = normalizePath(path);
 
-        const handle = syncHandleCache.get(path);
-        if (!handle) {
-            console.warn('[opfs-fs] No sync handle for write, path:', path);
-            return 0;
+        const handle = syncHandleCache.get(normalizedPath);
+        if (handle) {
+            // Write to OPFS via cached handle
+            handle.write(buffer, { at: offset });
+            handle.flush();
+
+            // Update tree entry size and mtime
+            const newSize = Math.max(this.treeEntry.size || 0, offset + buffer.byteLength);
+            this.treeEntry.size = newSize;
+            this.treeEntry.mtime = Date.now();
+
+            return buffer.byteLength;
         }
 
-        // Write to OPFS
-        handle.write(buffer, { at: offset });
-        handle.flush();
+        // Fallback: use sync helper to write file via Atomics
+        console.log('[opfs-fs] No cached handle, using syncFileOperation for write:', normalizedPath);
+        try {
+            const text = new TextDecoder().decode(buffer);
+            const response = syncFileOperation({ type: 'writeFile', path: normalizedPath, data: text });
+            if (!response.success) {
+                console.warn('[opfs-fs] Write failed:', response.error);
+                return 0;
+            }
 
-        // Update tree entry size and mtime
-        const newSize = Math.max(this.treeEntry.size || 0, offset + buffer.byteLength);
-        this.treeEntry.size = newSize;
-        this.treeEntry.mtime = Date.now();
-
-        return buffer.byteLength;
+            // Update tree entry
+            this.treeEntry.size = (this.treeEntry.size || 0) + buffer.byteLength;
+            this.treeEntry.mtime = Date.now();
+            return buffer.byteLength;
+        } catch (e) {
+            console.error('[opfs-fs] syncFileOperation write error:', e);
+            return 0;
+        }
     }
+
 
     /**
      * Write via stream - returns proper WASI OutputStream resource
