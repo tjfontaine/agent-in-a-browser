@@ -1,0 +1,24 @@
+# Use Playwright v1.49.1 (latest stable that's well-tested)
+FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY frontend/package*.json ./frontend/
+
+# Install dependencies
+RUN npm ci
+WORKDIR /app/frontend
+RUN npm ci
+RUN npx playwright install chromium
+
+WORKDIR /app
+
+# Copy source files
+COPY . .
+
+# Set up for E2E tests
+WORKDIR /app/frontend
+CMD ["npx", "playwright", "test", "--reporter=list"]
