@@ -284,3 +284,59 @@ test.describe('MCP Tools', () => {
         expect(result.output).toContain('Hello from shell');
     });
 });
+
+test.describe('Shell Glob Expansion', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/wasm-test.html');
+        await page.waitForFunction(() => {
+            // @ts-expect-error - window.testHarness is set up when ready
+            return window.testHarness?.ready === true;
+        }, { timeout: 30000 });
+    });
+
+    test('glob * expands to matching files', async ({ page }) => {
+        // Create test files
+        await writeFile(page, '/globtest/file1.txt', 'content1');
+        await writeFile(page, '/globtest/file2.txt', 'content2');
+        await writeFile(page, '/globtest/other.rs', 'rust');
+
+        // Test glob expansion with *.txt
+        const result = await shellEval(page, 'echo /globtest/*.txt');
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('file1.txt');
+        expect(result.output).toContain('file2.txt');
+        expect(result.output).not.toContain('other.rs');
+    });
+
+    test('glob ? expands to single character match', async ({ page }) => {
+        // Create test files
+        await writeFile(page, '/globtest2/a1.txt', '');
+        await writeFile(page, '/globtest2/a2.txt', '');
+        await writeFile(page, '/globtest2/b1.txt', '');
+
+        // Test ? pattern
+        const result = await shellEval(page, 'echo /globtest2/a?.txt');
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('a1.txt');
+        expect(result.output).toContain('a2.txt');
+        expect(result.output).not.toContain('b1.txt');
+    });
+
+    test('rm with glob deletes matching files', async ({ page }) => {
+        // Create test files
+        await writeFile(page, '/rmtest/del1.txt', 'delete me');
+        await writeFile(page, '/rmtest/del2.txt', 'delete me too');
+        await writeFile(page, '/rmtest/keep.rs', 'keep this');
+
+        // Delete only .txt files using glob
+        const rmResult = await shellEval(page, 'rm /rmtest/*.txt');
+        expect(rmResult.success).toBe(true);
+
+        // Verify .txt files are gone
+        const lsResult = await shellEval(page, 'ls /rmtest');
+        expect(lsResult.success).toBe(true);
+        expect(lsResult.output).not.toContain('del1.txt');
+        expect(lsResult.output).not.toContain('del2.txt');
+        expect(lsResult.output).toContain('keep.rs');
+    });
+});
