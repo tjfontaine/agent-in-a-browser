@@ -1,65 +1,13 @@
 /**
  * Tool Converter - MCP Tools to Vercel AI SDK Format
  * 
- * Converts MCP tools into Vercel AI SDK dynamic tools with proper
- * JSON Schema handling and Zod validation.
+ * Converts MCP tools into Vercel AI SDK dynamic tools.
+ * Uses AI SDK's jsonSchema() for JSON Schema validation.
  */
 
 import { dynamicTool, jsonSchema } from 'ai';
-import { z } from 'zod';
 import type { McpTool } from '../mcp-client';
 import { callMcpTool } from './mcp-bridge';
-
-// ============================================================
-// SCHEMA CONVERSION
-// ============================================================
-
-/**
- * Convert a JSON Schema type to a Zod type.
- * 
- * @param propSchema - The JSON Schema property definition
- * @param key - Property name (for logging)
- * @param isRequired - Whether this property is required
- * @returns Zod type definition
- */
-function jsonSchemaToZod(
-    propSchema: { type?: string; description?: string },
-    key: string,
-    isRequired: boolean
-): z.ZodTypeAny {
-    let zodType: z.ZodTypeAny;
-
-    switch (propSchema.type) {
-        case 'string':
-            zodType = z.string();
-            break;
-        case 'number':
-            zodType = z.number();
-            break;
-        case 'boolean':
-            zodType = z.boolean();
-            break;
-        case 'object':
-            zodType = z.record(z.string(), z.any());
-            break;
-        case 'array':
-            zodType = z.array(z.any());
-            break;
-        default:
-            console.warn(`[Agent] Unknown type "${propSchema.type}" for property "${key}", using z.any()`);
-            zodType = z.any();
-    }
-
-    if (propSchema.description) {
-        zodType = zodType.describe(propSchema.description);
-    }
-
-    if (!isRequired) {
-        zodType = zodType.optional();
-    }
-
-    return zodType;
-}
 
 // ============================================================
 // TOOL CONVERSION
@@ -82,12 +30,6 @@ export function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
     for (const mcpTool of mcpTools) {
         const properties = (mcpTool.inputSchema?.properties || {}) as Record<string, unknown>;
         const required = (mcpTool.inputSchema?.required || []) as string[];
-
-        // Build Zod schema from MCP inputSchema properties (for future use)
-        const schemaProps: Record<string, z.ZodTypeAny> = {};
-        for (const [key, propSchema] of Object.entries(properties) as [string, { type?: string; description?: string }][]) {
-            schemaProps[key] = jsonSchemaToZod(propSchema, key, required.includes(key));
-        }
 
         const inputSchemaObj = {
             type: 'object' as const,
