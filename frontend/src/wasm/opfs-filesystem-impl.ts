@@ -214,6 +214,130 @@ function syncScanDirectory(path: string): boolean {
     return true;
 }
 
+// ============================================================
+// SYNC FILE OPERATIONS (via helper worker + Atomics)
+// ============================================================
+
+interface SyncFileRequest {
+    type: 'readFile' | 'writeFile' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
+    path: string;
+    data?: string;
+    recursive?: boolean;
+}
+
+interface SyncFileResponse {
+    success: boolean;
+    data?: string;
+    size?: number;
+    mtime?: number;
+    isFile?: boolean;
+    isDirectory?: boolean;
+    error?: string;
+}
+
+/**
+ * Execute a file operation synchronously via the helper worker.
+ * Uses Atomics.wait() to block until the helper completes.
+ */
+function syncFileOperation(request: SyncFileRequest): SyncFileResponse {
+    if (!sharedBuffer || !controlArray || !dataArray || !helperReady) {
+        throw new Error('OPFS helper not ready for sync file operations');
+    }
+
+    const requestBytes = new TextEncoder().encode(JSON.stringify(request));
+    dataArray.set(requestBytes);
+    Atomics.store(controlArray, CONTROL.DATA_LENGTH, requestBytes.length);
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+    Atomics.store(controlArray, CONTROL.REQUEST_READY, 1);
+    Atomics.notify(controlArray, CONTROL.REQUEST_READY);
+
+    const waitResult = Atomics.wait(controlArray, CONTROL.RESPONSE_READY, 0, 30000);
+    if (waitResult === 'timed-out') {
+        throw new Error('Timeout waiting for file operation');
+    }
+
+    const responseLength = Atomics.load(controlArray, CONTROL.DATA_LENGTH);
+    const responseJson = new TextDecoder().decode(dataArray.slice(0, responseLength));
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+
+    return JSON.parse(responseJson);
+}
+
+/**
+ * Synchronously read a file's contents.
+ */
+export function syncReadFile(path: string): string {
+    const response = syncFileOperation({ type: 'readFile', path });
+    if (!response.success) {
+        throw new Error(response.error || `ENOENT: no such file: ${path}`);
+    }
+    return response.data || '';
+}
+
+/**
+ * Synchronously write data to a file.
+ */
+export function syncWriteFile(path: string, data: string): void {
+    const response = syncFileOperation({ type: 'writeFile', path, data });
+    if (!response.success) {
+        throw new Error(response.error || `Failed to write: ${path}`);
+    }
+}
+
+/**
+ * Synchronously check if a path exists.
+ */
+export function syncExists(path: string): boolean {
+    const response = syncFileOperation({ type: 'exists', path });
+    return response.success;
+}
+
+/**
+ * Synchronously get file/directory stats.
+ */
+export function syncStat(path: string): { size: number; isFile: boolean; isDirectory: boolean; mtime?: number } {
+    const response = syncFileOperation({ type: 'stat', path });
+    if (!response.success) {
+        throw new Error(response.error || `ENOENT: ${path}`);
+    }
+    return {
+        size: response.size || 0,
+        isFile: response.isFile || false,
+        isDirectory: response.isDirectory || false,
+        mtime: response.mtime
+    };
+}
+
+/**
+ * Synchronously create a directory.
+ */
+export function syncMkdir(path: string, recursive = false): void {
+    const response = syncFileOperation({ type: 'mkdir', path, recursive });
+    if (!response.success) {
+        throw new Error(response.error || `Failed to mkdir: ${path}`);
+    }
+}
+
+/**
+ * Synchronously remove a directory.
+ */
+export function syncRmdir(path: string, recursive = false): void {
+    const response = syncFileOperation({ type: 'rmdir', path, recursive });
+    if (!response.success) {
+        throw new Error(response.error || `Failed to rmdir: ${path}`);
+    }
+}
+
+/**
+ * Synchronously remove a file.
+ */
+export function syncUnlink(path: string): void {
+    const response = syncFileOperation({ type: 'unlink', path });
+    if (!response.success) {
+        throw new Error(response.error || `Failed to unlink: ${path}`);
+    }
+}
+
 export function _setCwd(path: string) {
     cwd = path;
 }
@@ -221,6 +345,7 @@ export function _setCwd(path: string) {
 export function _getCwd(): string {
     return cwd;
 }
+
 
 /**
  * Initialize the filesystem with lazy loading via SharedArrayBuffer + Atomics.

@@ -21,8 +21,10 @@ const CONTROL = {
 };
 
 interface OPFSRequest {
-    type: 'scanDirectory' | 'acquireSyncHandle';
+    type: 'scanDirectory' | 'readFile' | 'writeFile' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
     path: string;
+    data?: string;      // For writeFile
+    recursive?: boolean; // For mkdir/rmdir
 }
 
 interface DirectoryEntry {
@@ -34,7 +36,12 @@ interface DirectoryEntry {
 
 interface OPFSResponse {
     success: boolean;
-    entries?: DirectoryEntry[];
+    entries?: DirectoryEntry[];  // For scanDirectory
+    data?: string;               // For readFile
+    size?: number;               // For stat
+    mtime?: number;              // For stat
+    isFile?: boolean;            // For stat
+    isDirectory?: boolean;       // For stat
     error?: string;
 }
 
@@ -43,17 +50,34 @@ let opfsRoot: FileSystemDirectoryHandle | null = null;
 /**
  * Get directory handle for a path
  */
-async function getDirectoryHandle(path: string): Promise<FileSystemDirectoryHandle> {
+async function getDirectoryHandle(path: string, create = false): Promise<FileSystemDirectoryHandle> {
     if (!opfsRoot) throw new Error('OPFS not initialized');
 
     const parts = path.split('/').filter(p => p && p !== '.');
     let dir = opfsRoot;
 
     for (const part of parts) {
-        dir = await dir.getDirectoryHandle(part);
+        dir = await dir.getDirectoryHandle(part, { create });
     }
 
     return dir;
+}
+
+/**
+ * Get file handle for a path
+ */
+async function getFileHandle(path: string, create = false): Promise<FileSystemFileHandle> {
+    if (!opfsRoot) throw new Error('OPFS not initialized');
+
+    const parts = path.split('/').filter(p => p && p !== '.');
+    if (parts.length === 0) throw new Error('Invalid path');
+
+    const fileName = parts.pop()!;
+    const dir = parts.length > 0
+        ? await getDirectoryHandle(parts.join('/'), create)
+        : opfsRoot;
+
+    return await dir.getFileHandle(fileName, { create });
 }
 
 /**
@@ -88,6 +112,146 @@ async function scanDirectory(path: string): Promise<OPFSResponse> {
         return { success: false, error: String(e) };
     }
 }
+
+/**
+ * Read file contents as text
+ */
+async function readFile(path: string): Promise<OPFSResponse> {
+    try {
+        const fileHandle = await getFileHandle(path);
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        return { success: true, data: text };
+    } catch (_e) {
+        return { success: false, error: `ENOENT: no such file: ${path}` };
+    }
+
+}
+
+/**
+ * Write data to a file
+ */
+async function writeFile(path: string, data: string): Promise<OPFSResponse> {
+    try {
+        const fileHandle = await getFileHandle(path, true);
+        const writable = await fileHandle.createWritable();
+        await writable.write(data);
+        await writable.close();
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
+}
+
+/**
+ * Check if a path exists
+ */
+async function exists(path: string): Promise<OPFSResponse> {
+    try {
+        const parts = path.split('/').filter(p => p && p !== '.');
+        if (parts.length === 0) {
+            // Root always exists
+            return { success: true };
+        }
+
+        // Try as file first
+        try {
+            await getFileHandle(path);
+            return { success: true };
+        } catch {
+            // Try as directory
+            await getDirectoryHandle(path);
+            return { success: true };
+        }
+    } catch {
+        return { success: false };
+    }
+}
+
+/**
+ * Get file/directory stats
+ */
+async function stat(path: string): Promise<OPFSResponse> {
+    try {
+        const parts = path.split('/').filter(p => p && p !== '.');
+        if (parts.length === 0) {
+            // Root directory
+            return { success: true, isDirectory: true, isFile: false, size: 0 };
+        }
+
+        // Try as file first
+        try {
+            const fileHandle = await getFileHandle(path);
+            const file = await fileHandle.getFile();
+            return {
+                success: true,
+                isDirectory: false,
+                isFile: true,
+                size: file.size,
+                mtime: file.lastModified
+            };
+        } catch {
+            // Try as directory
+            await getDirectoryHandle(path);
+            return { success: true, isDirectory: true, isFile: false, size: 0 };
+        }
+    } catch {
+        return { success: false, error: 'ENOENT' };
+    }
+}
+
+/**
+ * Create a directory
+ */
+async function mkdir(path: string, recursive: boolean): Promise<OPFSResponse> {
+    try {
+        if (recursive) {
+            await getDirectoryHandle(path, true);
+        } else {
+            const parts = path.split('/').filter(p => p && p !== '.');
+            if (parts.length === 0) throw new Error('Invalid path');
+            const dirName = parts.pop()!;
+            const parent = parts.length > 0 ? await getDirectoryHandle(parts.join('/')) : opfsRoot!;
+            await parent.getDirectoryHandle(dirName, { create: true });
+        }
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
+}
+
+/**
+ * Remove a directory
+ */
+async function rmdir(path: string, recursive: boolean): Promise<OPFSResponse> {
+    try {
+        const parts = path.split('/').filter(p => p && p !== '.');
+        if (parts.length === 0) throw new Error('Cannot remove root');
+        const dirName = parts.pop()!;
+        const parent = parts.length > 0 ? await getDirectoryHandle(parts.join('/')) : opfsRoot!;
+        await parent.removeEntry(dirName, { recursive });
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
+}
+
+/**
+ * Remove a file
+ */
+async function unlink(path: string): Promise<OPFSResponse> {
+    try {
+        const parts = path.split('/').filter(p => p && p !== '.');
+        if (parts.length === 0) throw new Error('Invalid path');
+        const fileName = parts.pop()!;
+        const parent = parts.length > 0 ? await getDirectoryHandle(parts.join('/')) : opfsRoot!;
+        await parent.removeEntry(fileName);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
+}
+
 
 /**
  * Main request processing loop
@@ -143,9 +307,31 @@ async function requestLoop(
             case 'scanDirectory':
                 response = await scanDirectory(request.path);
                 break;
+            case 'readFile':
+                response = await readFile(request.path);
+                break;
+            case 'writeFile':
+                response = await writeFile(request.path, request.data || '');
+                break;
+            case 'exists':
+                response = await exists(request.path);
+                break;
+            case 'stat':
+                response = await stat(request.path);
+                break;
+            case 'mkdir':
+                response = await mkdir(request.path, request.recursive || false);
+                break;
+            case 'rmdir':
+                response = await rmdir(request.path, request.recursive || false);
+                break;
+            case 'unlink':
+                response = await unlink(request.path);
+                break;
             default:
                 response = { success: false, error: `Unknown request type: ${request.type}` };
         }
+
 
         // Write response
         const responseJson = JSON.stringify(response);
