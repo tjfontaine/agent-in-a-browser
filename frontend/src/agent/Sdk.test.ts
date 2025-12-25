@@ -5,21 +5,32 @@
  * Note: Many parts require full integration testing since they depend
  * on the sandbox worker and MCP server.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { WasmAgent, type AgentConfig, type StreamCallbacks, type AgentMessage } from './Sdk';
 
+// Mock the WASM runtime to prevent WASM file loading during tests
+vi.mock('../wasm/mcp-server/ts-runtime-mcp.js', () => ({
+    incomingHandler: {
+        handle: vi.fn(),
+    },
+}));
+
 // Mock the sandbox fetch
-vi.mock('./agent/sandbox', () => ({
+vi.mock('./sandbox', () => ({
     fetchFromSandbox: vi.fn(),
 }));
 
 // Mock the remote MCP registry
-vi.mock('./remote-mcp-registry', () => ({
-    getRemoteMCPRegistry: () => ({
-        subscribe: vi.fn(),
-        getAggregatedTools: () => ({}),
-    }),
-}));
+vi.mock('../mcp', async (importOriginal) => {
+    const original = await importOriginal();
+    return {
+        ...original as object,
+        getRemoteMCPRegistry: () => ({
+            subscribe: vi.fn(),
+            getAggregatedTools: () => ({}),
+        }),
+    };
+});
 
 describe('Agent SDK', () => {
     describe('WasmAgent class', () => {
