@@ -15,6 +15,7 @@ mod path;
 mod string;
 mod test;
 mod text;
+mod tsx;
 mod util;
 
 pub use self::core::CoreCommands;
@@ -27,6 +28,7 @@ pub use self::path::PathCommands;
 pub use self::string::StringCommands;
 pub use self::test::TestCommands;
 pub use self::text::TextCommands;
+pub use self::tsx::TsxCommands;
 pub use self::util::UtilCommands;
 
 use super::ShellEnv;
@@ -78,6 +80,7 @@ impl ShellCommands {
             .or_else(|| PathCommands::get_command(name))
             .or_else(|| EnvCommands::get_command(name))
             .or_else(|| MiscCommands::get_command(name))
+            .or_else(|| TsxCommands::get_command(name))
             .or_else(|| JsonCommands::get_command(name))
             .or_else(|| TestCommands::get_command(name))
             .or_else(|| UtilCommands::get_command(name))
@@ -92,6 +95,7 @@ impl ShellCommands {
             .or_else(|| PathCommands::show_help(name))
             .or_else(|| EnvCommands::show_help(name))
             .or_else(|| MiscCommands::show_help(name))
+            .or_else(|| TsxCommands::show_help(name))
             .or_else(|| JsonCommands::show_help(name))
             .or_else(|| TestCommands::show_help(name))
             .or_else(|| UtilCommands::show_help(name))
@@ -107,6 +111,7 @@ impl ShellCommands {
         cmds.extend_from_slice(PathCommands::list_commands());
         cmds.extend_from_slice(EnvCommands::list_commands());
         cmds.extend_from_slice(MiscCommands::list_commands());
+        cmds.extend_from_slice(TsxCommands::list_commands());
         cmds.extend_from_slice(JsonCommands::list_commands());
         cmds.extend_from_slice(TestCommands::list_commands());
         cmds.extend_from_slice(UtilCommands::list_commands());

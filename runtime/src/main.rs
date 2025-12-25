@@ -4,8 +4,8 @@
 //! Uses cargo-component bindings for WASI interfaces.
 
 mod bindings;
-mod host_bindings;
 mod http_client;
+mod js_modules;
 mod loader;
 mod mcp_server;
 mod resolver;
@@ -45,10 +45,7 @@ impl TsRuntimeMcp {
             .map_err(|e| format!("Failed to create context: {}", e))?;
 
         futures_lite::future::block_on(context.with(|ctx| {
-            host_bindings::install_console(&ctx)?;
-            host_bindings::install_path(&ctx)?;
-            host_bindings::install_fs(&ctx)?;
-            host_bindings::install_fetch(&ctx)?;
+            js_modules::install_all(&ctx)?;
             Ok::<(), rquickjs::Error>(())
         }))
         .map_err(|e| format!("Failed to install bindings: {}", e))?;
@@ -66,7 +63,7 @@ impl TsRuntimeMcp {
     }
     
     fn eval_code_with_source(&mut self, code: &str, source_name: &str) -> Result<String, String> {
-        host_bindings::clear_logs();
+        js_modules::clear_logs();
 
         // Always transpile to handle TypeScript
         let js_code = transpiler::transpile(code)?;
@@ -84,7 +81,7 @@ impl TsRuntimeMcp {
                         // Wait for module to finish evaluating
                         match promise.finish::<rquickjs::Value>() {
                             Ok(_) => {
-                                let logs = host_bindings::get_logs();
+                                let logs = js_modules::get_logs();
                                 if logs.is_empty() {
                                     Ok("(module executed)".to_string())
                                 } else {
@@ -188,7 +185,7 @@ impl TsRuntimeMcp {
     /// Format a JavaScript value as a string for output
     fn format_value<'a>(ctx: &rquickjs::Ctx<'a>, val: rquickjs::Value<'a>) -> Result<String, String> {
         if val.is_undefined() {
-            let logs = host_bindings::get_logs();
+            let logs = js_modules::get_logs();
             if logs.is_empty() {
                 Ok("undefined".to_string())
             } else {
