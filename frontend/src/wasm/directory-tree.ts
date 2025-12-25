@@ -6,11 +6,9 @@
  */
 
 import {
-    syncFileOperation,
     isHelperReady,
     getControlArray,
     getDataArray,
-    type DirectoryEntryData,
     type OPFSRequest,
     type OPFSResponse,
 } from './opfs-sync-bridge';

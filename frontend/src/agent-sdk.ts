@@ -7,13 +7,16 @@
  * - Multi-step tool calling with max steps limit
  */
 
-import { generateText, streamText, tool, dynamicTool, stepCountIs, jsonSchema, type CoreMessage } from 'ai';
+import { generateText, streamText, tool, stepCountIs, type CoreMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
-import { z } from 'zod';
-import { fetchFromSandbox } from './agent/sandbox';
 import type { McpTool } from './mcp-client';
 import { getRemoteMCPRegistry } from './remote-mcp-registry';
+import { initializeWasmMcp } from './agent/mcp-bridge';
+import { createAllTools } from './agent/tool-converter';
+
+// Re-export for backward compatibility
+export { initializeWasmMcp } from './agent/mcp-bridge';
 
 export interface AgentConfig {
     model?: string;
@@ -38,245 +41,6 @@ export interface StreamCallbacks {
     onFinish?: (steps: number) => void;
     /** Called between steps to get any pending steering messages from user */
     getSteering?: () => string[];
-}
-
-// Cache for MCP tools
-let cachedTools: McpTool[] = [];
-
-/**
- * Custom MCP Transport that bridges to our WASM MCP server via workerFetch
- * Uses direct POST requests since WASM MCP server doesn't support SSE
- */
-let mcpInitialized = false;
-
-/**
- * Send an MCP JSON-RPC request via POST
- */
-async function mcpRequest(method: string, params?: Record<string, unknown>): Promise<{ result?: Record<string, unknown>; error?: { message: string } }> {
-    const id = Date.now();
-    const request = {
-        jsonrpc: '2.0',
-        id,
-        method,
-        params: params || {}
-    };
-
-    console.log('[MCP] Request:', method, params);
-
-    const response = await fetchFromSandbox('/mcp/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
-    });
-
-    console.log('[MCP] Response status:', response.status);
-
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`MCP request failed: ${response.status} ${text}`);
-    }
-
-    const result = await response.json();
-    console.log('[MCP] Response:', result);
-    return result;
-}
-
-
-/**
- * Initialize the WASM MCP server and get tools
- */
-export async function initializeWasmMcp(): Promise<McpTool[]> {
-    if (mcpInitialized) {
-        return cachedTools;
-    }
-
-    console.log('[Agent] Initializing WASM MCP server...');
-
-    // MCP handshake
-    const initResult = await mcpRequest('initialize', {
-        protocolVersion: '2025-11-25',
-        capabilities: { tools: {} },
-        clientInfo: { name: 'web-agent', version: '0.1.0' }
-    });
-
-    if (initResult.error) {
-        throw new Error(`MCP initialize failed: ${initResult.error.message}`);
-    }
-
-    console.log('[Agent] MCP Server:', initResult.result?.serverInfo);
-
-    // Send initialized notification
-    await mcpRequest('initialized', {});
-
-    // List available tools
-    const toolsResult = await mcpRequest('tools/list', {});
-
-    if (toolsResult.error) {
-        throw new Error(`Failed to list tools: ${toolsResult.error.message}`);
-    }
-
-    cachedTools = (toolsResult.result?.tools as Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> || []).map((t) => ({
-        name: t.name,
-        description: t.description || '',
-        inputSchema: t.inputSchema || {}
-    }));
-
-    mcpInitialized = true;
-
-    console.log('[Agent] Available tools:', cachedTools.map(t => t.name));
-
-    return cachedTools;
-}
-
-/**
- * Call an MCP tool with streaming progress support
- * Used by the dynamic tool executors
- */
-async function callMcpToolStreaming(
-    name: string,
-    args: Record<string, unknown>,
-    _onProgress?: (data: string) => void
-): Promise<string> {
-    console.log('[MCP Tool Call] Tool:', name);
-
-    if (!mcpInitialized) {
-        throw new Error('MCP not initialized');
-    }
-
-    try {
-        const response = await mcpRequest('tools/call', { name, arguments: args });
-
-        if (response.error) {
-            throw new Error(response.error.message);
-        }
-
-        const result = response.result;
-        if (!result) {
-            return 'No result';
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const content = (result as any).content as Array<{ type: string; text?: string }> || [];
-        const textContent = content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text || '')
-            .join('\n');
-
-        console.log('[MCP Tool Call] Result:', textContent.substring(0, 100) + '...');
-        return textContent;
-    } catch (error: unknown) {
-        console.error('[MCP Tool Call] Error:', error);
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
-    }
-}
-
-/**
- * Convert MCP tools to Vercel AI SDK tools
- * Uses Zod schemas to properly parse and validate tool arguments
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: Record<string, any> = {};
-
-    for (const mcpTool of mcpTools) {
-        const properties = (mcpTool.inputSchema?.properties || {}) as Record<string, unknown>;
-        const required = (mcpTool.inputSchema?.required || []) as string[];
-
-        // Build Zod schema from MCP inputSchema properties
-        const schemaProps: Record<string, z.ZodTypeAny> = {};
-
-        for (const [key, propSchema] of Object.entries(properties) as [string, { type?: string; description?: string }][]) {
-            let zodType: z.ZodTypeAny;
-
-            switch (propSchema.type) {
-                case 'string':
-                    zodType = z.string();
-                    break;
-                case 'number':
-                    zodType = z.number();
-                    break;
-                case 'boolean':
-                    zodType = z.boolean();
-                    break;
-                case 'object':
-                    zodType = z.record(z.string(), z.any());
-                    break;
-                case 'array':
-                    zodType = z.array(z.any());
-                    break;
-                default:
-                    console.warn(`[Agent] Unknown type "${propSchema.type}" for property "${key}", using z.any()`);
-                    zodType = z.any();
-            }
-
-            if (propSchema.description) {
-                zodType = zodType.describe(propSchema.description);
-            }
-
-            if (!required.includes(key)) {
-                zodType = zodType.optional();
-            }
-
-            schemaProps[key] = zodType;
-        }
-
-        const inputSchemaObj = {
-            type: 'object' as const,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            properties: properties as any,
-            required: required,
-        };
-
-        tools[mcpTool.name] = dynamicTool({
-            description: mcpTool.description || mcpTool.name,
-            inputSchema: jsonSchema(inputSchemaObj),
-            execute: async (args: unknown) => {
-                const argsObj = args as Record<string, unknown>;
-                console.log(`[Agent] Executing tool ${mcpTool.name}`);
-                return callMcpToolStreaming(mcpTool.name, argsObj);
-            },
-        });
-    }
-
-    // Add frontend-only task_write tool (no WASM roundtrip needed)
-    tools['task_write'] = dynamicTool({
-        description: 'Manage task list for tracking multi-step work. Updates the task display shown to the user. Use frequently to plan complex tasks and show progress.',
-        inputSchema: jsonSchema({
-            type: 'object',
-            properties: {
-                tasks: {
-                    type: 'array',
-                    description: 'Array of task objects with id, content, and status',
-                    items: {
-                        type: 'object',
-                        properties: {
-                            id: { type: 'string', description: 'Unique task identifier' },
-                            content: { type: 'string', description: 'Task description' },
-                            status: { type: 'string', description: 'pending, in_progress, or completed' },
-                        },
-                        required: ['content', 'status'],
-                    },
-                },
-            },
-            required: ['tasks'],
-        }),
-        execute: async (args: unknown) => {
-            const { tasks } = args as { tasks: Array<{ id?: string; content: string; status: string }> };
-            console.log('[Agent] task_write called with', tasks.length, 'tasks');
-
-            // Import dynamically to avoid circular dependency
-            const { getTaskManager } = await import('./task-manager');
-            getTaskManager().setTasks(tasks.map(t => ({
-                id: t.id || crypto.randomUUID(),
-                content: t.content,
-                status: t.status as 'pending' | 'in_progress' | 'completed',
-            })));
-
-            return JSON.stringify({ message: `Task list updated: ${tasks.length} tasks` });
-        },
-    });
-
-    return tools;
 }
 
 /**
@@ -318,7 +82,7 @@ export class WasmAgent {
 
         // Initialize WASM MCP and get local tools
         this.mcpTools = await initializeWasmMcp();
-        this.tools = createAiSdkTools(this.mcpTools);
+        this.tools = createAllTools(this.mcpTools);
 
         // Subscribe to remote registry changes to auto-refresh tools
         const registry = getRemoteMCPRegistry();
@@ -375,7 +139,7 @@ export class WasmAgent {
      */
     refreshTools(): void {
         // Rebuild local tools
-        this.tools = createAiSdkTools(this.mcpTools);
+        this.tools = createAllTools(this.mcpTools);
         // Merge remote tools
         this.mergeRemoteTools();
         console.log('[Agent] Refreshed tools, now have', Object.keys(this.tools).length, 'tools');
