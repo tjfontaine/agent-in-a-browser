@@ -224,7 +224,7 @@ async fn execute_simple(
     // Process any command substitution markers in the name
     let expanded_name = super::pipeline::execute_command_substitutions(&expanded_name, env).await;
     
-    // Expand arguments (with brace expansion first, then variable expansion)
+    // Expand arguments (with brace expansion first, then variable expansion, then glob)
     let mut expanded_args = Vec::new();
     for arg in args {
         // First do brace expansion (before variable substitution)
@@ -236,7 +236,10 @@ async fn execute_simple(
                 Err(e) => return ShellResult::error(e, 1),
             };
             let final_exp = super::pipeline::execute_command_substitutions(&expanded, env).await;
-            expanded_args.push(final_exp);
+            
+            // Finally, do pathname/glob expansion
+            let glob_results = expand::expand_glob(&final_exp, &env.cwd.to_string_lossy(), &env.options);
+            expanded_args.extend(glob_results);
         }
     }
     
@@ -673,6 +676,7 @@ fn handle_set_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
                 for c in flag.chars() {
                     match c {
                         'e' => env.options.errexit = enable,
+                        'f' => env.options.noglob = enable,
                         'u' => env.options.nounset = enable,
                         'x' => env.options.xtrace = enable,
                         _ => {}

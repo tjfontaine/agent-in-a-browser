@@ -1212,3 +1212,156 @@ fn test_edge_case_piped_control_flow() {
     assert_eq!(result.code, 0);
     assert!(result.stdout.contains("test"));
 }
+
+// ========================================================================
+// Glob/Pathname Expansion Tests
+// ========================================================================
+
+#[test]
+fn test_glob_star_expansion() {
+    let mut env = ShellEnv::new();
+    
+    // Create test directory and files
+    let _ = std::fs::create_dir_all("/tmp/globtest");
+    let _ = std::fs::write("/tmp/globtest/file1.txt", "content1");
+    let _ = std::fs::write("/tmp/globtest/file2.txt", "content2");
+    let _ = std::fs::write("/tmp/globtest/other.rs", "rust");
+    
+    // Test *.txt expansion
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest/*.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("file1.txt"));
+    assert!(result.stdout.contains("file2.txt"));
+    assert!(!result.stdout.contains("other.rs"));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest");
+}
+
+#[test]
+fn test_glob_question_expansion() {
+    let mut env = ShellEnv::new();
+    
+    // Create test files
+    let _ = std::fs::create_dir_all("/tmp/globtest2");
+    let _ = std::fs::write("/tmp/globtest2/a1.txt", "");
+    let _ = std::fs::write("/tmp/globtest2/a2.txt", "");
+    let _ = std::fs::write("/tmp/globtest2/b1.txt", "");
+    
+    // Test a?.txt matches a1.txt and a2.txt but not b1.txt
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest2/a?.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("a1.txt"));
+    assert!(result.stdout.contains("a2.txt"));
+    assert!(!result.stdout.contains("b1.txt"));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest2");
+}
+
+#[test]
+fn test_glob_no_match_returns_literal() {
+    let mut env = ShellEnv::new();
+    
+    // Create empty test directory  
+    let _ = std::fs::create_dir_all("/tmp/globtest3");
+    
+    // With no matches, should return the literal pattern
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest3/*.nomatch", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("*.nomatch"));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest3");
+}
+
+#[test]
+fn test_glob_nullglob() {
+    let mut env = ShellEnv::new();
+    
+    // Create empty test directory
+    let _ = std::fs::create_dir_all("/tmp/globtest4");
+    
+    // Enable nullglob
+    futures_lite::future::block_on(run_pipeline("shopt -s nullglob", &mut env));
+    
+    // With nullglob, no matches = empty (echo with no args outputs newline)
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest4/*.nomatch", &mut env));
+    assert_eq!(result.code, 0);
+    // Should just be empty or a newline, not the pattern
+    assert!(!result.stdout.contains("*.nomatch"));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest4");
+}
+
+#[test]
+fn test_glob_dotglob() {
+    let mut env = ShellEnv::new();
+    
+    // Create test files
+    let _ = std::fs::create_dir_all("/tmp/globtest5");
+    let _ = std::fs::write("/tmp/globtest5/.hidden", "");
+    let _ = std::fs::write("/tmp/globtest5/visible", "");
+    
+    // Without dotglob, * should not match .hidden
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest5/*", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("visible"));
+    assert!(!result.stdout.contains(".hidden"));
+    
+    // Enable dotglob
+    futures_lite::future::block_on(run_pipeline("shopt -s dotglob", &mut env));
+    
+    // Now * should match .hidden too
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest5/*", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("visible"));
+    assert!(result.stdout.contains(".hidden"));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest5");
+}
+
+#[test]
+fn test_glob_with_rm() {
+    let mut env = ShellEnv::new();
+    
+    // Create test files
+    let _ = std::fs::create_dir_all("/tmp/globtest6");
+    let _ = std::fs::write("/tmp/globtest6/del1.txt", "");
+    let _ = std::fs::write("/tmp/globtest6/del2.txt", "");
+    let _ = std::fs::write("/tmp/globtest6/keep.rs", "");
+    
+    // Delete only .txt files
+    let result = futures_lite::future::block_on(run_pipeline("rm /tmp/globtest6/*.txt", &mut env));
+    assert_eq!(result.code, 0);
+    
+    // Check that .txt files are gone but .rs remains
+    assert!(!std::path::Path::new("/tmp/globtest6/del1.txt").exists());
+    assert!(!std::path::Path::new("/tmp/globtest6/del2.txt").exists());
+    assert!(std::path::Path::new("/tmp/globtest6/keep.rs").exists());
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest6");
+}
+
+#[test]
+fn test_noglob_disables_expansion() {
+    let mut env = ShellEnv::new();
+    
+    // Create test files
+    let _ = std::fs::create_dir_all("/tmp/globtest7");
+    let _ = std::fs::write("/tmp/globtest7/file.txt", "");
+    
+    // Enable noglob
+    futures_lite::future::block_on(run_pipeline("set -f", &mut env));
+    
+    // Now *.txt should NOT expand
+    let result = futures_lite::future::block_on(run_pipeline("echo /tmp/globtest7/*.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("*.txt"));  // Literal pattern
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all("/tmp/globtest7");
+}

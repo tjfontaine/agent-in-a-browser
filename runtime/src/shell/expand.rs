@@ -782,6 +782,141 @@ pub fn expand_braces(input: &str) -> Vec<String> {
     super::braceexpansion::expand_braces_with_parser(input)
 }
 
+/// Check if a string contains unquoted glob characters (*, ?, [)
+fn contains_glob_chars(s: &str) -> bool {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for c in s.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match c {
+            '\\' => escaped = true,
+            '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            '"' if !in_single_quote => in_double_quote = !in_double_quote,
+            '*' | '?' | '[' if !in_single_quote && !in_double_quote => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Expand pathname/glob patterns like *.txt, /data/*, test?.sh
+///
+/// Returns a list of matching paths. If no matches are found:
+/// - With nullglob: returns empty vec
+/// - Without nullglob: returns the original pattern as-is
+///
+/// Respects shell options:
+/// - noglob: disables globbing entirely
+/// - nullglob: no matches = empty result
+/// - dotglob: include dotfiles in matches
+/// - nocaseglob: case-insensitive matching
+/// - extglob: extended glob patterns
+pub fn expand_glob(pattern: &str, cwd: &str, opts: &super::env::ShellOptions) -> Vec<String> {
+    // If noglob is set, don't expand
+    if opts.noglob {
+        return vec![pattern.to_string()];
+    }
+
+    // If no glob characters, return as-is
+    if !contains_glob_chars(pattern) {
+        return vec![pattern.to_string()];
+    }
+
+    // Split pattern into directory and file parts
+    let (dir_part, file_pattern) = if let Some(last_slash) = pattern.rfind('/') {
+        let dir = &pattern[..last_slash];
+        let file = &pattern[last_slash + 1..];
+        // Handle absolute vs relative paths
+        let resolved_dir = if dir.is_empty() {
+            "/".to_string()
+        } else if dir.starts_with('/') {
+            dir.to_string()
+        } else {
+            format!("{}/{}", cwd.trim_end_matches('/'), dir)
+        };
+        (resolved_dir, file.to_string())
+    } else {
+        // No slash - pattern is in current directory
+        (cwd.to_string(), pattern.to_string())
+    };
+
+    // If the file pattern has no glob chars, return original
+    if !contains_glob_chars(&file_pattern) {
+        return vec![pattern.to_string()];
+    }
+
+    // Convert glob pattern to regex using brush_parser
+    let regex_str = match brush_parser::pattern::pattern_to_regex_str(&file_pattern, opts.extglob) {
+        Ok(r) => r,
+        Err(_) => return vec![pattern.to_string()],
+    };
+
+    // Build regex with options
+    let regex_pattern = if opts.nocaseglob {
+        format!("(?i)^{}$", regex_str)
+    } else {
+        format!("^{}$", regex_str)
+    };
+
+    let regex = match regex::Regex::new(&regex_pattern) {
+        Ok(r) => r,
+        Err(_) => return vec![pattern.to_string()],
+    };
+
+    // Read directory and match entries
+    let mut matches = Vec::new();
+
+    match std::fs::read_dir(&dir_part) {
+        Ok(entries) => {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                // Skip dotfiles unless dotglob is set or pattern explicitly starts with .
+                if name.starts_with('.') && !opts.dotglob && !file_pattern.starts_with('.') {
+                    continue;
+                }
+
+                // Check if name matches the pattern
+                if regex.is_match(&name) {
+                    // Build full path
+                    let full_path = if dir_part == "/" {
+                        format!("/{}", name)
+                    } else {
+                        format!("{}/{}", dir_part, name)
+                    };
+                    matches.push(full_path);
+                }
+            }
+        }
+        Err(_) => {
+            // Directory doesn't exist or can't be read
+            if opts.nullglob {
+                return Vec::new();
+            }
+            return vec![pattern.to_string()];
+        }
+    }
+
+    // Sort matches for consistent ordering
+    matches.sort();
+
+    // Handle no matches
+    if matches.is_empty() {
+        if opts.nullglob {
+            return Vec::new();
+        }
+        return vec![pattern.to_string()];
+    }
+
+    matches
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
