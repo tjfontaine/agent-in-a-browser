@@ -2,7 +2,7 @@
  * Tests for WorkerFetch
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createWorkerFetch, type WorkerFetch } from './worker-fetch';
+import { createWorkerFetch, type WorkerFetch } from './Fetch';
 
 // Mock MessageChannel
 class MockMessagePort {

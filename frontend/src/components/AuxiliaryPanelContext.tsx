@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { Task } from '../task-manager';
+import type { Task } from '../agent/TaskManager';
 
 // ============ Types ============
 

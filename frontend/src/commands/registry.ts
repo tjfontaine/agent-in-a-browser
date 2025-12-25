@@ -5,7 +5,7 @@
  * execute and completion functionality.
  */
 
-import { parseSlashCommand } from '../command-parser';
+import { parseSlashCommand } from './Parser';
 import { CommandDef, CommandContext, colors } from './types';
 
 // Import all command definitions

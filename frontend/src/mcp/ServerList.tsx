@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Select, TextInput } from '@inkjs/ui';
-import { getRemoteMCPRegistry, RemoteMCPServer } from '../remote-mcp-registry';
+import { getRemoteMCPRegistry, RemoteMCPServer } from './Registry';
 import { getMcpStatusData } from '../commands/mcp';
 
 const colors = {

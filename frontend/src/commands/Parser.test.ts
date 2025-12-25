@@ -2,7 +2,7 @@
  * Tests for Slash Command Parser
  */
 import { describe, it, expect } from 'vitest';
-import { parseSlashCommand, getCommandUsage } from './command-parser';
+import { parseSlashCommand, getCommandUsage } from './Parser';
 
 describe('parseSlashCommand', () => {
     it('returns null for non-slash input', () => {

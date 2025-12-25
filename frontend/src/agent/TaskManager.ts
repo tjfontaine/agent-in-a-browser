@@ -35,7 +35,7 @@ class TaskManager {
         this.emit();
         // Auto-show aux panel when tasks are added
         if (tasks.length > 0) {
-            import('./components/SplitLayout').then(({ setAuxPanelVisible }) => {
+            import('../components/SplitLayout').then(({ setAuxPanelVisible }) => {
                 setAuxPanelVisible(true);
             });
         }

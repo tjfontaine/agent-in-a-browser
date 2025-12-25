@@ -4,11 +4,11 @@
  * Manages the sandbox worker for MCP tool execution via workerFetch.
  */
 
-import { createWorkerFetch } from '../worker-fetch';
+import { createWorkerFetch } from '../workers/Fetch';
 
 // ============ Worker Instance ============
 
-const sandbox = new Worker(new URL('../sandbox-worker.ts', import.meta.url), { type: 'module' });
+const sandbox = new Worker(new URL('../workers/SandboxWorker.ts', import.meta.url), { type: 'module' });
 
 // ============ Worker Fetch ============
 

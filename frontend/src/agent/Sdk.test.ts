@@ -6,7 +6,7 @@
  * on the sandbox worker and MCP server.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WasmAgent, type AgentConfig, type StreamCallbacks, type AgentMessage } from './agent-sdk';
+import { WasmAgent, type AgentConfig, type StreamCallbacks, type AgentMessage } from './Sdk';
 
 // Mock the sandbox fetch
 vi.mock('./agent/sandbox', () => ({
@@ -221,13 +221,13 @@ describe('Module-level functions', () => {
 
     describe('exports', () => {
         it('exports WasmAgent class', async () => {
-            const module = await import('./agent-sdk');
+            const module = await import('./Sdk');
             expect(module.WasmAgent).toBeDefined();
             expect(typeof module.WasmAgent).toBe('function');
         });
 
         it('exports initializeWasmMcp function', async () => {
-            const module = await import('./agent-sdk');
+            const module = await import('./Sdk');
             expect(module.initializeWasmMcp).toBeDefined();
             expect(typeof module.initializeWasmMcp).toBe('function');
         });

@@ -8,14 +8,14 @@
  * directly to the WASI HTTP shim, minimizing data copying and buffering.
  */
 
-import { incomingHandler } from './wasm/mcp-server/ts-runtime-mcp.js';
+import { incomingHandler } from '../wasm/mcp-server/ts-runtime-mcp.js';
 import {
     createIncomingRequest,
     Fields,
     ResponseOutparam,
     IncomingRequest,
-} from './wasm/wasi-http-impl.js';
-import { prepareFileForSync } from './wasm/opfs-filesystem-impl.js';
+} from '../wasm/wasi-http-impl.js';
+import { prepareFileForSync } from '../wasm/opfs-filesystem-impl.js';
 
 // Type for WASM response objects
 interface WasmResponse {
@@ -25,7 +25,7 @@ interface WasmResponse {
 }
 
 // Re-export types for consumers
-export type { JsonRpcRequest, JsonRpcResponse } from './mcp-client';
+export type { JsonRpcRequest, JsonRpcResponse } from './Client';
 
 /**
  * Intercept and prepare file paths for file operations.

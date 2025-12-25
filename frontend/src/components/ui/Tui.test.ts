@@ -14,7 +14,7 @@ import {
     Spinner,
     type DiffHunk,
     type PlanItem,
-} from './tui';
+} from './Tui';
 import type { Terminal } from '@xterm/xterm';
 
 // Mock terminal that captures output

@@ -5,7 +5,7 @@
  */
 
 import { Terminal } from '@xterm/xterm';
-import { getRemoteMCPRegistry } from '../remote-mcp-registry';
+import { getRemoteMCPRegistry } from '../mcp';
 
 // State references - will be set during initialization
 let mcpInitialized = false;

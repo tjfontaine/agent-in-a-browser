@@ -2,7 +2,7 @@
  * Tests for System Prompt
  */
 import { describe, it, expect } from 'vitest';
-import { SYSTEM_PROMPT } from './system-prompt';
+import { SYSTEM_PROMPT } from './SystemPrompt';
 
 describe('System Prompt', () => {
     it('should be a non-empty string', () => {

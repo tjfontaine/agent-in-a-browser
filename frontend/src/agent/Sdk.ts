@@ -10,13 +10,13 @@
 import { generateText, streamText, tool, stepCountIs, type CoreMessage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { McpTool } from './mcp-client';
-import { getRemoteMCPRegistry } from './remote-mcp-registry';
-import { initializeWasmMcp } from './agent/mcp-bridge';
-import { createAllTools } from './agent/tool-converter';
+import type { McpTool } from '../mcp';
+import { getRemoteMCPRegistry } from '../mcp';
+import { initializeWasmMcp } from './mcp-bridge';
+import { createAllTools } from './tool-converter';
 
 // Re-export for backward compatibility
-export { initializeWasmMcp } from './agent/mcp-bridge';
+export { initializeWasmMcp } from './mcp-bridge';
 
 export interface AgentConfig {
     model?: string;

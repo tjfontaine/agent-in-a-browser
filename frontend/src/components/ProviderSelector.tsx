@@ -23,7 +23,7 @@ import {
     ProviderInfo,
     BUILT_IN_PROVIDERS,
 } from '../provider-config';
-import { refreshModels } from '../model-discovery';
+import { refreshModels } from '../config/ModelDiscovery';
 
 const colors = {
     cyan: '#39c5cf',

@@ -5,7 +5,7 @@
  * Results are cached in memory and can be refreshed on demand.
  */
 
-import { getApiKey, getEffectiveBaseURL, setModelCacheGetter, type ModelInfo } from './provider-config';
+import { getApiKey, getEffectiveBaseURL, setModelCacheGetter, type ModelInfo } from '../provider-config';
 
 // ============ Types ============
 

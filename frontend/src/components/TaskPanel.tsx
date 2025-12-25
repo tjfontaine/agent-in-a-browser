@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink-web';
-import { getTaskManager, Task } from '../task-manager';
+import { getTaskManager, Task } from '../agent/TaskManager';
 
 const colors = {
     cyan: '#39c5cf',

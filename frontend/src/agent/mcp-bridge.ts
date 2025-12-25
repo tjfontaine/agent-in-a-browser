@@ -5,7 +5,7 @@
  */
 
 import { fetchFromSandbox } from './sandbox';
-import type { McpTool } from '../mcp-client';
+import type { McpTool } from '../mcp';
 
 // ============================================================
 // STATE

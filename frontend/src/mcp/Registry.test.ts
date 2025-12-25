@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     getRemoteMCPRegistry,
     RemoteMCPRegistry,
-} from './remote-mcp-registry';
+} from './Registry';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -23,7 +23,7 @@ const localStorageMock = (() => {
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
 // Mock oauth-pkce module
-vi.mock('./oauth-pkce', () => ({
+vi.mock('../auth/OAuthPkce', () => ({
     authenticateWithServer: vi.fn(),
     getToken: vi.fn(() => null),
     removeToken: vi.fn(),

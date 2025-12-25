@@ -13,7 +13,7 @@ import {
     hasValidToken,
     discoverOAuthEndpoints,
     type StoredToken
-} from './oauth-pkce';
+} from '../auth/OAuthPkce';
 
 // ============ Types ============
 

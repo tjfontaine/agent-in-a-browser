@@ -6,7 +6,7 @@
  */
 
 import { dynamicTool, jsonSchema } from 'ai';
-import type { McpTool } from '../mcp-client';
+import type { McpTool } from '../mcp';
 import { callMcpTool } from './mcp-bridge';
 
 // ============================================================
@@ -88,7 +88,7 @@ export function createTaskWriteTool(): any {
             console.log('[Agent] task_write called with', tasks.length, 'tasks');
 
             // Import dynamically to avoid circular dependency
-            const { getTaskManager } = await import('../task-manager');
+            const { getTaskManager } = await import('./TaskManager');
             getTaskManager().setTasks(tasks.map(t => ({
                 id: t.id || crypto.randomUUID(),
                 content: t.content,

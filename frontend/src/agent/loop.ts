@@ -5,12 +5,12 @@
  */
 
 import { Terminal } from '@xterm/xterm';
-import { WasmAgent } from '../agent-sdk';
-import { Spinner, renderToolOutput } from '../tui';
+import { WasmAgent } from './Sdk';
+import { Spinner, renderToolOutput } from '../components/ui/Tui';
 import { setStatus } from './status';
 import { isMcpInitialized } from '../commands/mcp';
 import { API_URL, ANTHROPIC_API_KEY } from '../constants';
-import { SYSTEM_PROMPT } from '../system-prompt';
+import { SYSTEM_PROMPT } from './SystemPrompt';
 
 // ============ State ============
 

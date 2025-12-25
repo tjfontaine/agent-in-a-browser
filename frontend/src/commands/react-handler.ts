@@ -5,9 +5,9 @@
  * This replaces the xterm-based command router for the ink-web TUI.
  */
 
-import { parseSlashCommand } from '../command-parser';
+import { parseSlashCommand } from './Parser';
 import { getMcpStatusData } from './mcp';
-import { getRemoteMCPRegistry } from '../remote-mcp-registry';
+import { getRemoteMCPRegistry } from '../mcp';
 
 // Colors for output
 const colors = {

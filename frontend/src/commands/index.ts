@@ -7,7 +7,7 @@
 // Legacy xterm router (for backward compat)
 export { handleSlashCommand } from './router';
 export { handleMcpCommand, showMcpStatus, setMcpState, isMcpInitialized, getMcpStatusData } from './mcp';
-export { parseSlashCommand, COMMANDS, getCommandUsage } from '../command-parser';
+export { parseSlashCommand, COMMANDS, getCommandUsage } from './Parser';
 
 // New modular command system  
 export {

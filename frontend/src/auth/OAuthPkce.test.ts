@@ -23,7 +23,7 @@ import {
     createOAuthProvider,
     type AuthServerMetadata,
     type StoredToken,
-} from './oauth-pkce';
+} from './OAuthPkce';
 
 // Mock localStorage
 const localStorageMock = (() => {

@@ -8,17 +8,17 @@
 
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { InkXterm, Box, Text, useInput } from 'ink-web';
-import { TextInput } from './components/ui/text-input';
+import { TextInput } from './components/ui/TextInput';
 import { Spinner } from './components/ui/Spinner';
 // TEMPORARILY DISABLED - rotating hints cause input issues
-// import { useRotatingHints, IDLE_HINTS, BUSY_HINTS } from './components/ui/rotating-hints';
+// import { useRotatingHints, IDLE_HINTS, BUSY_HINTS } from './components/ui/RotatingHints';
 import { SplitLayout, focusAuxPanel } from './components/SplitLayout';
 import { AuxiliaryPanel } from './components/AuxiliaryPanel';
-import { AuxiliaryPanelProvider } from './components/auxiliary-panel-context';
+import { AuxiliaryPanelProvider } from './components/AuxiliaryPanelContext';
 import { ModelSelector } from './components/ModelSelector';
 import { ProviderSelector } from './components/ProviderSelector';
 import { SecretInput } from './components/SecretInput';
-import { McpServerList } from './components/mcp-server-list';
+import { McpServerList } from './mcp';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
 import {

@@ -8,7 +8,7 @@ import type {
     McpToolResult,
     JsonRpcRequest,
     JsonRpcResponse
-} from './mcp-client';
+} from './Client';
 
 describe('MCP Types', () => {
     describe('McpServerInfo', () => {

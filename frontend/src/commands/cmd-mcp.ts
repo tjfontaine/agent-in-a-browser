@@ -6,7 +6,7 @@
 
 import { CommandDef, colors } from './types';
 import { getMcpStatusData } from './mcp';
-import { getRemoteMCPRegistry } from '../remote-mcp-registry';
+import { getRemoteMCPRegistry } from '../mcp';
 
 export const mcpCommand: CommandDef = {
     name: 'mcp',

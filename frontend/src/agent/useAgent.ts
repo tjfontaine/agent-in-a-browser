@@ -7,10 +7,10 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { initializeSandbox } from './sandbox';
-import { initializeWasmMcp, WasmAgent } from '../agent-sdk';
+import { initializeWasmMcp, WasmAgent } from './Sdk';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
 import { ANTHROPIC_API_KEY } from '../constants';
-import { SYSTEM_PROMPT } from '../system-prompt';
+import { SYSTEM_PROMPT } from './SystemPrompt';
 import {
     getCurrentModel,
     getCurrentModelInfo,

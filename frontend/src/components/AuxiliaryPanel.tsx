@@ -13,9 +13,9 @@
 
 import { useEffect, useState } from 'react';
 import { InkXterm, Box, Text, useInput } from 'ink-web';
-import { setGlobalAuxiliaryPanel, AuxiliaryMode, FileContent, ArtifactContent, AuxiliaryPanelContextValue } from './auxiliary-panel-context';
+import { setGlobalAuxiliaryPanel, AuxiliaryMode, FileContent, ArtifactContent, AuxiliaryPanelContextValue } from './AuxiliaryPanelContext';
 import { focusMainPanel } from './SplitLayout';
-import { getTaskManager, Task } from '../task-manager';
+import { getTaskManager, Task } from '../agent/TaskManager';
 import 'ink-web/css';
 
 const colors = {

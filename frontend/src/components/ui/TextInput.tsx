@@ -16,7 +16,7 @@ import {
     getCommandHistory,
     addToHistory,
     searchHistory,
-} from './command-history';
+} from './CommandHistory';
 
 // Completion function type
 export type CompletionFn = (input: string) => string[];

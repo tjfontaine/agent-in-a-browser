@@ -22,7 +22,7 @@ import {
     getCurrentProvider,
     getApiKey,
 } from '../provider-config';
-import { refreshModels } from '../model-discovery';
+import { refreshModels } from '../config/ModelDiscovery';
 
 /**
  * Display the current model and available options

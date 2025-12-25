@@ -5,7 +5,7 @@
  */
 
 // Re-export MCP types for convenience
-export type { McpServerInfo, McpTool, McpToolResult, JsonRpcRequest, JsonRpcResponse } from './mcp-client';
+export type { McpServerInfo, McpTool, McpToolResult, JsonRpcRequest, JsonRpcResponse } from './mcp';
 
 /**
  * Messages sent from the sandbox worker to the main thread

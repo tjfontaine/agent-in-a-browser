@@ -10,8 +10,8 @@ import {
     isCacheStale,
     clearModelCache,
     backgroundRefreshModels,
-} from './model-discovery';
-import * as providerConfig from './provider-config';
+} from './ModelDiscovery';
+import * as providerConfig from '../provider-config';
 
 // Mock fetch globally
 const mockFetch = vi.fn();

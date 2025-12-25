@@ -5,7 +5,7 @@
  */
 
 import { Terminal } from '@xterm/xterm';
-import { parseSlashCommand } from '../command-parser';
+import { parseSlashCommand } from './Parser';
 import { handleMcpCommand } from './mcp';
 
 /**

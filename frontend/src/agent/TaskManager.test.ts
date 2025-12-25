@@ -2,7 +2,7 @@
  * Tests for Task Manager
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getTaskManager, resetTaskManager } from './task-manager';
+import { getTaskManager, resetTaskManager } from './TaskManager';
 
 describe('TaskManager', () => {
     beforeEach(() => {
