@@ -4,7 +4,7 @@
  * Tests the WASM MCP server tools through the sandbox worker via workerFetch.
  */
 
-import { fetchFromSandbox } from './agent/sandbox';
+import { fetchFromSandbox } from '../src/agent/sandbox';
 
 const output = document.getElementById('output')!;
 
