@@ -12,6 +12,11 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import {
+    getCommandHistory,
+    addToHistory,
+    searchHistory,
+} from './command-history';
 
 // Completion function type
 export type CompletionFn = (input: string) => string[];
@@ -28,37 +33,8 @@ export interface TextInputProps {
     getCompletions?: CompletionFn;
 }
 
-// History storage key
-const HISTORY_STORAGE_KEY = 'web-agent-command-history';
-const MAX_HISTORY = 1000;
-
-// Load history from localStorage on module init
-function loadHistory(): string[] {
-    try {
-        const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) {
-                return parsed.slice(-MAX_HISTORY);
-            }
-        }
-    } catch {
-        // Ignore errors, start fresh
-    }
-    return [];
-}
-
-// Save history to localStorage
-function saveHistory(history: string[]): void {
-    try {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(-MAX_HISTORY)));
-    } catch {
-        // Ignore quota errors etc.
-    }
-}
-
-// Shared history across all inputs, loaded from localStorage
-const commandHistory: string[] = loadHistory();
+// Reference to shared command history
+const commandHistory = getCommandHistory();
 
 export const TextInput = ({
     value: controlledValue,
@@ -179,13 +155,10 @@ export const TextInput = ({
             // Ctrl+R again to search further back
             if (key.ctrl && inputChar === 'r') {
                 if (searchMatchIndex > 0) {
-                    // Search from the entry before the current match
-                    for (let i = searchMatchIndex - 1; i >= 0; i--) {
-                        if (commandHistory[i].toLowerCase().includes(searchQuery.toLowerCase())) {
-                            setSearchMatch(commandHistory[i]);
-                            setSearchMatchIndex(i);
-                            break;
-                        }
+                    const result = searchHistory(searchQuery, searchMatchIndex);
+                    if (result) {
+                        setSearchMatch(result.match);
+                        setSearchMatchIndex(result.index);
                     }
                 }
                 return;
@@ -197,12 +170,13 @@ export const TextInput = ({
                 setSearchQuery(newQuery);
                 // Re-search with shorter query
                 if (newQuery) {
-                    for (let i = commandHistory.length - 1; i >= 0; i--) {
-                        if (commandHistory[i].toLowerCase().includes(newQuery.toLowerCase())) {
-                            setSearchMatch(commandHistory[i]);
-                            setSearchMatchIndex(i);
-                            break;
-                        }
+                    const result = searchHistory(newQuery);
+                    if (result) {
+                        setSearchMatch(result.match);
+                        setSearchMatchIndex(result.index);
+                    } else {
+                        setSearchMatch(null);
+                        setSearchMatchIndex(-1);
                     }
                 } else {
                     setSearchMatch(null);
@@ -216,16 +190,11 @@ export const TextInput = ({
                 const newQuery = searchQuery + inputChar;
                 setSearchQuery(newQuery);
                 // Search backwards through history
-                let found = false;
-                for (let i = commandHistory.length - 1; i >= 0; i--) {
-                    if (commandHistory[i].toLowerCase().includes(newQuery.toLowerCase())) {
-                        setSearchMatch(commandHistory[i]);
-                        setSearchMatchIndex(i);
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
+                const result = searchHistory(newQuery);
+                if (result) {
+                    setSearchMatch(result.match);
+                    setSearchMatchIndex(result.index);
+                } else {
                     setSearchMatch(null);
                     setSearchMatchIndex(-1);
                 }
@@ -246,14 +215,8 @@ export const TextInput = ({
         // Submit on Enter
         if (key.return) {
             if (value.trim()) {
-                // Add to history
-                if (commandHistory[commandHistory.length - 1] !== value) {
-                    commandHistory.push(value);
-                    if (commandHistory.length > MAX_HISTORY) {
-                        commandHistory.shift();
-                    }
-                    saveHistory(commandHistory);
-                }
+                // Add to history using the history module
+                addToHistory(value);
 
                 onSubmit?.(value);
                 if (controlledValue === undefined) {
