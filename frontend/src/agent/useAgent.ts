@@ -317,8 +317,11 @@ export function useAgent(): UseAgentReturn {
     const setMode = useCallback((newMode: AgentMode) => {
         setModeState(newMode);
 
-        // Update agent system prompt based on mode
+        // Update agent mode and system prompt
         if (agentRef.current) {
+            // Set mode on agent (triggers tool rebuild with mode filtering)
+            agentRef.current.setMode(newMode);
+
             if (newMode === 'plan') {
                 // Append plan mode prompt to base prompt
                 const planPrompt = SYSTEM_PROMPT + '\n\n' + PLAN_MODE_SYSTEM_PROMPT;

@@ -8,6 +8,7 @@
 import { dynamicTool, jsonSchema } from 'ai';
 import type { McpTool } from '../mcp';
 import { callMcpTool } from './mcp-bridge';
+import { AgentMode, isToolAllowedInPlanMode } from './AgentMode';
 
 // ============================================================
 // TOOL CONVERSION
@@ -20,10 +21,14 @@ import { callMcpTool } from './mcp-bridge';
  * proper schema validation and execution.
  * 
  * @param mcpTools - Array of MCP tool definitions
+ * @param getModeCallback - Optional callback to get current agent mode for filtering
  * @returns Record of AI SDK tool instances
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
+export function createAiSdkTools(
+    mcpTools: McpTool[],
+    getModeCallback?: () => AgentMode
+): Record<string, any> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: Record<string, any> = {};
 
@@ -43,6 +48,16 @@ export function createAiSdkTools(mcpTools: McpTool[]): Record<string, any> {
             inputSchema: jsonSchema(inputSchemaObj),
             execute: async (args: unknown) => {
                 const argsObj = args as Record<string, unknown>;
+
+                // Check mode before execution
+                if (getModeCallback?.() === 'plan') {
+                    const check = isToolAllowedInPlanMode(mcpTool.name, argsObj);
+                    if (!check.allowed) {
+                        console.log(`[Agent] Tool ${mcpTool.name} blocked in plan mode:`, check.reason);
+                        return JSON.stringify({ error: check.reason });
+                    }
+                }
+
                 console.log(`[Agent] Executing tool ${mcpTool.name}`);
                 return callMcpTool(mcpTool.name, argsObj);
             },
@@ -104,11 +119,15 @@ export function createTaskWriteTool(): any {
  * Create all AI SDK tools from MCP tools plus built-in frontend tools.
  * 
  * @param mcpTools - Array of MCP tool definitions
+ * @param getModeCallback - Optional callback to get current agent mode for filtering
  * @returns Record of all tool instances
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createAllTools(mcpTools: McpTool[]): Record<string, any> {
-    const tools = createAiSdkTools(mcpTools);
+export function createAllTools(
+    mcpTools: McpTool[],
+    getModeCallback?: () => AgentMode
+): Record<string, any> {
+    const tools = createAiSdkTools(mcpTools, getModeCallback);
     tools['task_write'] = createTaskWriteTool();
     return tools;
 }

@@ -14,6 +14,7 @@ import type { McpTool } from '../mcp';
 import { getRemoteMCPRegistry } from '../mcp';
 import { initializeWasmMcp } from './mcp-bridge';
 import { createAllTools } from './tool-converter';
+import { AgentMode } from './AgentMode';
 
 // Re-export for backward compatibility
 export { initializeWasmMcp } from './mcp-bridge';
@@ -63,6 +64,7 @@ export class WasmAgent {
     private mcpTools: McpTool[] = [];
     private initialized = false;
     private messages: CoreMessage[] = [];
+    private mode: AgentMode = 'normal';
 
     constructor(config: AgentConfig = {}) {
         this.config = {
@@ -82,7 +84,7 @@ export class WasmAgent {
 
         // Initialize WASM MCP and get local tools
         this.mcpTools = await initializeWasmMcp();
-        this.tools = createAllTools(this.mcpTools);
+        this.tools = createAllTools(this.mcpTools, () => this.mode);
 
         // Subscribe to remote registry changes to auto-refresh tools
         const registry = getRemoteMCPRegistry();
@@ -135,14 +137,34 @@ export class WasmAgent {
     }
 
     /**
-     * Refresh tools (called when remote registry changes)
+     * Refresh tools (called when remote registry changes or mode changes)
      */
     refreshTools(): void {
-        // Rebuild local tools
-        this.tools = createAllTools(this.mcpTools);
+        // Rebuild local tools with current mode
+        this.tools = createAllTools(this.mcpTools, () => this.mode);
         // Merge remote tools
         this.mergeRemoteTools();
         console.log('[Agent] Refreshed tools, now have', Object.keys(this.tools).length, 'tools');
+    }
+
+    /**
+     * Set the agent mode and refresh tools
+     */
+    setMode(mode: AgentMode): void {
+        if (this.mode !== mode) {
+            this.mode = mode;
+            if (this.initialized) {
+                this.refreshTools();
+            }
+            console.log('[Agent] Mode set to:', mode);
+        }
+    }
+
+    /**
+     * Get current mode
+     */
+    getMode(): AgentMode {
+        return this.mode;
     }
 
     /**
