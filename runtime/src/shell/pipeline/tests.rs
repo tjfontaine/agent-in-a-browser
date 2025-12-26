@@ -1365,3 +1365,141 @@ fn test_noglob_disables_expansion() {
     // Cleanup
     let _ = std::fs::remove_dir_all("/tmp/globtest7");
 }
+
+// ========================================================================
+// SQLite3 Command Tests
+// ========================================================================
+
+#[test]
+fn test_sqlite3_simple_query() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'SELECT 1+1 AS result'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("2"));
+}
+
+#[test]
+fn test_sqlite3_create_and_insert() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'CREATE TABLE t(x INTEGER); INSERT INTO t VALUES(42); SELECT * FROM t'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("42"));
+}
+
+#[test]
+fn test_sqlite3_pipeline() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "echo 'SELECT 5*5' | sqlite3",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("25"));
+}
+
+#[test]
+fn test_sqlite3_error_handling() {
+    let mut env = ShellEnv::new();
+    // Invalid SQL syntax should return error
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'INVALID SQL STATEMENT'",
+        &mut env
+    ));
+    assert_ne!(result.code, 0);
+    assert!(result.stderr.contains("Error:"));
+}
+
+#[test]
+fn test_sqlite3_multicolumn() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'SELECT 1 AS a, 2 AS b, 3 AS c'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    // Output format is value1|value2|value3
+    assert!(result.stdout.contains("1|2|3"));
+}
+
+#[test]
+fn test_sqlite3_null_values() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'SELECT NULL AS x'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    // sqlite3 shows empty string for NULL
+    assert!(result.stdout.trim().is_empty() || result.stdout.contains("\n"));
+}
+
+#[test]
+fn test_sqlite3_float_values() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'SELECT 3.14159 AS pi'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("3.14"));
+}
+
+#[test]
+fn test_sqlite3_empty_result() {
+    let mut env = ShellEnv::new();
+    // Create table, don't insert anything, select from it
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 'CREATE TABLE empty_t(x); SELECT * FROM empty_t'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    // Should succeed with empty output (no rows)
+    assert!(result.stdout.is_empty() || result.stdout.trim().is_empty());
+}
+
+#[test]
+fn test_sqlite3_persistent_file() {
+    // Test file-backed persistent database
+    let db_path = "/tmp/test_sqlite3_persist.db";
+    
+    // Clean up any existing file
+    let _ = std::fs::remove_file(db_path);
+    
+    let mut env = ShellEnv::new();
+    
+    // Create table and insert data: sqlite3 DATABASE SQL
+    let result = futures_lite::future::block_on(run_pipeline(
+        &format!("sqlite3 {} 'CREATE TABLE persist_t(val INTEGER); INSERT INTO persist_t VALUES(999)'", db_path),
+        &mut env
+    ));
+    assert_eq!(result.code, 0, "Failed to create/insert: {}", result.stderr);
+    
+    // Query the persisted data in a new connection
+    let result2 = futures_lite::future::block_on(run_pipeline(
+        &format!("sqlite3 {} 'SELECT * FROM persist_t'", db_path),
+        &mut env
+    ));
+    assert_eq!(result2.code, 0, "Failed to select: {}", result2.stderr);
+    assert!(result2.stdout.contains("999"), "Expected 999, got: {}", result2.stdout);
+    
+    // Clean up
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[test]
+fn test_sqlite3_with_memory_explicit() {
+    let mut env = ShellEnv::new();
+    // Explicitly specify :memory: database
+    let result = futures_lite::future::block_on(run_pipeline(
+        "sqlite3 :memory: 'SELECT 100*2'",
+        &mut env
+    ));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("200"));
+}

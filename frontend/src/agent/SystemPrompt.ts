@@ -157,7 +157,14 @@ Text: sed, cut, tr, grep, sort, uniq, head, tail, wc
 Files: ls, cat, find, diff, cp, mv, rm, mkdir, touch
 Network: curl (for simple HTTP requests)
 JSON: jq
+Database: sqlite3 (SQLite database CLI)
 Pipeline: xargs
+
+**sqlite3 Usage:**
+\`sqlite3 [DATABASE] [SQL]\`
+- \`sqlite3 'SELECT 1+1'\` - in-memory database (default)
+- \`sqlite3 /data/app.db 'SELECT * FROM users'\` - file-backed database
+- \`echo 'SELECT datetime()' | sqlite3\` - piped SQL
 
 ## File Tools
 - **read_file** / **write_file**: OPFS file operations

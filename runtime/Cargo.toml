@@ -86,6 +86,12 @@ brush-parser = "0.3.0"
 regex = "1"
 itertools = "0.14"
 
+# SQLite - Turso core (using fork with WASM simsimd fix)
+turso_core = { git = "https://github.com/tjfontaine/turso.git", branch = "fix/simsimd-wasm-conditional", default-features = false, features = [
+    "fs",
+    "uuid",
+] }
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 
