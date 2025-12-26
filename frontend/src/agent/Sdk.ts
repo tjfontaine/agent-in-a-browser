@@ -183,6 +183,21 @@ export class WasmAgent {
     }
 
     /**
+     * Update the system prompt (e.g., when switching modes)
+     */
+    updateSystemPrompt(prompt: string): void {
+        this.config.systemPrompt = prompt;
+        console.log('[Agent] System prompt updated');
+    }
+
+    /**
+     * Get current system prompt
+     */
+    getSystemPrompt(): string | undefined {
+        return this.config.systemPrompt;
+    }
+
+    /**
      * Run a query with real-time streaming callbacks
      * This is the preferred method for TUI as it provides immediate feedback
      */

@@ -21,6 +21,8 @@ import { SecretInput } from './components/SecretInput';
 import { McpServerList } from './mcp';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
+import { registerModeCallbacks as registerPlanModeCallbacks } from './commands/cmd-plan';
+import { registerModeCallbacks as registerModeModeCallbacks } from './commands/cmd-mode';
 import {
     getCurrentProvider,
     getConfigSummary,
@@ -67,6 +69,7 @@ function TerminalContent({
     queueLength,
     overlayMode,
     secretInputState,
+    agentMode,
     onSubmit,
     getCompletions,
     onCancel,
@@ -74,6 +77,8 @@ function TerminalContent({
     onModelSelected,
     onProviderSelected,
     onSecretSubmit,
+    onTogglePlanMode,
+    onNormalMode,
 }: {
     outputs: AgentOutput[];
     isReady: boolean;
@@ -81,6 +86,7 @@ function TerminalContent({
     queueLength: number;
     overlayMode: OverlayMode;
     secretInputState: SecretInputState | null;
+    agentMode: 'normal' | 'plan';
     onSubmit: (value: string) => void;
     getCompletions: (input: string) => string[];
     onCancel: () => void;
@@ -88,6 +94,8 @@ function TerminalContent({
     onModelSelected: (modelId: string) => void;
     onProviderSelected: (providerId: string) => void;
     onSecretSubmit: (value: string) => void;
+    onTogglePlanMode: () => void;
+    onNormalMode: () => void;
     onMcpAction?: (action: string, serverId: string) => Promise<void>;
 }) {
 
@@ -99,7 +107,7 @@ function TerminalContent({
         ? outputs.slice(-maxScrollback)
         : outputs;
 
-    // Handle ESC to cancel, Ctrl+\ to switch panels
+    // Handle ESC to cancel, Ctrl+\ to switch panels, Ctrl+P/N for mode switching
     useInput((_input, key) => {
         if (key.escape && isBusy) {
             onCancel();
@@ -112,13 +120,25 @@ function TerminalContent({
         if (_input === '\x1c') {
             focusAuxPanel();
         }
+        // Ctrl+P - Toggle plan mode
+        if (key.ctrl && _input === 'p') {
+            onTogglePlanMode();
+        }
+        // Ctrl+N - Switch to normal mode
+        if (key.ctrl && _input === 'n') {
+            onNormalMode();
+        }
     });
 
     // TEMPORARILY DISABLED: Rotating hints cause re-renders that drop input characters
     // const idleHint = useRotatingHints(IDLE_HINTS, 6000);
     // const busyHint = useRotatingHints(BUSY_HINTS, 5000);
     // const placeholder = isBusy ? busyHint : idleHint;
-    const placeholder = isBusy ? 'Type to queue... [ESC to cancel]' : 'Type a message or /help... [Ctrl+\\\\ to switch panels]';
+    const placeholder = isBusy
+        ? 'Type to queue... [ESC to cancel]'
+        : agentMode === 'plan'
+            ? 'Type "go" to execute plan, or /mode normal... [Ctrl+N: normal]'
+            : 'Type a message or /help... [Ctrl+P: plan, Ctrl+\\: panels]';
 
     return (
         <Box
@@ -196,11 +216,13 @@ export default function App() {
         isReady,
         isBusy,
         messageQueue,
+        mode,
         initialize,
         sendMessage,
         queueMessage,
         cancelRequest,
         clearHistory,
+        setMode,
         addOutput,
     } = useAgent();
 
@@ -222,6 +244,10 @@ export default function App() {
         if (initialized.current) return;
         initialized.current = true;
 
+        // Register mode callbacks for slash commands
+        registerPlanModeCallbacks(() => mode, setMode);
+        registerModeModeCallbacks(() => mode, setMode);
+
         // Show welcome banner
         addOutput('system', '╭────────────────────────────────────────────╮', colors.cyan);
         addOutput('system', '│  Web Agent - Browser Edition               │', colors.cyan);
@@ -237,7 +263,7 @@ export default function App() {
         // https://github.com/xtermjs/xterm.js/issues/5011
         const timer = setTimeout(() => setTerminalMounted(true), 200);
         return () => clearTimeout(timer);
-    }, [initialize, addOutput]);
+    }, [initialize, addOutput, mode, setMode]);
 
     // Cleanup timer if unmounted
     useEffect(() => {
@@ -369,6 +395,11 @@ export default function App() {
                     <span style={{ fontSize: '12px', color: status.color }}>
                         {status.text}
                     </span>
+                    {mode === 'plan' && (
+                        <span style={{ fontSize: '12px', color: colors.yellow, marginLeft: '8px' }}>
+                            📋 PLAN MODE
+                        </span>
+                    )}
                 </div>
 
                 {/* Split Terminal Layout */}
@@ -385,6 +416,7 @@ export default function App() {
                                         queueLength={messageQueue.length}
                                         overlayMode={overlayMode}
                                         secretInputState={secretInputState}
+                                        agentMode={mode}
                                         onSubmit={handleSubmit}
                                         getCompletions={getCommandCompletions}
                                         onCancel={cancelRequest}
@@ -392,6 +424,8 @@ export default function App() {
                                         onModelSelected={handleModelSelected}
                                         onProviderSelected={handleProviderSelected}
                                         onSecretSubmit={handleSecretSubmit}
+                                        onTogglePlanMode={() => setMode(mode === 'plan' ? 'normal' : 'plan')}
+                                        onNormalMode={() => setMode('normal')}
                                     />
                                 </InkXterm>
                             }

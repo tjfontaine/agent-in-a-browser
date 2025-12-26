@@ -15,6 +15,12 @@ export const helpCommand: CommandDef = {
         ctx.output('system', '  /clear             - Clear conversation');
         ctx.output('system', '  /files [path]      - List files in sandbox');
         ctx.output('system', '', undefined);
+        ctx.output('system', 'Plan Mode:', colors.cyan);
+        ctx.output('system', '  /plan [desc]       - Enter plan mode, optionally start planning');
+        ctx.output('system', '  /mode [normal|plan] - View/switch agent mode');
+        ctx.output('system', '  Ctrl+P             - Toggle plan mode');
+        ctx.output('system', '  Ctrl+N             - Switch to normal mode');
+        ctx.output('system', '', undefined);
         ctx.output('system', 'AI Provider:', colors.cyan);
         ctx.output('system', '  /provider          - Configure provider and API keys');
         ctx.output('system', '  /model             - View/switch AI model');

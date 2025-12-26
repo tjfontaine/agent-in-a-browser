@@ -11,6 +11,7 @@ import { initializeWasmMcp, WasmAgent } from './Sdk';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
 import { ANTHROPIC_API_KEY } from '../constants';
 import { SYSTEM_PROMPT } from './SystemPrompt';
+import { AgentMode, PLAN_MODE_SYSTEM_PROMPT } from './AgentMode';
 import {
     getCurrentModel,
     getCurrentModelInfo,
@@ -43,6 +44,7 @@ export interface UseAgentReturn {
     isReady: boolean;
     isBusy: boolean;
     messageQueue: string[];  // Queued messages waiting to be sent
+    mode: AgentMode;  // Current agent mode (normal or plan)
 
     // Actions
     initialize: () => Promise<void>;
@@ -52,6 +54,7 @@ export interface UseAgentReturn {
     clearOutputs: () => void;
     clearHistory: () => void;
     clearQueue: () => void;  // Clear all queued messages
+    setMode: (mode: AgentMode) => void;  // Switch agent mode
 
     // Low-level output function for non-agent messages
     addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
@@ -73,6 +76,7 @@ export function useAgent(): UseAgentReturn {
     const [isReady, setIsReady] = useState(false);
     const [isBusy, setIsBusy] = useState(false);
     const [messageQueue, setMessageQueue] = useState<string[]>([]);
+    const [mode, setModeState] = useState<AgentMode>('normal');
 
     const agentRef = useRef<WasmAgent | null>(null);
     const nextIdRef = useRef(0);
@@ -309,6 +313,31 @@ export function useAgent(): UseAgentReturn {
         addOutput('system', 'Queue cleared.', colors.dim);
     }, [addOutput]);
 
+    // Set agent mode with output message and update system prompt
+    const setMode = useCallback((newMode: AgentMode) => {
+        setModeState(newMode);
+
+        // Update agent system prompt based on mode
+        if (agentRef.current) {
+            if (newMode === 'plan') {
+                // Append plan mode prompt to base prompt
+                const planPrompt = SYSTEM_PROMPT + '\n\n' + PLAN_MODE_SYSTEM_PROMPT;
+                agentRef.current.updateSystemPrompt(planPrompt);
+            } else {
+                // Restore normal prompt
+                agentRef.current.updateSystemPrompt(SYSTEM_PROMPT);
+            }
+        }
+
+        if (newMode === 'plan') {
+            addOutput('system', '📋 Entered PLAN MODE (read-only)', colors.yellow);
+            addOutput('system', '   Agent is now in read-only analysis mode', colors.dim);
+            addOutput('system', '   Type "go" or "yes" after planning to execute', colors.dim);
+        } else {
+            addOutput('system', '✓ Switched to NORMAL MODE', colors.green);
+        }
+    }, [addOutput]);
+
     // Process queued messages when agent becomes idle
     useEffect(() => {
         if (!isBusy && messageQueue.length > 0 && isReady) {
@@ -350,6 +379,7 @@ export function useAgent(): UseAgentReturn {
         isReady,
         isBusy,
         messageQueue,
+        mode,
         initialize,
         sendMessage,
         queueMessage,
@@ -357,6 +387,7 @@ export function useAgent(): UseAgentReturn {
         clearOutputs,
         clearHistory,
         clearQueue,
+        setMode,
         addOutput,
     };
 }

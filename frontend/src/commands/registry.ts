@@ -16,6 +16,8 @@ import { mcpCommand } from './cmd-mcp';
 import { panelCommand } from './cmd-panel';
 import { modelCommand } from './cmd-model';
 import { providerCommand } from './cmd-provider';
+import { planCommand } from './cmd-plan';
+import { modeCommand } from './cmd-mode';
 
 // Registry of all commands
 const registry: Map<string, CommandDef> = new Map();
@@ -137,6 +139,8 @@ registerCommand(mcpCommand);
 registerCommand(panelCommand);
 registerCommand(modelCommand);
 registerCommand(providerCommand);
+registerCommand(planCommand);
+registerCommand(modeCommand);
 
 // Re-export types for convenience
 export type { CommandDef, CommandContext, OutputFn } from './types';
