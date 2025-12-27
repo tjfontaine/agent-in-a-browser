@@ -119,23 +119,38 @@ impl ArchiveCommands {
                             }
                         };
 
+                        // Archive paths must be relative - strip leading slash
+                        let archive_path = file_path.trim_start_matches('/');
+                        
                         if verbose {
-                            stdout_msgs.push(format!("a {}\n", file_path));
+                            stdout_msgs.push(format!("a {}\n", archive_path));
                         }
 
                         if metadata.is_dir() {
-                            if let Err(e) = builder.append_dir_all(file_path, &resolved) {
+                            if let Err(e) = builder.append_dir_all(archive_path, &resolved) {
                                 stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
                             }
                         } else {
-                            let mut f = match std::fs::File::open(&resolved) {
-                                Ok(f) => f,
+                            // Read file content first to avoid WASI File::metadata issues
+                            let content = match std::fs::read(&resolved) {
+                                Ok(c) => c,
                                 Err(e) => {
                                     stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
                                     continue;
                                 }
                             };
-                            if let Err(e) = builder.append_file(file_path, &mut f) {
+                            
+                            // Create header manually
+                            let mut header = tar::Header::new_gnu();
+                            header.set_path(archive_path).unwrap_or_else(|_| {});
+                            header.set_size(content.len() as u64);
+                            header.set_mode(0o644);
+                            header.set_mtime(metadata.modified()
+                                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
+                                .unwrap_or(0));
+                            header.set_cksum();
+                            
+                            if let Err(e) = builder.append_data(&mut header, archive_path, content.as_slice()) {
                                 stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
                             }
                         }
@@ -720,87 +735,90 @@ impl ArchiveCommands {
             let archive_path = resolve(&files[0]);
             let files_to_add = &files[1..];
 
-            let file = match std::fs::File::create(&archive_path) {
-                Ok(f) => f,
-                Err(e) => {
-                    let msg = format!("zip: {}: {}\n", archive_path, e);
+            // Use in-memory buffer to avoid WASI streaming issues with direct File writes
+            let mut buffer = std::io::Cursor::new(Vec::new());
+
+            {
+                let mut zip = zip_next::ZipWriter::new(&mut buffer);
+                let options = zip_next::write::SimpleFileOptions::default()
+                    .compression_method(zip_next::CompressionMethod::Deflated);
+
+                fn add_file_to_zip<W: Write + std::io::Seek>(
+                    zip: &mut zip_next::ZipWriter<W>,
+                    file_path: &str,
+                    archive_name: &str,
+                    options: zip_next::write::SimpleFileOptions,
+                ) -> Result<(), String> {
+                    let content = std::fs::read(file_path)
+                        .map_err(|e| format!("{}: {}", file_path, e))?;
+                    zip.start_file(archive_name, options)
+                        .map_err(|e| format!("{}: {}", archive_name, e))?;
+                    zip.write_all(&content)
+                        .map_err(|e| format!("{}: {}", archive_name, e))?;
+                    Ok(())
+                }
+
+                fn add_dir_to_zip<W: Write + std::io::Seek>(
+                    zip: &mut zip_next::ZipWriter<W>,
+                    dir_path: &str,
+                    base_name: &str,
+                    options: zip_next::write::SimpleFileOptions,
+                ) -> Result<(), String> {
+                    for entry in std::fs::read_dir(dir_path)
+                        .map_err(|e| format!("{}: {}", dir_path, e))?
+                    {
+                        let entry = entry.map_err(|e| format!("{}", e))?;
+                        let path = entry.path();
+                        let name = format!("{}/{}", base_name, entry.file_name().to_string_lossy());
+                        
+                        if path.is_dir() {
+                            add_dir_to_zip(zip, &path.to_string_lossy(), &name, options)?;
+                        } else {
+                            add_file_to_zip(zip, &path.to_string_lossy(), &name, options)?;
+                        }
+                    }
+                    Ok(())
+                }
+
+                for file_path in files_to_add {
+                    let resolved = resolve(file_path);
+                    let metadata = match std::fs::metadata(&resolved) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            let msg = format!("zip: {}: {}\n", resolved, e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                            continue;
+                        }
+                    };
+
+                    if metadata.is_dir() {
+                        if !recursive {
+                            let msg = format!("zip: {}: is a directory (use -r)\n", resolved);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                            continue;
+                        }
+                        if let Err(e) = add_dir_to_zip(&mut zip, &resolved, file_path, options) {
+                            let msg = format!("zip: {}\n", e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                        }
+                    } else {
+                        if let Err(e) = add_file_to_zip(&mut zip, &resolved, file_path, options) {
+                            let msg = format!("zip: {}\n", e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                        }
+                    }
+                }
+
+                if let Err(e) = zip.finish() {
+                    let msg = format!("zip: error finishing archive: {}\n", e);
                     let _ = stderr.write_all(msg.as_bytes()).await;
                     return 1;
                 }
-            };
-
-            let mut zip = zip_next::ZipWriter::new(file);
-            let options = zip_next::write::SimpleFileOptions::default()
-                .compression_method(zip_next::CompressionMethod::Deflated);
-
-            fn add_file_to_zip<W: Write + std::io::Seek>(
-                zip: &mut zip_next::ZipWriter<W>,
-                file_path: &str,
-                archive_name: &str,
-                options: zip_next::write::SimpleFileOptions,
-            ) -> Result<(), String> {
-                let content = std::fs::read(file_path)
-                    .map_err(|e| format!("{}: {}", file_path, e))?;
-                zip.start_file(archive_name, options)
-                    .map_err(|e| format!("{}: {}", archive_name, e))?;
-                zip.write_all(&content)
-                    .map_err(|e| format!("{}: {}", archive_name, e))?;
-                Ok(())
             }
 
-            fn add_dir_to_zip<W: Write + std::io::Seek>(
-                zip: &mut zip_next::ZipWriter<W>,
-                dir_path: &str,
-                base_name: &str,
-                options: zip_next::write::SimpleFileOptions,
-            ) -> Result<(), String> {
-                for entry in std::fs::read_dir(dir_path)
-                    .map_err(|e| format!("{}: {}", dir_path, e))?
-                {
-                    let entry = entry.map_err(|e| format!("{}", e))?;
-                    let path = entry.path();
-                    let name = format!("{}/{}", base_name, entry.file_name().to_string_lossy());
-                    
-                    if path.is_dir() {
-                        add_dir_to_zip(zip, &path.to_string_lossy(), &name, options)?;
-                    } else {
-                        add_file_to_zip(zip, &path.to_string_lossy(), &name, options)?;
-                    }
-                }
-                Ok(())
-            }
-
-            for file_path in files_to_add {
-                let resolved = resolve(file_path);
-                let metadata = match std::fs::metadata(&resolved) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        let msg = format!("zip: {}: {}\n", resolved, e);
-                        let _ = stderr.write_all(msg.as_bytes()).await;
-                        continue;
-                    }
-                };
-
-                if metadata.is_dir() {
-                    if !recursive {
-                        let msg = format!("zip: {}: is a directory (use -r)\n", resolved);
-                        let _ = stderr.write_all(msg.as_bytes()).await;
-                        continue;
-                    }
-                    if let Err(e) = add_dir_to_zip(&mut zip, &resolved, file_path, options) {
-                        let msg = format!("zip: {}\n", e);
-                        let _ = stderr.write_all(msg.as_bytes()).await;
-                    }
-                } else {
-                    if let Err(e) = add_file_to_zip(&mut zip, &resolved, file_path, options) {
-                        let msg = format!("zip: {}\n", e);
-                        let _ = stderr.write_all(msg.as_bytes()).await;
-                    }
-                }
-            }
-
-            if let Err(e) = zip.finish() {
-                let msg = format!("zip: error finishing archive: {}\n", e);
+            // Write the completed zip buffer to the file
+            if let Err(e) = std::fs::write(&archive_path, buffer.into_inner()) {
+                let msg = format!("zip: {}: {}\n", archive_path, e);
                 let _ = stderr.write_all(msg.as_bytes()).await;
                 return 1;
             }
@@ -873,10 +891,12 @@ impl ArchiveCommands {
 
             // Do all zip operations synchronously to avoid Send issues with ZipFile  
             let result: Result<(Vec<String>, Vec<String>), String> = (|| {
-                let file = std::fs::File::open(&archive_path)
+                // Read entire file into memory to avoid WASI File::seek issues
+                let file_data = std::fs::read(&archive_path)
                     .map_err(|e| format!("unzip: {}: {}\n", archive_path, e))?;
                 
-                let mut zip = zip_next::ZipArchive::new(file)
+                let cursor = std::io::Cursor::new(file_data);
+                let mut zip = zip_next::ZipArchive::new(cursor)
                     .map_err(|e| format!("unzip: {}: {}\n", archive_path, e))?;
 
                 let mut stdout_msgs = Vec::new();

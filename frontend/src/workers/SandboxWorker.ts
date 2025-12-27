@@ -6,10 +6,20 @@ console.log('[SandboxWorker] Module loading...');
 export { }; // Make this a module
 
 import { callWasmMcpServerFetch } from '../mcp/WasmBridge';
+// Import lazy module initialization - this starts loading in the background
+import { initPromise as lazyModulesReady } from '../wasm/module-loader-impl';
 
-console.log('[SandboxWorker] Imports complete, sending ready signal');
+console.log('[SandboxWorker] Imports complete, starting lazy module loading...');
 
-// Signal to main thread that worker is ready to receive messages
+// Start module loading in background (non-blocking)
+lazyModulesReady.then(() => {
+    console.log('[SandboxWorker] Lazy modules loaded successfully');
+}).catch((e) => {
+    console.error('[SandboxWorker] Failed to load lazy modules:', e);
+});
+
+// Signal ready immediately - module loading continues in background
+console.log('[SandboxWorker] Sending ready signal');
 self.postMessage({ type: 'ready' });
 
 // OPFS root handle (exported for browser-fs-impl.ts)

@@ -8,27 +8,46 @@ name = "ts-runtime-mcp"
 path = "src/main.rs"
 required-features = []
 
+[features]
+# Default: Core + Archive (shell + http + fs + gzip/tar/zip)
+# tsx and sqlite are lazy-loaded from separate WASM modules
+default = ["archive"]
+
+# Full build (legacy, not recommended - use lazy modules instead)
+full = ["tsx", "sqlite", "archive"]
+
+# TypeScript transpilation (SWC only - no rquickjs runtime)
+tsx = [
+    "dep:swc_common",
+    "dep:swc_ecma_ast",
+    "dep:swc_ecma_parser",
+    "dep:swc_ecma_codegen",
+    "dep:swc_ecma_transforms_typescript",
+    "dep:swc_ecma_visit",
+]
+
+# SQLite database (turso_core)
+sqlite = ["dep:turso_core"]
+
+# Archive tools (tar, gzip, bzip2, zip)
+archive = ["dep:tar", "dep:flate2", "dep:bzip2", "dep:zip_next"]
+
+# Core-only: minimal shell without heavy commands
+# Build with: cargo build --no-default-features
+
 [dependencies]
 # MCP Tool Macros
 runtime-macros = { path = "runtime-macros" }
 
-# The Engine: rquickjs uses QuickJS-NG by default, using git for wasm32-wasip1 bindings (PR #548)
-rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = [
-    "futures",
-    "loader",
-    "classes",
-    "macro",
-] }
-
-# The Transpiler: Individual SWC crates - let cargo resolve compatible versions
-swc_common = "*"
-swc_ecma_ast = "*"
+# The Transpiler: Individual SWC crates (for tsx command)
+swc_common = { version = "*", optional = true }
+swc_ecma_ast = { version = "*", optional = true }
 swc_ecma_parser = { version = "*", default-features = false, features = [
     "typescript",
-] }
-swc_ecma_codegen = "*"
-swc_ecma_transforms_typescript = "*"
-swc_ecma_visit = "*"
+], optional = true }
+swc_ecma_codegen = { version = "*", optional = true }
+swc_ecma_transforms_typescript = { version = "*", optional = true }
+swc_ecma_visit = { version = "*", optional = true }
 
 # Browser Interop
 wasm-bindgen = "0.2"
@@ -86,20 +105,19 @@ brush-parser = "0.3.0"
 regex = "1"
 itertools = "0.14"
 
-# SQLite - Turso core (using fork with WASM simsimd fix)
+# SQLite - Turso core (optional)
 turso_core = { git = "https://github.com/tjfontaine/turso.git", branch = "fix/simsimd-wasm-conditional", default-features = false, features = [
     "fs",
     "uuid",
-] }
+], optional = true }
 
-# Archive handling - pure Rust implementations (WASM-compatible)
-tar = "0.4"    # TAR archive read/write (secure, not affected by CVE-2025-62518)
-flate2 = "1.0" # GZIP via miniz_oxide (pure Rust, WASM-compatible by default)
-bzip2 = "0.6"  # BZIP2 via pure Rust libbz2-rs-sys (0.6+ uses pure Rust by default)
-# NOTE: zip_next default-features include zstd which requires C code - disable for WASM
+# Archive handling - pure Rust implementations (optional)
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+bzip2 = { version = "0.6", optional = true }
 zip_next = { version = "=1.1.0", default-features = false, features = [
     "deflate",
-] }
+], optional = true }
 
 # Git - pure Rust implementation (gitoxide project)
 # NOTE: gix-path has wasm32-wasip2 incompatibility (requires unstable wasip2 feature)
@@ -129,6 +147,7 @@ world = "ts-runtime-mcp"
 "wasi:cli" = { path = "wit/deps/cli" }
 "wasi:sockets" = { path = "wit/deps/sockets" }
 "wasi:filesystem" = { path = "wit/deps/filesystem" }
+"mcp:module-loader" = { path = "wit/deps/module-loader" }
 
 [package.metadata.component.dependencies]
 

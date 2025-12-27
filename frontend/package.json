@@ -6,7 +6,7 @@
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
         "dev": "vite",
-        "build": "npm run transpile:component && tsc && vite build",
+        "build": "npm run transpile:all && tsc && vite build",
         "preview": "vite preview",
         "test": "vitest run",
         "test:watch": "vitest",
@@ -16,8 +16,11 @@
         "test:e2e:ui": "playwright test --ui",
         "test:e2e:docker": "docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit",
         "test:all": "npm run test && npm run test:e2e",
-        "transpile:component": "jco transpile ../target/wasm32-wasip2/release/ts-runtime-mcp.wasm -o src/wasm/mcp-server --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --valid-lifting-optimization --name ts-runtime-mcp",
-        "clean:wasm": "rm -rf src/wasm/mcp-server"
+        "transpile:component": "jco transpile ../target/wasm32-wasip2/release/ts-runtime-mcp.wasm -o src/wasm/mcp-server --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --map 'mcp:module-loader/loader=../module-loader-impl.js' --valid-lifting-optimization --name ts-runtime-mcp",
+        "transpile:tsx-engine": "jco transpile ../target/wasm32-wasip1/release/tsx_engine.wasm -o src/wasm/tsx-engine --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --valid-lifting-optimization --name tsx-engine",
+        "transpile:sqlite-module": "jco transpile ../target/wasm32-wasip2/release/sqlite_module.wasm -o src/wasm/sqlite-module --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --valid-lifting-optimization --name sqlite-module",
+        "transpile:all": "npm run transpile:component && npm run transpile:tsx-engine && npm run transpile:sqlite-module",
+        "clean:wasm": "rm -rf src/wasm/mcp-server src/wasm/tsx-engine src/wasm/sqlite-module"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^2.0.56",

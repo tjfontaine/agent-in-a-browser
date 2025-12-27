@@ -1,5 +1,10 @@
 [workspace]
-members = ["runtime", "runtime/runtime-macros"]
+members = [
+    "runtime",
+    "runtime/runtime-macros",
+    "runtime/crates/tsx-engine",
+    "runtime/crates/sqlite-module",
+]
 resolver = "2"
 
 [workspace.package]

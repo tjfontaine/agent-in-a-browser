@@ -21,10 +21,12 @@ const CONTROL = {
 };
 
 interface OPFSRequest {
-    type: 'scanDirectory' | 'readFile' | 'writeFile' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
+    type: 'scanDirectory' | 'readFile' | 'writeFile' | 'readFileBinary' | 'writeFileBinary' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
     path: string;
-    data?: string;      // For writeFile
-    recursive?: boolean; // For mkdir/rmdir
+    data?: string;         // For writeFile (text)
+    recursive?: boolean;   // For mkdir/rmdir
+    binaryOffset?: number; // For writeFileBinary: where binary data starts in dataArray
+    binaryLength?: number; // For writeFileBinary: length of binary data
 }
 
 interface DirectoryEntry {
@@ -37,12 +39,14 @@ interface DirectoryEntry {
 interface OPFSResponse {
     success: boolean;
     entries?: DirectoryEntry[];  // For scanDirectory
-    data?: string;               // For readFile
-    size?: number;               // For stat
+    data?: string;               // For readFile (text)
+    size?: number;               // For stat and readFileBinary
     mtime?: number;              // For stat
     isFile?: boolean;            // For stat
     isDirectory?: boolean;       // For stat
     error?: string;
+    binaryOffset?: number;       // For readFileBinary: where binary data starts in dataArray
+    binaryLength?: number;       // For readFileBinary: length of binary data
 }
 
 let opfsRoot: FileSystemDirectoryHandle | null = null;
@@ -136,6 +140,64 @@ async function writeFile(path: string, data: string): Promise<OPFSResponse> {
         const fileHandle = await getFileHandle(path, true);
         const writable = await fileHandle.createWritable();
         await writable.write(data);
+        await writable.close();
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
+}
+
+/**
+ * Read file contents as binary (returns data via dataArray, not JSON)
+ * The binary data is written to dataArray starting at a fixed offset,
+ * and the response includes binaryOffset and binaryLength.
+ */
+async function readFileBinary(path: string, dataArray: Uint8Array): Promise<OPFSResponse> {
+    try {
+        const fileHandle = await getFileHandle(path);
+        const file = await fileHandle.getFile();
+        const arrayBuffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+
+        // Reserve first 1KB for JSON response, put binary after
+        const binaryOffset = 1024;
+        const maxBinarySize = dataArray.length - binaryOffset;
+
+        if (bytes.length > maxBinarySize) {
+            return { success: false, error: `File too large: ${bytes.length} > ${maxBinarySize}` };
+        }
+
+        // Copy binary data to dataArray
+        dataArray.set(bytes, binaryOffset);
+
+        return {
+            success: true,
+            binaryOffset,
+            binaryLength: bytes.length,
+            size: bytes.length
+        };
+    } catch (_e) {
+        return { success: false, error: `ENOENT: no such file: ${path}` };
+    }
+}
+
+/**
+ * Write binary data to a file (reads data from dataArray, not JSON)
+ * The binary data is read from dataArray using binaryOffset and binaryLength.
+ */
+async function writeFileBinary(
+    path: string,
+    dataArray: Uint8Array,
+    binaryOffset: number,
+    binaryLength: number
+): Promise<OPFSResponse> {
+    try {
+        // Extract binary data from dataArray
+        const binaryData = dataArray.slice(binaryOffset, binaryOffset + binaryLength);
+
+        const fileHandle = await getFileHandle(path, true);
+        const writable = await fileHandle.createWritable();
+        await writable.write(binaryData);
         await writable.close();
         return { success: true };
     } catch (e) {
@@ -312,6 +374,17 @@ async function requestLoop(
                 break;
             case 'writeFile':
                 response = await writeFile(request.path, request.data || '');
+                break;
+            case 'readFileBinary':
+                response = await readFileBinary(request.path, dataArray);
+                break;
+            case 'writeFileBinary':
+                response = await writeFileBinary(
+                    request.path,
+                    dataArray,
+                    request.binaryOffset || 0,
+                    request.binaryLength || 0
+                );
                 break;
             case 'exists':
                 response = await exists(request.path);

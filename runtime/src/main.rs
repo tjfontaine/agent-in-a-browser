@@ -1,247 +1,35 @@
 //! MCP HTTP Server
 //!
 //! Implements wasi:http/incoming-handler to serve MCP protocol over HTTP.
-//! Uses cargo-component bindings for WASI interfaces.
+//! Pure shell-based implementation without JavaScript runtime.
 
 mod bindings;
 mod http_client;
-mod js_modules;
-mod loader;
 mod mcp_server;
-mod resolver;
 mod shell;
-mod transpiler;
+
 
 use bindings::exports::wasi::http::incoming_handler::Guest;
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
 use mcp_server::{JsonRpcRequest, JsonRpcResponse, ToolResult};
-use rquickjs::{AsyncContext, AsyncRuntime, CatchResultExt};
 use runtime_macros::mcp_tool_router;
 use serde_json::json;
 use std::cell::RefCell;
 
-/// The TypeScript Runtime MCP Server (thread-local, single-threaded)
-struct TsRuntimeMcp {
-    #[allow(dead_code)] // held to keep runtime alive
-    runtime: AsyncRuntime,
-    context: AsyncContext,
-}
+/// The Shell-based MCP Server (thread-local, single-threaded)
+/// Pure shell implementation - no JavaScript runtime
+struct ShellMcpServer;
 
 thread_local! {
-    static MCP_SERVER: RefCell<Option<TsRuntimeMcp>> = RefCell::new(None);
-    // Separate runtime for tsx shell command execution to avoid RefCell borrow conflicts
-    // (shell commands run within MCP_SERVER borrow, so tsx can't re-borrow)
-    static TSX_RUNTIME: RefCell<Option<TsRuntimeMcp>> = RefCell::new(None);
+    static MCP_SERVER: RefCell<Option<ShellMcpServer>> = RefCell::new(None);
 }
 
 #[mcp_tool_router]
-impl TsRuntimeMcp {
+impl ShellMcpServer {
     pub fn new() -> Result<Self, String> {
-        let runtime =
-            AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
-        let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
-            .map_err(|e| format!("Failed to create context: {}", e))?;
-
-        futures_lite::future::block_on(context.with(|ctx| {
-            js_modules::install_all(&ctx)?;
-            Ok::<(), rquickjs::Error>(())
-        }))
-        .map_err(|e| format!("Failed to install bindings: {}", e))?;
-
-        futures_lite::future::block_on(
-            runtime.set_loader(resolver::HybridResolver, loader::HybridLoader),
-        );
-
-        Ok(Self { runtime, context })
-    }
-
-    #[allow(dead_code)] // convenience wrapper for eval_code_with_source
-    fn eval_code(&mut self, code: &str) -> Result<String, String> {
-        self.eval_code_with_source(code, "<eval>")
-    }
-    
-    fn eval_code_with_source(&mut self, code: &str, source_name: &str) -> Result<String, String> {
-        js_modules::clear_logs();
-
-        // Always transpile to handle TypeScript
-        let js_code = transpiler::transpile(code)?;
-
-        // Detect if code has ES module imports
-        let has_imports = js_code.contains("import ") || js_code.contains("import{") 
-            || js_code.contains("import\t") || js_code.contains("import\n");
-
-        if has_imports {
-            // Use Module::evaluate for ESM import support
-            futures_lite::future::block_on(self.context.with(|ctx| {
-                let result = rquickjs::Module::evaluate(ctx.clone(), source_name, js_code);
-                match result.catch(&ctx) {
-                    Ok(promise) => {
-                        // Wait for module to finish evaluating
-                        match promise.finish::<rquickjs::Value>() {
-                            Ok(_) => {
-                                let logs = js_modules::get_logs();
-                                if logs.is_empty() {
-                                    Ok("(module executed)".to_string())
-                                } else {
-                                    Ok(logs)
-                                }
-                            }
-                            Err(e) => {
-                                // Try to extract exception details using ctx.catch()
-                                Err(Self::format_js_error(&ctx, e, "Module error"))
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // CaughtError contains the exception - format it
-                        Err(format!("Module compile error: {}", e))
-                    }
-                }
-            }))
-        } else {
-            // Script mode for simple code without imports
-            let wrapped = format!("(async () => {{\n{}\n}})();", js_code);
-
-            futures_lite::future::block_on(self.context.with(|ctx| {
-                let result = ctx.eval::<rquickjs::Value, _>(wrapped.as_bytes());
-                match result.catch(&ctx) {
-                    Ok(val) => {
-                        // Check if result is a Promise and resolve it
-                        let resolved_val = if let Ok(promise) = rquickjs::Promise::from_value(val.clone()) {
-                            // Drive the JS job queue until the Promise resolves
-                            match promise.finish::<rquickjs::Value>() {
-                                Ok(resolved) => resolved,
-                                Err(e) => {
-                                    // Promise rejected or error - return error message
-                                    return Err(format!("Promise error: {:?}", e));
-                                }
-                            }
-                        } else {
-                            val
-                        };
-                        
-                        // Format the resolved value
-                        Self::format_value(&ctx, resolved_val)
-                    }
-                    Err(e) => Err(format!("Evaluation error: {:?}", e)),
-                }
-            }))
-        }
-    }
-    
-    /// Format a JavaScript error, extracting exception details if available
-    fn format_js_error<'a>(ctx: &rquickjs::Ctx<'a>, err: rquickjs::Error, prefix: &str) -> String {
-        // Check if there's a caught exception on the context
-        // ctx.catch() returns Value which may be undefined if no exception
-        let exc = ctx.catch();
-        if !exc.is_undefined() {
-            // Try to extract error message and stack
-            if let Some(obj) = exc.as_object() {
-                let mut parts = vec![];
-                
-                // Get error name (e.g., "TypeError", "SyntaxError")
-                if let Ok(name) = obj.get::<_, String>("name") {
-                    parts.push(name);
-                }
-                
-                // Get error message
-                if let Ok(msg) = obj.get::<_, String>("message") {
-                    parts.push(msg);
-                }
-                
-                // Get stack trace
-                if let Ok(stack) = obj.get::<_, String>("stack") {
-                    if !stack.is_empty() {
-                        return format!("{}: {}\nStack: {}", prefix, parts.join(": "), stack);
-                    }
-                }
-                
-                if !parts.is_empty() {
-                    return format!("{}: {}", prefix, parts.join(": "));
-                }
-            }
-            
-            // Fallback: try to stringify the exception
-            if let Some(s) = exc.as_string() {
-                if let Ok(msg) = s.to_string() {
-                    return format!("{}: {}", prefix, msg);
-                }
-            }
-            
-            return format!("{}: {:?}", prefix, exc);
-        }
-        
-        // No caught exception, use error's Display
-        let error_msg = format!("{}", err);
-        if error_msg.is_empty() || error_msg == "Exception" {
-            format!("{}: {:?}", prefix, err)
-        } else {
-            format!("{}: {}", prefix, error_msg)
-        }
-    }
-    
-    /// Format a JavaScript value as a string for output
-    fn format_value<'a>(ctx: &rquickjs::Ctx<'a>, val: rquickjs::Value<'a>) -> Result<String, String> {
-        if val.is_undefined() {
-            let logs = js_modules::get_logs();
-            if logs.is_empty() {
-                Ok("undefined".to_string())
-            } else {
-                Ok(logs)
-            }
-        } else if let Some(s) = val.as_string() {
-            Ok(s.to_string().unwrap_or_default())
-        } else if let Some(n) = val.as_number() {
-            Ok(format!("{}", n))
-        } else if let Some(b) = val.as_bool() {
-            Ok(format!("{}", b))
-        } else {
-            let json_global = ctx.globals();
-            if let Ok(json_obj) = json_global.get::<_, rquickjs::Object>("JSON") {
-                if let Ok(stringify) =
-                    json_obj.get::<_, rquickjs::Function>("stringify")
-                {
-                    if let Ok(result) = stringify.call::<_, String>((val.clone(),)) {
-                        return Ok(result);
-                    }
-                }
-            }
-            Ok("[object]".to_string())
-        }
-    }
-
-    // Internal helpers - may be used for non-browser-fs implementations in the future
-    #[allow(dead_code)]
-    fn transpile_code(&self, code: &str) -> Result<String, String> {
-        transpiler::transpile(code)
-    }
-
-    #[allow(dead_code)]
-    fn read_file_internal(&self, path: &str) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))
-    }
-
-    #[allow(dead_code)]
-    fn write_file_internal(&self, path: &str, content: &str) -> Result<(), String> {
-        std::fs::write(path, content).map_err(|e| format!("Failed to write {}: {}", path, e))
-    }
-
-    #[allow(dead_code)]
-    fn list_dir_internal(&self, path: &str) -> Result<Vec<String>, String> {
-        let entries =
-            std::fs::read_dir(path).map_err(|e| format!("Failed to list {}: {}", path, e))?;
-        let mut result = Vec::new();
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                result.push(format!("{}/", name));
-            } else {
-                result.push(name);
-            }
-        }
-        Ok(result)
+        Ok(Self)
     }
 
     // ============================================================
@@ -368,7 +156,7 @@ impl TsRuntimeMcp {
         }
     }
 
-    #[mcp_tool(description = "Execute shell commands with pipe support. Supports: echo, pwd, ls, cat, head, yes, true, false. Example: 'ls /data | head -n 5'")]
+    #[mcp_tool(description = "Execute shell commands with pipe support. Supports 50+ commands including: echo, ls, cat, grep, sed, awk, jq, curl, sqlite3, tsx, tar, gzip, and more. Example: 'ls /data | head -n 5'")]
     fn shell_eval(&self, command: String) -> ToolResult {
         if command.is_empty() {
             return ToolResult::error("No command provided");
@@ -462,33 +250,14 @@ impl TsRuntimeMcp {
 /// Get or create the MCP server instance (thread-local)
 fn with_server<F, R>(f: F) -> R
 where
-    F: FnOnce(&mut TsRuntimeMcp) -> R,
+    F: FnOnce(&mut ShellMcpServer) -> R,
 {
     MCP_SERVER.with(|server| {
         let mut server_ref = server.borrow_mut();
         if server_ref.is_none() {
-            *server_ref = Some(TsRuntimeMcp::new().expect("Failed to create MCP server"));
+            *server_ref = Some(ShellMcpServer::new().expect("Failed to create MCP server"));
         }
         f(server_ref.as_mut().unwrap())
-    })
-}
-
-/// Public API for shell commands to execute JavaScript/TypeScript code.
-/// Uses a separate QuickJS runtime (TSX_RUNTIME) to avoid RefCell conflicts
-/// since shell commands run within an MCP_SERVER borrow.
-pub fn eval_js(code: &str) -> Result<String, String> {
-    eval_js_with_source(code, "<eval>")
-}
-
-/// Execute JavaScript/TypeScript code with a source path for module resolution.
-/// The source_name is used as the base path when resolving relative imports.
-pub fn eval_js_with_source(code: &str, source_name: &str) -> Result<String, String> {
-    TSX_RUNTIME.with(|rt| {
-        let mut rt_ref = rt.borrow_mut();
-        if rt_ref.is_none() {
-            *rt_ref = Some(TsRuntimeMcp::new().map_err(|e| format!("Failed to create tsx runtime: {}", e))?);
-        }
-        rt_ref.as_mut().unwrap().eval_code_with_source(code, source_name)
     })
 }
 

@@ -24,9 +24,15 @@ import {
 } from './directory-tree';
 import {
     initHelperWorker,
-    syncFileOperation,
+    syncReadFileBinary,
+    syncWriteFileBinary,
     msToDatetime
 } from './opfs-sync-bridge';
+
+// Global buffer cache for files being written via streams without sync handles.
+// This persists data across writeViaStream() calls since each call creates a new OutputStream.
+// Key: normalized file path, Value: accumulated binary data
+const fileBufferCache = new Map<string, Uint8Array>();
 
 // ============================================================
 // WASI TYPES & CLASSES
@@ -191,6 +197,7 @@ class Descriptor {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
+        console.log('[opfs-fs] Descriptor.read called, length:', length, 'offset:', offset, 'path:', normalizedPath);
 
         // Get cached sync handle
         const handle = syncHandleCache.get(normalizedPath);
@@ -203,23 +210,17 @@ class Descriptor {
             return [buffer, eof];
         }
 
-        // Fallback: use sync helper to read file via Atomics
-        console.log('[opfs-fs] No cached handle, using syncFileOperation for:', normalizedPath);
+        // Fallback: use sync helper to read file via Atomics (binary-safe)
+        console.log('[opfs-fs] No cached handle, using syncReadFileBinary for:', normalizedPath);
         try {
-            const response = syncFileOperation({ type: 'readFile', path: normalizedPath });
-            if (!response.success || response.data === undefined) {
-                console.warn('[opfs-fs] Read failed:', response.error);
-                return [new Uint8Array(0), true];
-            }
-
-            const fullData = new TextEncoder().encode(response.data);
+            const fullData = syncReadFileBinary(normalizedPath);
             const sliceStart = Math.min(offset, fullData.length);
             const sliceEnd = Math.min(offset + length, fullData.length);
             const slicedData = fullData.slice(sliceStart, sliceEnd);
             const eof = sliceEnd >= fullData.length;
             return [slicedData, eof];
         } catch (e) {
-            console.error('[opfs-fs] syncFileOperation read error:', e);
+            console.error('[opfs-fs] syncReadFileBinary error:', e);
             return [new Uint8Array(0), true];
         }
     }
@@ -233,6 +234,7 @@ class Descriptor {
         const path = this.path;
         const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
+        console.log('[opfs-fs] readViaStream called, path:', normalizedPath, 'offset:', offset);
 
         const handle = syncHandleCache.get(normalizedPath);
         if (handle) {
@@ -263,15 +265,11 @@ class Descriptor {
             });
         }
 
-        // Fallback: read entire file via sync helper, then stream from memory
-        console.log('[opfs-fs] No cached handle for stream, using syncFileOperation:', normalizedPath);
+        // Fallback: read entire file via sync helper (binary-safe), then stream from memory
+        console.log('[opfs-fs] No cached handle for stream, using syncReadFileBinary:', normalizedPath);
         let fileData: Uint8Array | null = null;
         try {
-            const response = syncFileOperation({ type: 'readFile', path: normalizedPath });
-            if (!response.success || response.data === undefined) {
-                throw 'no-entry';
-            }
-            fileData = new TextEncoder().encode(response.data);
+            fileData = syncReadFileBinary(normalizedPath);
         } catch (e) {
             console.error('[opfs-fs] readViaStream sync fallback error:', e);
             throw 'no-entry';
@@ -311,6 +309,7 @@ class Descriptor {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
+        console.log('[opfs-fs] Descriptor.write called, buffer.length:', buffer.length, 'offset:', offset, 'path:', normalizedPath);
 
         const handle = syncHandleCache.get(normalizedPath);
         if (handle) {
@@ -326,22 +325,17 @@ class Descriptor {
             return buffer.byteLength;
         }
 
-        // Fallback: use sync helper to write file via Atomics
-        console.log('[opfs-fs] No cached handle, using syncFileOperation for write:', normalizedPath);
+        // Fallback: use sync helper to write file via Atomics (binary-safe)
+        console.log('[opfs-fs] No cached handle, using syncWriteFileBinary for:', normalizedPath);
         try {
-            const text = new TextDecoder().decode(buffer);
-            const response = syncFileOperation({ type: 'writeFile', path: normalizedPath, data: text });
-            if (!response.success) {
-                console.warn('[opfs-fs] Write failed:', response.error);
-                return 0;
-            }
+            syncWriteFileBinary(normalizedPath, buffer);
 
             // Update tree entry
             this.treeEntry.size = (this.treeEntry.size || 0) + buffer.byteLength;
             this.treeEntry.mtime = Date.now();
             return buffer.byteLength;
         } catch (e) {
-            console.error('[opfs-fs] syncFileOperation write error:', e);
+            console.error('[opfs-fs] syncWriteFileBinary error:', e);
             return 0;
         }
     }
@@ -389,34 +383,59 @@ class Descriptor {
         }
 
         // Fallback: write immediately to OPFS via syncFileOperation
+        // Use global buffer cache to persist data across stream re-opens (ZipWriter seeks cause multiple writeViaStream calls)
         console.log('[opfs-fs] No cached handle for stream write, using syncFileOperation:', normalizedPath);
-        let totalWritten = '';
         const syncPath = normalizedPath;
         const syncEntry = entry;
 
+        // Initialize buffer in cache if not present, or get existing buffer
+        if (!fileBufferCache.has(syncPath)) {
+            fileBufferCache.set(syncPath, new Uint8Array(0));
+        }
+
         return new OutputStream({
             write(buf: Uint8Array): bigint {
-                const text = new TextDecoder().decode(buf);
-                totalWritten += text;
-                // Write immediately to OPFS - don't buffer
-                const response = syncFileOperation({ type: 'writeFile', path: syncPath, data: totalWritten });
-                if (response.success) {
-                    syncEntry.size = totalWritten.length;
+                const existingData = fileBufferCache.get(syncPath) || new Uint8Array(0);
+                console.log('[opfs-fs] writeViaStream.write called, buf.length:', buf.length, 'cached:', existingData.length);
+
+                // Accumulate binary data in cache
+                const newData = new Uint8Array(existingData.length + buf.length);
+                newData.set(existingData);
+                newData.set(buf, existingData.length);
+                fileBufferCache.set(syncPath, newData);
+
+                // Write immediately to OPFS (binary-safe)
+                try {
+                    syncWriteFileBinary(syncPath, newData);
+                    syncEntry.size = newData.length;
                     syncEntry.mtime = Date.now();
+                    console.log('[opfs-fs] writeViaStream.write completed, total size:', newData.length);
+                } catch (e) {
+                    console.error('[opfs-fs] writeViaStream binary write error:', e);
                 }
                 return BigInt(buf.byteLength);
             },
             blockingWriteAndFlush(buf: Uint8Array): void {
-                const text = new TextDecoder().decode(buf);
-                totalWritten += text;
-                const response = syncFileOperation({ type: 'writeFile', path: syncPath, data: totalWritten });
-                if (response.success) {
-                    syncEntry.size = totalWritten.length;
+                const existingData = fileBufferCache.get(syncPath) || new Uint8Array(0);
+
+                // Accumulate binary data in cache
+                const newData = new Uint8Array(existingData.length + buf.length);
+                newData.set(existingData);
+                newData.set(buf, existingData.length);
+                fileBufferCache.set(syncPath, newData);
+
+                // Write immediately to OPFS (binary-safe)
+                try {
+                    syncWriteFileBinary(syncPath, newData);
+                    syncEntry.size = newData.length;
                     syncEntry.mtime = Date.now();
+                } catch (e) {
+                    console.error('[opfs-fs] writeViaStream binary blockingWrite error:', e);
                 }
             },
             flush(): void {
-                // Already persisted on write
+                // Clear the buffer cache for this file since it's been flushed
+                // (Data is already persisted on each write)
             },
             blockingFlush(): void {
                 // Already persisted on write

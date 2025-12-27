@@ -3,6 +3,587 @@
 //   * runtime_path: "wit_bindgen_rt"
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
+pub mod mcp {
+    pub mod module_loader {
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod loader {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type Pollable = super::super::super::wasi::io::poll::Pollable;
+            /// Environment context for command execution
+            #[derive(Clone)]
+            pub struct ExecEnv {
+                /// Current working directory
+                pub cwd: _rt::String,
+                /// Environment variables
+                pub vars: _rt::Vec<(_rt::String, _rt::String)>,
+            }
+            impl ::core::fmt::Debug for ExecEnv {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("ExecEnv")
+                        .field("cwd", &self.cwd)
+                        .field("vars", &self.vars)
+                        .finish()
+                }
+            }
+            /// Handle to a running lazy command process
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct LazyProcess {
+                handle: _rt::Resource<LazyProcess>,
+            }
+            impl LazyProcess {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for LazyProcess {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]lazy-process"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Get a pollable that becomes ready when the module is loaded
+                /// Shell should poll/block on this before writing stdin
+                pub fn get_ready_pollable(&self) -> Pollable {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.get-ready-pollable"]
+                            fn wit_import0(_: i32) -> i32;
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32) -> i32 {
+                            unreachable!()
+                        }
+                        let ret = unsafe { wit_import0((self).handle() as i32) };
+                        unsafe {
+                            super::super::super::wasi::io::poll::Pollable::from_handle(
+                                ret as u32,
+                            )
+                        }
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Check if module is loaded and ready for execution
+                pub fn is_ready(&self) -> bool {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.is-ready"]
+                            fn wit_import0(_: i32) -> i32;
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32) -> i32 {
+                            unreachable!()
+                        }
+                        let ret = unsafe { wit_import0((self).handle() as i32) };
+                        _rt::bool_lift(ret as u8)
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Write data to stdin. Returns number of bytes written.
+                /// Should only be called after is-ready returns true.
+                pub fn write_stdin(&self, data: &[u8]) -> Result<u64, _rt::String> {
+                    unsafe {
+                        #[repr(align(8))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 8 + 2 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8
+                                + 2 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let vec0 = data;
+                        let ptr0 = vec0.as_ptr().cast::<u8>();
+                        let len0 = vec0.len();
+                        let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.write-stdin"]
+                            fn wit_import2(_: i32, _: *mut u8, _: usize, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import2(
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        ) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import2(
+                                (self).handle() as i32,
+                                ptr0.cast_mut(),
+                                len0,
+                                ptr1,
+                            )
+                        };
+                        let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                        let result8 = match l3 {
+                            0 => {
+                                let e = {
+                                    let l4 = *ptr1.add(8).cast::<i64>();
+                                    l4 as u64
+                                };
+                                Ok(e)
+                            }
+                            1 => {
+                                let e = {
+                                    let l5 = *ptr1.add(8).cast::<*mut u8>();
+                                    let l6 = *ptr1
+                                        .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len7 = l6;
+                                    let bytes7 = _rt::Vec::from_raw_parts(
+                                        l5.cast(),
+                                        len7,
+                                        len7,
+                                    );
+                                    _rt::string_lift(bytes7)
+                                };
+                                Err(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result8
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Close stdin, signaling EOF to the process
+                pub fn close_stdin(&self) -> () {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.close-stdin"]
+                            fn wit_import0(_: i32);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import0((self).handle() as i32) };
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read available data from stdout (non-blocking)
+                pub fn read_stdout(&self, max_bytes: u64) -> _rt::Vec<u8> {
+                    unsafe {
+                        #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                        #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 2 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2
+                                * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.read-stdout"]
+                            fn wit_import1(_: i32, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i64, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(&max_bytes),
+                                ptr0,
+                            )
+                        };
+                        let l2 = *ptr0.add(0).cast::<*mut u8>();
+                        let l3 = *ptr0
+                            .add(::core::mem::size_of::<*const u8>())
+                            .cast::<usize>();
+                        let len4 = l3;
+                        let result5 = _rt::Vec::from_raw_parts(l2.cast(), len4, len4);
+                        result5
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Read available data from stderr (non-blocking)
+                pub fn read_stderr(&self, max_bytes: u64) -> _rt::Vec<u8> {
+                    unsafe {
+                        #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                        #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                        struct RetArea(
+                            [::core::mem::MaybeUninit<
+                                u8,
+                            >; 2 * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 2
+                                * ::core::mem::size_of::<*const u8>()],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.read-stderr"]
+                            fn wit_import1(_: i32, _: i64, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i64, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i64(&max_bytes),
+                                ptr0,
+                            )
+                        };
+                        let l2 = *ptr0.add(0).cast::<*mut u8>();
+                        let l3 = *ptr0
+                            .add(::core::mem::size_of::<*const u8>())
+                            .cast::<usize>();
+                        let len4 = l3;
+                        let result5 = _rt::Vec::from_raw_parts(l2.cast(), len4, len4);
+                        result5
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Check if the process has completed
+                pub fn try_wait(&self) -> Option<i32> {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.try-wait"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                        let result4 = match l2 {
+                            0 => None,
+                            1 => {
+                                let e = {
+                                    let l3 = *ptr0.add(4).cast::<i32>();
+                                    l3
+                                };
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        };
+                        result4
+                    }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Spawn a lazy module command, returns a process handle
+            ///
+            /// This starts async module loading. Use get-ready-pollable()
+            /// to wait for the module to load before writing stdin.
+            pub fn spawn_lazy_command(
+                module: &str,
+                command: &str,
+                args: &[_rt::String],
+                env: &ExecEnv,
+            ) -> Result<LazyProcess, _rt::String> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 3 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 3
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let vec0 = module;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let vec1 = command;
+                    let ptr1 = vec1.as_ptr().cast::<u8>();
+                    let len1 = vec1.len();
+                    let vec3 = args;
+                    let len3 = vec3.len();
+                    let layout3 = _rt::alloc::Layout::from_size_align_unchecked(
+                        vec3.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result3 = if layout3.size() != 0 {
+                        let ptr = _rt::alloc::alloc(layout3).cast::<u8>();
+                        if ptr.is_null() {
+                            _rt::alloc::handle_alloc_error(layout3);
+                        }
+                        ptr
+                    } else {
+                        ::core::ptr::null_mut()
+                    };
+                    for (i, e) in vec3.into_iter().enumerate() {
+                        let base = result3
+                            .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let vec2 = e;
+                            let ptr2 = vec2.as_ptr().cast::<u8>();
+                            let len2 = vec2.len();
+                            *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len2;
+                            *base.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+                        }
+                    }
+                    let ExecEnv { cwd: cwd4, vars: vars4 } = env;
+                    let vec5 = cwd4;
+                    let ptr5 = vec5.as_ptr().cast::<u8>();
+                    let len5 = vec5.len();
+                    let vec9 = vars4;
+                    let len9 = vec9.len();
+                    let layout9 = _rt::alloc::Layout::from_size_align_unchecked(
+                        vec9.len() * (4 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result9 = if layout9.size() != 0 {
+                        let ptr = _rt::alloc::alloc(layout9).cast::<u8>();
+                        if ptr.is_null() {
+                            _rt::alloc::handle_alloc_error(layout9);
+                        }
+                        ptr
+                    } else {
+                        ::core::ptr::null_mut()
+                    };
+                    for (i, e) in vec9.into_iter().enumerate() {
+                        let base = result9
+                            .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let (t6_0, t6_1) = e;
+                            let vec7 = t6_0;
+                            let ptr7 = vec7.as_ptr().cast::<u8>();
+                            let len7 = vec7.len();
+                            *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len7;
+                            *base.add(0).cast::<*mut u8>() = ptr7.cast_mut();
+                            let vec8 = t6_1;
+                            let ptr8 = vec8.as_ptr().cast::<u8>();
+                            let len8 = vec8.len();
+                            *base
+                                .add(3 * ::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len8;
+                            *base
+                                .add(2 * ::core::mem::size_of::<*const u8>())
+                                .cast::<*mut u8>() = ptr8.cast_mut();
+                        }
+                    }
+                    let ptr10 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "spawn-lazy-command"]
+                        fn wit_import11(
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        );
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import11(
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                    ) {
+                        unreachable!()
+                    }
+                    unsafe {
+                        wit_import11(
+                            ptr0.cast_mut(),
+                            len0,
+                            ptr1.cast_mut(),
+                            len1,
+                            result3,
+                            len3,
+                            ptr5.cast_mut(),
+                            len5,
+                            result9,
+                            len9,
+                            ptr10,
+                        )
+                    };
+                    let l12 = i32::from(*ptr10.add(0).cast::<u8>());
+                    let result17 = match l12 {
+                        0 => {
+                            let e = {
+                                let l13 = *ptr10
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>();
+                                unsafe { LazyProcess::from_handle(l13 as u32) }
+                            };
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l14 = *ptr10
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l15 = *ptr10
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len16 = l15;
+                                let bytes16 = _rt::Vec::from_raw_parts(
+                                    l14.cast(),
+                                    len16,
+                                    len16,
+                                );
+                                _rt::string_lift(bytes16)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    if layout3.size() != 0 {
+                        _rt::alloc::dealloc(result3.cast(), layout3);
+                    }
+                    if layout9.size() != 0 {
+                        _rt::alloc::dealloc(result9.cast(), layout9);
+                    }
+                    result17
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Check if a command should be handled by a lazy module
+            /// Returns the module name if so, or none
+            pub fn get_lazy_module(command: &str) -> Option<_rt::String> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 3 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 3
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let vec0 = command;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "get-lazy-module"]
+                        fn wit_import2(_: *mut u8, _: usize, _: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import2(_: *mut u8, _: usize, _: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import2(ptr0.cast_mut(), len0, ptr1) };
+                    let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                    let result7 = match l3 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l4 = *ptr1
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l5 = *ptr1
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len6 = l5;
+                                let bytes6 = _rt::Vec::from_raw_parts(
+                                    l4.cast(),
+                                    len6,
+                                    len6,
+                                );
+                                _rt::string_lift(bytes6)
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result7
+                }
+            }
+        }
+    }
+}
+#[rustfmt::skip]
+#[allow(dead_code, clippy::all)]
 pub mod wasi {
     pub mod clocks {
         /// WASI Monotonic Clock is a clock API intended to let users measure elapsed
@@ -11764,8 +12345,8 @@ pub(crate) use __export_ts_runtime_mcp_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10067] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xceM\x01A\x02\x01A$\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10643] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x8eR\x01A\x02\x01A&\x01\
 B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[meth\
 od]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.b\
 lock\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\0\
@@ -11956,13 +12537,25 @@ ror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01@
 \x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\0\x20wasi:h\
 ttp/outgoing-handler@0.2.4\x05\x14\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10\
 get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi\
-:random/random@0.2.4\x05\x15\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11\
-response-outparam\x01B\x08\x02\x03\x02\x01\x16\x04\0\x10incoming-request\x03\0\0\
-\x02\x03\x02\x01\x17\x04\0\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\
-\x02\x07request\x04\x0cresponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20w\
-asi:http/incoming-handler@0.2.4\x05\x18\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.\
-0\x04\0\x0b\x14\x01\0\x0ets-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed\
--by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
+:random/random@0.2.4\x05\x15\x01B!\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\
+\x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\x04\
+\0\x0clazy-process\x03\x01\x01h\x06\x01i\x01\x01@\x01\x04self\x07\0\x08\x04\0'[m\
+ethod]lazy-process.get-ready-pollable\x01\x09\x01@\x01\x04self\x07\0\x7f\x04\0\x1d\
+[method]lazy-process.is-ready\x01\x0a\x01p}\x01j\x01w\x01s\x01@\x02\x04self\x07\x04\
+data\x0b\0\x0c\x04\0\x20[method]lazy-process.write-stdin\x01\x0d\x01@\x01\x04sel\
+f\x07\x01\0\x04\0\x20[method]lazy-process.close-stdin\x01\x0e\x01@\x02\x04self\x07\
+\x09max-bytesw\0\x0b\x04\0\x20[method]lazy-process.read-stdout\x01\x0f\x04\0\x20\
+[method]lazy-process.read-stderr\x01\x0f\x01kz\x01@\x01\x04self\x07\0\x10\x04\0\x1d\
+[method]lazy-process.try-wait\x01\x11\x01ps\x01i\x06\x01j\x01\x13\x01s\x01@\x04\x06\
+modules\x07commands\x04args\x12\x03env\x05\0\x14\x04\0\x12spawn-lazy-command\x01\
+\x15\x01ks\x01@\x01\x07commands\0\x16\x04\0\x0fget-lazy-module\x01\x17\x03\0\x1e\
+mcp:module-loader/loader@0.1.0\x05\x16\x02\x03\0\x07\x10incoming-request\x02\x03\
+\0\x07\x11response-outparam\x01B\x08\x02\x03\x02\x01\x17\x04\0\x10incoming-reque\
+st\x03\0\0\x02\x03\x02\x01\x18\x04\0\x11response-outparam\x03\0\x02\x01i\x01\x01\
+i\x03\x01@\x02\x07request\x04\x0cresponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\
+\0\x20wasi:http/incoming-handler@0.2.4\x05\x19\x04\0#mcp:ts-runtime/ts-runtime-m\
+cp@0.2.0\x04\0\x0b\x14\x01\0\x0ets-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cpr\
+ocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

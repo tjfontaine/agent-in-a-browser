@@ -1,0 +1,33 @@
+[package]
+name = "sqlite-module"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# SQLite via Turso (fork with WASM simsimd fix)
+turso_core = { git = "https://github.com/tjfontaine/turso.git", branch = "fix/simsimd-wasm-conditional", default-features = false, features = [
+    "fs",
+    "uuid",
+] }
+
+# WASI bindings
+wasm-bindgen = "0.2"
+wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+
+# Async executor
+futures-lite = "2"
+
+[package.metadata.component]
+package = "shell:unix"
+
+[package.metadata.component.target]
+path = "wit"
+world = "sqlite-module"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = { path = "wit/deps/io" }
+"wasi:filesystem" = { path = "wit/deps/filesystem" }
+"wasi:clocks" = { path = "wit/deps/clocks" }

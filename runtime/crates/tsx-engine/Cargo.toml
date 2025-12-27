@@ -1,0 +1,63 @@
+[package]
+name = "tsx-engine"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# QuickJS-NG engine
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = [
+    "futures",
+    "loader",
+    "classes",
+    "macro",
+] }
+
+# SWC transpiler (individual crates)
+swc_common = "*"
+swc_ecma_ast = "*"
+swc_ecma_parser = { version = "*", default-features = false, features = [
+    "typescript",
+] }
+swc_ecma_codegen = "*"
+swc_ecma_transforms_typescript = "*"
+swc_ecma_visit = "*"
+
+# WASI/WASM bindings
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "Response",
+    "Request",
+    "RequestInit",
+    "Headers",
+] }
+wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+
+# Serialization (for fetch options parsing)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async executor
+futures-lite = "2"
+
+[package.metadata.component]
+package = "shell:unix"
+
+[package.metadata.component.target]
+path = "wit"
+world = "tsx-engine"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = { path = "wit/deps/io" }
+"wasi:filesystem" = { path = "wit/deps/filesystem" }
+"wasi:clocks" = { path = "wit/deps/clocks" }
+"wasi:http" = { path = "wit/deps/http" }
+"wasi:sockets" = { path = "wit/deps/sockets" }
+"wasi:random" = { path = "wit/deps/random" }
+"wasi:cli" = { path = "wit/deps/cli" }

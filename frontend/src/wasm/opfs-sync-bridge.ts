@@ -28,20 +28,24 @@ export interface OPFSResponse {
 }
 
 export interface SyncFileRequest {
-    type: 'readFile' | 'writeFile' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
+    type: 'readFile' | 'writeFile' | 'readFileBinary' | 'writeFileBinary' | 'exists' | 'stat' | 'mkdir' | 'rmdir' | 'unlink';
     path: string;
     data?: string;
     recursive?: boolean;
+    binaryOffset?: number;  // For writeFileBinary: where binary data starts in dataArray
+    binaryLength?: number;  // For writeFileBinary: length of binary data
 }
 
 export interface SyncFileResponse {
     success: boolean;
-    data?: string;
+    data?: string;           // For readFile (text)
     size?: number;
     mtime?: number;
     isFile?: boolean;
     isDirectory?: boolean;
     error?: string;
+    binaryOffset?: number;   // For readFileBinary: where binary data is in dataArray
+    binaryLength?: number;   // For readFileBinary: length of binary data
 }
 
 // ============================================================
@@ -176,6 +180,80 @@ export function syncReadFile(path: string): string {
  */
 export function syncWriteFile(path: string, data: string): void {
     const response = syncFileOperation({ type: 'writeFile', path, data });
+    if (!response.success) {
+        throw new Error(response.error || `Failed to write: ${path}`);
+    }
+}
+
+/**
+ * Synchronously read a file's binary contents.
+ * Returns the raw bytes without any text encoding/decoding.
+ */
+export function syncReadFileBinary(path: string): Uint8Array {
+    if (!dataArray) {
+        throw new Error('OPFS helper not ready for binary operations');
+    }
+
+    const response = syncFileOperation({ type: 'readFileBinary', path });
+    if (!response.success || response.binaryOffset === undefined || response.binaryLength === undefined) {
+        throw new Error(response.error || `ENOENT: no such file: ${path}`);
+    }
+
+    // Copy binary data from dataArray (don't just slice - we need a copy)
+    return dataArray.slice(response.binaryOffset, response.binaryOffset + response.binaryLength);
+}
+
+/**
+ * Synchronously write binary data to a file.
+ * Writes raw bytes without any text encoding/decoding.
+ */
+export function syncWriteFileBinary(path: string, data: Uint8Array): void {
+    if (!sharedBuffer || !controlArray || !dataArray || !helperReady) {
+        throw new Error('OPFS helper not ready for binary operations');
+    }
+
+    // Binary data goes at fixed offset (after the JSON request)
+    const binaryOffset = 1024;
+    const maxBinarySize = dataArray.length - binaryOffset;
+
+    if (data.length > maxBinarySize) {
+        throw new Error(`Binary data too large: ${data.length} > ${maxBinarySize}`);
+    }
+
+    // Copy binary data to dataArray
+    dataArray.set(data, binaryOffset);
+
+    // Make request with binary offset/length
+    const request: SyncFileRequest = {
+        type: 'writeFileBinary',
+        path,
+        binaryOffset,
+        binaryLength: data.length
+    };
+
+    const requestBytes = new TextEncoder().encode(JSON.stringify(request));
+
+    // Don't overwrite the binary data area
+    if (requestBytes.length > binaryOffset) {
+        throw new Error('Request JSON too large for binary operation');
+    }
+
+    dataArray.set(requestBytes);
+    Atomics.store(controlArray, CONTROL.DATA_LENGTH, requestBytes.length);
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+    Atomics.store(controlArray, CONTROL.REQUEST_READY, 1);
+    Atomics.notify(controlArray, CONTROL.REQUEST_READY);
+
+    const waitResult = Atomics.wait(controlArray, CONTROL.RESPONSE_READY, 0, 30000);
+    if (waitResult === 'timed-out') {
+        throw new Error('Timeout waiting for binary write');
+    }
+
+    const responseLength = Atomics.load(controlArray, CONTROL.DATA_LENGTH);
+    const responseJson = new TextDecoder().decode(dataArray.slice(0, responseLength));
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+
+    const response: SyncFileResponse = JSON.parse(responseJson);
     if (!response.success) {
         throw new Error(response.error || `Failed to write: ${path}`);
     }

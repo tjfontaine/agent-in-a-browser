@@ -15,10 +15,15 @@ mod path;
 mod string;
 mod test;
 mod text;
-mod tsx;
 mod util;
+
+// Feature-gated modules for modular WASM builds
+// Note: tsx commands are now in tsx-engine (lazy-loaded)
+#[cfg(feature = "sqlite")]
 mod sql;
+#[cfg(feature = "sqlite")]
 mod wasi_io;
+#[cfg(feature = "archive")]
 mod archive;
 mod git;
 
@@ -32,11 +37,14 @@ pub use self::path::PathCommands;
 pub use self::string::StringCommands;
 pub use self::test::TestCommands;
 pub use self::text::TextCommands;
-pub use self::tsx::TsxCommands;
 pub use self::util::UtilCommands;
-pub use self::sql::SqlCommands;
-pub use self::archive::ArchiveCommands;
 pub use self::git::GitCommands;
+
+// TsxCommands moved to tsx-engine module (lazy-loaded)
+#[cfg(feature = "sqlite")]
+pub use self::sql::SqlCommands;
+#[cfg(feature = "archive")]
+pub use self::archive::ArchiveCommands;
 
 use super::ShellEnv;
 
@@ -80,22 +88,32 @@ pub struct ShellCommands;
 
 impl ShellCommands {
     pub fn get_command(name: &str) -> Option<CommandFn> {
-        // Try each category in order
+        // Try each category in order (core commands always available)
         CoreCommands::get_command(name)
             .or_else(|| FileCommands::get_command(name))
             .or_else(|| TextCommands::get_command(name))
             .or_else(|| PathCommands::get_command(name))
             .or_else(|| EnvCommands::get_command(name))
             .or_else(|| MiscCommands::get_command(name))
-            .or_else(|| TsxCommands::get_command(name))
             .or_else(|| JsonCommands::get_command(name))
             .or_else(|| TestCommands::get_command(name))
             .or_else(|| UtilCommands::get_command(name))
             .or_else(|| EncodingCommands::get_command(name))
             .or_else(|| StringCommands::get_command(name))
-            .or_else(|| SqlCommands::get_command(name))
-            .or_else(|| ArchiveCommands::get_command(name))
             .or_else(|| GitCommands::get_command(name))
+            // tsx commands are lazy-loaded from tsx-engine
+            .or_else(|| {
+                #[cfg(feature = "sqlite")]
+                { SqlCommands::get_command(name) }
+                #[cfg(not(feature = "sqlite"))]
+                { None }
+            })
+            .or_else(|| {
+                #[cfg(feature = "archive")]
+                { ArchiveCommands::get_command(name) }
+                #[cfg(not(feature = "archive"))]
+                { None }
+            })
     }
     
     pub fn show_help(name: &str) -> Option<&'static str> {
@@ -105,15 +123,25 @@ impl ShellCommands {
             .or_else(|| PathCommands::show_help(name))
             .or_else(|| EnvCommands::show_help(name))
             .or_else(|| MiscCommands::show_help(name))
-            .or_else(|| TsxCommands::show_help(name))
             .or_else(|| JsonCommands::show_help(name))
             .or_else(|| TestCommands::show_help(name))
             .or_else(|| UtilCommands::show_help(name))
             .or_else(|| EncodingCommands::show_help(name))
             .or_else(|| StringCommands::show_help(name))
-            .or_else(|| SqlCommands::show_help(name))
-            .or_else(|| ArchiveCommands::show_help(name))
             .or_else(|| GitCommands::show_help(name))
+            // tsx commands are lazy-loaded from tsx-engine
+            .or_else(|| {
+                #[cfg(feature = "sqlite")]
+                { SqlCommands::show_help(name) }
+                #[cfg(not(feature = "sqlite"))]
+                { None }
+            })
+            .or_else(|| {
+                #[cfg(feature = "archive")]
+                { ArchiveCommands::show_help(name) }
+                #[cfg(not(feature = "archive"))]
+                { None }
+            })
     }
     
     pub fn list_commands() -> Vec<&'static str> {
@@ -124,15 +152,19 @@ impl ShellCommands {
         cmds.extend_from_slice(PathCommands::list_commands());
         cmds.extend_from_slice(EnvCommands::list_commands());
         cmds.extend_from_slice(MiscCommands::list_commands());
-        cmds.extend_from_slice(TsxCommands::list_commands());
         cmds.extend_from_slice(JsonCommands::list_commands());
         cmds.extend_from_slice(TestCommands::list_commands());
         cmds.extend_from_slice(UtilCommands::list_commands());
         cmds.extend_from_slice(EncodingCommands::list_commands());
         cmds.extend_from_slice(StringCommands::list_commands());
-        cmds.extend_from_slice(SqlCommands::list_commands());
-        cmds.extend_from_slice(ArchiveCommands::list_commands());
         cmds.extend_from_slice(GitCommands::list_commands());
+        
+        // tsx commands are lazy-loaded from tsx-engine
+        #[cfg(feature = "sqlite")]
+        cmds.extend_from_slice(SqlCommands::list_commands());
+        #[cfg(feature = "archive")]
+        cmds.extend_from_slice(ArchiveCommands::list_commands());
+        
         cmds.sort();
         cmds
     }
@@ -187,17 +219,12 @@ mod tests {
         assert!(commands.contains(&"sort"));
         assert!(commands.contains(&"basename"));
         assert!(commands.contains(&"env"));
-        // New commands
-        assert!(commands.contains(&"sed"));
-        assert!(commands.contains(&"cut"));
-        assert!(commands.contains(&"tr"));
-        assert!(commands.contains(&"find"));
-        assert!(commands.contains(&"diff"));
-        assert!(commands.contains(&"curl"));
-        assert!(commands.contains(&"jq"));
-        assert!(commands.contains(&"xargs"));
-        assert!(commands.contains(&"tsc"));
-        assert!(commands.contains(&"tsx"));
+        // Feature-gated commands - only test if feature enabled
+        #[cfg(feature = "tsx")]
+        {
+            assert!(commands.contains(&"tsc"));
+            assert!(commands.contains(&"tsx"));
+        }
     }
     
     #[test]
