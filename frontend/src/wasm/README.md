@@ -42,7 +42,17 @@ This directory contains the browser-side infrastructure that connects the WASM M
 
 | Directory | Description |
 |-----------|-------------|
-| `mcp-server/` | jco-transpiled WASM component (ES modules) |
+| `mcp-server/` | jco-transpiled main WASM component (ES modules) |
+| `tsx-engine/` | jco-transpiled TypeScript execution module |
+| `sqlite-module/` | jco-transpiled SQLite database module |
+
+### Lazy Loading Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `lazy-modules.ts` | On-demand loading of heavy modules (tsx, sqlite) |
+| `module-loader-impl.ts` | Module instantiation with WASI imports |
+| `module-loader-worker.ts` | Dedicated worker for module loading |
 
 ### Host Bridge Implementations
 
@@ -50,6 +60,8 @@ This directory contains the browser-side infrastructure that connects the WASM M
 |------|----------------|---------|
 | `opfs-filesystem-impl.ts` | `wasi:filesystem/*` | Sync filesystem via SyncAccessHandle + lazy-loaded directory tree |
 | `opfs-async-helper.ts` | N/A | Helper worker for async OPFS operations (SharedArrayBuffer bridge) |
+| `opfs-sync-bridge.ts` | N/A | Synchronous file I/O via Atomics + binary data handling |
+| `directory-tree.ts` | N/A | In-memory directory structure and file metadata |
 | `wasi-http-impl.ts` | `wasi:http/outgoing-handler` | Sync HTTP via XMLHttpRequest |
 | `clocks-impl.js` | `wasi:clocks/*` | Custom Pollable extensions for sync blocking |
 

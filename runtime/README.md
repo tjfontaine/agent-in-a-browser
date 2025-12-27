@@ -77,14 +77,27 @@ runtime/
 │   ├── bindings.rs         # Generated WIT bindings (cargo-component)
 │   │
 │   ├── host_bindings.rs    # Console, path polyfills for QuickJS
-│   ├── loader.rs           # Module loader (CDN + local files)
-│   ├── resolver.rs         # Import specifier resolution
-│   ├── transpiler.rs       # SWC TypeScript → JavaScript
 │   ├── http_client.rs      # Outgoing HTTP via WASI HTTP
 │   └── shell/              # Shell command implementation
 │       ├── mod.rs          # Shell infrastructure
 │       ├── commands/       # Built-in commands (ls, cat, cd, etc.)
 │       └── pipeline.rs     # Command pipeline execution
+│
+├── crates/                 # ← Modular WASM components (lazy-loaded)
+│   ├── tsx-engine/         # TypeScript/TSX execution
+│   │   ├── Cargo.toml
+│   │   ├── src/
+│   │   │   ├── lib.rs      # WASI component entry point
+│   │   │   ├── loader.rs   # Module loader (CDN + local files)
+│   │   │   ├── resolver.rs # Import specifier resolution
+│   │   │   ├── transpiler.rs # SWC TypeScript → JavaScript
+│   │   │   └── js_modules/ # Node.js polyfills (Buffer, URL, etc.)
+│   │   └── wit/            # Component world definition
+│   │
+│   └── sqlite-module/      # SQLite database support
+│       ├── Cargo.toml
+│       ├── src/lib.rs      # turso_core SQLite wrapper
+│       └── wit/            # Component world definition
 │
 ├── wit/
 │   ├── world.wit           # Component world definition
@@ -95,6 +108,18 @@ runtime/
 └── runtime-macros/         # Proc macros for MCP tool definitions
     └── ...
 ```
+
+### Modular Architecture
+
+Heavy commands are split into separate WASM components for lazy loading:
+
+| Component | Purpose | Commands |
+|-----------|---------|----------|
+| `ts-runtime-mcp` | Core shell, filesystem, HTTP | Most commands |
+| `tsx-engine` | TypeScript/JavaScript execution | `tsx`, `tsc` |
+| `sqlite-module` | SQLite database operations | `sqlite3` |
+
+These modules are transpiled separately and loaded on-demand in the browser.
 
 ## Building
 

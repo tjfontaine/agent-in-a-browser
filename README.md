@@ -197,12 +197,27 @@ This starts:
 ```bash
 cd frontend
 
-# Transpile WASM component to ES modules
-npm run transpile:component
+# Transpile all WASM components to ES modules
+npm run transpile:all
+
+# Transpile individual components (if needed)
+npm run transpile:component      # Main MCP server
+npm run transpile:tsx-engine     # TypeScript execution module
+npm run transpile:sqlite-module  # SQLite database module
 
 # Clean generated WASM bindings
 npm run clean:wasm
 ```
+
+### Modular WASM Architecture
+
+Heavy modules are lazy-loaded on first use to reduce initial load time:
+
+| Module | Commands | Loaded When |
+|--------|----------|-------------|
+| `mcp-server` | Most shell commands | Startup |
+| `tsx-engine` | `tsx`, `tsc` | First TypeScript execution |
+| `sqlite-module` | `sqlite3` | First database operation |
 
 ## Project Structure
 
@@ -217,10 +232,13 @@ web-agent/
 │   ├── src/
 │   │   ├── main.rs          # HTTP handler + MCP dispatch
 │   │   ├── mcp_server.rs    # JSON-RPC types
-│   │   └── ...
-│   └── wit/                 # WASI interface definitions
-│       ├── world.wit        # Component world (pure WASI interfaces)
-│       └── deps/            # WASI dependencies
+│   │   └── shell/           # Shell command implementation
+│   ├── wit/                 # WASI interface definitions
+│   │   ├── world.wit        # Component world (pure WASI)
+│   │   └── deps/            # WASI dependencies
+│   └── crates/              # ← Modular WASM components
+│       ├── tsx-engine/      # TypeScript/TSX execution (lazy-loaded)
+│       └── sqlite-module/   # SQLite database (lazy-loaded)
 │
 ├── frontend/                # ← Browser UI + agent
 │   ├── package.json
@@ -229,7 +247,10 @@ web-agent/
 │   │   ├── README.md        # Frontend architecture docs
 │   │   └── wasm/            # ← Host bridges + generated code
 │   │       ├── README.md    # Bridge layer docs
-│   │       ├── mcp-server/  # jco-transpiled WASM (generated)
+│   │       ├── mcp-server/  # jco-transpiled main WASM (generated)
+│   │       ├── tsx-engine/  # jco-transpiled TSX module (generated)
+│   │       ├── sqlite-module/ # jco-transpiled SQLite (generated)
+│   │       ├── lazy-modules.ts # On-demand module loading
 │   │       ├── opfs-filesystem-impl.ts
 │   │       └── wasi-http-impl.ts
 │   └── vite.config.ts

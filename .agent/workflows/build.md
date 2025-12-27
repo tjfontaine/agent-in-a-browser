@@ -41,11 +41,14 @@ Runs 422 Rust tests including JS module tests (Buffer, path, fs, URL, etc.).
 // turbo
 
 ```bash
-cd frontend && npm run transpile:component
+cd frontend && npm run transpile:all
 ```
 
-This uses `jco` to transpile the WASM component to JavaScript modules at:
-`frontend/src/wasm/mcp-server/`
+This uses `jco` to transpile all WASM components to JavaScript modules:
+
+- `frontend/src/wasm/mcp-server/` - Main shell and MCP tools
+- `frontend/src/wasm/tsx-engine/` - TypeScript execution (lazy-loaded)
+- `frontend/src/wasm/sqlite-module/` - SQLite database (lazy-loaded)
 
 ### 4. Run Frontend Unit Tests
 
@@ -94,7 +97,7 @@ This runs steps 1, 3, plus TypeScript compilation and Vite production build.
 // turbo
 
 ```bash
-npm run build:wasm && cd runtime && cargo test && cd ../frontend && npm run transpile:component && npm run test:all
+npm run build:wasm && cd runtime && cargo test && cd ../frontend && npm run transpile:all && npm run test:all
 ```
 
 ### Unit Tests Only
