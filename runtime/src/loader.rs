@@ -16,7 +16,7 @@ impl Loader for HybridLoader {
         let source = if path.starts_with("https://") || path.starts_with("http://") {
             // Fetch from URL using synchronous WASI HTTP
             match http_client::fetch_sync(path) {
-                Ok(response) if response.ok => response.body,
+                Ok(response) if response.ok => response.body(),
                 Ok(response) => {
                     return Err(rquickjs::Error::new_loading_message(
                         path,

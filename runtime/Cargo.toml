@@ -92,6 +92,24 @@ turso_core = { git = "https://github.com/tjfontaine/turso.git", branch = "fix/si
     "uuid",
 ] }
 
+# Archive handling - pure Rust implementations (WASM-compatible)
+tar = "0.4"    # TAR archive read/write (secure, not affected by CVE-2025-62518)
+flate2 = "1.0" # GZIP via miniz_oxide (pure Rust, WASM-compatible by default)
+bzip2 = "0.6"  # BZIP2 via pure Rust libbz2-rs-sys (0.6+ uses pure Rust by default)
+# NOTE: zip_next default-features include zstd which requires C code - disable for WASM
+zip_next = { version = "=1.1.0", default-features = false, features = [
+    "deflate",
+] }
+
+# Git - pure Rust implementation (gitoxide project)
+# NOTE: gix-path has wasm32-wasip2 incompatibility (requires unstable wasip2 feature)
+# Git commands are disabled on WASM until upstream gix fixes wasip2 support
+# Tracking: https://github.com/rust-lang/rust/issues/129033
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.gix]
+version = "0.76"
+default-features = false
+features = ["basic", "attributes", "excludes", "status", "zlib-rs"]
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 

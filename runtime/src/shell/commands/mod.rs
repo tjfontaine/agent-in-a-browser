@@ -19,6 +19,8 @@ mod tsx;
 mod util;
 mod sql;
 mod wasi_io;
+mod archive;
+mod git;
 
 pub use self::core::CoreCommands;
 pub use self::encoding::EncodingCommands;
@@ -33,6 +35,8 @@ pub use self::text::TextCommands;
 pub use self::tsx::TsxCommands;
 pub use self::util::UtilCommands;
 pub use self::sql::SqlCommands;
+pub use self::archive::ArchiveCommands;
+pub use self::git::GitCommands;
 
 use super::ShellEnv;
 
@@ -90,6 +94,8 @@ impl ShellCommands {
             .or_else(|| EncodingCommands::get_command(name))
             .or_else(|| StringCommands::get_command(name))
             .or_else(|| SqlCommands::get_command(name))
+            .or_else(|| ArchiveCommands::get_command(name))
+            .or_else(|| GitCommands::get_command(name))
     }
     
     pub fn show_help(name: &str) -> Option<&'static str> {
@@ -106,6 +112,8 @@ impl ShellCommands {
             .or_else(|| EncodingCommands::show_help(name))
             .or_else(|| StringCommands::show_help(name))
             .or_else(|| SqlCommands::show_help(name))
+            .or_else(|| ArchiveCommands::show_help(name))
+            .or_else(|| GitCommands::show_help(name))
     }
     
     pub fn list_commands() -> Vec<&'static str> {
@@ -123,6 +131,8 @@ impl ShellCommands {
         cmds.extend_from_slice(EncodingCommands::list_commands());
         cmds.extend_from_slice(StringCommands::list_commands());
         cmds.extend_from_slice(SqlCommands::list_commands());
+        cmds.extend_from_slice(ArchiveCommands::list_commands());
+        cmds.extend_from_slice(GitCommands::list_commands());
         cmds.sort();
         cmds
     }

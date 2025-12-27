@@ -1,7 +1,7 @@
 //! HTTP Client using WASI HTTP outgoing-handler
 //!
-//! Provides a synchronous fetch function for use within QuickJS.
-//! Uses the standard WASI HTTP interface which maps to JavaScript XMLHttpRequest shim.
+//! Provides synchronous fetch functions for use within the runtime.
+//! Uses the standard WASI HTTP interface.
 
 use crate::bindings::wasi::http::{
     outgoing_handler,
@@ -12,12 +12,32 @@ use crate::bindings::wasi::http::{
 pub struct FetchResponse {
     pub status: u16,
     pub ok: bool,
-    pub body: String,
+    /// Raw bytes of response body
+    pub bytes: Vec<u8>,
+}
+
+impl FetchResponse {
+    /// Get body as UTF-8 string (legacy compatibility)
+    pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.bytes.clone())
+    }
+    
+    /// Get body as string, using lossy conversion for non-UTF8
+    pub fn text_lossy(&self) -> String {
+        String::from_utf8_lossy(&self.bytes).to_string()
+    }
+}
+
+// Legacy compatibility - body as string
+impl FetchResponse {
+    #[allow(dead_code)]
+    pub fn body(&self) -> String {
+        self.text_lossy()
+    }
 }
 
 /// Parse a URL into scheme, authority, and path components
 fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
-    // Handle scheme
     let (scheme, rest) = if url.starts_with("https://") {
         (Scheme::Https, &url[8..])
     } else if url.starts_with("http://") {
@@ -26,7 +46,6 @@ fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
         return Err(format!("Unsupported URL scheme: {}", url));
     };
 
-    // Split authority and path
     let (authority, path) = match rest.find('/') {
         Some(idx) => (rest[..idx].to_string(), rest[idx..].to_string()),
         None => (rest.to_string(), "/".to_string()),
@@ -39,24 +58,17 @@ fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
     Ok((scheme, authority, path))
 }
 
-/// Read the entire body from an IncomingBody stream
-/// 
-/// Uses poll-based reading instead of blocking_read to avoid condvar panics
-/// in single-threaded WASM environments.
-fn read_body(
+/// Read the entire body from an IncomingBody stream as bytes
+fn read_body_bytes(
     body: crate::bindings::wasi::http::types::IncomingBody,
-) -> Result<String, String> {
+) -> Result<Vec<u8>, String> {
     let stream = body.stream().map_err(|_| "Failed to get body stream")?;
 
     let mut bytes = Vec::new();
     loop {
-        // Get pollable for this stream
         let pollable = stream.subscribe();
-        
-        // Block until stream is ready (uses WASI poll, not std condvar)
         pollable.block();
         
-        // Now do non-blocking read
         match stream.read(65536) {
             Ok(chunk) => {
                 if chunk.is_empty() {
@@ -69,29 +81,63 @@ fn read_body(
     }
 
     drop(stream);
-    
-    String::from_utf8(bytes).map_err(|e| format!("Body is not valid UTF-8: {}", e))
+    Ok(bytes)
 }
 
 /// Perform a synchronous HTTP GET request
 pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
+    fetch(Method::Get, url, &[], None)
+}
+
+/// Perform a synchronous HTTP request with full control
+pub fn fetch(
+    method: Method,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: Option<&[u8]>,
+) -> Result<FetchResponse, String> {
     let (scheme, authority, path) = parse_url(url)?;
 
     // Build headers
-    let headers = Fields::new();
+    let header_fields = Fields::new();
+    for (key, value) in headers {
+        let _ = header_fields.append(&key.to_string(), &value.as_bytes().to_vec());
+    }
 
     // Build request
-    let request = OutgoingRequest::new(headers);
-    request.set_method(&Method::Get).map_err(|_| "Failed to set method")?;
+    let request = OutgoingRequest::new(header_fields);
+    request.set_method(&method).map_err(|_| "Failed to set method")?;
     request.set_scheme(Some(&scheme)).map_err(|_| "Failed to set scheme")?;
     request.set_authority(Some(&authority)).map_err(|_| "Failed to set authority")?;
     request.set_path_with_query(Some(&path)).map_err(|_| "Failed to set path")?;
+
+    // Write body if provided
+    if let Some(body_bytes) = body {
+        let outgoing_body = request.body().map_err(|_| "Failed to get outgoing body")?;
+        let stream = outgoing_body.write().map_err(|_| "Failed to get write stream")?;
+        
+        let mut offset = 0;
+        while offset < body_bytes.len() {
+            let chunk_size = std::cmp::min(65536, body_bytes.len() - offset);
+            let chunk = &body_bytes[offset..offset + chunk_size];
+            
+            let pollable = stream.subscribe();
+            pollable.block();
+            
+            stream.write(chunk).map_err(|_| "Failed to write body chunk")?;
+            offset += chunk_size;
+        }
+        
+        drop(stream);
+        crate::bindings::wasi::http::types::OutgoingBody::finish(outgoing_body, None)
+            .map_err(|_| "Failed to finish body")?;
+    }
 
     // Send request
     let future_response = outgoing_handler::handle(request, None)
         .map_err(|e| format!("HTTP request failed: {:?}", e))?;
 
-    // Wait for response (our shim resolves synchronously)
+    // Wait for response
     loop {
         if let Some(result) = future_response.get() {
             let response = result.map_err(|_| "Response error")?
@@ -100,50 +146,22 @@ pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
             let status = response.status();
             let ok = status >= 200 && status < 300;
 
-            // Read body
             let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
-            let body = read_body(body_handle)?;
+            let bytes = read_body_bytes(body_handle)?;
 
-            return Ok(FetchResponse { status, ok, body });
+            return Ok(FetchResponse { status, ok, bytes });
         }
     }
 }
 
-/// Perform a synchronous HTTP request with custom method, headers, body
+/// Convenience: POST request with JSON headers string (legacy compatibility)
 pub fn fetch_request(
     method: &str,
     url: &str,
     headers_json: Option<&str>,
     body: Option<&str>,
 ) -> Result<FetchResponse, String> {
-    let (scheme, authority, path) = parse_url(url)?;
-
-    // Build headers
-    let headers = Fields::new();
-    
-    // Parse JSON headers if provided
-    if let Some(headers_str) = headers_json {
-        // Simple JSON parsing for {"key": "value", ...}
-        // This is a basic parser since we don't have serde
-        for pair in headers_str.trim_matches(|c| c == '{' || c == '}').split(',') {
-            let parts: Vec<&str> = pair.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let key = parts[0].trim().trim_matches('"');
-                let value = parts[1].trim().trim_matches('"');
-                if !key.is_empty() && !value.is_empty() {
-                    let _ = headers.append(
-                        &key.to_string(),
-                        &value.as_bytes().to_vec(),
-                    );
-                }
-            }
-        }
-    }
-
-    // Build request
-    let request = OutgoingRequest::new(headers);
-    
-    // Set method
+    // Parse method
     let method_enum = match method.to_uppercase().as_str() {
         "GET" => Method::Get,
         "HEAD" => Method::Head,
@@ -155,40 +173,26 @@ pub fn fetch_request(
         "PATCH" => Method::Patch,
         _ => Method::Other(method.to_string()),
     };
-    request.set_method(&method_enum).map_err(|_| "Failed to set method")?;
-    request.set_scheme(Some(&scheme)).map_err(|_| "Failed to set scheme")?;
-    request.set_authority(Some(&authority)).map_err(|_| "Failed to set authority")?;
-    request.set_path_with_query(Some(&path)).map_err(|_| "Failed to set path")?;
 
-    // Write body if provided
-    if let Some(_body_str) = body {
-        // Note: For now we only support GET-style requests
-        // Full body support would require writing to the OutgoingBody stream
-        // This matches the previous browser-http behavior
-    }
-
-    // Send request
-    let future_response = outgoing_handler::handle(request, None)
-        .map_err(|e| format!("HTTP request failed: {:?}", e))?;
-
-    // Wait for response (our shim resolves synchronously)
-    loop {
-        if let Some(result) = future_response.get() {
-            let response = result.map_err(|_| "Response error")?
-                                 .map_err(|e| format!("HTTP error: {:?}", e))?;
-
-            let status = response.status();
-            let ok = status >= 200 && status < 300;
-
-            // Read body
-            let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
-            let response_body = read_body(body_handle)?;
-
-            return Ok(FetchResponse { 
-                status, 
-                ok, 
-                body: response_body,
-            });
+    // Parse JSON headers
+    let mut header_vec = Vec::new();
+    if let Some(headers_str) = headers_json {
+        for pair in headers_str.trim_matches(|c| c == '{' || c == '}').split(',') {
+            let parts: Vec<&str> = pair.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                let key = parts[0].trim().trim_matches('"');
+                let value = parts[1].trim().trim_matches('"');
+                if !key.is_empty() && !value.is_empty() {
+                    header_vec.push((key, value));
+                }
+            }
         }
     }
+
+    fetch(
+        method_enum,
+        url,
+        &header_vec,
+        body.map(|s| s.as_bytes()),
+    )
 }

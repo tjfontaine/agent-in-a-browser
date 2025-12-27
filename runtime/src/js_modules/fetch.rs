@@ -49,7 +49,7 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                             "status": response.status,
                             "statusText": if response.ok { "OK" } else { "" },
                             "headers": [],
-                            "body": response.body
+                            "body": response.body()
                         }).to_string()
                     }
                     Err(e) => {

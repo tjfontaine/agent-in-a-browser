@@ -274,14 +274,14 @@ impl MiscCommands {
                         } else {
                             format!("{}/{}", cwd, out_path)
                         };
-                        if let Err(e) = std::fs::write(&path, &response.body) {
+                        if let Err(e) = std::fs::write(&path, &response.body()) {
                             let msg = format!("curl: {}: {}\n", path, e);
                             let _ = stderr.write_all(msg.as_bytes()).await;
                             return 1;
                         }
                     } else {
-                        let _ = stdout.write_all(response.body.as_bytes()).await;
-                        if !response.body.ends_with('\n') {
+                        let _ = stdout.write_all(response.body().as_bytes()).await;
+                        if !response.body().ends_with('\n') {
                             let _ = stdout.write_all(b"\n").await;
                         }
                     }

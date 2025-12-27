@@ -340,3 +340,106 @@ test.describe('Shell Glob Expansion', () => {
         expect(lsResult.output).toContain('keep.rs');
     });
 });
+
+test.describe('Archive Commands', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/wasm-test.html');
+        await page.waitForFunction(() => {
+            // @ts-expect-error - window.testHarness is set up when ready
+            return window.testHarness?.ready === true;
+        }, { timeout: 30000 });
+    });
+
+    test('gzip compresses and gunzip decompresses', async ({ page }) => {
+        // Create a test file
+        await writeFile(page, '/gztest/file.txt', 'hello gzip world');
+
+        // Compress with gzip  
+        const gzipResult = await shellEval(page, 'gzip -k /gztest/file.txt');
+        expect(gzipResult.success).toBe(true);
+
+        // Verify .gz file exists
+        const lsResult = await shellEval(page, 'ls /gztest');
+        expect(lsResult.success).toBe(true);
+        expect(lsResult.output).toContain('file.txt.gz');
+
+        // Decompress with zcat to stdout
+        const zcatResult = await shellEval(page, 'zcat /gztest/file.txt.gz');
+        expect(zcatResult.success).toBe(true);
+        expect(zcatResult.output).toContain('hello gzip world');
+    });
+
+    test('tar creates and extracts archives', async ({ page }) => {
+        // Create test files
+        await writeFile(page, '/tartest/src/a.txt', 'file a');
+        await writeFile(page, '/tartest/src/b.txt', 'file b');
+
+        // Create tar archive
+        const createResult = await shellEval(page, 'cd /tartest/src && tar -cvf /tartest/archive.tar a.txt b.txt');
+        expect(createResult.success).toBe(true);
+
+        // List archive contents
+        const listResult = await shellEval(page, 'tar -tvf /tartest/archive.tar');
+        expect(listResult.success).toBe(true);
+        expect(listResult.output).toContain('a.txt');
+        expect(listResult.output).toContain('b.txt');
+    });
+
+    test('zip creates and unzip extracts', async ({ page }) => {
+        // Create test file
+        await writeFile(page, '/ziptest/file.txt', 'zip content here');
+
+        // Create zip archive
+        const zipResult = await shellEval(page, 'cd /ziptest && zip archive.zip file.txt');
+        expect(zipResult.success).toBe(true);
+
+        // List zip contents
+        const listResult = await shellEval(page, 'unzip -l /ziptest/archive.zip');
+        expect(listResult.success).toBe(true);
+        expect(listResult.output).toContain('file.txt');
+    });
+});
+
+test.describe('Git Commands', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/wasm-test.html');
+        await page.waitForFunction(() => {
+            // @ts-expect-error - window.testHarness is set up when ready
+            return window.testHarness?.ready === true;
+        }, { timeout: 30000 });
+    });
+
+    test('git init creates a repository', async ({ page }) => {
+        // Create directory and init
+        const mkdirResult = await shellEval(page, 'mkdir -p /gitrepo');
+        expect(mkdirResult.success).toBe(true);
+
+        const initResult = await shellEval(page, 'cd /gitrepo && git init');
+        expect(initResult.success).toBe(true);
+        expect(initResult.output).toContain('Initialized');
+
+        // Verify .git directory exists
+        const lsResult = await shellEval(page, 'ls -a /gitrepo');
+        expect(lsResult.success).toBe(true);
+        expect(lsResult.output).toContain('.git');
+    });
+
+    test('git status shows repository state', async ({ page }) => {
+        // Create and init repo
+        await shellEval(page, 'mkdir -p /gitrepo2');
+        await shellEval(page, 'cd /gitrepo2 && git init');
+
+        // Check status
+        const statusResult = await shellEval(page, 'cd /gitrepo2 && git status');
+        expect(statusResult.success).toBe(true);
+        expect(statusResult.output).toContain('On branch');
+    });
+
+    test('git help shows available commands', async ({ page }) => {
+        const helpResult = await shellEval(page, 'git --help');
+        expect(helpResult.success).toBe(true);
+        expect(helpResult.output).toContain('init');
+        expect(helpResult.output).toContain('status');
+        expect(helpResult.output).toContain('commit');
+    });
+});
