@@ -2,7 +2,7 @@
  * Module Loader Implementation
  * 
  * Provides the mcp:module-loader/loader interface that the core WASM runtime
- * imports. Uses eager loading to have modules ready before WIT calls.
+ * imports. Modules are loaded ON-DEMAND when first command runs (true lazy loading).
  */
 
 import {
@@ -25,40 +25,7 @@ export interface ExecEnv {
     vars: [string, string][];
 }
 
-// Track initialization state
-let modulesInitialized = false;
-
-/**
- * Initialize all lazy modules at startup (eager loading).
- * This should be called during WASM initialization.
- */
-export async function initializeLazyModules(): Promise<void> {
-    if (modulesInitialized) return;
-
-    console.log('[ModuleLoader] Eagerly loading all lazy modules...');
-    const startTime = performance.now();
-
-    try {
-        // Load all modules in parallel
-        await Promise.all([
-            loadLazyModule('tsx-engine').catch(e => {
-                console.warn('[ModuleLoader] Failed to load tsx-engine:', e);
-            }),
-            loadLazyModule('sqlite-module').catch(e => {
-                console.warn('[ModuleLoader] Failed to load sqlite-module:', e);
-            }),
-        ]);
-
-        const elapsed = performance.now() - startTime;
-        console.log(`[ModuleLoader] All modules loaded in ${elapsed.toFixed(0)}ms`);
-        modulesInitialized = true;
-    } catch (e) {
-        console.error('[ModuleLoader] Failed to initialize modules:', e);
-    }
-}
-
-// Start loading immediately on module import
-const initPromise = initializeLazyModules();
+// Eager loading is now DISABLED - modules load on-demand when first command runs
 
 /**
  * Check if a command should be handled by a lazy module.
@@ -86,41 +53,66 @@ export function spawnLazyCommand(
 }
 
 /**
- * ReadyPollable - A pollable that is immediately ready.
- * Since modules are eagerly loaded, this just checks the cache.
+ * ReadyPollable - A pollable that triggers module loading on-demand.
+ * Starts async loading in constructor, block() waits for completion.
  */
 class ReadyPollable extends BasePollable {
     private moduleName: string;
     private _module: CommandModule | null = null;
     private _error: Error | null = null;
+    private _loadingPromise: Promise<CommandModule> | null = null;
+    private _loadingComplete = false;
 
     constructor(moduleName: string) {
         super();
         this.moduleName = moduleName;
 
-        // Check if already loaded (should be, since we eager load)
+        // Check if already cached
         this._module = getLoadedModuleSync(moduleName);
-        if (!this._module) {
-            console.warn(`[ReadyPollable] Module '${moduleName}' not loaded - waiting for init`);
+        if (this._module) {
+            this._loadingComplete = true;
+            console.log(`[ReadyPollable] Module '${moduleName}' already cached`);
+        } else {
+            // Start loading immediately (lazy, on-demand)
+            console.log(`[ReadyPollable] Starting on-demand load of '${moduleName}'`);
+            this._loadingPromise = loadLazyModule(moduleName)
+                .then((mod) => {
+                    this._module = mod;
+                    this._loadingComplete = true;
+                    console.log(`[ReadyPollable] Module '${moduleName}' loaded on-demand`);
+                    return mod;
+                })
+                .catch((err) => {
+                    this._error = err instanceof Error ? err : new Error(String(err));
+                    this._loadingComplete = true;
+                    console.error(`[ReadyPollable] Failed to load '${moduleName}':`, err);
+                    throw err;
+                });
         }
     }
 
     ready(): boolean {
-        if (!this._module) {
-            this._module = getLoadedModuleSync(this.moduleName);
+        // Check if loading completed (module available or error occurred)
+        if (!this._loadingComplete) {
+            // Try sync check in case it finished
+            const cached = getLoadedModuleSync(this.moduleName);
+            if (cached) {
+                this._module = cached;
+                this._loadingComplete = true;
+            }
         }
-        return this._module !== null;
+        return this._loadingComplete;
     }
 
     block(): void {
-        // Module should already be loaded from eager loading
-        if (!this._module) {
-            this._module = getLoadedModuleSync(this.moduleName);
-        }
-        if (!this._module) {
-            console.error(`[ReadyPollable] Module '${this.moduleName}' not loaded after block()`);
-            this._error = new Error(`Module '${this.moduleName}' not available`);
-        }
+        // If already complete, nothing to do
+        if (this._loadingComplete) return;
+
+        // We have an async promise but block() is sync - the WASM runtime
+        // uses this pattern: it calls block() then checks ready() in a loop.
+        // Since we started loading in constructor, just mark we've been blocked.
+        // The runtime will poll ready() until it returns true.
+        console.log(`[ReadyPollable] block() called, loading in progress for '${this.moduleName}'`);
     }
 
     getModule(): CommandModule | null {
@@ -129,6 +121,19 @@ class ReadyPollable extends BasePollable {
 
     getError(): Error | null {
         return this._error;
+    }
+
+    // Allow async waiting for callers that can await
+    async waitForLoad(): Promise<CommandModule | null> {
+        if (this._module) return this._module;
+        if (this._loadingPromise) {
+            try {
+                return await this._loadingPromise;
+            } catch {
+                return null;
+            }
+        }
+        return null;
     }
 }
 
@@ -366,6 +371,3 @@ export class LazyProcess {
         return result;
     }
 }
-
-// Export the init promise for callers who need to wait
-export { initPromise };

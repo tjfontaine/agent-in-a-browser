@@ -6,19 +6,12 @@ console.log('[SandboxWorker] Module loading...');
 export { }; // Make this a module
 
 import { callWasmMcpServerFetch } from '../mcp/WasmBridge';
-// Import lazy module initialization - this starts loading in the background
-import { initPromise as lazyModulesReady } from '../wasm/module-loader-impl';
+// Note: Lazy modules now load ON-DEMAND when first command runs
+// No eager loading needed here
 
-console.log('[SandboxWorker] Imports complete, starting lazy module loading...');
+console.log('[SandboxWorker] Imports complete');
 
-// Start module loading in background (non-blocking)
-lazyModulesReady.then(() => {
-    console.log('[SandboxWorker] Lazy modules loaded successfully');
-}).catch((e) => {
-    console.error('[SandboxWorker] Failed to load lazy modules:', e);
-});
-
-// Signal ready immediately - module loading continues in background
+// Signal ready immediately
 console.log('[SandboxWorker] Sending ready signal');
 self.postMessage({ type: 'ready' });
 
