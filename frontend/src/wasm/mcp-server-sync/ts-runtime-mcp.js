@@ -836,6 +836,10 @@ class RepTable {
   }
 }
 
+function throwUninitialized() {
+  throw new TypeError('Wasm uninitialized use `await $init` first');
+}
+
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 
 const instantiateCore = WebAssembly.instantiate;
@@ -9987,6 +9991,7 @@ function trampoline40(handle) {
 let incomingHandler024Handle;
 
 function handle$1(arg0, arg1) {
+  if (!_initialized) throwUninitialized();
   if (!(arg0 instanceof IncomingRequest)) {
     throw new TypeError('Resource error: Not a valid "IncomingRequest" resource.');
   }
@@ -10024,6 +10029,7 @@ function handle$1(arg0, arg1) {
 let run026Run;
 
 function run() {
+  if (!_initialized) throwUninitialized();
   _debugLog('[iface="wasi:cli/run@0.2.6", function="run"][Instruction::CallWasm] enter', {
     funcName: 'run',
     paramCount: 0,
@@ -10060,7 +10066,8 @@ function run() {
   
 }
 
-const $init = (() => {
+let _initialized = false;
+export const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./ts-runtime-mcp.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./ts-runtime-mcp.core2.wasm', import.meta.url));
@@ -10367,6 +10374,7 @@ const $init = (() => {
         '9': exports2.fd_filestat_set_size,
       },
     }));
+    _initialized = true;
     incomingHandler024Handle = exports1['wasi:http/incoming-handler@0.2.4#handle'];
     run026Run = exports2['wasi:cli/run@0.2.6#run'];
   })();
@@ -10392,8 +10400,6 @@ const $init = (() => {
   const maybeSyncReturn = runNext(null);
   return promise || maybeSyncReturn;
 })();
-
-await $init;
 const run026 = {
   run: run,
   

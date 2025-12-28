@@ -81,6 +81,13 @@ async function loadTsxEngine(): Promise<CommandModule> {
     // Dynamic import of the transpiled module
     const module = await import('./tsx-engine/tsx-engine.js');
 
+    // With --tla-compat, we must await $init before accessing exports
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const $init = (module as any).$init;
+    if ($init) {
+        await $init;
+    }
+
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] tsx-engine loaded in ${loadTime.toFixed(0)}ms`);
 
@@ -98,6 +105,13 @@ async function loadSqliteModule(): Promise<CommandModule> {
 
     // Dynamic import of the transpiled module
     const module = await import('./sqlite-module/sqlite-module.js');
+
+    // With --tla-compat, we must await $init before accessing exports
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const $init = (module as any).$init;
+    if ($init) {
+        await $init;
+    }
 
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] sqlite-module loaded in ${loadTime.toFixed(0)}ms`);

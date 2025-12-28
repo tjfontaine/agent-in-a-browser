@@ -47,6 +47,12 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
         } else {
             console.log('[AsyncMode] Loading Sync-mode MCP server...');
             const module = await import('./mcp-server-sync/ts-runtime-mcp.js');
+            // With --tla-compat, we must await $init before accessing exports
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const $init = (module as any).$init;
+            if ($init) {
+                await $init;
+            }
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         }
         return cachedIncomingHandler;
