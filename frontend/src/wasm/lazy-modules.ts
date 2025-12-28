@@ -55,6 +55,7 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'tsx': 'tsx-engine',
     'tsc': 'tsx-engine',
     'sqlite3': 'sqlite-module',
+    'git': 'git-module',
 };
 
 /**
@@ -121,6 +122,21 @@ async function loadSqliteModule(): Promise<CommandModule> {
 }
 
 /**
+ * Load the git-module (pure TypeScript, not WASM)
+ */
+async function loadGitModule(): Promise<CommandModule> {
+    console.log('[LazyLoader] Loading git-module...');
+    const startTime = performance.now();
+
+    const module = await import('./git-module.js');
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] git-module loaded in ${loadTime.toFixed(0)}ms`);
+
+    return module.command as unknown as CommandModule;
+}
+
+/**
  * Load a lazy module by name
  */
 export async function loadLazyModule(moduleName: string): Promise<CommandModule> {
@@ -147,6 +163,9 @@ export async function loadLazyModule(moduleName: string): Promise<CommandModule>
             break;
         case 'sqlite-module':
             loadPromise = loadSqliteModule();
+            break;
+        case 'git-module':
+            loadPromise = loadGitModule();
             break;
         default:
             throw new Error(`Unknown lazy module: ${moduleName}`);
