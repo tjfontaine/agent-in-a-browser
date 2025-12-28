@@ -16,15 +16,14 @@ use bindings::wasi::http::types::{
 use mcp_server::{JsonRpcRequest, JsonRpcResponse, ToolResult};
 use runtime_macros::mcp_tool_router;
 use serde_json::json;
-use std::cell::RefCell;
 
-/// The Shell-based MCP Server (thread-local, single-threaded)
+/// The Shell-based MCP Server (stateless, created per-request)
 /// Pure shell implementation - no JavaScript runtime
+/// 
+/// Note: This struct has no state - all state is created per-request in ShellEnv.
+/// We create a new instance per request to avoid RefCell borrow conflicts in sync mode,
+/// where WASI calls during shell execution can trigger re-entrant behavior.
 struct ShellMcpServer;
-
-thread_local! {
-    static MCP_SERVER: RefCell<Option<ShellMcpServer>> = RefCell::new(None);
-}
 
 #[mcp_tool_router]
 impl ShellMcpServer {
@@ -247,28 +246,18 @@ impl ShellMcpServer {
     }
 }
 
-/// Get or create the MCP server instance (thread-local)
-fn with_server<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut ShellMcpServer) -> R,
-{
-    MCP_SERVER.with(|server| {
-        let mut server_ref = server.borrow_mut();
-        if server_ref.is_none() {
-            *server_ref = Some(ShellMcpServer::new().expect("Failed to create MCP server"));
-        }
-        f(server_ref.as_mut().unwrap())
-    })
-}
-
 /// Handle JSON-RPC request
+/// 
+/// Creates a fresh ShellMcpServer instance per request to avoid RefCell borrow
+/// conflicts in sync mode (Safari). The server is stateless, so this is safe.
 fn handle_mcp_request(request_str: &str) -> String {
     match serde_json::from_str::<JsonRpcRequest>(request_str) {
-        Ok(req) => with_server(|server| {
-            let response = mcp_server::handle_request(server, req);
+        Ok(req) => {
+            let mut server = ShellMcpServer::new().expect("Failed to create MCP server");
+            let response = mcp_server::handle_request(&mut server, req);
             serde_json::to_string(&response)
                 .unwrap_or_else(|_| r#"{"error":"serialize failed"}"#.to_string())
-        }),
+        }
         Err(e) => {
             let err = JsonRpcResponse::error(None, -32700, format!("Parse error: {}", e));
             serde_json::to_string(&err)
