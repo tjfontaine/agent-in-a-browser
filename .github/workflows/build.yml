@@ -26,11 +26,23 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: runtime
+          workspaces: |
+            runtime
+            runtime/crates/tsx-engine
+            runtime/crates/sqlite-module
           cache-on-failure: true
 
+      - name: Cache Cargo Install
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: cargo-install-${{ runner.os }}-wit-deps-cargo-component-wasm-tools
+
       - name: Install build tools
-        run: cargo install wit-deps-cli cargo-component --locked
+        run: |
+          which wit-deps || cargo install wit-deps-cli --locked
+          which cargo-component || cargo install cargo-component --locked
+          which wasm-tools || cargo install wasm-tools --locked
 
       - name: Cache WIT dependencies
         uses: actions/cache@v4
@@ -55,9 +67,7 @@ jobs:
         run: cargo component build --release --target wasm32-wasip2
 
       - name: Verify main component
-        run: |
-          cargo install wasm-tools --locked
-          wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+        run: wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
@@ -202,6 +212,16 @@ jobs:
       - name: Transpile WASM components
         working-directory: frontend
         run: npm run transpile:all
+
+      - name: Get Playwright Version
+        id: playwright-version
+        run: echo "version=$(cd frontend && npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright Browsers
         working-directory: frontend
