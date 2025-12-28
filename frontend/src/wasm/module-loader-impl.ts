@@ -10,7 +10,6 @@
 
 import {
     LAZY_COMMANDS,
-    getLoadedModuleSync,
     loadLazyModule,
     type CommandModule,
     type ExecEnv as LazyExecEnv,
@@ -150,7 +149,10 @@ export class LazyProcess {
         this.stdinClosed = true;
         if (!this.started) {
             this.started = true;
-            this.execute();
+            // Start async execution - store promise for tryWait/polling
+            this.executeAsync().catch(err => {
+                console.error('[LazyProcess] executeAsync error:', err);
+            });
         }
         console.log(`[LazyProcess] closeStdin() complete, stdoutBuffer.length=${this.stdoutBuffer.length}, stderrBuffer.length=${this.stderrBuffer.length}`);
     }
@@ -207,7 +209,7 @@ export class LazyProcess {
         return result;
     }
 
-    private execute(): void {
+    private async executeAsync(): Promise<void> {
         console.log(`[LazyProcess] === EXECUTE START === command: ${this.command}, args:`, this.args);
 
         console.log(`[LazyProcess] Module loaded, preparing streams`);
@@ -271,9 +273,10 @@ export class LazyProcess {
                 vars: this.env.vars,
             };
 
-            console.log(`[LazyProcess] Calling module.run(${this.command}, args=${JSON.stringify(this.args)}, cwd=${execEnv.cwd})`);
+            console.log(`[LazyProcess] Calling module.spawn(${this.command}, args=${JSON.stringify(this.args)}, cwd=${execEnv.cwd})`);
 
-            this.exitCode = this.module.run(
+            // Use new spawn/resolve pattern
+            const handle = this.module.spawn(
                 this.command,
                 this.args,
                 execEnv,
@@ -282,7 +285,10 @@ export class LazyProcess {
                 stderrStream as never,
             );
 
-            console.log(`[LazyProcess] module.run() returned exitCode: ${this.exitCode}`);
+            // Wait for command to complete
+            this.exitCode = await handle.resolve();
+
+            console.log(`[LazyProcess] handle.resolve() returned exitCode: ${this.exitCode}`);
             console.log(`[LazyProcess] stdoutChunks count: ${stdoutChunks.length}`);
             console.log(`[LazyProcess] stderrChunks count: ${stderrChunks.length}`);
 
@@ -294,7 +300,7 @@ export class LazyProcess {
             const totalStderr = stderrChunks.reduce((sum, c) => sum + c.length, 0);
             console.log(`[LazyProcess] === EXECUTE END === stdout: ${totalStdout} bytes, stderr: ${totalStderr} bytes, exit: ${this.exitCode}`);
         } catch (error) {
-            console.error(`[LazyProcess] EXCEPTION during module.run():`, error);
+            console.error(`[LazyProcess] EXCEPTION during module.spawn():`, error);
             this.stderrBuffer.push(new TextEncoder().encode(
                 `Error: ${error instanceof Error ? error.message : String(error)}\n`
             ));

@@ -29,16 +29,25 @@ export interface ExecEnv {
     vars: [string, string][];
 }
 
+// Handle for a spawned command - supports poll and resolve patterns
+export interface CommandHandle {
+    // Poll for completion, returns exit code when done, undefined if still running
+    poll(): number | undefined;
+    // Wait for completion, returns exit code
+    resolve(): Promise<number>;
+}
+
 // Interface that lazy-loaded command modules export
 export interface CommandModule {
-    run: (
+    // Spawn a command, returns handle for polling/resolving
+    spawn: (
         name: string,
         args: string[],
         env: ExecEnv,
         stdin: InputStream,
         stdout: OutputStream,
         stderr: OutputStream,
-    ) => number;
+    ) => CommandHandle;
     listCommands: () => string[];
 }
 
@@ -73,6 +82,24 @@ export function getModuleForCommand(commandName: string): string | undefined {
 }
 
 /**
+ * Wrap a sync module (with run()) to provide spawn() interface
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function wrapSyncModule(syncModule: any): CommandModule {
+    return {
+        spawn(name, args, env, stdin, stdout, stderr) {
+            // Execute synchronously and return immediately-resolved handle
+            const exitCode = syncModule.run(name, args, env, stdin, stdout, stderr) as number;
+            return {
+                poll: () => exitCode,
+                resolve: () => Promise.resolve(exitCode),
+            };
+        },
+        listCommands: () => syncModule.listCommands() as string[],
+    };
+}
+
+/**
  * Load the tsx-engine module
  */
 async function loadTsxEngine(): Promise<CommandModule> {
@@ -92,9 +119,8 @@ async function loadTsxEngine(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] tsx-engine loaded in ${loadTime.toFixed(0)}ms`);
 
-    // The command interface is exported from the module
-    // Cast via unknown since the generated types are compatible at runtime
-    return module.command as unknown as CommandModule;
+    // Wrap the sync command interface to provide spawn()
+    return wrapSyncModule(module.command);
 }
 
 /**
@@ -117,8 +143,8 @@ async function loadSqliteModule(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] sqlite-module loaded in ${loadTime.toFixed(0)}ms`);
 
-    // Cast via unknown since the generated types are compatible at runtime
-    return module.command as unknown as CommandModule;
+    // Wrap the sync command interface to provide spawn()
+    return wrapSyncModule(module.command);
 }
 
 /**
