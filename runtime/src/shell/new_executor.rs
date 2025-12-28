@@ -588,10 +588,11 @@ async fn execute_simple(
                 let mut offset = 0;
                 while offset < data.len() {
                     let chunk = &data[offset..std::cmp::min(offset + 65536, data.len())];
-                    match process.write_stdin(chunk) {
-                        Ok(written) => offset += written as usize,
-                        Err(_) => break,
+                    let written = process.write_stdin(chunk);
+                    if written == 0 {
+                        break;
                     }
+                    offset += written as usize;
                 }
             }
             process.close_stdin();
