@@ -97,68 +97,64 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
     console.log('[WasmBridge] IncomingRequest created');
 
     // 3. Create response outparam and call handler
-    return new Promise((resolve, reject) => {
-        let wasmResponse: WasmResponse | null = null;
+    let wasmResponse: WasmResponse | null = null;
 
-        const responseOutparam = new ResponseOutparam((result) => {
-            console.log('[WasmBridge] ResponseOutparam callback:', result);
-            if (result.tag === 'err') {
-                reject(result.val);
-                return;
-            }
-            wasmResponse = result.val;
-        });
-
-        console.log('[WasmBridge] Calling incomingHandler.handle...');
-        try {
-            // Cast to any because our IncomingRequest is compatible at runtime with the WASM-generated type
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            incomingHandler.handle(incomingRequest as any, responseOutparam);
-        } catch (error) {
-            console.error('[WasmBridge] Error in handle:', error);
-            reject(error);
-            return;
+    const responseOutparam = new ResponseOutparam((result) => {
+        console.log('[WasmBridge] ResponseOutparam callback:', result);
+        if (result.tag === 'err') {
+            throw result.val;
         }
-        console.log('[WasmBridge] incomingHandler.handle returned');
-
-        // 4. Get response from WASM
-        if (!wasmResponse) {
-            wasmResponse = responseOutparam.getResponse();
-        }
-
-        if (!wasmResponse) {
-            reject(new Error('No response from WASM handler'));
-            return;
-        }
-
-        console.log('[WasmBridge] Got WASM response, status:', wasmResponse.statusCode());
-
-        // 5. Convert headers
-        const respHeaders = new Headers();
-        wasmResponse.headers().entries().forEach(([k, v]: [string, Uint8Array]) => {
-            respHeaders.append(String(k), new TextDecoder().decode(v));
-        });
-
-        // 6. Get body content from WASM response's collected chunks
-        const bodyChunks = wasmResponse._bodyChunks || [];
-        console.log('[WasmBridge] Body chunks:', bodyChunks.length);
-
-        // Create a ReadableStream from the collected body
-        const stream = new ReadableStream({
-            start(controller) {
-                for (const chunk of bodyChunks) {
-                    controller.enqueue(chunk);
-                }
-                controller.close();
-            }
-        });
-
-        resolve({
-            status: wasmResponse.statusCode(),
-            headers: respHeaders,
-            body: stream
-        });
+        wasmResponse = result.val;
     });
+
+    console.log('[WasmBridge] Calling incomingHandler.handle...');
+    try {
+        // Cast to any because our IncomingRequest is compatible at runtime with the WASM-generated type
+        // The handle function is now async with JSPI, so we await it
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await incomingHandler.handle(incomingRequest as any, responseOutparam);
+    } catch (error) {
+        console.error('[WasmBridge] Error in handle:', error);
+        throw error;
+    }
+    console.log('[WasmBridge] incomingHandler.handle returned');
+
+    // 4. Get response from WASM
+    if (!wasmResponse) {
+        wasmResponse = responseOutparam.getResponse();
+    }
+
+    if (!wasmResponse) {
+        throw new Error('No response from WASM handler');
+    }
+
+    console.log('[WasmBridge] Got WASM response, status:', wasmResponse.statusCode());
+
+    // 5. Convert headers
+    const respHeaders = new Headers();
+    wasmResponse.headers().entries().forEach(([k, v]: [string, Uint8Array]) => {
+        respHeaders.append(String(k), new TextDecoder().decode(v));
+    });
+
+    // 6. Get body content from WASM response's collected chunks
+    const bodyChunks = wasmResponse._bodyChunks || [];
+    console.log('[WasmBridge] Body chunks:', bodyChunks.length);
+
+    // Create a ReadableStream from the collected body
+    const stream = new ReadableStream({
+        start(controller) {
+            for (const chunk of bodyChunks) {
+                controller.enqueue(chunk);
+            }
+            controller.close();
+        }
+    });
+
+    return {
+        status: wasmResponse.statusCode(),
+        headers: respHeaders,
+        body: stream
+    };
 }
 
 

@@ -2,7 +2,10 @@
  * Module Loader Implementation
  * 
  * Provides the mcp:module-loader/loader interface that the core WASM runtime
- * imports. Modules are loaded ON-DEMAND when first command runs (true lazy loading).
+ * imports. With JSPI (JavaScript Promise Integration), these functions can be
+ * async and the WASM runtime will suspend/resume automatically.
+ * 
+ * Modules load ON-DEMAND when first command runs (true lazy loading).
  */
 
 import {
@@ -25,15 +28,22 @@ export interface ExecEnv {
     vars: [string, string][];
 }
 
-// Eager loading is now DISABLED - modules load on-demand when first command runs
-
 /**
  * Check if a command should be handled by a lazy module.
+ * With JSPI, this can be async and load the module here.
+ * 
+ * Returns the module name if the command is lazy-loadable.
  */
-export function getLazyModule(command: string): string | undefined {
+export async function getLazyModule(command: string): Promise<string | undefined> {
     const moduleName = LAZY_COMMANDS[command];
     if (moduleName) {
         console.log(`[ModuleLoader] Command '${command}' -> module '${moduleName}'`);
+
+        // Start loading the module in background (will be ready when spawnLazyCommand is called)
+        loadLazyModule(moduleName).catch(e => {
+            console.warn(`[ModuleLoader] Background preload of ${moduleName} failed:`, e);
+        });
+
         return moduleName;
     }
     return undefined;
@@ -41,104 +51,50 @@ export function getLazyModule(command: string): string | undefined {
 
 /**
  * Spawn a lazy command process.
+ * With JSPI, this is async and will load the module if needed.
  */
-export function spawnLazyCommand(
-    module: string,
+export async function spawnLazyCommand(
+    moduleName: string,
     command: string,
     args: string[],
     env: ExecEnv,
-): LazyProcess {
-    console.log(`[ModuleLoader] spawnLazyCommand: ${command} (module: ${module})`);
-    return new LazyProcess(module, command, args, env);
+): Promise<LazyProcess> {
+    console.log(`[ModuleLoader] spawnLazyCommand: ${command} (module: ${moduleName})`);
+
+    // Ensure module is loaded (await the async load)
+    const module = await loadLazyModule(moduleName);
+    console.log(`[ModuleLoader] Module '${moduleName}' loaded for command '${command}'`);
+
+    return new LazyProcess(moduleName, command, args, env, module);
 }
 
 /**
- * ReadyPollable - A pollable that triggers module loading on-demand.
- * Starts async loading in constructor, block() waits for completion.
+ * ReadyPollable - A pollable that is immediately ready since module is already loaded.
  */
 class ReadyPollable extends BasePollable {
-    private moduleName: string;
-    private _module: CommandModule | null = null;
-    private _error: Error | null = null;
-    private _loadingPromise: Promise<CommandModule> | null = null;
-    private _loadingComplete = false;
+    private _module: CommandModule;
 
-    constructor(moduleName: string) {
+    constructor(module: CommandModule) {
         super();
-        this.moduleName = moduleName;
-
-        // Check if already cached
-        this._module = getLoadedModuleSync(moduleName);
-        if (this._module) {
-            this._loadingComplete = true;
-            console.log(`[ReadyPollable] Module '${moduleName}' already cached`);
-        } else {
-            // Start loading immediately (lazy, on-demand)
-            console.log(`[ReadyPollable] Starting on-demand load of '${moduleName}'`);
-            this._loadingPromise = loadLazyModule(moduleName)
-                .then((mod) => {
-                    this._module = mod;
-                    this._loadingComplete = true;
-                    console.log(`[ReadyPollable] Module '${moduleName}' loaded on-demand`);
-                    return mod;
-                })
-                .catch((err) => {
-                    this._error = err instanceof Error ? err : new Error(String(err));
-                    this._loadingComplete = true;
-                    console.error(`[ReadyPollable] Failed to load '${moduleName}':`, err);
-                    throw err;
-                });
-        }
+        this._module = module;
     }
 
     ready(): boolean {
-        // Check if loading completed (module available or error occurred)
-        if (!this._loadingComplete) {
-            // Try sync check in case it finished
-            const cached = getLoadedModuleSync(this.moduleName);
-            if (cached) {
-                this._module = cached;
-                this._loadingComplete = true;
-            }
-        }
-        return this._loadingComplete;
+        return true; // Module is already loaded
     }
 
     block(): void {
-        // If already complete, nothing to do
-        if (this._loadingComplete) return;
-
-        // We have an async promise but block() is sync - the WASM runtime
-        // uses this pattern: it calls block() then checks ready() in a loop.
-        // Since we started loading in constructor, just mark we've been blocked.
-        // The runtime will poll ready() until it returns true.
-        console.log(`[ReadyPollable] block() called, loading in progress for '${this.moduleName}'`);
+        // Nothing to block on - module is already loaded
     }
 
-    getModule(): CommandModule | null {
+    getModule(): CommandModule {
         return this._module;
-    }
-
-    getError(): Error | null {
-        return this._error;
-    }
-
-    // Allow async waiting for callers that can await
-    async waitForLoad(): Promise<CommandModule | null> {
-        if (this._module) return this._module;
-        if (this._loadingPromise) {
-            try {
-                return await this._loadingPromise;
-            } catch {
-                return null;
-            }
-        }
-        return null;
     }
 }
 
 /**
  * LazyProcess - Handle for a running lazy command with streaming I/O.
+ * The module is passed in already loaded (since spawnLazyCommand awaited it).
  */
 export class LazyProcess {
     private stdinBuffer: Uint8Array[] = [];
@@ -152,6 +108,7 @@ export class LazyProcess {
     private command: string;
     private args: string[];
     private env: ExecEnv;
+    private module: CommandModule;
 
     private readyPollable: ReadyPollable;
 
@@ -160,14 +117,16 @@ export class LazyProcess {
         command: string,
         args: string[],
         env: ExecEnv,
+        module: CommandModule,
     ) {
         this.moduleName = moduleName;
         this.command = command;
         this.args = args;
         this.env = env;
+        this.module = module;
 
-        // Module should already be loaded from eager loading
-        this.readyPollable = new ReadyPollable(moduleName);
+        // Module is already loaded
+        this.readyPollable = new ReadyPollable(module);
     }
 
     getReadyPollable(): ReadyPollable {
@@ -175,7 +134,7 @@ export class LazyProcess {
     }
 
     isReady(): boolean {
-        return this.readyPollable.ready();
+        return true; // Always ready since module was loaded in spawnLazyCommand
     }
 
     writeStdin(data: Uint8Array): bigint {
@@ -251,23 +210,6 @@ export class LazyProcess {
     private execute(): void {
         console.log(`[LazyProcess] === EXECUTE START === command: ${this.command}, args:`, this.args);
 
-        const module = this.readyPollable.getModule();
-        const loadError = this.readyPollable.getError();
-
-        if (loadError) {
-            console.error(`[LazyProcess] Load error:`, loadError);
-            this.stderrBuffer.push(new TextEncoder().encode(`Error: ${loadError.message}\n`));
-            this.exitCode = 127;
-            return;
-        }
-
-        if (!module) {
-            console.error(`[LazyProcess] Module '${this.moduleName}' not loaded`);
-            this.stderrBuffer.push(new TextEncoder().encode(`Module '${this.moduleName}' not loaded\n`));
-            this.exitCode = 127;
-            return;
-        }
-
         console.log(`[LazyProcess] Module loaded, preparing streams`);
 
         // Concatenate stdin
@@ -331,7 +273,7 @@ export class LazyProcess {
 
             console.log(`[LazyProcess] Calling module.run(${this.command}, args=${JSON.stringify(this.args)}, cwd=${execEnv.cwd})`);
 
-            this.exitCode = module.run(
+            this.exitCode = this.module.run(
                 this.command,
                 this.args,
                 execEnv,

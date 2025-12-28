@@ -1,5 +1,5 @@
-# Use Playwright v1.49.1 (latest stable that's well-tested)
-FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+# Use Playwright v1.57.0 with Ubuntu 24.04 (Noble) - uses Chrome for Testing
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
 
 WORKDIR /app/frontend
 
@@ -8,6 +8,7 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm ci
+# Install Chromium (Playwright 1.57+ uses Chrome for Testing on x64)
 RUN npx playwright install chromium
 
 # Copy source files
