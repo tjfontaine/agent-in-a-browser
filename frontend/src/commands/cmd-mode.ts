@@ -5,17 +5,18 @@
  */
 
 import { CommandDef, colors } from './types';
+import type { AgentMode } from '../agent/AgentMode';
 
 // We need access to mode state - will be injected via context
-let setModeCallback: ((mode: 'normal' | 'plan') => void) | null = null;
-let getModeCallback: (() => 'normal' | 'plan') | null = null;
+let setModeCallback: ((mode: AgentMode) => void) | null = null;
+let getModeCallback: (() => AgentMode) | null = null;
 
 /**
  * Register callbacks for mode state management
  */
 export function registerModeCallbacks(
-    getModeFunc: () => 'normal' | 'plan',
-    setModeFunc: (mode: 'normal' | 'plan') => void
+    getModeFunc: () => AgentMode,
+    setModeFunc: (mode: AgentMode) => void
 ): void {
     getModeCallback = getModeFunc;
     setModeCallback = setModeFunc;

@@ -18,6 +18,7 @@ import { modelCommand } from './cmd-model';
 import { providerCommand } from './cmd-provider';
 import { planCommand } from './cmd-plan';
 import { modeCommand } from './cmd-mode';
+import { shellCommand } from './cmd-shell';
 
 // Registry of all commands
 const registry: Map<string, CommandDef> = new Map();
@@ -141,6 +142,7 @@ registerCommand(modelCommand);
 registerCommand(providerCommand);
 registerCommand(planCommand);
 registerCommand(modeCommand);
+registerCommand(shellCommand);
 
 // Re-export types for convenience
 export type { CommandDef, CommandContext, OutputFn } from './types';

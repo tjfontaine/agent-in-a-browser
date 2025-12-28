@@ -9,8 +9,19 @@
  * Agent operating modes:
  * - 'normal': Full access to all tools
  * - 'plan': Read-only mode for planning, only /plan.md is writable
+ * - 'shell': Direct shell command execution (no AI processing)
  */
-export type AgentMode = 'normal' | 'plan';
+export type AgentMode = 'normal' | 'plan' | 'shell';
+
+/**
+ * Shell mode prompt indicator
+ */
+export const SHELL_MODE_PROMPT = '$ ';
+
+/**
+ * Commands that exit shell mode
+ */
+export const SHELL_EXIT_COMMANDS = ['exit', 'logout'];
 
 /**
  * The plan file path - the only file writable in plan mode

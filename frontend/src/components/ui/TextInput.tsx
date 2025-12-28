@@ -31,6 +31,12 @@ export interface TextInputProps {
     focus?: boolean;
     /** Function to get completions for the current input */
     getCompletions?: CompletionFn;
+    /** Optional shell mode history navigation - navigates to older command */
+    shellHistoryUp?: (currentInput?: string) => string | undefined;
+    /** Optional shell mode history navigation - navigates to newer command */
+    shellHistoryDown?: () => string | undefined;
+    /** If true, skip adding to command history on submit (used in shell mode) */
+    skipCommandHistory?: boolean;
 }
 
 // Reference to shared command history
@@ -45,6 +51,9 @@ export const TextInput = ({
     promptColor = 'cyan',
     focus = true,
     getCompletions,
+    shellHistoryUp,
+    shellHistoryDown,
+    skipCommandHistory = false,
 }: TextInputProps) => {
     const [internalValue, setInternalValue] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
@@ -251,8 +260,10 @@ export const TextInput = ({
         // Submit on Enter
         if (key.return) {
             if (value.trim()) {
-                // Add to history using the history module
-                addToHistory(value);
+                // Add to history using the history module (unless skipCommandHistory)
+                if (!skipCommandHistory) {
+                    addToHistory(value);
+                }
 
                 onSubmit?.(value);
                 if (controlledValue === undefined) {
@@ -281,6 +292,17 @@ export const TextInput = ({
 
         // Up arrow - History previous
         if (key.upArrow) {
+            // Use shell history if provided
+            if (shellHistoryUp) {
+                const cmd = shellHistoryUp(historyIndex === -1 ? value : undefined);
+                if (cmd !== undefined) {
+                    setValue(cmd, cmd.length);
+                    setHistoryIndex(0); // Just mark that we're browsing
+                }
+                return;
+            }
+
+            // Default command history
             if (commandHistory.length === 0) return;
 
             if (historyIndex === -1) {
@@ -300,6 +322,18 @@ export const TextInput = ({
 
         // Down arrow - History next
         if (key.downArrow) {
+            // Use shell history if provided
+            if (shellHistoryDown) {
+                const cmd = shellHistoryDown();
+                if (cmd !== undefined) {
+                    setValue(cmd, cmd.length);
+                } else {
+                    setHistoryIndex(-1);
+                }
+                return;
+            }
+
+            // Default command history
             if (historyIndex === -1) return;
 
             const newIndex = historyIndex + 1;

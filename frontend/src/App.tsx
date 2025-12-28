@@ -20,9 +20,11 @@ import { ProviderSelector } from './components/ProviderSelector';
 import { SecretInput } from './components/SecretInput';
 import { McpServerList } from './mcp';
 import { useAgent, AgentOutput } from './agent/useAgent';
+import type { AgentMode } from './agent/AgentMode';
 import { executeCommand, getCommandCompletions } from './commands';
 import { registerModeCallbacks as registerPlanModeCallbacks } from './commands/cmd-plan';
 import { registerModeCallbacks as registerModeModeCallbacks } from './commands/cmd-mode';
+import { registerShellModeCallback } from './commands/cmd-shell';
 import {
     getCurrentProvider,
     getConfigSummary,
@@ -79,6 +81,9 @@ function TerminalContent({
     onSecretSubmit,
     onTogglePlanMode,
     onNormalMode,
+    onExitShellMode,
+    shellHistoryUp,
+    shellHistoryDown,
 }: {
     outputs: AgentOutput[];
     isReady: boolean;
@@ -86,7 +91,7 @@ function TerminalContent({
     queueLength: number;
     overlayMode: OverlayMode;
     secretInputState: SecretInputState | null;
-    agentMode: 'normal' | 'plan';
+    agentMode: AgentMode;
     onSubmit: (value: string) => void;
     getCompletions: (input: string) => string[];
     onCancel: () => void;
@@ -96,6 +101,9 @@ function TerminalContent({
     onSecretSubmit: (value: string) => void;
     onTogglePlanMode: () => void;
     onNormalMode: () => void;
+    onExitShellMode: () => void;
+    shellHistoryUp?: (currentInput?: string) => string | undefined;
+    shellHistoryDown?: () => string | undefined;
     onMcpAction?: (action: string, serverId: string) => Promise<void>;
 }) {
 
@@ -107,7 +115,7 @@ function TerminalContent({
         ? outputs.slice(-maxScrollback)
         : outputs;
 
-    // Handle ESC to cancel, Ctrl+\ to switch panels, Ctrl+P/N for mode switching
+    // Handle ESC to cancel, Ctrl+\ to switch panels, Ctrl+P/N for mode switching, Ctrl+D to exit shell
     useInput((_input, key) => {
         if (key.escape && isBusy) {
             onCancel();
@@ -120,8 +128,12 @@ function TerminalContent({
         if (_input === '\x1c') {
             focusAuxPanel();
         }
-        // Ctrl+P - Toggle plan mode
-        if (key.ctrl && _input === 'p') {
+        // Ctrl+D - Exit shell mode (only in shell mode)
+        if (key.ctrl && _input === 'd' && agentMode === 'shell') {
+            onExitShellMode();
+        }
+        // Ctrl+P - Toggle plan mode (not in shell mode)
+        if (key.ctrl && _input === 'p' && agentMode !== 'shell') {
             onTogglePlanMode();
         }
         // Ctrl+N - Switch to normal mode
@@ -136,9 +148,15 @@ function TerminalContent({
     // const placeholder = isBusy ? busyHint : idleHint;
     const placeholder = isBusy
         ? 'Type to queue... [ESC to cancel]'
-        : agentMode === 'plan'
-            ? 'Type "go" to execute plan, or /mode normal... [Ctrl+N: normal]'
-            : 'Type a message or /help... [Ctrl+P: plan, Ctrl+\\: panels]';
+        : agentMode === 'shell'
+            ? 'Type command... [Ctrl+D or exit to return]'
+            : agentMode === 'plan'
+                ? 'Type "go" to execute plan, or /mode normal... [Ctrl+N: normal]'
+                : 'Type a message or /help... [Ctrl+P: plan, Ctrl+\\: panels]';
+
+    // Shell mode uses $ prompt in green, otherwise use agent prompts
+    const promptChar = agentMode === 'shell' ? '$ ' : (isBusy ? '📋 ' : '❯ ');
+    const promptClr = agentMode === 'shell' ? colors.green : (isBusy ? colors.dim : colors.cyan);
 
     return (
         <Box
@@ -196,11 +214,14 @@ function TerminalContent({
                 isReady && (
                     <TextInput
                         onSubmit={onSubmit}
-                        prompt={isBusy ? "📋 " : "❯ "}
-                        promptColor={isBusy ? colors.dim : colors.cyan}
+                        prompt={promptChar}
+                        promptColor={promptClr}
                         placeholder={placeholder}
                         focus={true}
-                        getCompletions={getCompletions}
+                        getCompletions={agentMode === 'shell' ? undefined : getCompletions}
+                        shellHistoryUp={agentMode === 'shell' ? shellHistoryUp : undefined}
+                        shellHistoryDown={agentMode === 'shell' ? shellHistoryDown : undefined}
+                        skipCommandHistory={agentMode === 'shell'}
                     />
                 )
             )}
@@ -224,6 +245,9 @@ export default function App() {
         clearHistory,
         setMode,
         addOutput,
+        executeShellDirect,
+        shellHistoryUp,
+        shellHistoryDown,
     } = useAgent();
 
     const initialized = useRef(false);
@@ -247,6 +271,7 @@ export default function App() {
         // Register mode callbacks for slash commands
         registerPlanModeCallbacks(() => mode, setMode);
         registerModeModeCallbacks(() => mode, setMode);
+        registerShellModeCallback(setMode);
 
         // Show welcome banner
         addOutput('system', '╭────────────────────────────────────────────╮', colors.cyan);
@@ -270,9 +295,15 @@ export default function App() {
         return () => { };
     }, []);
 
-    // Handle user input - queues if agent is busy
+    // Handle user input - queues if agent is busy (or routes to shell)
     const handleSubmit = useCallback(async (input: string) => {
         if (!input.trim()) return;
+
+        // In shell mode, route to direct shell execution (no slash commands)
+        if (mode === 'shell') {
+            await executeShellDirect(input);
+            return;
+        }
 
         // Handle slash commands via command handler (always immediate)
         if (input.startsWith('/')) {
@@ -336,7 +367,7 @@ export default function App() {
             }
             sendMessage(input);
         }
-    }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage]);
+    }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage, mode, executeShellDirect]);
 
     // Handle overlay close
     const handleOverlayClose = useCallback(() => {
@@ -400,6 +431,11 @@ export default function App() {
                             📋 PLAN MODE
                         </span>
                     )}
+                    {mode === 'shell' && (
+                        <span style={{ fontSize: '12px', color: colors.green, marginLeft: '8px' }}>
+                            💻 SHELL MODE
+                        </span>
+                    )}
                 </div>
 
                 {/* Split Terminal Layout */}
@@ -426,6 +462,12 @@ export default function App() {
                                         onSecretSubmit={handleSecretSubmit}
                                         onTogglePlanMode={() => setMode(mode === 'plan' ? 'normal' : 'plan')}
                                         onNormalMode={() => setMode('normal')}
+                                        onExitShellMode={() => {
+                                            setMode('normal');
+                                            addOutput('system', '📤 Exiting shell mode', colors.dim);
+                                        }}
+                                        shellHistoryUp={shellHistoryUp}
+                                        shellHistoryDown={shellHistoryDown}
                                     />
                                 </InkXterm>
                             }

@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { modeCommand, registerModeCallbacks } from './cmd-mode';
 import { colors } from './types';
+import type { AgentMode } from '../agent/AgentMode';
 
 describe('modeCommand', () => {
     const mockOutput = vi.fn();
@@ -35,7 +36,7 @@ describe('modeCommand', () => {
     });
 
     it('should show current mode when no args provided', async () => {
-        let currentMode: 'normal' | 'plan' = 'normal';
+        let currentMode: AgentMode = 'normal';
         registerModeCallbacks(() => currentMode, (mode) => { currentMode = mode; });
 
         const ctx = createContext();
@@ -49,7 +50,7 @@ describe('modeCommand', () => {
     });
 
     it('should show plan mode indicator when in plan mode', async () => {
-        let currentMode: 'normal' | 'plan' = 'plan';
+        let currentMode: AgentMode = 'plan';
         registerModeCallbacks(() => currentMode, (mode) => { currentMode = mode; });
 
         const ctx = createContext();
@@ -63,8 +64,8 @@ describe('modeCommand', () => {
     });
 
     it('should switch to plan mode', async () => {
-        let currentMode: 'normal' | 'plan' = 'normal';
-        const setMode = vi.fn((mode: 'normal' | 'plan') => { currentMode = mode; });
+        let currentMode: AgentMode = 'normal';
+        const setMode = vi.fn((mode: AgentMode) => { currentMode = mode; });
         registerModeCallbacks(() => currentMode, setMode);
 
         const ctx = createContext();
@@ -74,8 +75,8 @@ describe('modeCommand', () => {
     });
 
     it('should switch to normal mode', async () => {
-        let currentMode: 'normal' | 'plan' = 'plan';
-        const setMode = vi.fn((mode: 'normal' | 'plan') => { currentMode = mode; });
+        let currentMode: AgentMode = 'plan';
+        const setMode = vi.fn((mode: AgentMode) => { currentMode = mode; });
         registerModeCallbacks(() => currentMode, setMode);
 
         const ctx = createContext();

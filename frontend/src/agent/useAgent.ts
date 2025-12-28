@@ -8,10 +8,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { initializeSandbox } from './sandbox';
 import { initializeWasmMcp, WasmAgent } from './Sdk';
+import { callMcpTool } from './mcp-bridge';
 import { setMcpState, isMcpInitialized } from '../commands/mcp';
 import { ANTHROPIC_API_KEY } from '../constants';
 import { SYSTEM_PROMPT } from './SystemPrompt';
-import { AgentMode, PLAN_MODE_SYSTEM_PROMPT } from './AgentMode';
+import { AgentMode, PLAN_MODE_SYSTEM_PROMPT, SHELL_EXIT_COMMANDS } from './AgentMode';
+import { shellHistory } from './shell-history';
 import {
     getCurrentModel,
     getCurrentModelInfo,
@@ -44,7 +46,7 @@ export interface UseAgentReturn {
     isReady: boolean;
     isBusy: boolean;
     messageQueue: string[];  // Queued messages waiting to be sent
-    mode: AgentMode;  // Current agent mode (normal or plan)
+    mode: AgentMode;  // Current agent mode (normal, plan, or shell)
 
     // Actions
     initialize: () => Promise<void>;
@@ -55,6 +57,12 @@ export interface UseAgentReturn {
     clearHistory: () => void;
     clearQueue: () => void;  // Clear all queued messages
     setMode: (mode: AgentMode) => void;  // Switch agent mode
+
+    // Shell mode
+    executeShellDirect: (command: string) => Promise<void>;  // Direct shell execution
+    shellHistoryUp: (currentInput?: string) => string | undefined;  // Navigate shell history
+    shellHistoryDown: () => string | undefined;  // Navigate shell history
+    resetShellHistoryCursor: () => void;  // Reset shell history cursor
 
     // Low-level output function for non-agent messages
     addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
@@ -225,6 +233,15 @@ export function useAgent(): UseAgentReturn {
                         : '';
                     addOutput('tool-start', `⏳ ${name} ${argsDisplay}`, colors.magenta, name);
                     setStatus({ text: `Running ${name}...`, color: colors.magenta });
+
+                    // Track shell_eval commands in shell history (from agent)
+                    if (name === 'shell_eval') {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const command = (input as any).command;
+                        if (typeof command === 'string') {
+                            shellHistory.add(command, 'agent');
+                        }
+                    }
                 },
                 onToolResult: (name, result, success) => {
                     const preview = typeof result === 'string'
@@ -317,8 +334,13 @@ export function useAgent(): UseAgentReturn {
     const setMode = useCallback((newMode: AgentMode) => {
         setModeState(newMode);
 
-        // Update agent mode and system prompt
-        if (agentRef.current) {
+        // Reset shell history cursor when switching modes
+        if (newMode === 'shell') {
+            shellHistory.resetCursor();
+        }
+
+        // Update agent mode and system prompt (only for agent modes)
+        if (agentRef.current && newMode !== 'shell') {
             // Set mode on agent (triggers tool rebuild with mode filtering)
             agentRef.current.setMode(newMode);
 
@@ -336,10 +358,69 @@ export function useAgent(): UseAgentReturn {
             addOutput('system', '📋 Entered PLAN MODE (read-only)', colors.yellow);
             addOutput('system', '   Agent is now in read-only analysis mode', colors.dim);
             addOutput('system', '   Type "go" or "yes" after planning to execute', colors.dim);
+        } else if (newMode === 'shell') {
+            // Shell mode message is shown by cmd-shell.ts
         } else {
             addOutput('system', '✓ Switched to NORMAL MODE', colors.green);
         }
     }, [addOutput]);
+
+    // Execute shell command directly (no AI processing)
+    const executeShellDirect = useCallback(async (command: string) => {
+        if (!isMcpInitialized()) {
+            addOutput('error', 'Shell not initialized. Please wait for initialization.', colors.red);
+            return;
+        }
+
+        // Check for exit commands
+        const trimmedCommand = command.trim();
+        if (SHELL_EXIT_COMMANDS.includes(trimmedCommand.toLowerCase())) {
+            setMode('normal');
+            addOutput('system', '📤 Exiting shell mode', colors.dim);
+            return;
+        }
+
+        // Don't execute empty commands
+        if (!trimmedCommand) {
+            return;
+        }
+
+        // Add to shell history (from user)
+        shellHistory.add(trimmedCommand, 'user');
+
+        // Echo the command with shell prompt
+        addOutput('text', `$ ${trimmedCommand}`, colors.green);
+        setStatus({ text: 'Running...', color: colors.green });
+
+        try {
+            const result = await callMcpTool('shell_eval', { command: trimmedCommand });
+
+            // Display output line by line
+            const lines = result.split('\n');
+            for (const line of lines) {
+                addOutput('text', line, colors.dim);
+            }
+
+            setStatus({ text: 'Shell Ready', color: colors.green });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            addOutput('error', `Error: ${message}`, colors.red);
+            setStatus({ text: 'Shell Ready', color: colors.green });
+        }
+    }, [addOutput, setMode]);
+
+    // Shell history navigation
+    const shellHistoryUp = useCallback((currentInput?: string): string | undefined => {
+        return shellHistory.navigateUp(currentInput);
+    }, []);
+
+    const shellHistoryDown = useCallback((): string | undefined => {
+        return shellHistory.navigateDown();
+    }, []);
+
+    const resetShellHistoryCursor = useCallback(() => {
+        shellHistory.resetCursor();
+    }, []);
 
     // Process queued messages when agent becomes idle
     useEffect(() => {
@@ -391,6 +472,10 @@ export function useAgent(): UseAgentReturn {
         clearHistory,
         clearQueue,
         setMode,
+        executeShellDirect,
+        shellHistoryUp,
+        shellHistoryDown,
+        resetShellHistoryCursor,
         addOutput,
     };
 }

@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { planCommand, registerModeCallbacks } from './cmd-plan';
 import { colors } from './types';
+import type { AgentMode } from '../agent/AgentMode';
 
 describe('planCommand', () => {
     const mockOutput = vi.fn();
@@ -36,9 +37,9 @@ describe('planCommand', () => {
     });
 
     it('should switch to plan mode when callbacks are registered', async () => {
-        let currentMode: 'normal' | 'plan' = 'normal';
+        let currentMode: AgentMode = 'normal';
         const getMode = () => currentMode;
-        const setMode = (mode: 'normal' | 'plan') => { currentMode = mode; };
+        const setMode = (mode: AgentMode) => { currentMode = mode; };
 
         registerModeCallbacks(getMode, setMode);
 
@@ -49,9 +50,9 @@ describe('planCommand', () => {
     });
 
     it('should send message when in plan mode with description', async () => {
-        let currentMode: 'normal' | 'plan' = 'normal';
+        let currentMode: AgentMode = 'normal';
         const getMode = () => currentMode;
-        const setMode = (mode: 'normal' | 'plan') => { currentMode = mode; };
+        const setMode = (mode: AgentMode) => { currentMode = mode; };
 
         registerModeCallbacks(getMode, setMode);
 
@@ -65,9 +66,9 @@ describe('planCommand', () => {
     });
 
     it('should show already in plan mode message when called again', async () => {
-        let currentMode: 'normal' | 'plan' = 'plan';
+        let currentMode: AgentMode = 'plan';
         const getMode = () => currentMode;
-        const setMode = (mode: 'normal' | 'plan') => { currentMode = mode; };
+        const setMode = (mode: AgentMode) => { currentMode = mode; };
 
         registerModeCallbacks(getMode, setMode);
 
