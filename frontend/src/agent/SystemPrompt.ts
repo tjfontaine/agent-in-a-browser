@@ -76,6 +76,12 @@ Use \`task_write\` to track multi-step work. The task panel helps users understa
 ## shell_eval
 Execute commands in a POSIX-compatible shell (with bash extensions, no job control).
 
+**IMPORTANT**: Each shell_eval call starts fresh - no state persists between calls.
+- \`cd /foo && pwd\` works (same call)
+- But: \`cd /foo\` then \`pwd\` (separate calls) → pwd shows "/" not "/foo"  
+- Same for: \`export\`, \`alias\`, variables
+- To combine stateful operations, chain them: \`cd /data && ls && cat file.txt\`
+
 ### Shell Features
 **Operators:**
 - Pipes: \`|\`

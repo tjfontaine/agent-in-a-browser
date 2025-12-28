@@ -55,12 +55,16 @@ Standard WASI interfaces are bridged to browser APIs via TypeScript shims in `fr
 
 | Tool | Description |
 |------|-------------|
-| `shell_eval` | Evaluate shell commands (tsx, ls, cat, curl, etc.) |
+| `shell_eval` | Execute shell commands (stateless - each call starts fresh) |
 | `read_file` | Read file content from virtual filesystem |
 | `write_file` | Write content to virtual filesystem |
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
 | `edit_file` | Find and replace text in files |
+
+> **Note**: `shell_eval` creates a fresh shell environment per call. State like `cd`, `export`,
+> `alias`, and variables do NOT persist between calls. Chain commands in a single call to use
+> stateful features: `cd /data && ls && cat file.txt`
 
 The `tsx` shell command executes TypeScript/JavaScript in an embedded QuickJS runtime.
 
