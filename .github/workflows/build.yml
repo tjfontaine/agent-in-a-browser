@@ -42,20 +42,31 @@ jobs:
         working-directory: runtime
         run: wit-deps update
 
-      - name: Build WASM component
+      - name: Build main WASM component
         working-directory: runtime
         run: cargo component build --release --target wasm32-wasip2
 
-      - name: Verify component
+      - name: Build tsx-engine WASM module
+        working-directory: runtime/crates/tsx-engine
+        run: cargo component build --release --target wasm32-wasip2
+
+      - name: Build sqlite-module WASM module
+        working-directory: runtime/crates/sqlite-module
+        run: cargo component build --release --target wasm32-wasip2
+
+      - name: Verify main component
         run: |
           cargo install wasm-tools --locked
           wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 
-      - name: Upload WASM artifact
+      - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-component
-          path: target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+          path: |
+            target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+            target/wasm32-wasip2/release/tsx_engine.wasm
+            target/wasm32-wasip2/release/sqlite_module.wasm
           retention-days: 7
 
   frontend:
@@ -88,9 +99,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Transpile WASM component
+      - name: Transpile WASM components
         working-directory: frontend
-        run: npm run transpile:component
+        run: npm run transpile:all
 
       - name: Build frontend
         working-directory: frontend
@@ -142,9 +153,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Transpile WASM component
+      - name: Transpile WASM components
         working-directory: frontend
-        run: npm run transpile:component
+        run: npm run transpile:all
 
       - name: Run Rust tests
         working-directory: runtime
@@ -188,9 +199,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Transpile WASM component
+      - name: Transpile WASM components
         working-directory: frontend
-        run: npm run transpile:component
+        run: npm run transpile:all
 
       - name: Install Playwright Browsers
         working-directory: frontend
