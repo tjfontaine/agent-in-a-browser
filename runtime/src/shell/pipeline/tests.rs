@@ -1368,9 +1368,12 @@ fn test_noglob_disables_expansion() {
 
 // ========================================================================
 // SQLite3 Command Tests
+// NOTE: sqlite3 is lazy-loaded in WASM mode via mcp:module-loader.
+// In native tests, enable the sqlite feature: cargo test --features sqlite
 // ========================================================================
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_simple_query() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1382,6 +1385,7 @@ fn test_sqlite3_simple_query() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_create_and_insert() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1393,6 +1397,7 @@ fn test_sqlite3_create_and_insert() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_pipeline() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1404,6 +1409,7 @@ fn test_sqlite3_pipeline() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_error_handling() {
     let mut env = ShellEnv::new();
     // Invalid SQL syntax should return error
@@ -1416,6 +1422,7 @@ fn test_sqlite3_error_handling() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_multicolumn() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1428,6 +1435,7 @@ fn test_sqlite3_multicolumn() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_null_values() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1440,6 +1448,7 @@ fn test_sqlite3_null_values() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_float_values() {
     let mut env = ShellEnv::new();
     let result = futures_lite::future::block_on(run_pipeline(
@@ -1451,6 +1460,7 @@ fn test_sqlite3_float_values() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_empty_result() {
     let mut env = ShellEnv::new();
     // Create table, don't insert anything, select from it
@@ -1464,6 +1474,7 @@ fn test_sqlite3_empty_result() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_persistent_file() {
     // Test file-backed persistent database
     let db_path = "/tmp/test_sqlite3_persist.db";
@@ -1493,6 +1504,7 @@ fn test_sqlite3_persistent_file() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_sqlite3_with_memory_explicit() {
     let mut env = ShellEnv::new();
     // Explicitly specify :memory: database

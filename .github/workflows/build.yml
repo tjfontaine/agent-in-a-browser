@@ -169,7 +169,7 @@ jobs:
 
       - name: Run Rust tests
         working-directory: runtime
-        run: cargo test
+        run: cargo test --features sqlite
 
       - name: Run frontend tests
         working-directory: frontend
