@@ -87,6 +87,25 @@ The tradeoff is complexity: WASI P2 requires custom JavaScript shims for browser
 - **Sync HTTP**: Uses synchronous XMLHttpRequest to block the WASM module during HTTP requests.
 - **Custom Pollables**: Clock and I/O pollables with busy-wait implementations for the browser environment.
 
+### Browser Compatibility & Async Modes
+
+We use a dual-build approach to provide cross-browser support for async module loading:
+
+| Browser | Async Mode | Module Loading Strategy |
+|---------|------------|-------------------------|
+| **Chrome** | JSPI (JavaScript Promise Integration) | Lazy loading with WebAssembly stack switching |
+| **Safari** | Sync | Eager loading at startup |
+| **Firefox** | Sync | Eager loading at startup |
+
+**How it works:**
+
+- **JSPI mode** (Chrome): Uses experimental `WebAssembly.Suspending` and `WebAssembly.promising` APIs. Modules load on-demand when first used, with the WASM call stack suspended until loading completes.
+- **Sync mode** (Safari/Firefox): All lazy modules are pre-loaded during initialization. No async suspension needed.
+
+The runtime detects JSPI support via `typeof WebAssembly?.Suspending !== 'undefined'` and loads the appropriate MCP server variant (`mcp-server-jspi/` or `mcp-server-sync/`).
+
+> **Note**: Chrome requires JSPI flags (`--enable-experimental-web-platform-features` or `--js-flags=--experimental-wasm-stack-switching`). These are enabled automatically in Playwright tests.
+
 ---
 
 ## Slash Commands
@@ -215,9 +234,12 @@ Heavy modules are lazy-loaded on first use to reduce initial load time:
 
 | Module | Commands | Loaded When |
 |--------|----------|-------------|
-| `mcp-server` | Most shell commands | Startup |
-| `tsx-engine` | `tsx`, `tsc` | First TypeScript execution |
-| `sqlite-module` | `sqlite3` | First database operation |
+| `mcp-server-jspi/` | Most shell commands (Chrome) | Startup |
+| `mcp-server-sync/` | Most shell commands (Safari/Firefox) | Startup |
+| `tsx-engine/` | `tsx`, `tsc` | First TypeScript execution* |
+| `sqlite-module/` | `sqlite3` | First database operation* |
+
+*In Sync mode, these are pre-loaded at startup for browsers without JSPI support.
 
 ## Project Structure
 
@@ -247,7 +269,9 @@ web-agent/
 │   │   ├── README.md        # Frontend architecture docs
 │   │   └── wasm/            # ← Host bridges + generated code
 │   │       ├── README.md    # Bridge layer docs
-│   │       ├── mcp-server/  # jco-transpiled main WASM (generated)
+│   │       ├── async-mode.ts  # JSPI detection & dynamic loading
+│   │       ├── mcp-server-jspi/ # JSPI mode (Chrome)
+│   │       ├── mcp-server-sync/ # Sync mode (Safari/Firefox)
 │   │       ├── tsx-engine/  # jco-transpiled TSX module (generated)
 │   │       ├── sqlite-module/ # jco-transpiled SQLite (generated)
 │   │       ├── lazy-modules.ts # On-demand module loading
