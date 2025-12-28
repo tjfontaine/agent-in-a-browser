@@ -558,15 +558,12 @@ async fn execute_simple(
             };
             
             // Spawn the lazy command process
-            let process = match loader::spawn_lazy_command(
+            let process = loader::spawn_lazy_command(
                 &module_name,
                 &expanded_name,
                 &expanded_args,
                 &exec_env,
-            ) {
-                Ok(p) => p,
-                Err(e) => return ShellResult::error(format!("{}: {}", expanded_name, e), 127),
-            };
+            );
             
             // Wait for the module to be loaded before writing stdin
             // Get the ready pollable and block on it
