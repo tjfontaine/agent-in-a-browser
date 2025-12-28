@@ -4,6 +4,7 @@ members = [
     "runtime/runtime-macros",
     "runtime/crates/tsx-engine",
     "runtime/crates/sqlite-module",
+    "runtime/crates/gix-module",
 ]
 resolver = "2"
 

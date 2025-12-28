@@ -22,8 +22,11 @@ runtime/doc/
 
 # Generated WASM MCP server (from jco transpile)
 frontend/src/wasm/mcp-server/
+frontend/src/wasm/mcp-server-jspi/
+frontend/src/wasm/mcp-server-sync/
 frontend/src/wasm/tsx-engine/
 frontend/src/wasm/sqlite-module/
+frontend/src/wasm/gix-module/
 frontend/src/wasm/ts-runtime-component/
 frontend/src/wasm/component/
 frontend/src/wasm/browser_ts_runtime.wasm
