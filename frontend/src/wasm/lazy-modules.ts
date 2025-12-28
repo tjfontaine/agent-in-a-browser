@@ -3,7 +3,13 @@
  * 
  * Dynamically loads heavy WASM modules (tsx-engine, sqlite-module) on demand.
  * This reduces initial load time by deferring these modules until first use.
+ * 
+ * Supports dual async modes:
+ * - JSPI mode (Chrome): True lazy loading with async suspension
+ * - Sync mode (Safari/Firefox): Eager loading at startup
  */
+
+import { hasJSPI } from './async-mode.js';
 
 // Type for WASI stream interfaces (simplified for our needs)
 export interface InputStream {
@@ -192,3 +198,32 @@ export function preloadModule(moduleName: string): void {
         console.error(`[LazyLoader] Failed to preload ${moduleName}:`, err);
     });
 }
+
+/**
+ * Initialize all lazy modules eagerly.
+ * Used in Sync mode (Safari/Firefox) where we can't do async suspension.
+ * In JSPI mode (Chrome), this is not needed as modules load on-demand.
+ */
+export async function initializeForSyncMode(): Promise<void> {
+    if (hasJSPI) {
+        console.log('[LazyLoader] JSPI available, skipping eager load');
+        return;
+    }
+
+    console.log('[LazyLoader] Sync mode - eager loading all lazy modules...');
+    const startTime = performance.now();
+
+    // Load all lazy modules in parallel
+    const moduleNames = ['tsx-engine', 'sqlite-module'];
+    await Promise.all(moduleNames.map(name =>
+        loadLazyModule(name).catch(err => {
+            console.error(`[LazyLoader] Failed to eager load ${name}:`, err);
+        })
+    ));
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] All modules loaded in ${loadTime.toFixed(0)}ms`);
+}
+
+// Re-export hasJSPI for consumers
+export { hasJSPI };

@@ -6,9 +6,13 @@
  * 
  * This bridge connects standard Web Fetch API objects (Request, Response, ReadableStream)
  * directly to the WASI HTTP shim, minimizing data copying and buffering.
+ * 
+ * Supports dual async modes:
+ * - JSPI mode (Chrome): Uses WebAssembly.Suspending for true async
+ * - Sync mode (Safari/Firefox): Eager module loading, synchronous execution
  */
 
-import { incomingHandler } from '../wasm/mcp-server/ts-runtime-mcp.js';
+import { getIncomingHandler, hasJSPI } from '../wasm/async-mode.js';
 import {
     createIncomingRequest,
     Fields,
@@ -109,10 +113,14 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
 
     console.log('[WasmBridge] Calling incomingHandler.handle...');
     try {
+        const incomingHandler = getIncomingHandler();
         // Cast to any because our IncomingRequest is compatible at runtime with the WASM-generated type
-        // The handle function is now async with JSPI, so we await it
+        // In JSPI mode, handle() returns a Promise; in Sync mode it returns void
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await incomingHandler.handle(incomingRequest as any, responseOutparam);
+        const result = incomingHandler.handle(incomingRequest as any, responseOutparam);
+        if (hasJSPI && result instanceof Promise) {
+            await result;
+        }
     } catch (error) {
         console.error('[WasmBridge] Error in handle:', error);
         throw error;

@@ -6,8 +6,9 @@ console.log('[SandboxWorker] Module loading...');
 export { }; // Make this a module
 
 import { callWasmMcpServerFetch } from '../mcp/WasmBridge';
-// Note: Lazy modules now load ON-DEMAND when first command runs
-// No eager loading needed here
+import { loadMcpServer } from '../wasm/async-mode';
+import { initializeForSyncMode } from '../wasm/lazy-modules';
+// Lazy modules load ON-DEMAND in JSPI mode, or eagerly in Sync mode
 
 console.log('[SandboxWorker] Imports complete');
 
@@ -93,8 +94,26 @@ async function initialize(): Promise<void> {
         throw e;
     }
 
-    // Note: MCP initialization is now handled by the client (agent-sdk.ts) 
-    // initiating the connection via the fetch transport.
+    // Load MCP server WASM module (JSPI or Sync mode based on browser support)
+    try {
+        console.log('[SandboxWorker] Loading MCP server module...');
+        await loadMcpServer();
+        console.log('[SandboxWorker] MCP server module loaded');
+    } catch (e) {
+        console.error('[SandboxWorker] Failed to load MCP server:', e);
+        throw e;
+    }
+
+    // In Sync mode (Safari/Firefox), eager-load all lazy modules now
+    // In JSPI mode (Chrome), this is a no-op and modules load on-demand
+    try {
+        console.log('[SandboxWorker] Initializing lazy modules for sync mode...');
+        await initializeForSyncMode();
+        console.log('[SandboxWorker] Lazy modules initialized');
+    } catch (e) {
+        console.error('[SandboxWorker] Failed to initialize lazy modules:', e);
+        throw e;
+    }
 
     initialized = true;
 }
