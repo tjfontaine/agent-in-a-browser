@@ -21,6 +21,7 @@ export interface TreeEntry {
     dir?: Record<string, TreeEntry>;
     size?: number;
     mtime?: number; // Unix timestamp in milliseconds
+    symlink?: string; // If set, this is a symlink pointing to this target path
     _scanned?: boolean; // Has this directory been scanned from OPFS?
 }
 
@@ -166,6 +167,64 @@ export function syncScanDirectory(path: string): boolean {
 export function normalizePath(path: string): string {
     if (!path || path === '/' || path === '.') return '';
     return path.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+}
+
+/**
+ * Resolve symlinks in a path.
+ * @param path The path to resolve
+ * @param followFinal If true, follow the final component if it's a symlink
+ * @returns The resolved path with all symlinks followed
+ * @throws 'loop' if symlink loop detected (ELOOP)
+ */
+export function resolveSymlinks(path: string, followFinal = true): string {
+    const parts = normalizePath(path).split('/').filter(p => p);
+    if (parts.length === 0) return '';
+
+    const resolved: string[] = [];
+    let loopCount = 0;
+    const maxLoops = 40; // POSIX SYMLOOP_MAX
+
+    for (let i = 0; i < parts.length; i++) {
+        resolved.push(parts[i]);
+        const currentPath = resolved.join('/');
+        const entry = getTreeEntry(currentPath);
+
+        if (entry?.symlink) {
+            const isLast = i === parts.length - 1;
+            if (isLast && !followFinal) {
+                // Don't follow final symlink
+                break;
+            }
+
+            if (++loopCount > maxLoops) {
+                throw 'loop'; // ELOOP
+            }
+
+            // Resolve symlink target (can be relative or absolute)
+            let target: string;
+            if (entry.symlink.startsWith('/')) {
+                target = entry.symlink;
+            } else {
+                // Relative symlink: resolve relative to parent of current
+                const parent = resolved.slice(0, -1).join('/');
+                target = parent ? parent + '/' + entry.symlink : entry.symlink;
+            }
+
+            // Replace resolved path with target and restart resolution
+            const targetParts = normalizePath(target).split('/').filter(p => p);
+            resolved.length = 0;
+            resolved.push(...targetParts);
+
+            // Append remaining path components
+            const remaining = parts.slice(i + 1);
+            parts.length = 0;
+            parts.push(...resolved, ...remaining);
+            resolved.length = 0;
+            i = -1; // Restart loop
+        }
+    }
+
+    return resolved.join('/');
 }
 
 // ============================================================

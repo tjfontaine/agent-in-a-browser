@@ -18,6 +18,7 @@ import {
     getCwd, setCwd,
     syncScanDirectory,
     normalizePath,
+    resolveSymlinks,
     getOpfsDirectory, getOpfsFile,
     syncHandleCache,
     type TreeEntry
@@ -28,6 +29,11 @@ import {
     syncWriteFileBinary,
     msToDatetime
 } from './opfs-sync-bridge';
+import {
+    saveSymlink,
+    deleteSymlink,
+    deleteSymlinksUnderPath
+} from './symlink-store';
 
 // Global buffer cache for files being written via streams without sync handles.
 // This persists data across writeViaStream() calls since each call creates a new OutputStream.
@@ -52,10 +58,13 @@ class DirectoryEntryStream {
         }
         const [name, entry] = this.entries[this.idx];
         this.idx += 1;
-        return {
-            name,
-            type: entry.dir ? 'directory' : 'regular-file',
-        };
+        let type = 'regular-file';
+        if (entry.dir) {
+            type = 'directory';
+        } else if (entry.symlink) {
+            type = 'symbolic-link';
+        }
+        return { name, type };
     }
 }
 
@@ -100,9 +109,11 @@ class Descriptor {
         };
     }
 
-    statAt(_pathFlags: number, subpath: string) {
+    statAt(pathFlags: number, subpath: string) {
         const fullPath = this.resolvePath(subpath);
-        const entry = getTreeEntry(fullPath);
+        const shouldFollow = (pathFlags & 1) !== 0; // symlinkFollow flag
+        const resolvedPath = shouldFollow ? resolveSymlinks(fullPath) : fullPath;
+        const entry = getTreeEntry(resolvedPath);
 
         if (!entry) {
             throw 'no-entry';
@@ -113,6 +124,8 @@ class Descriptor {
 
         if (entry.dir !== undefined) {
             type = 'directory';
+        } else if (entry.symlink !== undefined) {
+            type = 'symbolic-link';
         } else if (entry.size !== undefined) {
             type = 'regular-file';
             size = BigInt(entry.size);
@@ -607,11 +620,21 @@ class Descriptor {
     }
 
     /**
-     * Read symbolic link - not supported in OPFS
+     * Read symbolic link - returns target path
      */
-    readlinkAt(_path: string): string {
-        console.warn('[opfs-fs] readlinkAt: symbolic links not supported');
-        throw 'not-supported';
+    readlinkAt(subpath: string): string {
+        const fullPath = this.resolvePath(subpath);
+        const normalizedPath = normalizePath(fullPath);
+        const entry = getTreeEntry(normalizedPath);
+
+        if (!entry) {
+            throw 'no-entry';
+        }
+        if (!entry.symlink) {
+            throw 'invalid'; // Not a symlink
+        }
+
+        return entry.symlink;
     }
 
     removeDirectoryAt(subpath: string): void {
@@ -627,14 +650,10 @@ class Descriptor {
             throw 'not-directory';
         }
 
-        // Close all sync handles for files in this directory tree
-        // This is necessary because OPFS won't allow deletion while handles are open
-        // Use imported helper from directory-tree (which I need to check if closeHandlesUnderPath is exported!)
-        // If not, I can't call it. 
-        // Wait, removeTreeEntry alone isn't enough.
-        // I need closeHandlesUnderPath logic.
-        // Let's assume for now I should have exported it from directory-tree.ts.
-        // If not, I'll need to fix directory-tree.ts.
+        // Delete any symlinks under this directory from IndexedDB
+        deleteSymlinksUnderPath(normalizedPath).catch(e => {
+            console.error('[opfs-fs] Failed to cascade delete symlinks:', normalizedPath, e);
+        });
 
         // Remove from OPFS (async)
         this.removeOpfsEntry(normalizedPath, true);
@@ -753,11 +772,25 @@ class Descriptor {
     }
 
     /**
-     * Create symbolic link - not supported in OPFS
+     * Create symbolic link - stored in TreeEntry and persisted to IndexedDB
      */
-    symlinkAt(_oldPath: string, _newPath: string): void {
-        console.warn('[opfs-fs] symlinkAt: symbolic links not supported');
-        throw 'not-supported';
+    symlinkAt(targetPath: string, linkName: string): void {
+        const fullPath = this.resolvePath(linkName);
+        const normalizedPath = normalizePath(fullPath);
+
+        // Check if something already exists at link path
+        const existing = getTreeEntry(normalizedPath);
+        if (existing) {
+            throw 'exist';
+        }
+
+        // Create symlink entry in tree
+        setTreeEntry(normalizedPath, { symlink: targetPath, mtime: Date.now() });
+
+        // Persist to IndexedDB (async, fire-and-forget)
+        saveSymlink(normalizedPath, targetPath).catch(e => {
+            console.error('[opfs-fs] Failed to persist symlink to IndexedDB:', normalizedPath, e);
+        });
     }
 
     unlinkFileAt(subpath: string): void {
@@ -771,6 +804,15 @@ class Descriptor {
         }
         if (entry.dir !== undefined) {
             throw 'is-directory';
+        }
+
+        // If it's a symlink, delete from IndexedDB
+        if (entry.symlink !== undefined) {
+            deleteSymlink(normalizedPath).catch(e => {
+                console.error('[opfs-fs] Failed to delete symlink from IndexedDB:', normalizedPath, e);
+            });
+            removeTreeEntry(normalizedPath);
+            return;
         }
 
         // Close and remove sync handle if cached
@@ -918,6 +960,14 @@ export async function initFilesystem(): Promise<void> {
 
         console.log('[opfs-fs] Helper worker ready, scanning root directory...');
         syncScanDirectory('');
+
+        // Load symlinks from IndexedDB into tree
+        const { loadAllSymlinks } = await import('./symlink-store');
+        const symlinks = await loadAllSymlinks();
+        for (const [path, target] of symlinks) {
+            setTreeEntry(path, { symlink: target, mtime: Date.now() });
+        }
+        console.log('[opfs-fs] Loaded', symlinks.size, 'symlinks from IndexedDB');
 
         setInitialized(true);
         console.log('[opfs-fs] Filesystem initialized with lazy loading');
