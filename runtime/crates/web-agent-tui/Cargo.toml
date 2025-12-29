@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 ratatui = { version = "0.29", default-features = false }
 
 # WASM support
-wit-bindgen = "0.36"
+wit-bindgen = "0.50"
 
 # Serialization for config
 toml = "0.8"
