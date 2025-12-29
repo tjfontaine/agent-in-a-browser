@@ -7,6 +7,9 @@
 
 import type { Terminal } from 'ghostty-web';
 
+// Use our existing custom stream classes that properly integrate with jco
+import { CustomInputStream, CustomOutputStream } from './streams.js';
+
 // Buffer for stdin data from terminal
 const stdinBuffer: Uint8Array[] = [];
 const stdinWaiters: Array<(data: Uint8Array) => void> = [];
@@ -35,7 +38,7 @@ export function setTerminal(terminal: Terminal): void {
 }
 
 /**
- * Read from stdin (blocking)
+ * Read from stdin (blocking) - async for JSPI
  */
 async function readStdin(len: number): Promise<Uint8Array> {
     // Check if we have buffered data
@@ -50,16 +53,14 @@ async function readStdin(len: number): Promise<Uint8Array> {
         return result;
     }
 
-    // Wait for data
+    // Wait for data - this suspends the WASM via JSPI
     return new Promise(resolve => {
         stdinWaiters.push(resolve);
     });
 }
 
-/**
- * InputStream implementation for ghostty-web stdin
- */
-class GhosttyInputStream {
+// Create stdin stream using our CustomInputStream
+const stdinStream = new CustomInputStream({
     read(len: bigint): Uint8Array {
         // Non-blocking read - return empty if no data
         if (stdinBuffer.length === 0) {
@@ -72,149 +73,107 @@ class GhosttyInputStream {
         }
         stdinBuffer.unshift(chunk.slice(n));
         return chunk.slice(0, n);
-    }
+    },
 
+    // Async blockingRead for JSPI - suspends WASM until data available
     async blockingRead(len: bigint): Promise<Uint8Array> {
         return await readStdin(Number(len));
-    }
+    },
+});
 
-    skip(len: bigint): bigint {
-        const data = this.read(len);
-        return BigInt(data.length);
-    }
+// Text decoder for output
+const textDecoder = new TextDecoder();
 
-    async blockingSkip(len: bigint): Promise<bigint> {
-        const data = await this.blockingRead(len);
-        return BigInt(data.length);
-    }
-
-    subscribe() {
-        return {
-            ready: () => stdinBuffer.length > 0,
-            block: () => { /* Can't block in browser */ }
-        };
-    }
-
-    [Symbol.dispose ?? Symbol.for('dispose')]() { }
-}
-
-/**
- * OutputStream implementation for ghostty-web stdout
- */
-class GhosttyOutputStream {
-    checkWrite(): bigint {
-        return BigInt(1024 * 1024); // Always ready
-    }
-
-    write(contents: Uint8Array): void {
+// Create stdout stream using our CustomOutputStream
+const stdoutStream = new CustomOutputStream({
+    write(contents: Uint8Array): bigint {
         if (currentTerminal) {
-            currentTerminal.write(new TextDecoder().decode(contents));
+            currentTerminal.write(textDecoder.decode(contents));
         }
-    }
+        return BigInt(contents.length);
+    },
 
-    async blockingWriteAndFlush(contents: Uint8Array): Promise<void> {
-        this.write(contents);
-    }
+    blockingFlush(): void { },
+});
 
-    flush(): void { }
+// Create stderr stream (also goes to terminal)
+const stderrStream = new CustomOutputStream({
+    write(contents: Uint8Array): bigint {
+        if (currentTerminal) {
+            currentTerminal.write(textDecoder.decode(contents));
+        }
+        return BigInt(contents.length);
+    },
 
-    async blockingFlush(): Promise<void> { }
-
-    subscribe() {
-        return {
-            ready: () => true,
-            block: () => { }
-        };
-    }
-
-    splice(_src: unknown, _len: bigint): bigint {
-        throw new Error('splice not implemented');
-    }
-
-    async blockingSplice(_src: unknown, _len: bigint): Promise<bigint> {
-        throw new Error('blockingSplice not implemented');
-    }
-
-    writeZeroes(len: bigint): void {
-        this.write(new Uint8Array(Number(len)));
-    }
-
-    async blockingWriteZeroes(len: bigint): Promise<void> {
-        this.writeZeroes(len);
-    }
-
-    [Symbol.dispose ?? Symbol.for('dispose')]() { }
-}
-
-// Singleton instances
-let stdinStream: GhosttyInputStream | null = null;
-let stdoutStream: GhosttyOutputStream | null = null;
-let stderrStream: GhosttyOutputStream | null = null;
-
-/**
- * Get stdin stream
- */
-export function getStdin() {
-    if (!stdinStream) {
-        stdinStream = new GhosttyInputStream();
-    }
-    return stdinStream;
-}
-
-/**
- * Get stdout stream
- */
-export function getStdout() {
-    if (!stdoutStream) {
-        stdoutStream = new GhosttyOutputStream();
-    }
-    return stdoutStream;
-}
-
-/**
- * Get stderr stream
- */
-export function getStderr() {
-    if (!stderrStream) {
-        stderrStream = new GhosttyOutputStream();
-    }
-    return stderrStream;
-}
+    blockingFlush(): void { },
+});
 
 // Export the shim interface compatible with @bytecodealliance/preview2-shim/cli
-export const stdin = { getStdin };
-export const stdout = { getStdout };
-export const stderr = { getStderr };
+export const stdin = {
+    getStdin: () => stdinStream
+};
+
+export const stdout = {
+    getStdout: () => stdoutStream
+};
+
+export const stderr = {
+    getStderr: () => stderrStream
+};
 
 // Environment stub
 export const environment = {
     getEnvironment: () => [] as [string, string][],
+    getArguments: () => [] as string[],
+    initialCwd: () => '/',
 };
 
 // Exit stub
+class ComponentExit extends Error {
+    exitError = true;
+    code: number;
+    constructor(code: number) {
+        super(`Component exited ${code === 0 ? 'successfully' : 'with error'}`);
+        this.code = code;
+    }
+}
+
 export const exit = {
-    exit: (code: { tag: string; val?: number }) => {
-        console.log('TUI exit:', code);
+    exit: (status: { tag: string; val?: number }) => {
+        throw new ComponentExit(status.tag === 'err' ? 1 : 0);
+    },
+    exitWithCode: (code: number) => {
+        throw new ComponentExit(code);
     }
 };
 
 // Terminal stubs (for raw mode, etc.)
+class TerminalInput { }
+class TerminalOutput { }
+
+const terminalStdinInstance = new TerminalInput();
+const terminalStdoutInstance = new TerminalOutput();
+const terminalStderrInstance = new TerminalOutput();
+
 export const terminalInput = {
-    TerminalInput: class { },
+    TerminalInput,
 };
 
 export const terminalOutput = {
-    TerminalOutput: class { },
+    TerminalOutput,
 };
 
 export const terminalStdin = {
-    getTerminalStdin: () => null,
+    TerminalInput,
+    getTerminalStdin: () => terminalStdinInstance,
 };
 
 export const terminalStdout = {
-    getTerminalStdout: () => null,
+    TerminalOutput,
+    getTerminalStdout: () => terminalStdoutInstance,
 };
 
 export const terminalStderr = {
-    getTerminalStderr: () => null,
+    TerminalOutput,
+    getTerminalStderr: () => terminalStderrInstance,
 };
