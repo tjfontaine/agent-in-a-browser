@@ -328,21 +328,96 @@ impl<R: Read, W: Write> App<R, W> {
                 // Reset history navigation to end
                 self.history_index = self.history.len();
                 
-                // Add user message
-                self.messages.push(Message {
-                    role: Role::User,
-                    content: input.clone(),
-                });
-                
-                // Handle slash commands
-                if input.starts_with('/') {
-                    self.handle_slash_command(&input);
-                } else {
-                    // Regular message - send to AI
-                    self.send_to_ai(&input);
+                // Handle based on mode
+                match self.mode {
+                    Mode::Shell => {
+                        // Shell mode: execute command via MCP
+                        self.execute_shell_command(&input);
+                    }
+                    Mode::Agent | Mode::Plan => {
+                        // Add user message
+                        self.messages.push(Message {
+                            role: Role::User,
+                            content: input.clone(),
+                        });
+                        
+                        // Handle slash commands
+                        if input.starts_with('/') {
+                            self.handle_slash_command(&input);
+                        } else {
+                            // Regular message - send to AI
+                            self.send_to_ai(&input);
+                        }
+                    }
                 }
             }
         }
+    }
+    
+    /// Execute a shell command via MCP shell_eval
+    fn execute_shell_command(&mut self, command: &str) {
+        // Show the command with shell prompt
+        self.messages.push(Message {
+            role: Role::User,
+            content: format!("$ {}", command),
+        });
+        
+        // Handle shell-local commands
+        if command.trim() == "exit" {
+            self.mode = Mode::Agent;
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Exiting shell mode.".to_string(),
+            });
+            return;
+        }
+        
+        if command.trim() == "clear" {
+            self.messages.clear();
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Shell mode - type 'exit' or ^D to return".to_string(),
+            });
+            return;
+        }
+        
+        self.state = AppState::Processing;
+        
+        // Call shell_eval via MCP
+        let args = serde_json::json!({
+            "command": command
+        });
+        
+        match self.mcp_client.call_tool("shell_eval", args) {
+            Ok(output) => {
+                // Update aux panel with full output
+                self.aux_content = AuxContent {
+                    kind: AuxContentKind::ToolOutput,
+                    title: "Shell Output".to_string(),
+                    content: output.clone(),
+                };
+                
+                // Show output in messages (truncate if long)
+                let display = if output.len() > 500 {
+                    format!("{}...\n[see aux panel →]", &output[..500])
+                } else {
+                    output
+                };
+                
+                self.messages.push(Message {
+                    role: Role::Tool,
+                    content: display,
+                });
+            }
+            Err(e) => {
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("Error: {}", e),
+                });
+            }
+        }
+        
+        self.state = AppState::Ready;
     }
     
     fn send_to_ai(&mut self, message: &str) {
