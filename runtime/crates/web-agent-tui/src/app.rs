@@ -30,6 +30,10 @@ pub struct App<R: Read, W: Write> {
     input: String,
     /// Chat/output history  
     messages: Vec<Message>,
+    /// Command history for up/down navigation
+    history: Vec<String>,
+    /// Current position in history
+    history_index: usize,
     /// Terminal
     terminal: Terminal<WasiBackend<W>>,
     /// Stdin handle
@@ -86,6 +90,8 @@ impl<R: Read, W: Write> App<R, W> {
                     content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
                 }
             ],
+            history: Vec::new(),
+            history_index: 0,
             terminal,
             stdin,
             should_quit: false,
@@ -143,9 +149,21 @@ impl<R: Read, W: Write> App<R, W> {
         if self.stdin.read(&mut buf).is_ok() {
             let byte = buf[0];
             match byte {
-                // Ctrl+C or Ctrl+D - quit
-                0x03 | 0x04 => {
+                // Ctrl+C - quit (always)
+                0x03 => {
                     self.should_quit = true;
+                }
+                // Ctrl+D - exit shell mode or quit
+                0x04 => {
+                    if self.mode == Mode::Shell {
+                        self.mode = Mode::Agent;
+                        self.messages.push(Message {
+                            role: Role::System,
+                            content: "Exiting shell mode.".to_string(),
+                        });
+                    } else {
+                        self.should_quit = true;
+                    }
                 }
                 // Enter - submit
                 0x0D | 0x0A => {
@@ -156,6 +174,14 @@ impl<R: Read, W: Write> App<R, W> {
                 // Backspace
                 0x7F | 0x08 => {
                     self.input.pop();
+                }
+                // Ctrl+U - clear input line
+                0x15 => {
+                    self.input.clear();
+                }
+                // Tab - potential autocomplete (placeholder)
+                0x09 => {
+                    // Future: autocomplete
                 }
                 // Printable ASCII
                 0x20..=0x7E => {
@@ -175,14 +201,47 @@ impl<R: Read, W: Write> App<R, W> {
     }
     
     fn handle_escape_sequence(&mut self, seq: &[u8]) {
-        if seq.len() >= 2 && seq[0] == b'[' {
-            match seq[1] {
-                b'A' => { /* Up arrow - history */ }
-                b'B' => { /* Down arrow - history */ }
-                b'C' => { /* Right arrow */ }
-                b'D' => { /* Left arrow */ }
-                _ => {}
+        // Handle bare Escape (seq would be empty or not '[')
+        if seq.len() < 2 || seq[0] != b'[' {
+            // Bare Escape key - cancel API key entry
+            if self.state == AppState::NeedsApiKey {
+                self.state = AppState::Ready;
+                self.pending_message = None;
+                self.input.clear();
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "API key entry cancelled.".to_string(),
+                });
             }
+            return;
+        }
+        
+        match seq[1] {
+            // Up arrow - history previous
+            b'A' => {
+                if self.history_index > 0 {
+                    self.history_index -= 1;
+                    if let Some(cmd) = self.history.get(self.history_index) {
+                        self.input = cmd.clone();
+                    }
+                }
+            }
+            // Down arrow - history next
+            b'B' => {
+                if self.history_index < self.history.len() {
+                    self.history_index += 1;
+                    if self.history_index >= self.history.len() {
+                        self.input.clear();
+                    } else if let Some(cmd) = self.history.get(self.history_index) {
+                        self.input = cmd.clone();
+                    }
+                }
+            }
+            // Right arrow - move cursor right (placeholder)
+            b'C' => {}
+            // Left arrow - move cursor left (placeholder)
+            b'D' => {}
+            _ => {}
         }
     }
     
@@ -191,7 +250,7 @@ impl<R: Read, W: Write> App<R, W> {
         
         match self.state {
             AppState::NeedsApiKey => {
-                // This input is the API key
+                // This input is the API key - don't add to history
                 self.ai_client.set_api_key(&input);
                 self.messages.push(Message {
                     role: Role::System,
@@ -205,6 +264,13 @@ impl<R: Read, W: Write> App<R, W> {
                 }
             }
             AppState::Ready | AppState::Processing => {
+                // Add to command history (don't add duplicates)
+                if self.history.last() != Some(&input) {
+                    self.history.push(input.clone());
+                }
+                // Reset history navigation to end
+                self.history_index = self.history.len();
+                
                 // Add user message
                 self.messages.push(Message {
                     role: Role::User,
