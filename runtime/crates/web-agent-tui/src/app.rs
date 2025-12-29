@@ -5,7 +5,7 @@
 use ratatui::Terminal;
 
 use crate::backend::{WasiBackend, enter_alternate_screen, leave_alternate_screen};
-use crate::bridge::{AiClient, McpClient};
+use crate::bridge::{AiClient, McpClient, try_execute_local_tool, get_local_tool_definitions, format_tasks_for_display, Task};
 use crate::ui::{Mode, render_ui, AuxContent, AuxContentKind, ServerStatus};
 use std::io::{Write, Read};
 
@@ -50,6 +50,8 @@ pub struct App<R: Read, W: Write> {
     aux_content: AuxContent,
     /// Server connection status
     server_status: ServerStatus,
+    /// Current task list (from task_write)
+    tasks: Vec<Task>,
 }
 
 /// A message in the chat history
@@ -108,6 +110,7 @@ impl<R: Read, W: Write> App<R, W> {
                 local_tool_count: 0,
                 remote_servers: Vec::new(),
             },
+            tasks: Vec::new(),
         }
     }
     
@@ -357,8 +360,8 @@ impl<R: Read, W: Write> App<R, W> {
         
         self.state = AppState::Processing;
         
-        // Get tools from MCP
-        let tools = match self.mcp_client.list_tools() {
+        // Get tools from MCP (sandbox)
+        let mut tools = match self.mcp_client.list_tools() {
             Ok(t) => {
                 // Update server status
                 self.server_status.local_connected = true;
@@ -371,10 +374,14 @@ impl<R: Read, W: Write> App<R, W> {
                     role: Role::System,
                     content: format!("MCP error: {}", e),
                 });
-                // Continue without tools
+                // Continue without MCP tools
                 vec![]
             }
         };
+        
+        // Add local tools (task_write, etc.)
+        let local_tools = get_local_tool_definitions();
+        tools.extend(local_tools);
         
         // Build message history for AI
         let ai_messages: Vec<crate::bridge::ai_client::Message> = self.messages
@@ -406,40 +413,68 @@ impl<R: Read, W: Write> App<R, W> {
                         content: format!("🔧 Calling tool: {}", tool_name),
                     });
                     
-                    // Parse arguments and call MCP
-                    match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
-                        Ok(args) => {
-                            match self.mcp_client.call_tool(&tool_name, args) {
-                                Ok(result) => {
-                                    // Update aux panel with tool output
-                                    self.aux_content = AuxContent {
-                                        kind: AuxContentKind::ToolOutput,
-                                        title: tool_name.clone(),
-                                        content: result.clone(),
-                                    };
-                                    
-                                    self.messages.push(Message {
-                                        role: Role::Tool,
-                                        content: if result.len() > 100 {
-                                            format!("{}... [see aux panel →]", &result[..100])
-                                        } else {
-                                            result
-                                        },
-                                    });
-                                }
-                                Err(e) => {
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!("Tool error: {}", e),
-                                    });
-                                }
-                            }
-                        }
+                    // Parse arguments
+                    let args = match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
+                        Ok(a) => a,
                         Err(e) => {
                             self.messages.push(Message {
                                 role: Role::System,
                                 content: format!("Invalid tool arguments: {}", e),
                             });
+                            continue;
+                        }
+                    };
+                    
+                    // Try local tool first
+                    if let Some(local_result) = try_execute_local_tool(&tool_name, args.clone()) {
+                        // Handle local tool result
+                        if local_result.success {
+                            // Update tasks if returned
+                            if let Some(new_tasks) = local_result.tasks {
+                                self.tasks = new_tasks;
+                                // Update aux panel with tasks
+                                self.aux_content = AuxContent {
+                                    kind: AuxContentKind::TaskList,
+                                    title: "Tasks".to_string(),
+                                    content: format_tasks_for_display(&self.tasks),
+                                };
+                            }
+                            self.messages.push(Message {
+                                role: Role::Tool,
+                                content: local_result.message,
+                            });
+                        } else {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Tool error: {}", local_result.message),
+                            });
+                        }
+                    } else {
+                        // Delegate to MCP
+                        match self.mcp_client.call_tool(&tool_name, args) {
+                            Ok(result) => {
+                                // Update aux panel with tool output
+                                self.aux_content = AuxContent {
+                                    kind: AuxContentKind::ToolOutput,
+                                    title: tool_name.clone(),
+                                    content: result.clone(),
+                                };
+                                
+                                self.messages.push(Message {
+                                    role: Role::Tool,
+                                    content: if result.len() > 100 {
+                                        format!("{}... [see aux panel →]", &result[..100])
+                                    } else {
+                                        result
+                                    },
+                                });
+                            }
+                            Err(e) => {
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!("Tool error: {}", e),
+                                });
+                            }
                         }
                     }
                 }
