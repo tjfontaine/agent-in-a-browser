@@ -1,44 +1,42 @@
 /**
  * /shell Command
  * 
- * Enter direct shell mode for raw command execution.
- * In shell mode, input goes directly to the WASM shell without AI processing.
- * Exit with 'exit', 'logout', or Ctrl+D.
+ * Launch the interactive shell (sh) with full REPL functionality.
+ * This gives you an unbuffered, raw terminal experience.
+ * Exit with 'exit', Ctrl+D, or 'q' depending on the shell.
  */
 
 import { CommandDef, colors } from './types';
-import type { AgentMode } from '../agent/AgentMode';
 
-// Callback for mode switching - registered by App
-let setModeCallback: ((mode: AgentMode) => void) | null = null;
+// Callback for launching interactive shell - registered by App
+let launchInteractiveCallback: ((moduleName: string, command: string, args: string[]) => Promise<void>) | null = null;
 
 /**
- * Register callback for mode state management
+ * Register callback for launching interactive processes
  */
 export function registerShellModeCallback(
-    setModeFunc: (mode: AgentMode) => void
+    launchInteractiveFunc: (moduleName: string, command: string, args: string[]) => Promise<void>
 ): void {
-    setModeCallback = setModeFunc;
+    launchInteractiveCallback = launchInteractiveFunc;
 }
 
 export const shellCommand: CommandDef = {
     name: 'shell',
-    description: 'Enter direct shell mode (no AI processing)',
+    description: 'Launch interactive shell (full REPL)',
     usage: '/shell',
     aliases: ['sh'],
     handler: async (ctx) => {
-        if (!setModeCallback) {
-            ctx.output('error', 'Shell mode callbacks not registered', colors.red);
+        if (!launchInteractiveCallback) {
+            ctx.output('error', 'Interactive shell callback not registered', colors.red);
             return;
         }
 
         ctx.output('system', '', undefined);
-        ctx.output('system', '💻 Entering shell mode', colors.green);
-        ctx.output('system', '   Commands execute directly in the WASM shell', colors.dim);
-        ctx.output('system', '   Type "exit" or press Ctrl+D to return to agent mode', colors.dim);
+        ctx.output('system', '🖥️ Launching interactive shell...', colors.cyan);
+        ctx.output('system', '   Press Ctrl+D or type "exit" to return to agent mode', colors.dim);
         ctx.output('system', '', undefined);
 
-        // Switch to shell mode
-        setModeCallback('shell');
+        // Launch the interactive shell
+        await launchInteractiveCallback('brush-shell', 'sh', []);
     },
 };

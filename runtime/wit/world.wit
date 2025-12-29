@@ -18,5 +18,9 @@ world ts-runtime-mcp {
   // Module loader import - frontend provides this for lazy loading
   import mcp:module-loader/loader@0.1.0;
   
+  // HTTP handler export - for MCP JSON-RPC requests
   export wasi:http/incoming-handler@0.2.4;
+  
+  // Interactive shell export - for interactive REPL mode
+  export shell:unix/command@0.1.0;
 }

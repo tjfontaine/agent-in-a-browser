@@ -139,6 +139,7 @@ world = "ts-runtime-mcp"
 "wasi:sockets" = { path = "wit/deps/sockets" }
 "wasi:filesystem" = { path = "wit/deps/filesystem" }
 "mcp:module-loader" = { path = "wit/deps/module-loader" }
+"shell:unix" = { path = "wit/deps/shell-unix" }
 
 [package.metadata.component.dependencies]
 

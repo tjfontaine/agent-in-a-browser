@@ -63,6 +63,10 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'tui-demo': 'ratatui-demo',
     'counter': 'ratatui-demo',
     'ansi-demo': 'ratatui-demo',
+    // Interactive shell (uses main runtime's shell:unix/command export)
+    'sh': 'brush-shell',
+    'shell': 'brush-shell',
+    'bash': 'brush-shell',
 };
 
 /**
@@ -251,6 +255,40 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
     return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
 }
 
+/**
+ * Load the brush-shell from the main MCP server (interactive shell)
+ * 
+ * The main runtime now exports shell:unix/command alongside wasi:http/incoming-handler.
+ * This gives the interactive shell access to all 50+ shell commands.
+ */
+async function loadBrushShell(): Promise<CommandModule> {
+    // Interactive shell requires JSPI for stdin to work
+    if (!hasJSPI) {
+        throw new Error(
+            'Interactive shell requires JSPI (JavaScript Promise Integration). ' +
+            'Please use Chrome with JSPI enabled.'
+        );
+    }
+
+    console.log('[LazyLoader] Loading interactive shell from MCP server...');
+    const startTime = performance.now();
+
+    // Import the JSPI-transpiled MCP server which now exports command
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const module = await import('./mcp-server-jspi/ts-runtime-mcp.js') as any;
+
+    // Await $init for the JSPI module initialization
+    if (module.$init) {
+        await module.$init;
+    }
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] Interactive shell loaded in ${loadTime.toFixed(0)}ms`);
+
+    // Use JSPI wrapper since run() returns a Promise with async exports
+    // The MCP server exports 'command' for shell:unix/command interface
+    return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+}
 
 /**
  * Load a lazy module by name
@@ -285,6 +323,9 @@ export async function loadLazyModule(moduleName: string): Promise<CommandModule>
             break;
         case 'ratatui-demo':
             loadPromise = loadRatatuiDemo();
+            break;
+        case 'brush-shell':
+            loadPromise = loadBrushShell();
             break;
         default:
             throw new Error(`Unknown lazy module: ${moduleName}`);

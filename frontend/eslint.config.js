@@ -15,6 +15,7 @@ export default tseslint.config(
             'src/wasm/tsx-engine/**',
             'src/wasm/sqlite-module/**',
             'src/wasm/ratatui-demo/**',
+            'src/wasm/brush-shell/**',
         ],
     },
     {

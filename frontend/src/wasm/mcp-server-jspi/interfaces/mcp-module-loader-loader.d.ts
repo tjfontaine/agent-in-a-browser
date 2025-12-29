@@ -6,11 +6,11 @@ export interface ExecEnv {
   cwd: string,
   vars: Array<[string, string]>,
 }
+export type Pollable = import('./wasi-io-poll.js').Pollable;
 export interface TerminalSize {
   cols: number,
   rows: number,
 }
-export type Pollable = import('./wasi-io-poll.js').Pollable;
 
 export class LazyProcess {
   /**
@@ -24,11 +24,4 @@ export class LazyProcess {
   readStdout(maxBytes: bigint): Uint8Array;
   readStderr(maxBytes: bigint): Uint8Array;
   tryWait(): number | undefined;
-  // Terminal control methods
-  getTerminalSize(): TerminalSize;
-  setTerminalSize(size: TerminalSize): void;
-  setRawMode(enabled: boolean): void;
-  isRawMode(): boolean;
-  sendSignal(signum: number): void;
 }
-

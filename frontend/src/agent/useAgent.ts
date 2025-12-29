@@ -24,7 +24,12 @@ import {
 
 // Commands that should launch in interactive mode
 // These are TUI applications that need unbuffered I/O
-export const INTERACTIVE_COMMANDS = new Set(['counter', 'ansi-demo', 'tui-demo', 'ratatui-demo']);
+export const INTERACTIVE_COMMANDS = new Set([
+    // TUI demos
+    'counter', 'ansi-demo', 'tui-demo', 'ratatui-demo',
+    // Interactive shell
+    'sh', 'shell', 'bash',
+]);
 
 import {
     getCurrentModel,
@@ -39,7 +44,7 @@ import {
 // Output types for TUI
 export interface AgentOutput {
     id: number;
-    type: 'text' | 'tool-start' | 'tool-result' | 'error' | 'system';
+    type: 'text' | 'tool-start' | 'tool-result' | 'error' | 'system' | 'raw';
     content: string;
     color?: string;
     toolName?: string;
@@ -80,6 +85,7 @@ export interface UseAgentReturn {
     interactiveBridge: InteractiveProcessBridge | null;  // Bridge for interactive process
     launchInteractive: (moduleName: string, command: string, args?: string[]) => Promise<void>;
     exitInteractive: () => void;
+    setRawTerminalWrite: (write: ((text: string) => void) | null) => void;  // Set raw xterm write function
 
     // Low-level output function for non-agent messages
     addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
@@ -114,6 +120,9 @@ export function useAgent(): UseAgentReturn {
     // Interactive mode state
     const [interactiveBridge, setInteractiveBridge] = useState<InteractiveProcessBridge | null>(null);
 
+    // Raw xterm write function for interactive mode (set by RawXtermTerminal component)
+    const rawTerminalWriteRef = useRef<((text: string) => void) | null>(null);
+
     // Flush pending outputs - batches multiple addOutput calls into single state update
     // This helps mitigate xterm.js issue #5011 by reducing re-render frequency
     // https://github.com/xtermjs/xterm.js/issues/5011
@@ -122,7 +131,19 @@ export function useAgent(): UseAgentReturn {
         const pending = pendingOutputsRef.current;
         if (pending.length > 0) {
             pendingOutputsRef.current = [];
-            setOutputs(prev => [...prev, ...pending]);
+            setOutputs(prev => {
+                // For raw outputs, try to merge with the last output if it's also raw
+                if (pending.length > 0 && pending[0].type === 'raw' &&
+                    prev.length > 0 && prev[prev.length - 1].type === 'raw') {
+                    // Merge first pending raw output with last existing raw output
+                    const merged = {
+                        ...prev[prev.length - 1],
+                        content: prev[prev.length - 1].content + pending[0].content,
+                    };
+                    return [...prev.slice(0, -1), merged, ...pending.slice(1)];
+                }
+                return [...prev, ...pending];
+            });
         }
     }, []);
 
@@ -134,14 +155,30 @@ export function useAgent(): UseAgentReturn {
         toolName?: string,
         success?: boolean
     ) => {
-        pendingOutputsRef.current.push({
-            id: nextIdRef.current++,
-            type,
-            content,
-            color,
-            toolName,
-            success,
-        });
+        // For 'raw' type, append to the last output if possible (for interactive ANSI output)
+        if (type === 'raw') {
+            // Try to append to the last pending output or last output
+            const pending = pendingOutputsRef.current;
+            if (pending.length > 0 && pending[pending.length - 1].type === 'raw') {
+                pending[pending.length - 1].content += content;
+            } else {
+                pending.push({
+                    id: nextIdRef.current++,
+                    type: 'raw',
+                    content,
+                    color,
+                });
+            }
+        } else {
+            pendingOutputsRef.current.push({
+                id: nextIdRef.current++,
+                type,
+                content,
+                color,
+                toolName,
+                success,
+            });
+        }
 
         // Schedule flush on next animation frame if not already scheduled
         if (!flushScheduledRef.current) {
@@ -456,20 +493,40 @@ export function useAgent(): UseAgentReturn {
 
         addOutput('system', `🖥️ Launching ${command}...`, colors.cyan);
 
+        // Clear terminal for a clean slate in interactive mode
+        // \x1b[2J = clear screen, \x1b[H = move cursor home
+        addOutput('raw', '\x1b[2J\x1b[H');
+
         // Create the interactive bridge with callbacks
+        // Note: We use a local cleanup function to avoid stale closure issues with exitInteractive
         const bridge = new InteractiveProcessBridge({
             onStdout: (data: Uint8Array) => {
-                // ANSI output goes directly to terminal - decode and display
                 const text = new TextDecoder().decode(data);
-                addOutput('text', text);
+                // Use raw xterm write if available (for proper ANSI handling)
+                if (rawTerminalWriteRef.current) {
+                    rawTerminalWriteRef.current(text);
+                } else {
+                    addOutput('raw', text);
+                }
             },
             onStderr: (data: Uint8Array) => {
                 const text = new TextDecoder().decode(data);
-                addOutput('error', text, colors.red);
+                // Use raw xterm write if available (for proper ANSI handling)
+                if (rawTerminalWriteRef.current) {
+                    rawTerminalWriteRef.current(`\x1b[31m${text}\x1b[0m`);
+                } else {
+                    addOutput('raw', text, colors.red);
+                }
             },
             onExit: (exitCode: number) => {
                 addOutput('system', `Process exited with code ${exitCode}`, colors.dim);
-                exitInteractive();
+                // Clean up directly here to avoid stale closure issues
+                bridge.detach();
+                setInteractiveBridge(null);
+                rawTerminalWriteRef.current = null;
+                setModeState('normal');
+                setStatus({ text: 'Ready', color: colors.green });
+                addOutput('system', '📤 Exited interactive mode', colors.dim);
             },
         });
 
@@ -500,10 +557,8 @@ export function useAgent(): UseAgentReturn {
         } catch (err) {
             console.error('[launchInteractive] Failed to spawn process:', err);
             addOutput('error', `Failed to launch ${command}: ${err instanceof Error ? err.message : String(err)}`, colors.red);
-            // Clean up on error - inline the exit logic since exitInteractive is defined after
-            if (bridge) {
-                bridge.detach();
-            }
+            // Clean up on error
+            bridge.detach();
             setInteractiveBridge(null);
             setModeState('shell');
             setStatus({ text: 'Shell Ready', color: colors.green });
@@ -579,6 +634,9 @@ export function useAgent(): UseAgentReturn {
         interactiveBridge,
         launchInteractive,
         exitInteractive,
+        setRawTerminalWrite: (write: ((text: string) => void) | null) => {
+            rawTerminalWriteRef.current = write;
+        },
         addOutput,
     };
 }

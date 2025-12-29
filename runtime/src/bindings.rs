@@ -31,6 +31,24 @@ pub mod mcp {
                         .finish()
                 }
             }
+            /// Terminal dimensions (columns, rows)
+            #[repr(C)]
+            #[derive(Clone, Copy)]
+            pub struct TerminalSize {
+                pub cols: u32,
+                pub rows: u32,
+            }
+            impl ::core::fmt::Debug for TerminalSize {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("TerminalSize")
+                        .field("cols", &self.cols)
+                        .field("rows", &self.rows)
+                        .finish()
+                }
+            }
             /// A handle to a lazy-loaded process
             #[derive(Debug)]
             #[repr(transparent)]
@@ -287,6 +305,134 @@ pub mod mcp {
                     }
                 }
             }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// ===== Terminal Control Methods =====
+                /// Get current terminal dimensions
+                pub fn get_terminal_size(&self) -> TerminalSize {
+                    unsafe {
+                        #[repr(align(4))]
+                        struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                        let mut ret_area = RetArea(
+                            [::core::mem::MaybeUninit::uninit(); 8],
+                        );
+                        let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.get-terminal-size"]
+                            fn wit_import1(_: i32, _: *mut u8);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: *mut u8) {
+                            unreachable!()
+                        }
+                        unsafe { wit_import1((self).handle() as i32, ptr0) };
+                        let l2 = *ptr0.add(0).cast::<i32>();
+                        let l3 = *ptr0.add(4).cast::<i32>();
+                        let result4 = TerminalSize {
+                            cols: l2 as u32,
+                            rows: l3 as u32,
+                        };
+                        result4
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Set terminal dimensions (for resize events from frontend)
+                pub fn set_terminal_size(&self, size: TerminalSize) -> () {
+                    unsafe {
+                        let TerminalSize { cols: cols0, rows: rows0 } = size;
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.set-terminal-size"]
+                            fn wit_import1(_: i32, _: i32, _: i32);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import1(_: i32, _: i32, _: i32) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import1(
+                                (self).handle() as i32,
+                                _rt::as_i32(cols0),
+                                _rt::as_i32(rows0),
+                            )
+                        };
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Enable/disable raw mode (unbuffered input, no echo)
+                /// When enabled: each keystroke sent immediately, no line editing
+                pub fn set_raw_mode(&self, enabled: bool) -> () {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.set-raw-mode"]
+                            fn wit_import0(_: i32, _: i32);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32, _: i32) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import0(
+                                (self).handle() as i32,
+                                match &enabled {
+                                    true => 1,
+                                    false => 0,
+                                },
+                            )
+                        };
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Check if raw mode is currently enabled
+                pub fn is_raw_mode(&self) -> bool {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.is-raw-mode"]
+                            fn wit_import0(_: i32) -> i32;
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32) -> i32 {
+                            unreachable!()
+                        }
+                        let ret = unsafe { wit_import0((self).handle() as i32) };
+                        _rt::bool_lift(ret as u8)
+                    }
+                }
+            }
+            impl LazyProcess {
+                #[allow(unused_unsafe, clippy::all)]
+                /// Send signal to process (SIGINT=2, SIGTERM=15, etc.)
+                pub fn send_signal(&self, signum: u8) -> () {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")]
+                        #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                        unsafe extern "C" {
+                            #[link_name = "[method]lazy-process.send-signal"]
+                            fn wit_import0(_: i32, _: i32);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        unsafe extern "C" fn wit_import0(_: i32, _: i32) {
+                            unreachable!()
+                        }
+                        unsafe {
+                            wit_import0((self).handle() as i32, _rt::as_i32(&signum))
+                        };
+                    }
+                }
+            }
             #[allow(unused_unsafe, clippy::all)]
             /// Get the module name for a lazy-loaded command (none if not a lazy command)
             pub fn get_lazy_module(command: &str) -> Option<_rt::String> {
@@ -472,6 +618,155 @@ pub mod mcp {
                             len5,
                             result9,
                             len9,
+                        )
+                    };
+                    if layout3.size() != 0 {
+                        _rt::alloc::dealloc(result3.cast(), layout3);
+                    }
+                    if layout9.size() != 0 {
+                        _rt::alloc::dealloc(result9.cast(), layout9);
+                    }
+                    unsafe { LazyProcess::from_handle(ret as u32) }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Spawn an interactive command (enters raw mode automatically)
+            /// Used for TUI applications that need character-by-character I/O
+            pub fn spawn_interactive(
+                module: &str,
+                command: &str,
+                args: &[_rt::String],
+                env: &ExecEnv,
+                size: TerminalSize,
+            ) -> LazyProcess {
+                unsafe {
+                    let vec0 = module;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let vec1 = command;
+                    let ptr1 = vec1.as_ptr().cast::<u8>();
+                    let len1 = vec1.len();
+                    let vec3 = args;
+                    let len3 = vec3.len();
+                    let layout3 = _rt::alloc::Layout::from_size_align_unchecked(
+                        vec3.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result3 = if layout3.size() != 0 {
+                        let ptr = _rt::alloc::alloc(layout3).cast::<u8>();
+                        if ptr.is_null() {
+                            _rt::alloc::handle_alloc_error(layout3);
+                        }
+                        ptr
+                    } else {
+                        ::core::ptr::null_mut()
+                    };
+                    for (i, e) in vec3.into_iter().enumerate() {
+                        let base = result3
+                            .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let vec2 = e;
+                            let ptr2 = vec2.as_ptr().cast::<u8>();
+                            let len2 = vec2.len();
+                            *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len2;
+                            *base.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+                        }
+                    }
+                    let ExecEnv { cwd: cwd4, vars: vars4 } = env;
+                    let vec5 = cwd4;
+                    let ptr5 = vec5.as_ptr().cast::<u8>();
+                    let len5 = vec5.len();
+                    let vec9 = vars4;
+                    let len9 = vec9.len();
+                    let layout9 = _rt::alloc::Layout::from_size_align_unchecked(
+                        vec9.len() * (4 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result9 = if layout9.size() != 0 {
+                        let ptr = _rt::alloc::alloc(layout9).cast::<u8>();
+                        if ptr.is_null() {
+                            _rt::alloc::handle_alloc_error(layout9);
+                        }
+                        ptr
+                    } else {
+                        ::core::ptr::null_mut()
+                    };
+                    for (i, e) in vec9.into_iter().enumerate() {
+                        let base = result9
+                            .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let (t6_0, t6_1) = e;
+                            let vec7 = t6_0;
+                            let ptr7 = vec7.as_ptr().cast::<u8>();
+                            let len7 = vec7.len();
+                            *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len7;
+                            *base.add(0).cast::<*mut u8>() = ptr7.cast_mut();
+                            let vec8 = t6_1;
+                            let ptr8 = vec8.as_ptr().cast::<u8>();
+                            let len8 = vec8.len();
+                            *base
+                                .add(3 * ::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len8;
+                            *base
+                                .add(2 * ::core::mem::size_of::<*const u8>())
+                                .cast::<*mut u8>() = ptr8.cast_mut();
+                        }
+                    }
+                    let TerminalSize { cols: cols10, rows: rows10 } = size;
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "spawn-interactive"]
+                        fn wit_import11(
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: i32,
+                        ) -> i32;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import11(
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: i32,
+                        _: i32,
+                    ) -> i32 {
+                        unreachable!()
+                    }
+                    let ret = unsafe {
+                        wit_import11(
+                            ptr0.cast_mut(),
+                            len0,
+                            ptr1.cast_mut(),
+                            len1,
+                            result3,
+                            len3,
+                            ptr5.cast_mut(),
+                            len5,
+                            result9,
+                            len9,
+                            _rt::as_i32(cols10),
+                            _rt::as_i32(rows10),
                         )
                     };
                     if layout3.size() != 0 {
@@ -11952,6 +12247,248 @@ pub mod wasi {
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
 pub mod exports {
+    pub mod shell {
+        pub mod unix {
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod command {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                pub type InputStream = super::super::super::super::wasi::io::streams::InputStream;
+                pub type OutputStream = super::super::super::super::wasi::io::streams::OutputStream;
+                /// Execution environment
+                #[derive(Clone)]
+                pub struct ExecEnv {
+                    pub cwd: _rt::String,
+                    pub vars: _rt::Vec<(_rt::String, _rt::String)>,
+                }
+                impl ::core::fmt::Debug for ExecEnv {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("ExecEnv")
+                            .field("cwd", &self.cwd)
+                            .field("vars", &self.vars)
+                            .finish()
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_run_cabi<T: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                    arg6: *mut u8,
+                    arg7: usize,
+                    arg8: i32,
+                    arg9: i32,
+                    arg10: i32,
+                ) -> i32 {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let len0 = arg1;
+                    let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
+                    let base4 = arg2;
+                    let len4 = arg3;
+                    let mut result4 = _rt::Vec::with_capacity(len4);
+                    for i in 0..len4 {
+                        let base = base4
+                            .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                        let e4 = {
+                            let l1 = *base.add(0).cast::<*mut u8>();
+                            let l2 = *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>();
+                            let len3 = l2;
+                            let bytes3 = _rt::Vec::from_raw_parts(l1.cast(), len3, len3);
+                            _rt::string_lift(bytes3)
+                        };
+                        result4.push(e4);
+                    }
+                    _rt::cabi_dealloc(
+                        base4,
+                        len4 * (2 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let len5 = arg5;
+                    let bytes5 = _rt::Vec::from_raw_parts(arg4.cast(), len5, len5);
+                    let base12 = arg6;
+                    let len12 = arg7;
+                    let mut result12 = _rt::Vec::with_capacity(len12);
+                    for i in 0..len12 {
+                        let base = base12
+                            .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                        let e12 = {
+                            let l6 = *base.add(0).cast::<*mut u8>();
+                            let l7 = *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>();
+                            let len8 = l7;
+                            let bytes8 = _rt::Vec::from_raw_parts(l6.cast(), len8, len8);
+                            let l9 = *base
+                                .add(2 * ::core::mem::size_of::<*const u8>())
+                                .cast::<*mut u8>();
+                            let l10 = *base
+                                .add(3 * ::core::mem::size_of::<*const u8>())
+                                .cast::<usize>();
+                            let len11 = l10;
+                            let bytes11 = _rt::Vec::from_raw_parts(
+                                l9.cast(),
+                                len11,
+                                len11,
+                            );
+                            (_rt::string_lift(bytes8), _rt::string_lift(bytes11))
+                        };
+                        result12.push(e12);
+                    }
+                    _rt::cabi_dealloc(
+                        base12,
+                        len12 * (4 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result13 = T::run(
+                        _rt::string_lift(bytes0),
+                        result4,
+                        ExecEnv {
+                            cwd: _rt::string_lift(bytes5),
+                            vars: result12,
+                        },
+                        unsafe {
+                            super::super::super::super::wasi::io::streams::InputStream::from_handle(
+                                arg8 as u32,
+                            )
+                        },
+                        unsafe {
+                            super::super::super::super::wasi::io::streams::OutputStream::from_handle(
+                                arg9 as u32,
+                            )
+                        },
+                        unsafe {
+                            super::super::super::super::wasi::io::streams::OutputStream::from_handle(
+                                arg10 as u32,
+                            )
+                        },
+                    );
+                    _rt::as_i32(result13)
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_list_commands_cabi<T: Guest>() -> *mut u8 {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let result0 = T::list_commands();
+                    let ptr1 = (&raw mut _RET_AREA.0).cast::<u8>();
+                    let vec3 = result0;
+                    let len3 = vec3.len();
+                    let layout3 = _rt::alloc::Layout::from_size_align_unchecked(
+                        vec3.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                    let result3 = if layout3.size() != 0 {
+                        let ptr = _rt::alloc::alloc(layout3).cast::<u8>();
+                        if ptr.is_null() {
+                            _rt::alloc::handle_alloc_error(layout3);
+                        }
+                        ptr
+                    } else {
+                        ::core::ptr::null_mut()
+                    };
+                    for (i, e) in vec3.into_iter().enumerate() {
+                        let base = result3
+                            .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let vec2 = (e.into_bytes()).into_boxed_slice();
+                            let ptr2 = vec2.as_ptr().cast::<u8>();
+                            let len2 = vec2.len();
+                            ::core::mem::forget(vec2);
+                            *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>() = len2;
+                            *base.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+                        }
+                    }
+                    *ptr1.add(::core::mem::size_of::<*const u8>()).cast::<usize>() = len3;
+                    *ptr1.add(0).cast::<*mut u8>() = result3;
+                    ptr1
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_list_commands<T: Guest>(arg0: *mut u8) {
+                    let l0 = *arg0.add(0).cast::<*mut u8>();
+                    let l1 = *arg0
+                        .add(::core::mem::size_of::<*const u8>())
+                        .cast::<usize>();
+                    let base4 = l0;
+                    let len4 = l1;
+                    for i in 0..len4 {
+                        let base = base4
+                            .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                        {
+                            let l2 = *base.add(0).cast::<*mut u8>();
+                            let l3 = *base
+                                .add(::core::mem::size_of::<*const u8>())
+                                .cast::<usize>();
+                            _rt::cabi_dealloc(l2, l3, 1);
+                        }
+                    }
+                    _rt::cabi_dealloc(
+                        base4,
+                        len4 * (2 * ::core::mem::size_of::<*const u8>()),
+                        ::core::mem::size_of::<*const u8>(),
+                    );
+                }
+                pub trait Guest {
+                    /// Run an interactive command with streaming I/O
+                    fn run(
+                        name: _rt::String,
+                        args: _rt::Vec<_rt::String>,
+                        env: ExecEnv,
+                        stdin: InputStream,
+                        stdout: OutputStream,
+                        stderr: OutputStream,
+                    ) -> i32;
+                    /// List available commands
+                    fn list_commands() -> _rt::Vec<_rt::String>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_shell_unix_command_0_1_0_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "shell:unix/command@0.1.0#run")] unsafe extern "C" fn
+                        export_run(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 :
+                        usize, arg4 : * mut u8, arg5 : usize, arg6 : * mut u8, arg7 :
+                        usize, arg8 : i32, arg9 : i32, arg10 : i32,) -> i32 { unsafe {
+                        $($path_to_types)*:: _export_run_cabi::<$ty > (arg0, arg1, arg2,
+                        arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) } } #[unsafe
+                        (export_name = "shell:unix/command@0.1.0#list-commands")] unsafe
+                        extern "C" fn export_list_commands() -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_list_commands_cabi::<$ty > () } }
+                        #[unsafe (export_name =
+                        "cabi_post_shell:unix/command@0.1.0#list-commands")] unsafe
+                        extern "C" fn _post_return_list_commands(arg0 : * mut u8,) {
+                        unsafe { $($path_to_types)*:: __post_return_list_commands::<$ty >
+                        (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_shell_unix_command_0_1_0_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 2 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 2
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+        }
+    }
     pub mod wasi {
         pub mod http {
             /// This interface defines a handler of incoming HTTP Requests. It should
@@ -12239,6 +12776,9 @@ macro_rules! __export_ts_runtime_mcp_impl {
         $($path_to_types_root)*::
         exports::wasi::http::incoming_handler::__export_wasi_http_incoming_handler_0_2_4_cabi!($ty
         with_types_in $($path_to_types_root)*:: exports::wasi::http::incoming_handler);
+        $($path_to_types_root)*::
+        exports::shell::unix::command::__export_shell_unix_command_0_1_0_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::shell::unix::command);
     };
 }
 #[doc(inline)]
@@ -12249,8 +12789,8 @@ pub(crate) use __export_ts_runtime_mcp_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 10631] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x82R\x01A\x02\x01A&\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 11191] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb2V\x01A\x02\x01A(\x01\
 B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[meth\
 od]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.b\
 lock\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\0\
@@ -12441,25 +12981,37 @@ ror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01@
 \x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\0\x20wasi:h\
 ttp/outgoing-handler@0.2.4\x05\x14\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10\
 get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi\
-:random/random@0.2.4\x05\x15\x01B\x1f\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\
-\0\x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\x04\
-\0\x0clazy-process\x03\x01\x01h\x06\x01i\x01\x01@\x01\x04self\x07\0\x08\x04\0'[m\
-ethod]lazy-process.get-ready-pollable\x01\x09\x01@\x01\x04self\x07\0\x7f\x04\0\x1d\
-[method]lazy-process.is-ready\x01\x0a\x01p}\x01@\x02\x04self\x07\x04data\x0b\0w\x04\
-\0\x20[method]lazy-process.write-stdin\x01\x0c\x01@\x01\x04self\x07\x01\0\x04\0\x20\
-[method]lazy-process.close-stdin\x01\x0d\x01@\x02\x04self\x07\x09max-bytesw\0\x0b\
-\x04\0\x20[method]lazy-process.read-stdout\x01\x0e\x04\0\x20[method]lazy-process\
-.read-stderr\x01\x0e\x01kz\x01@\x01\x04self\x07\0\x0f\x04\0\x1d[method]lazy-proc\
-ess.try-wait\x01\x10\x01ks\x01@\x01\x07commands\0\x11\x04\0\x0fget-lazy-module\x01\
-\x12\x01ps\x01i\x06\x01@\x04\x06modules\x07commands\x04args\x13\x03env\x05\0\x14\
-\x04\0\x12spawn-lazy-command\x01\x15\x03\0\x1emcp:module-loader/loader@0.1.0\x05\
-\x16\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-outparam\x01B\x08\
-\x02\x03\x02\x01\x17\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\x01\x18\x04\0\
-\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07request\x04\x0cres\
-ponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/incoming-handler@\
-0.2.4\x05\x19\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0et\
-s-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x07\
-0.227.1\x10wit-bindgen-rust\x060.41.0";
+:random/random@0.2.4\x05\x15\x01B,\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\
+\x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\x01\
+r\x02\x04colsy\x04rowsy\x04\0\x0dterminal-size\x03\0\x06\x04\0\x0clazy-process\x03\
+\x01\x01h\x08\x01i\x01\x01@\x01\x04self\x09\0\x0a\x04\0'[method]lazy-process.get\
+-ready-pollable\x01\x0b\x01@\x01\x04self\x09\0\x7f\x04\0\x1d[method]lazy-process\
+.is-ready\x01\x0c\x01p}\x01@\x02\x04self\x09\x04data\x0d\0w\x04\0\x20[method]laz\
+y-process.write-stdin\x01\x0e\x01@\x01\x04self\x09\x01\0\x04\0\x20[method]lazy-p\
+rocess.close-stdin\x01\x0f\x01@\x02\x04self\x09\x09max-bytesw\0\x0d\x04\0\x20[me\
+thod]lazy-process.read-stdout\x01\x10\x04\0\x20[method]lazy-process.read-stderr\x01\
+\x10\x01kz\x01@\x01\x04self\x09\0\x11\x04\0\x1d[method]lazy-process.try-wait\x01\
+\x12\x01@\x01\x04self\x09\0\x07\x04\0&[method]lazy-process.get-terminal-size\x01\
+\x13\x01@\x02\x04self\x09\x04size\x07\x01\0\x04\0&[method]lazy-process.set-termi\
+nal-size\x01\x14\x01@\x02\x04self\x09\x07enabled\x7f\x01\0\x04\0![method]lazy-pr\
+ocess.set-raw-mode\x01\x15\x04\0\x20[method]lazy-process.is-raw-mode\x01\x0c\x01\
+@\x02\x04self\x09\x06signum}\x01\0\x04\0\x20[method]lazy-process.send-signal\x01\
+\x16\x01ks\x01@\x01\x07commands\0\x17\x04\0\x0fget-lazy-module\x01\x18\x01ps\x01\
+i\x08\x01@\x04\x06modules\x07commands\x04args\x19\x03env\x05\0\x1a\x04\0\x12spaw\
+n-lazy-command\x01\x1b\x01@\x05\x06modules\x07commands\x04args\x19\x03env\x05\x04\
+size\x07\0\x1a\x04\0\x11spawn-interactive\x01\x1c\x03\0\x1emcp:module-loader/loa\
+der@0.1.0\x05\x16\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-ou\
+tparam\x01B\x08\x02\x03\x02\x01\x17\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\
+\x01\x18\x04\0\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07requ\
+est\x04\x0cresponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/inc\
+oming-handler@0.2.4\x05\x19\x01B\x0f\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\
+\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01\
+r\x02\x03cwds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01\
+@\x06\x04names\x04args\x08\x03env\x07\x05stdin\x09\x06stdout\x0a\x06stderr\x0a\0\
+z\x04\0\x03run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shel\
+l:unix/command@0.1.0\x05\x1a\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\
+\x14\x01\0\x0ets-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0d\
+wit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

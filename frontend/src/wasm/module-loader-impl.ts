@@ -310,13 +310,9 @@ export class LazyProcess {
     }
 
     async tryWait(): Promise<number | undefined> {
-        // Wait for execution to complete before checking exit code
-        // JSPI must be configured for this function via --async-imports 'mcp:module-loader/loader#try-wait'
-        if (this.executionPromise) {
-            await this.executionPromise;
-            this.executionPromise = null;
-        }
-        console.log(`[LazyProcess] tryWait() => ${this.exitCode}`);
+        // For interactive mode, DON'T block waiting for execution to complete.
+        // The polling loop needs to keep running to forward I/O.
+        // Return the exitCode if the process has finished, undefined otherwise.
         return this.exitCode;
     }
 

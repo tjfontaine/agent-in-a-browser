@@ -1,6 +1,7 @@
 //! MCP HTTP Server
 //!
 //! Implements wasi:http/incoming-handler to serve MCP protocol over HTTP.
+//! Also implements shell:unix/command for interactive shell mode.
 //! Pure shell-based implementation without JavaScript runtime.
 
 mod bindings;
@@ -8,8 +9,13 @@ mod http_client;
 mod mcp_server;
 mod shell;
 
+// Interactive shell module
+mod interactive;
 
-use bindings::exports::wasi::http::incoming_handler::Guest;
+use bindings::exports::wasi::http::incoming_handler::Guest as HttpGuest;
+use bindings::exports::shell::unix::command::Guest as CommandGuest;
+use bindings::exports::shell::unix::command::ExecEnv;
+use bindings::wasi::io::streams::{InputStream, OutputStream};
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
@@ -271,7 +277,7 @@ struct Component;
 
 bindings::export!(Component with_types_in bindings);
 
-impl Guest for Component {
+impl HttpGuest for Component {
     fn handle(request: IncomingRequest, outparam: ResponseOutparam) {
         // Get request headers and path
         let headers = request.headers();
@@ -361,4 +367,36 @@ fn handle_sse_connection(_request_bytes: &[u8]) -> String {
 // WASI component entry point - no main needed, export handles it
 fn main() {
     // Component exports handle the actual entry point
+}
+
+/// Interactive shell implementation
+impl CommandGuest for Component {
+    fn run(
+        name: String,
+        args: Vec<String>,
+        env: ExecEnv,
+        stdin: InputStream,
+        stdout: OutputStream,
+        stderr: OutputStream,
+    ) -> i32 {
+        match name.as_str() {
+            "sh" | "shell" | "bash" | "brush-shell" => {
+                interactive::run_shell(args, env, stdin, stdout, stderr)
+            }
+            _ => {
+                let msg = format!("Unknown command: {}\n", name);
+                let _ = stderr.blocking_write_and_flush(msg.as_bytes());
+                127
+            }
+        }
+    }
+
+    fn list_commands() -> Vec<String> {
+        vec![
+            "sh".to_string(),
+            "shell".to_string(),
+            "bash".to_string(),
+            "brush-shell".to_string(),
+        ]
+    }
 }

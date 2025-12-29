@@ -9701,6 +9701,7 @@ function trampoline102(arg0) {
 }
 
 let exports3;
+let postReturn0;
 function trampoline3(handle) {
   const handleEntry = rscTableRemove(handleTable15, handle);
   if (handleEntry.own) {
@@ -9741,19 +9742,6 @@ function trampoline11(handle) {
   }
 }
 function trampoline14(handle) {
-  const handleEntry = rscTableRemove(handleTable2, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable2.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable2.delete(handleEntry.rep);
-    } else if (InputStream[symbolCabiDispose]) {
-      InputStream[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline15(handle) {
   const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
     
@@ -9766,7 +9754,7 @@ function trampoline15(handle) {
     }
   }
 }
-function trampoline16(handle) {
+function trampoline15(handle) {
   const handleEntry = rscTableRemove(handleTable4, handle);
   if (handleEntry.own) {
     
@@ -9776,6 +9764,19 @@ function trampoline16(handle) {
       captureTable4.delete(handleEntry.rep);
     } else if (Fields[symbolCabiDispose]) {
       Fields[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline16(handle) {
+  const handleEntry = rscTableRemove(handleTable2, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable2.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable2.delete(handleEntry.rep);
+    } else if (InputStream[symbolCabiDispose]) {
+      InputStream[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
@@ -10026,9 +10027,125 @@ function handle$1(arg0, arg1) {
     postReturn: false
   });
 }
+let command010Run;
+
+function run(arg0, arg1, arg2, arg3, arg4, arg5) {
+  if (!_initialized) throwUninitialized();
+  var ptr0 = utf8Encode(arg0, realloc0, memory0);
+  var len0 = utf8EncodedLen;
+  var vec2 = arg1;
+  var len2 = vec2.length;
+  var result2 = realloc0(0, 0, 4, len2 * 8);
+  for (let i = 0; i < vec2.length; i++) {
+    const e = vec2[i];
+    const base = result2 + i * 8;var ptr1 = utf8Encode(e, realloc0, memory0);
+    var len1 = utf8EncodedLen;
+    dataView(memory0).setUint32(base + 4, len1, true);
+    dataView(memory0).setUint32(base + 0, ptr1, true);
+  }
+  var {cwd: v3_0, vars: v3_1 } = arg2;
+  var ptr4 = utf8Encode(v3_0, realloc0, memory0);
+  var len4 = utf8EncodedLen;
+  var vec8 = v3_1;
+  var len8 = vec8.length;
+  var result8 = realloc0(0, 0, 4, len8 * 16);
+  for (let i = 0; i < vec8.length; i++) {
+    const e = vec8[i];
+    const base = result8 + i * 16;var [tuple5_0, tuple5_1] = e;
+    var ptr6 = utf8Encode(tuple5_0, realloc0, memory0);
+    var len6 = utf8EncodedLen;
+    dataView(memory0).setUint32(base + 4, len6, true);
+    dataView(memory0).setUint32(base + 0, ptr6, true);
+    var ptr7 = utf8Encode(tuple5_1, realloc0, memory0);
+    var len7 = utf8EncodedLen;
+    dataView(memory0).setUint32(base + 12, len7, true);
+    dataView(memory0).setUint32(base + 8, ptr7, true);
+  }
+  if (!(arg3 instanceof InputStream)) {
+    throw new TypeError('Resource error: Not a valid "InputStream" resource.');
+  }
+  var handle9 = arg3[symbolRscHandle];
+  if (!handle9) {
+    const rep = arg3[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, arg3);
+    handle9 = rscTableCreateOwn(handleTable2, rep);
+  }
+  if (!(arg4 instanceof OutputStream)) {
+    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+  }
+  var handle10 = arg4[symbolRscHandle];
+  if (!handle10) {
+    const rep = arg4[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, arg4);
+    handle10 = rscTableCreateOwn(handleTable3, rep);
+  }
+  if (!(arg5 instanceof OutputStream)) {
+    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+  }
+  var handle11 = arg5[symbolRscHandle];
+  if (!handle11) {
+    const rep = arg5[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, arg5);
+    handle11 = rscTableCreateOwn(handleTable3, rep);
+  }
+  _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::CallWasm] enter', {
+    funcName: 'run',
+    paramCount: 11,
+    async: false,
+    postReturn: false,
+  });
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'command010Run');
+  const ret = command010Run(ptr0, len0, result2, len2, ptr4, len4, result8, len8, handle9, handle10, handle11);
+  endCurrentTask(0);
+  _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::Return]', {
+    funcName: 'run',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return ret;
+}
+let command010ListCommands;
+
+function listCommands() {
+  if (!_initialized) throwUninitialized();
+  _debugLog('[iface="shell:unix/command@0.1.0", function="list-commands"][Instruction::CallWasm] enter', {
+    funcName: 'list-commands',
+    paramCount: 0,
+    async: false,
+    postReturn: true,
+  });
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'command010ListCommands');
+  const ret = command010ListCommands();
+  endCurrentTask(0);
+  var len1 = dataView(memory0).getUint32(ret + 4, true);
+  var base1 = dataView(memory0).getUint32(ret + 0, true);
+  var result1 = [];
+  for (let i = 0; i < len1; i++) {
+    const base = base1 + i * 8;
+    var ptr0 = dataView(memory0).getUint32(base + 0, true);
+    var len0 = dataView(memory0).getUint32(base + 4, true);
+    var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
+    result1.push(result0);
+  }
+  _debugLog('[iface="shell:unix/command@0.1.0", function="list-commands"][Instruction::Return]', {
+    funcName: 'list-commands',
+    paramCount: 1,
+    async: false,
+    postReturn: true
+  });
+  const retCopy = result1;
+  
+  let cstate = getOrCreateAsyncState(0);
+  cstate.mayLeave = false;
+  postReturn0(ret);
+  cstate.mayLeave = true;
+  return retCopy;
+  
+}
 let run026Run;
 
-function run() {
+function run$1() {
   if (!_initialized) throwUninitialized();
   _debugLog('[iface="wasi:cli/run@0.2.6", function="run"][Instruction::CallWasm] enter', {
     funcName: 'run',
@@ -10125,7 +10242,7 @@ export const $init = (() => {
         '[method]outgoing-request.set-scheme': exports0['31'],
         '[method]outgoing-response.body': exports0['44'],
         '[method]outgoing-response.set-status-code': trampoline26,
-        '[resource-drop]fields': trampoline16,
+        '[resource-drop]fields': trampoline15,
         '[resource-drop]future-incoming-response': trampoline11,
         '[resource-drop]future-trailers': trampoline24,
         '[resource-drop]incoming-body': trampoline18,
@@ -10144,14 +10261,14 @@ export const $init = (() => {
         '[resource-drop]error': trampoline17,
       },
       'wasi:io/poll@0.2.0': {
-        '[resource-drop]pollable': trampoline15,
+        '[resource-drop]pollable': trampoline14,
       },
       'wasi:io/poll@0.2.4': {
         '[method]pollable.block': trampoline13,
-        '[resource-drop]pollable': trampoline15,
+        '[resource-drop]pollable': trampoline14,
       },
       'wasi:io/streams@0.2.0': {
-        '[resource-drop]input-stream': trampoline14,
+        '[resource-drop]input-stream': trampoline16,
         '[resource-drop]output-stream': trampoline20,
       },
       'wasi:io/streams@0.2.4': {
@@ -10161,7 +10278,7 @@ export const $init = (() => {
         '[method]output-stream.blocking-write-and-flush': exports0['49'],
         '[method]output-stream.subscribe': trampoline7,
         '[method]output-stream.write': exports0['46'],
-        '[resource-drop]input-stream': trampoline14,
+        '[resource-drop]input-stream': trampoline16,
         '[resource-drop]output-stream': trampoline20,
       },
       'wasi:random/insecure-seed@0.2.4': {
@@ -10278,7 +10395,7 @@ export const $init = (() => {
         '[method]output-stream.blocking-write-and-flush': exports0['79'],
         '[method]output-stream.check-write': exports0['76'],
         '[method]output-stream.write': exports0['77'],
-        '[resource-drop]input-stream': trampoline14,
+        '[resource-drop]input-stream': trampoline16,
         '[resource-drop]output-stream': trampoline20,
       },
     }));
@@ -10374,8 +10491,11 @@ export const $init = (() => {
         '9': exports2.fd_filestat_set_size,
       },
     }));
+    postReturn0 = exports1['cabi_post_shell:unix/command@0.1.0#list-commands'];
     _initialized = true;
     incomingHandler024Handle = exports1['wasi:http/incoming-handler@0.2.4#handle'];
+    command010Run = exports1['shell:unix/command@0.1.0#run'];
+    command010ListCommands = exports1['shell:unix/command@0.1.0#list-commands'];
     run026Run = exports2['wasi:cli/run@0.2.6#run'];
   })();
   let promise, resolve, reject;
@@ -10400,8 +10520,13 @@ export const $init = (() => {
   const maybeSyncReturn = runNext(null);
   return promise || maybeSyncReturn;
 })();
-const run026 = {
+const command010 = {
+  listCommands: listCommands,
   run: run,
+  
+};
+const run026 = {
+  run: run$1,
   
 };
 const incomingHandler024 = {
@@ -10409,4 +10534,4 @@ const incomingHandler024 = {
   
 };
 
-export { incomingHandler024 as incomingHandler, run026 as run, run026 as 'wasi:cli/run@0.2.6', incomingHandler024 as 'wasi:http/incoming-handler@0.2.4',  }
+export { command010 as command, incomingHandler024 as incomingHandler, run026 as run, command010 as 'shell:unix/command@0.1.0', run026 as 'wasi:cli/run@0.2.6', incomingHandler024 as 'wasi:http/incoming-handler@0.2.4',  }

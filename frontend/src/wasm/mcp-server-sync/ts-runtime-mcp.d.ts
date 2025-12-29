@@ -24,6 +24,7 @@ export type * as WasiRandomRandom026 from './interfaces/wasi-random-random.js'; 
 export type * as WasiSocketsTcp026 from './interfaces/wasi-sockets-tcp.js'; // import wasi:sockets/tcp@0.2.6
 export type * as WasiSocketsUdp026 from './interfaces/wasi-sockets-udp.js'; // import wasi:sockets/udp@0.2.6
 export * as incomingHandler from './interfaces/wasi-http-incoming-handler.js'; // export wasi:http/incoming-handler@0.2.4
+export * as command from './interfaces/shell-unix-command.js'; // export shell:unix/command@0.1.0
 export * as run from './interfaces/wasi-cli-run.js'; // export wasi:cli/run@0.2.6
 
 export const $init: Promise<void>;

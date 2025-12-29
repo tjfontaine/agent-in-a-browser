@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
-import { InkXterm, Box, Text, useInput } from 'ink-web';
+import { InkXterm, Box, Text, useInput, useStdout } from 'ink-web';
 import { TextInput } from './components/ui/TextInput';
 import { Spinner } from './components/ui/Spinner';
 // TEMPORARILY DISABLED - rotating hints cause input issues
@@ -22,6 +22,8 @@ import { McpServerList } from './mcp';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import type { AgentMode } from './agent/AgentMode';
 import { INTERACTIVE_COMMANDS } from './agent/useAgent';
+import { useRawTerminalInput } from './components/ui/RawTerminalInput';
+import { RawXtermTerminal } from './components/RawXtermTerminal';
 import { executeCommand, getCommandCompletions } from './commands';
 import { registerModeCallbacks as registerPlanModeCallbacks } from './commands/cmd-plan';
 import { registerModeCallbacks as registerModeModeCallbacks } from './commands/cmd-mode';
@@ -107,14 +109,31 @@ function TerminalContent({
     shellHistoryDown?: () => string | undefined;
     onMcpAction?: (action: string, serverId: string) => Promise<void>;
 }) {
+    // useStdout provides direct write access to xterm.js for raw ANSI output
+    const { write: rawWrite } = useStdout();
 
+    // Filter out 'raw' outputs - those are written directly to xterm
+    // Keep a ref to track which raw outputs we've already written
+    const lastRawIdRef = useRef<number>(-1);
 
+    // Write new raw outputs directly to xterm (bypassing React rendering)
+    useEffect(() => {
+        for (const output of outputs) {
+            if (output.type === 'raw' && output.id > lastRawIdRef.current) {
+                rawWrite(output.content);
+                lastRawIdRef.current = output.id;
+            }
+        }
+    }, [outputs, rawWrite]);
+
+    // Filter raw outputs from rendering - they're written directly to xterm
+    const renderableOutputs = outputs.filter(o => o.type !== 'raw');
 
     // Show last 500 outputs for scrollback. xterm handles actual viewport scrolling.
     const maxScrollback = 500;
-    const visibleOutputs = outputs.length > maxScrollback
-        ? outputs.slice(-maxScrollback)
-        : outputs;
+    const visibleOutputs = renderableOutputs.length > maxScrollback
+        ? renderableOutputs.slice(-maxScrollback)
+        : renderableOutputs;
 
     // Handle ESC to cancel, Ctrl+\ to switch panels, Ctrl+P/N for mode switching, Ctrl+D to exit shell
     useInput((_input, key) => {
@@ -210,6 +229,9 @@ function TerminalContent({
                     onSubmit={onSecretSubmit}
                     onCancel={onOverlayClose}
                 />
+            ) : agentMode === 'interactive' ? (
+                /* In interactive mode, the TUI handles input directly - no TextInput */
+                null
             ) : (
                 /* Prompt at bottom - ALWAYS visible when ready (can queue while busy) */
                 isReady && (
@@ -250,6 +272,9 @@ export default function App() {
         shellHistoryUp,
         shellHistoryDown,
         launchInteractive,
+        interactiveBridge,
+        exitInteractive,
+        setRawTerminalWrite,
     } = useAgent();
 
     const initialized = useRef(false);
@@ -257,6 +282,12 @@ export default function App() {
     const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
     const [secretInputState, setSecretInputState] = useState<SecretInputState | null>(null);
     const [configSummary, setConfigSummary] = useState(getConfigSummary());
+
+    // Wire up keyboard input for interactive mode (counter, sh, etc.)
+    // NOTE: When using RawXtermTerminal, it handles keyboard input directly, so we disable this.
+    // This hook is kept for fallback if we ever render interactive mode inside InkXterm.
+    const isInteractiveModeInInk = false; // RawXtermTerminal handles input now
+    useRawTerminalInput(interactiveBridge, isInteractiveModeInInk, exitInteractive);
 
     // Subscribe to provider/model changes
     useEffect(() => {
@@ -273,7 +304,7 @@ export default function App() {
         // Register mode callbacks for slash commands
         registerPlanModeCallbacks(() => mode, setMode);
         registerModeModeCallbacks(() => mode, setMode);
-        registerShellModeCallback(setMode);
+        registerShellModeCallback(launchInteractive);
 
         // Show welcome banner
         addOutput('system', '╭────────────────────────────────────────────╮', colors.cyan);
@@ -301,17 +332,26 @@ export default function App() {
     const handleSubmit = useCallback(async (input: string) => {
         if (!input.trim()) return;
 
-        // In shell mode, route to direct shell execution (or interactive mode for TUI apps)
+        // Check for interactive shell commands FIRST - these launch an interactive REPL
+        // regardless of current mode (normal, plan, or shell mode)
+        // BUT: only if they have no arguments (e.g., "sh" alone, not "sh -c 'echo foo'")
+        const parts = input.trim().split(/\s+/);
+        const command = parts[0];
+        const isInteractiveShell = ['sh', 'shell', 'bash'].includes(command) && parts.length === 1;
+        if (isInteractiveShell) {
+            // Launch interactive shell with full functionality
+            await launchInteractive('brush-shell', command, []);
+            return;
+        }
+
+        // Other interactive TUI commands (counter, ratatui-demo, etc.)
+        if (INTERACTIVE_COMMANDS.has(command) && !['sh', 'shell', 'bash'].includes(command)) {
+            await launchInteractive('ratatui-demo', command, []);
+            return;
+        }
+
+        // In shell mode, route to direct shell execution
         if (mode === 'shell') {
-            // Check if this is an interactive command
-            const command = input.trim().split(/\s+/)[0];
-            if (INTERACTIVE_COMMANDS.has(command)) {
-                // Launch in interactive mode
-                const moduleName = 'ratatui-demo'; // All these commands are in ratatui-demo
-                await launchInteractive(moduleName, command, []);
-                return;
-            }
-            // Regular shell command
             await executeShellDirect(input);
             return;
         }
@@ -378,7 +418,7 @@ export default function App() {
             }
             sendMessage(input);
         }
-    }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage, mode, executeShellDirect]);
+    }, [addOutput, clearHistory, sendMessage, isBusy, queueMessage, mode, executeShellDirect, launchInteractive]);
 
     // Handle overlay close
     const handleOverlayClose = useCallback(() => {
@@ -455,32 +495,40 @@ export default function App() {
                         <SplitLayout
                             auxiliaryPanel={<AuxiliaryPanel />}
                             mainPanel={
-                                <InkXterm focus>
-                                    <TerminalContent
-                                        outputs={outputs}
-                                        isReady={isReady}
-                                        isBusy={isBusy}
-                                        queueLength={messageQueue.length}
-                                        overlayMode={overlayMode}
-                                        secretInputState={secretInputState}
-                                        agentMode={mode}
-                                        onSubmit={handleSubmit}
-                                        getCompletions={getCommandCompletions}
-                                        onCancel={cancelRequest}
-                                        onOverlayClose={handleOverlayClose}
-                                        onModelSelected={handleModelSelected}
-                                        onProviderSelected={handleProviderSelected}
-                                        onSecretSubmit={handleSecretSubmit}
-                                        onTogglePlanMode={() => setMode(mode === 'plan' ? 'normal' : 'plan')}
-                                        onNormalMode={() => setMode('normal')}
-                                        onExitShellMode={() => {
-                                            setMode('normal');
-                                            addOutput('system', '📤 Exiting shell mode', colors.dim);
-                                        }}
-                                        shellHistoryUp={shellHistoryUp}
-                                        shellHistoryDown={shellHistoryDown}
+                                mode === 'interactive' && interactiveBridge ? (
+                                    <RawXtermTerminal
+                                        bridge={interactiveBridge}
+                                        onReady={setRawTerminalWrite}
+                                        onExit={exitInteractive}
                                     />
-                                </InkXterm>
+                                ) : (
+                                    <InkXterm focus>
+                                        <TerminalContent
+                                            outputs={outputs}
+                                            isReady={isReady}
+                                            isBusy={isBusy}
+                                            queueLength={messageQueue.length}
+                                            overlayMode={overlayMode}
+                                            secretInputState={secretInputState}
+                                            agentMode={mode}
+                                            onSubmit={handleSubmit}
+                                            getCompletions={getCommandCompletions}
+                                            onCancel={cancelRequest}
+                                            onOverlayClose={handleOverlayClose}
+                                            onModelSelected={handleModelSelected}
+                                            onProviderSelected={handleProviderSelected}
+                                            onSecretSubmit={handleSecretSubmit}
+                                            onTogglePlanMode={() => setMode(mode === 'plan' ? 'normal' : 'plan')}
+                                            onNormalMode={() => setMode('normal')}
+                                            onExitShellMode={() => {
+                                                setMode('normal');
+                                                addOutput('system', '📤 Exiting shell mode', colors.dim);
+                                            }}
+                                            shellHistoryUp={shellHistoryUp}
+                                            shellHistoryDown={shellHistoryDown}
+                                        />
+                                    </InkXterm>
+                                )
                             }
                         />
                     ) : (
