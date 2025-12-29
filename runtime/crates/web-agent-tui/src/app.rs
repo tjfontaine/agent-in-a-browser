@@ -128,11 +128,12 @@ impl<R: Read, W: Write> App<R, W> {
     
     fn render(&mut self) {
         let mode = self.mode;
+        let state = self.state;
         let input = self.input.clone();
         let messages = self.messages.clone();
         
         let _ = self.terminal.draw(|frame| {
-            render_ui(frame, mode, &input, &messages);
+            render_ui(frame, mode, state, &input, &messages);
         });
     }
     
