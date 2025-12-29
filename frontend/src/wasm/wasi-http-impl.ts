@@ -363,16 +363,57 @@ export function createJsonRpcRequest(body: string): IncomingRequest {
 // ============ Outgoing HTTP Handler ============
 
 /**
+ * AsyncPollable - a pollable that waits on a Promise
+ */
+class AsyncPollable {
+    private _ready: boolean = false;
+    private _promise: Promise<void>;
+
+    constructor(promise: Promise<void>) {
+        this._promise = promise;
+        promise.then(() => {
+            this._ready = true;
+        }).catch(() => {
+            this._ready = true; // Ready on error too
+        });
+    }
+
+    ready(): boolean {
+        return this._ready;
+    }
+
+    async block(): Promise<void> {
+        await this._promise;
+    }
+}
+
+/**
  * FutureIncomingResponse - represents a pending HTTP response
  * 
- * IMPORTANT: Since we use synchronous XHR, the result is available immediately.
- * We store it directly instead of using Promise.then() which is async.
+ * Supports both sync (pre-resolved) and async (Promise-based) responses.
  */
 export class FutureIncomingResponse {
     private _result: WasmResult<IncomingResponse> | null = null;
+    private _promise: Promise<void> | null = null;
+    private _pollable: AsyncPollable | ReadyPollable;
 
-    constructor(resolvedData: { status: number; headers: [string, Uint8Array][]; body: Uint8Array }) {
-        // Store result synchronously since XHR is synchronous
+    constructor(resolvedDataOrPromise: { status: number; headers: [string, Uint8Array][]; body: Uint8Array } | Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>) {
+        if (resolvedDataOrPromise instanceof Promise) {
+            // Async case - resolve later
+            this._promise = resolvedDataOrPromise.then((resolvedData) => {
+                this._setResult(resolvedData);
+            }).catch((err) => {
+                this._result = { tag: 'err', val: String(err) };
+            });
+            this._pollable = new AsyncPollable(this._promise);
+        } else {
+            // Sync case - already resolved
+            this._setResult(resolvedDataOrPromise);
+            this._pollable = new ReadyPollable();
+        }
+    }
+
+    private _setResult(resolvedData: { status: number; headers: [string, Uint8Array][]; body: Uint8Array }) {
         const headers = new Fields();
         for (const [name, value] of resolvedData.headers) {
             const existing = headers.get(name);
@@ -383,13 +424,12 @@ export class FutureIncomingResponse {
     }
 
     subscribe(): unknown {
-        // Return a pollable that's immediately ready
-        return new ReadyPollable();
+        return this._pollable;
     }
 
     /**
      * Get the response. Returns:
-     * - undefined: not ready (never happens with sync XHR)
+     * - undefined: not ready
      * - { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } }: success
      * - { tag: 'ok', val: { tag: 'err', val: ErrorCode } }: HTTP error
      */
@@ -547,11 +587,11 @@ export class RequestOptions {
  * For localhost MCP requests: Uses transport handler if set (routes to sandbox worker)
  * For other requests: Uses synchronous XMLHttpRequest
  * 
- * Returns FutureIncomingResponse directly (jco wraps in Result automatically)
+ * Returns FutureIncomingResponse directly (sync return, but may be pending async)
  * Throws on error (jco catches and converts to Result.err)
  */
 export const outgoingHandler = {
-    async handle(request: OutgoingRequest, _options: RequestOptions | null): Promise<FutureIncomingResponse> {
+    handle(request: OutgoingRequest, _options: RequestOptions | null): FutureIncomingResponse {
         // Build the URL
         const scheme = request.scheme();
         const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'http'); // Default to http for localhost
@@ -573,16 +613,12 @@ export const outgoingHandler = {
         const bodyBytes = request.getBodyBytes();
         const body = bodyBytes.length > 0 ? bodyBytes : null;
 
-        // Check if we should route through transport handler
+        // Check if we should route through transport handler (async)
         if (transportHandler && shouldIntercept(url)) {
             console.log('[http] Routing via transport handler:', method, url);
-            try {
-                const response = await transportHandler(method, url, headers, body);
-                return new FutureIncomingResponse(response);
-            } catch (e) {
-                console.error('[http] Transport handler error:', e);
-                throw e;
-            }
+            // Pass Promise to FutureIncomingResponse - it will resolve async
+            const responsePromise = transportHandler(method, url, headers, body);
+            return new FutureIncomingResponse(responsePromise);
         }
 
         // Fallback to synchronous XMLHttpRequest for external requests
