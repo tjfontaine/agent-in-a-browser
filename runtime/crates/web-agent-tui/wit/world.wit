@@ -16,6 +16,10 @@ world tui {
     import wasi:cli/terminal-stderr@0.2.4;
     import wasi:clocks/monotonic-clock@0.2.4;
     
+    // HTTP for LLM API calls and MCP communication
+    import wasi:http/types@0.2.4;
+    import wasi:http/outgoing-handler@0.2.4;
+    
     // Main entry point
     export run: func() -> s32;
 }

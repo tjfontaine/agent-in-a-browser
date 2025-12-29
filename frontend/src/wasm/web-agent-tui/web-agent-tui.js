@@ -1,12 +1,15 @@
 import { environment, exit as exit$1, stderr, stdin, stdout } from '../ghostty-cli-shim.js';
-import { error, streams } from '@bytecodealliance/preview2-shim/io';
+import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../wasi-http-impl.js';
+import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
 const { getEnvironment } = environment;
 const { exit } = exit$1;
 const { getStderr } = stderr;
 const { getStdin } = stdin;
 const { getStdout } = stdout;
+const { handle } = outgoingHandler;
 const { Error: Error$1 } = error;
+const { Pollable } = poll;
 const { InputStream,
   OutputStream } = streams;
 const { insecureSeed } = insecureSeed$1;
@@ -15,6 +18,24 @@ let dv = new DataView(new ArrayBuffer());
 const dataView = mem => dv.buffer === mem.buffer ? dv : dv = new DataView(mem.buffer);
 
 const toUint64 = val => BigInt.asUintN(64, BigInt(val));
+
+function toUint16(val) {
+  val >>>= 0;
+  val %= 2 ** 16;
+  return val;
+}
+
+function toUint32(val) {
+  return val >>> 0;
+}
+
+function toUint8(val) {
+  val >>>= 0;
+  val %= 2 ** 8;
+  return val;
+}
+
+const utf8Decoder = new TextDecoder();
 
 const utf8Encoder = new TextEncoder();
 let utf8EncodedLen = 0;
@@ -787,12 +808,218 @@ const instantiateCore = WebAssembly.instantiate;
 
 
 let exports0;
-const handleTable2 = [T_FLAG, 0];
-const captureTable2= new Map();
-let captureCnt2 = 0;
-handleTables[2] = handleTable2;
+const handleTable4 = [T_FLAG, 0];
+const captureTable4= new Map();
+let captureCnt4 = 0;
+handleTables[4] = handleTable4;
 
-function trampoline1() {
+function trampoline0() {
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]fields');
+  const ret = new Fields();
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof Fields)) {
+    throw new TypeError('Resource error: Not a valid "Fields" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt4;
+    captureTable4.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable4, rep);
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"][Instruction::Return]', {
+    funcName: '[constructor]fields',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
+const handleTable5 = [T_FLAG, 0];
+const captureTable5= new Map();
+let captureCnt5 = 0;
+handleTables[5] = handleTable5;
+
+function trampoline1(arg0) {
+  var handle1 = arg0;
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Fields.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  else {
+    captureTable4.delete(rep2);
+  }
+  rscTableRemove(handleTable4, handle1);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]outgoing-request');
+  const ret = new OutgoingRequest(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof OutgoingRequest)) {
+    throw new TypeError('Resource error: Not a valid "OutgoingRequest" resource.');
+  }
+  var handle3 = ret[symbolRscHandle];
+  if (!handle3) {
+    const rep = ret[symbolRscRep] || ++captureCnt5;
+    captureTable5.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable5, rep);
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"][Instruction::Return]', {
+    funcName: '[constructor]outgoing-request',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle3;
+}
+
+const handleTable7 = [T_FLAG, 0];
+const captureTable7= new Map();
+let captureCnt7 = 0;
+handleTables[7] = handleTable7;
+
+function trampoline2() {
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]request-options"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]request-options');
+  const ret = new RequestOptions();
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]request-options"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof RequestOptions)) {
+    throw new TypeError('Resource error: Not a valid "RequestOptions" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt7;
+    captureTable7.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable7, rep);
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]request-options"][Instruction::Return]', {
+    funcName: '[constructor]request-options',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
+const handleTable8 = [T_FLAG, 0];
+const captureTable8= new Map();
+let captureCnt8 = 0;
+handleTables[8] = handleTable8;
+const handleTable0 = [T_FLAG, 0];
+const captureTable0= new Map();
+let captureCnt0 = 0;
+handleTables[0] = handleTable0;
+
+function trampoline4(arg0) {
+  var handle1 = arg0;
+  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable8.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(FutureIncomingResponse.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]future-incoming-response.subscribe');
+  const ret = rsc0.subscribe();
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.subscribe"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  if (!(ret instanceof Pollable)) {
+    throw new TypeError('Resource error: Not a valid "Pollable" resource.');
+  }
+  var handle3 = ret[symbolRscHandle];
+  if (!handle3) {
+    const rep = ret[symbolRscRep] || ++captureCnt0;
+    captureTable0.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable0, rep);
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.subscribe"][Instruction::Return]', {
+    funcName: '[method]future-incoming-response.subscribe',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle3;
+}
+
+
+function trampoline5(arg0) {
+  var handle1 = arg0;
+  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable0.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Pollable.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]pollable.block');
+  rsc0.block();
+  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"][Instruction::Return]', {
+    funcName: '[method]pollable.block',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable9 = [T_FLAG, 0];
+const captureTable9= new Map();
+let captureCnt9 = 0;
+handleTables[9] = handleTable9;
+
+function trampoline6(arg0) {
+  var handle1 = arg0;
+  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable9.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(IncomingResponse.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-response.status');
+  const ret = rsc0.status();
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"][Instruction::Return]', {
+    funcName: '[method]incoming-response.status',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return toUint16(ret);
+}
+
+const handleTable3 = [T_FLAG, 0];
+const captureTable3= new Map();
+let captureCnt3 = 0;
+handleTables[3] = handleTable3;
+
+function trampoline17() {
   _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdin');
   const ret = getStdin();
@@ -803,9 +1030,9 @@ function trampoline1() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt2;
-    captureTable2.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable2, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable3, rep);
   }
   _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"][Instruction::Return]', {
     funcName: 'get-stdin',
@@ -816,12 +1043,12 @@ function trampoline1() {
   return handle0;
 }
 
-const handleTable1 = [T_FLAG, 0];
-const captureTable1= new Map();
-let captureCnt1 = 0;
-handleTables[1] = handleTable1;
+const handleTable2 = [T_FLAG, 0];
+const captureTable2= new Map();
+let captureCnt2 = 0;
+handleTables[2] = handleTable2;
 
-function trampoline2() {
+function trampoline18() {
   _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
   const ret = getStdout();
@@ -832,9 +1059,9 @@ function trampoline2() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt1;
-    captureTable1.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable1, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable2, rep);
   }
   _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"][Instruction::Return]', {
     funcName: 'get-stdout',
@@ -846,7 +1073,7 @@ function trampoline2() {
 }
 
 
-function trampoline5() {
+function trampoline19() {
   _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stderr');
   const ret = getStderr();
@@ -857,9 +1084,9 @@ function trampoline5() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt1;
-    captureTable1.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable1, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable2, rep);
   }
   _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"][Instruction::Return]', {
     funcName: 'get-stderr',
@@ -872,7 +1099,7 @@ function trampoline5() {
 
 let exports1;
 
-function trampoline6(arg0) {
+function trampoline20(arg0) {
   let variant0;
   if (arg0) {
     variant0= {
@@ -902,33 +1129,32 @@ let exports2;
 let memory0;
 let realloc0;
 let realloc1;
-const handleTable0 = [T_FLAG, 0];
-const captureTable0= new Map();
-let captureCnt0 = 0;
-handleTables[0] = handleTable0;
 
-function trampoline7(arg0, arg1, arg2, arg3) {
+function trampoline21(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
-    rsc0 = Object.create(OutputStream.prototype);
+    rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
   var len3 = arg2;
-  var result3 = new Uint8Array(memory0.buffer.slice(ptr3, ptr3 + len3 * 1));
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-write-and-flush');
+  var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+  var ptr4 = arg3;
+  var len4 = arg4;
+  var result4 = new Uint8Array(memory0.buffer.slice(ptr4, ptr4 + len4 * 1));
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.append');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.blockingWriteAndFlush(result3)};
+    ret = { tag: 'ok', val: rsc0.append(result3, result4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -938,35 +1164,28 @@ function trampoline7(arg0, arg1, arg2, arg3) {
   switch (variant6.tag) {
     case 'ok': {
       const e = variant6.val;
-      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      dataView(memory0).setInt8(arg5 + 0, 0, true);
       break;
     }
     case 'err': {
       const e = variant6.val;
-      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      dataView(memory0).setInt8(arg5 + 0, 1, true);
       var variant5 = e;
       switch (variant5.tag) {
-        case 'last-operation-failed': {
-          const e = variant5.val;
-          dataView(memory0).setInt8(arg3 + 4, 0, true);
-          if (!(e instanceof Error$1)) {
-            throw new TypeError('Resource error: Not a valid "Error" resource.');
-          }
-          var handle4 = e[symbolRscHandle];
-          if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt0;
-            captureTable0.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable0, rep);
-          }
-          dataView(memory0).setInt32(arg3 + 8, handle4, true);
+        case 'invalid-syntax': {
+          dataView(memory0).setInt8(arg5 + 1, 0, true);
           break;
         }
-        case 'closed': {
-          dataView(memory0).setInt8(arg3 + 4, 1, true);
+        case 'forbidden': {
+          dataView(memory0).setInt8(arg5 + 1, 1, true);
+          break;
+        }
+        case 'immutable': {
+          dataView(memory0).setInt8(arg5 + 1, 2, true);
           break;
         }
         default: {
-          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`StreamError\``);
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`HeaderError\``);
         }
       }
       break;
@@ -975,8 +1194,8 @@ function trampoline7(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"][Instruction::Return]', {
-    funcName: '[method]output-stream.blocking-write-and-flush',
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"][Instruction::Return]', {
+    funcName: '[method]fields.append',
     paramCount: 0,
     async: false,
     postReturn: false
@@ -984,10 +1203,1952 @@ function trampoline7(arg0, arg1, arg2, arg3) {
 }
 
 
-const trampoline8 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+function trampoline22(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  let variant4;
+  switch (arg1) {
+    case 0: {
+      variant4= {
+        tag: 'get',
+      };
+      break;
+    }
+    case 1: {
+      variant4= {
+        tag: 'head',
+      };
+      break;
+    }
+    case 2: {
+      variant4= {
+        tag: 'post',
+      };
+      break;
+    }
+    case 3: {
+      variant4= {
+        tag: 'put',
+      };
+      break;
+    }
+    case 4: {
+      variant4= {
+        tag: 'delete',
+      };
+      break;
+    }
+    case 5: {
+      variant4= {
+        tag: 'connect',
+      };
+      break;
+    }
+    case 6: {
+      variant4= {
+        tag: 'options',
+      };
+      break;
+    }
+    case 7: {
+      variant4= {
+        tag: 'trace',
+      };
+      break;
+    }
+    case 8: {
+      variant4= {
+        tag: 'patch',
+      };
+      break;
+    }
+    case 9: {
+      var ptr3 = arg2;
+      var len3 = arg3;
+      var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+      variant4= {
+        tag: 'other',
+        val: result3
+      };
+      break;
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-method');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.setMethod(variant4)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  let variant5_0;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      variant5_0 = 0;
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      variant5_0 = 1;
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"][Instruction::Return]', {
+    funcName: '[method]outgoing-request.set-method',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return variant5_0;
+}
+
+
+function trampoline23(arg0, arg1, arg2, arg3, arg4) {
+  var handle1 = arg0;
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  let variant5;
+  if (arg1) {
+    let variant4;
+    switch (arg2) {
+      case 0: {
+        variant4= {
+          tag: 'HTTP',
+        };
+        break;
+      }
+      case 1: {
+        variant4= {
+          tag: 'HTTPS',
+        };
+        break;
+      }
+      case 2: {
+        var ptr3 = arg3;
+        var len3 = arg4;
+        var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+        variant4= {
+          tag: 'other',
+          val: result3
+        };
+        break;
+      }
+    }
+    variant5 = variant4;
+  } else {
+    variant5 = undefined;
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-scheme');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.setScheme(variant5)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant6 = ret;
+  let variant6_0;
+  switch (variant6.tag) {
+    case 'ok': {
+      const e = variant6.val;
+      variant6_0 = 0;
+      break;
+    }
+    case 'err': {
+      const e = variant6.val;
+      variant6_0 = 1;
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"][Instruction::Return]', {
+    funcName: '[method]outgoing-request.set-scheme',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return variant6_0;
+}
+
+
+function trampoline24(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  let variant4;
+  if (arg1) {
+    var ptr3 = arg2;
+    var len3 = arg3;
+    var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+    variant4 = result3;
+  } else {
+    variant4 = undefined;
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-authority');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.setAuthority(variant4)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  let variant5_0;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      variant5_0 = 0;
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      variant5_0 = 1;
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"][Instruction::Return]', {
+    funcName: '[method]outgoing-request.set-authority',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return variant5_0;
+}
+
+
+function trampoline25(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  let variant4;
+  if (arg1) {
+    var ptr3 = arg2;
+    var len3 = arg3;
+    var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+    variant4 = result3;
+  } else {
+    variant4 = undefined;
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-path-with-query');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.setPathWithQuery(variant4)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  let variant5_0;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      variant5_0 = 0;
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      variant5_0 = 1;
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"][Instruction::Return]', {
+    funcName: '[method]outgoing-request.set-path-with-query',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return variant5_0;
+}
+
+const handleTable6 = [T_FLAG, 0];
+const captureTable6= new Map();
+let captureCnt6 = 0;
+handleTables[6] = handleTable6;
+
+function trampoline26(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.body');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.body()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  switch (variant4.tag) {
+    case 'ok': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e instanceof OutgoingBody)) {
+        throw new TypeError('Resource error: Not a valid "OutgoingBody" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt6;
+        captureTable6.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable6, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"][Instruction::Return]', {
+    funcName: '[method]outgoing-request.body',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline27(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingBody.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-body.write');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.write()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  switch (variant4.tag) {
+    case 'ok': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e instanceof OutputStream)) {
+        throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt2;
+        captureTable2.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable2, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"][Instruction::Return]', {
+    funcName: '[method]outgoing-body.write',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline28(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingBody.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  else {
+    captureTable6.delete(rep2);
+  }
+  rscTableRemove(handleTable6, handle1);
+  let variant6;
+  if (arg1) {
+    var handle4 = arg2;
+    var rep5 = handleTable4[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable4.get(rep5);
+    if (!rsc3) {
+      rsc3 = Object.create(Fields.prototype);
+      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
+      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
+    }
+    else {
+      captureTable4.delete(rep5);
+    }
+    rscTableRemove(handleTable4, handle4);
+    variant6 = rsc3;
+  } else {
+    variant6 = undefined;
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]outgoing-body.finish');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: OutgoingBody.finish(rsc0, variant6)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var variant45 = ret;
+  switch (variant45.tag) {
+    case 'ok': {
+      const e = variant45.val;
+      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      break;
+    }
+    case 'err': {
+      const e = variant45.val;
+      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      var variant44 = e;
+      switch (variant44.tag) {
+        case 'DNS-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 0, true);
+          break;
+        }
+        case 'DNS-error': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 1, true);
+          var {rcode: v7_0, infoCode: v7_1 } = e;
+          var variant9 = v7_0;
+          if (variant9 === null || variant9=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant9;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr8 = utf8Encode(e, realloc0, memory0);
+            var len8 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len8, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr8, true);
+          }
+          var variant10 = v7_1;
+          if (variant10 === null || variant10=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant10;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt16(arg3 + 30, toUint16(e), true);
+          }
+          break;
+        }
+        case 'destination-not-found': {
+          dataView(memory0).setInt8(arg3 + 8, 2, true);
+          break;
+        }
+        case 'destination-unavailable': {
+          dataView(memory0).setInt8(arg3 + 8, 3, true);
+          break;
+        }
+        case 'destination-IP-prohibited': {
+          dataView(memory0).setInt8(arg3 + 8, 4, true);
+          break;
+        }
+        case 'destination-IP-unroutable': {
+          dataView(memory0).setInt8(arg3 + 8, 5, true);
+          break;
+        }
+        case 'connection-refused': {
+          dataView(memory0).setInt8(arg3 + 8, 6, true);
+          break;
+        }
+        case 'connection-terminated': {
+          dataView(memory0).setInt8(arg3 + 8, 7, true);
+          break;
+        }
+        case 'connection-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 8, true);
+          break;
+        }
+        case 'connection-read-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 9, true);
+          break;
+        }
+        case 'connection-write-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 10, true);
+          break;
+        }
+        case 'connection-limit-reached': {
+          dataView(memory0).setInt8(arg3 + 8, 11, true);
+          break;
+        }
+        case 'TLS-protocol-error': {
+          dataView(memory0).setInt8(arg3 + 8, 12, true);
+          break;
+        }
+        case 'TLS-certificate-error': {
+          dataView(memory0).setInt8(arg3 + 8, 13, true);
+          break;
+        }
+        case 'TLS-alert-received': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 14, true);
+          var {alertId: v11_0, alertMessage: v11_1 } = e;
+          var variant12 = v11_0;
+          if (variant12 === null || variant12=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant12;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt8(arg3 + 17, toUint8(e), true);
+          }
+          var variant14 = v11_1;
+          if (variant14 === null || variant14=== undefined) {
+            dataView(memory0).setInt8(arg3 + 20, 0, true);
+          } else {
+            const e = variant14;
+            dataView(memory0).setInt8(arg3 + 20, 1, true);
+            var ptr13 = utf8Encode(e, realloc0, memory0);
+            var len13 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 28, len13, true);
+            dataView(memory0).setUint32(arg3 + 24, ptr13, true);
+          }
+          break;
+        }
+        case 'HTTP-request-denied': {
+          dataView(memory0).setInt8(arg3 + 8, 15, true);
+          break;
+        }
+        case 'HTTP-request-length-required': {
+          dataView(memory0).setInt8(arg3 + 8, 16, true);
+          break;
+        }
+        case 'HTTP-request-body-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 17, true);
+          var variant15 = e;
+          if (variant15 === null || variant15=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant15;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setBigInt64(arg3 + 24, toUint64(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-method-invalid': {
+          dataView(memory0).setInt8(arg3 + 8, 18, true);
+          break;
+        }
+        case 'HTTP-request-URI-invalid': {
+          dataView(memory0).setInt8(arg3 + 8, 19, true);
+          break;
+        }
+        case 'HTTP-request-URI-too-long': {
+          dataView(memory0).setInt8(arg3 + 8, 20, true);
+          break;
+        }
+        case 'HTTP-request-header-section-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 21, true);
+          var variant16 = e;
+          if (variant16 === null || variant16=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant16;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-header-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 22, true);
+          var variant21 = e;
+          if (variant21 === null || variant21=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant21;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var {fieldName: v17_0, fieldSize: v17_1 } = e;
+            var variant19 = v17_0;
+            if (variant19 === null || variant19=== undefined) {
+              dataView(memory0).setInt8(arg3 + 20, 0, true);
+            } else {
+              const e = variant19;
+              dataView(memory0).setInt8(arg3 + 20, 1, true);
+              var ptr18 = utf8Encode(e, realloc0, memory0);
+              var len18 = utf8EncodedLen;
+              dataView(memory0).setUint32(arg3 + 28, len18, true);
+              dataView(memory0).setUint32(arg3 + 24, ptr18, true);
+            }
+            var variant20 = v17_1;
+            if (variant20 === null || variant20=== undefined) {
+              dataView(memory0).setInt8(arg3 + 32, 0, true);
+            } else {
+              const e = variant20;
+              dataView(memory0).setInt8(arg3 + 32, 1, true);
+              dataView(memory0).setInt32(arg3 + 36, toUint32(e), true);
+            }
+          }
+          break;
+        }
+        case 'HTTP-request-trailer-section-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 23, true);
+          var variant22 = e;
+          if (variant22 === null || variant22=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant22;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-trailer-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 24, true);
+          var {fieldName: v23_0, fieldSize: v23_1 } = e;
+          var variant25 = v23_0;
+          if (variant25 === null || variant25=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant25;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr24 = utf8Encode(e, realloc0, memory0);
+            var len24 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len24, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr24, true);
+          }
+          var variant26 = v23_1;
+          if (variant26 === null || variant26=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant26;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-incomplete': {
+          dataView(memory0).setInt8(arg3 + 8, 25, true);
+          break;
+        }
+        case 'HTTP-response-header-section-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 26, true);
+          var variant27 = e;
+          if (variant27 === null || variant27=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant27;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-header-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 27, true);
+          var {fieldName: v28_0, fieldSize: v28_1 } = e;
+          var variant30 = v28_0;
+          if (variant30 === null || variant30=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant30;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr29 = utf8Encode(e, realloc0, memory0);
+            var len29 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len29, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr29, true);
+          }
+          var variant31 = v28_1;
+          if (variant31 === null || variant31=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant31;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-body-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 28, true);
+          var variant32 = e;
+          if (variant32 === null || variant32=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant32;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setBigInt64(arg3 + 24, toUint64(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-trailer-section-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 29, true);
+          var variant33 = e;
+          if (variant33 === null || variant33=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant33;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-trailer-size': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 30, true);
+          var {fieldName: v34_0, fieldSize: v34_1 } = e;
+          var variant36 = v34_0;
+          if (variant36 === null || variant36=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant36;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr35 = utf8Encode(e, realloc0, memory0);
+            var len35 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len35, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr35, true);
+          }
+          var variant37 = v34_1;
+          if (variant37 === null || variant37=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant37;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-transfer-coding': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 31, true);
+          var variant39 = e;
+          if (variant39 === null || variant39=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant39;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr38 = utf8Encode(e, realloc0, memory0);
+            var len38 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len38, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr38, true);
+          }
+          break;
+        }
+        case 'HTTP-response-content-coding': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 32, true);
+          var variant41 = e;
+          if (variant41 === null || variant41=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant41;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr40 = utf8Encode(e, realloc0, memory0);
+            var len40 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len40, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr40, true);
+          }
+          break;
+        }
+        case 'HTTP-response-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 33, true);
+          break;
+        }
+        case 'HTTP-upgrade-failed': {
+          dataView(memory0).setInt8(arg3 + 8, 34, true);
+          break;
+        }
+        case 'HTTP-protocol-error': {
+          dataView(memory0).setInt8(arg3 + 8, 35, true);
+          break;
+        }
+        case 'loop-detected': {
+          dataView(memory0).setInt8(arg3 + 8, 36, true);
+          break;
+        }
+        case 'configuration-error': {
+          dataView(memory0).setInt8(arg3 + 8, 37, true);
+          break;
+        }
+        case 'internal-error': {
+          const e = variant44.val;
+          dataView(memory0).setInt8(arg3 + 8, 38, true);
+          var variant43 = e;
+          if (variant43 === null || variant43=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant43;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr42 = utf8Encode(e, realloc0, memory0);
+            var len42 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len42, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr42, true);
+          }
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant44.tag)}\` (received \`${variant44}\`) specified for \`ErrorCode\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"][Instruction::Return]', {
+    funcName: '[static]outgoing-body.finish',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline29(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable8.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(FutureIncomingResponse.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]future-incoming-response.get');
+  const ret = rsc0.get();
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant44 = ret;
+  if (variant44 === null || variant44=== undefined) {
+    dataView(memory0).setInt8(arg1 + 0, 0, true);
+  } else {
+    const e = variant44;
+    dataView(memory0).setInt8(arg1 + 0, 1, true);
+    var variant43 = e;
+    switch (variant43.tag) {
+      case 'ok': {
+        const e = variant43.val;
+        dataView(memory0).setInt8(arg1 + 8, 0, true);
+        var variant42 = e;
+        switch (variant42.tag) {
+          case 'ok': {
+            const e = variant42.val;
+            dataView(memory0).setInt8(arg1 + 16, 0, true);
+            if (!(e instanceof IncomingResponse)) {
+              throw new TypeError('Resource error: Not a valid "IncomingResponse" resource.');
+            }
+            var handle3 = e[symbolRscHandle];
+            if (!handle3) {
+              const rep = e[symbolRscRep] || ++captureCnt9;
+              captureTable9.set(rep, e);
+              handle3 = rscTableCreateOwn(handleTable9, rep);
+            }
+            dataView(memory0).setInt32(arg1 + 24, handle3, true);
+            break;
+          }
+          case 'err': {
+            const e = variant42.val;
+            dataView(memory0).setInt8(arg1 + 16, 1, true);
+            var variant41 = e;
+            switch (variant41.tag) {
+              case 'DNS-timeout': {
+                dataView(memory0).setInt8(arg1 + 24, 0, true);
+                break;
+              }
+              case 'DNS-error': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 1, true);
+                var {rcode: v4_0, infoCode: v4_1 } = e;
+                var variant6 = v4_0;
+                if (variant6 === null || variant6=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant6;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr5 = utf8Encode(e, realloc0, memory0);
+                  var len5 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len5, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr5, true);
+                }
+                var variant7 = v4_1;
+                if (variant7 === null || variant7=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 44, 0, true);
+                } else {
+                  const e = variant7;
+                  dataView(memory0).setInt8(arg1 + 44, 1, true);
+                  dataView(memory0).setInt16(arg1 + 46, toUint16(e), true);
+                }
+                break;
+              }
+              case 'destination-not-found': {
+                dataView(memory0).setInt8(arg1 + 24, 2, true);
+                break;
+              }
+              case 'destination-unavailable': {
+                dataView(memory0).setInt8(arg1 + 24, 3, true);
+                break;
+              }
+              case 'destination-IP-prohibited': {
+                dataView(memory0).setInt8(arg1 + 24, 4, true);
+                break;
+              }
+              case 'destination-IP-unroutable': {
+                dataView(memory0).setInt8(arg1 + 24, 5, true);
+                break;
+              }
+              case 'connection-refused': {
+                dataView(memory0).setInt8(arg1 + 24, 6, true);
+                break;
+              }
+              case 'connection-terminated': {
+                dataView(memory0).setInt8(arg1 + 24, 7, true);
+                break;
+              }
+              case 'connection-timeout': {
+                dataView(memory0).setInt8(arg1 + 24, 8, true);
+                break;
+              }
+              case 'connection-read-timeout': {
+                dataView(memory0).setInt8(arg1 + 24, 9, true);
+                break;
+              }
+              case 'connection-write-timeout': {
+                dataView(memory0).setInt8(arg1 + 24, 10, true);
+                break;
+              }
+              case 'connection-limit-reached': {
+                dataView(memory0).setInt8(arg1 + 24, 11, true);
+                break;
+              }
+              case 'TLS-protocol-error': {
+                dataView(memory0).setInt8(arg1 + 24, 12, true);
+                break;
+              }
+              case 'TLS-certificate-error': {
+                dataView(memory0).setInt8(arg1 + 24, 13, true);
+                break;
+              }
+              case 'TLS-alert-received': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 14, true);
+                var {alertId: v8_0, alertMessage: v8_1 } = e;
+                var variant9 = v8_0;
+                if (variant9 === null || variant9=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant9;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setInt8(arg1 + 33, toUint8(e), true);
+                }
+                var variant11 = v8_1;
+                if (variant11 === null || variant11=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 36, 0, true);
+                } else {
+                  const e = variant11;
+                  dataView(memory0).setInt8(arg1 + 36, 1, true);
+                  var ptr10 = utf8Encode(e, realloc0, memory0);
+                  var len10 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 44, len10, true);
+                  dataView(memory0).setUint32(arg1 + 40, ptr10, true);
+                }
+                break;
+              }
+              case 'HTTP-request-denied': {
+                dataView(memory0).setInt8(arg1 + 24, 15, true);
+                break;
+              }
+              case 'HTTP-request-length-required': {
+                dataView(memory0).setInt8(arg1 + 24, 16, true);
+                break;
+              }
+              case 'HTTP-request-body-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 17, true);
+                var variant12 = e;
+                if (variant12 === null || variant12=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant12;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setBigInt64(arg1 + 40, toUint64(e), true);
+                }
+                break;
+              }
+              case 'HTTP-request-method-invalid': {
+                dataView(memory0).setInt8(arg1 + 24, 18, true);
+                break;
+              }
+              case 'HTTP-request-URI-invalid': {
+                dataView(memory0).setInt8(arg1 + 24, 19, true);
+                break;
+              }
+              case 'HTTP-request-URI-too-long': {
+                dataView(memory0).setInt8(arg1 + 24, 20, true);
+                break;
+              }
+              case 'HTTP-request-header-section-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 21, true);
+                var variant13 = e;
+                if (variant13 === null || variant13=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant13;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setInt32(arg1 + 36, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-request-header-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 22, true);
+                var variant18 = e;
+                if (variant18 === null || variant18=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant18;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var {fieldName: v14_0, fieldSize: v14_1 } = e;
+                  var variant16 = v14_0;
+                  if (variant16 === null || variant16=== undefined) {
+                    dataView(memory0).setInt8(arg1 + 36, 0, true);
+                  } else {
+                    const e = variant16;
+                    dataView(memory0).setInt8(arg1 + 36, 1, true);
+                    var ptr15 = utf8Encode(e, realloc0, memory0);
+                    var len15 = utf8EncodedLen;
+                    dataView(memory0).setUint32(arg1 + 44, len15, true);
+                    dataView(memory0).setUint32(arg1 + 40, ptr15, true);
+                  }
+                  var variant17 = v14_1;
+                  if (variant17 === null || variant17=== undefined) {
+                    dataView(memory0).setInt8(arg1 + 48, 0, true);
+                  } else {
+                    const e = variant17;
+                    dataView(memory0).setInt8(arg1 + 48, 1, true);
+                    dataView(memory0).setInt32(arg1 + 52, toUint32(e), true);
+                  }
+                }
+                break;
+              }
+              case 'HTTP-request-trailer-section-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 23, true);
+                var variant19 = e;
+                if (variant19 === null || variant19=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant19;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setInt32(arg1 + 36, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-request-trailer-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 24, true);
+                var {fieldName: v20_0, fieldSize: v20_1 } = e;
+                var variant22 = v20_0;
+                if (variant22 === null || variant22=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant22;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr21 = utf8Encode(e, realloc0, memory0);
+                  var len21 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len21, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr21, true);
+                }
+                var variant23 = v20_1;
+                if (variant23 === null || variant23=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 44, 0, true);
+                } else {
+                  const e = variant23;
+                  dataView(memory0).setInt8(arg1 + 44, 1, true);
+                  dataView(memory0).setInt32(arg1 + 48, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-incomplete': {
+                dataView(memory0).setInt8(arg1 + 24, 25, true);
+                break;
+              }
+              case 'HTTP-response-header-section-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 26, true);
+                var variant24 = e;
+                if (variant24 === null || variant24=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant24;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setInt32(arg1 + 36, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-header-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 27, true);
+                var {fieldName: v25_0, fieldSize: v25_1 } = e;
+                var variant27 = v25_0;
+                if (variant27 === null || variant27=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant27;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr26 = utf8Encode(e, realloc0, memory0);
+                  var len26 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len26, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr26, true);
+                }
+                var variant28 = v25_1;
+                if (variant28 === null || variant28=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 44, 0, true);
+                } else {
+                  const e = variant28;
+                  dataView(memory0).setInt8(arg1 + 44, 1, true);
+                  dataView(memory0).setInt32(arg1 + 48, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-body-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 28, true);
+                var variant29 = e;
+                if (variant29 === null || variant29=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant29;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setBigInt64(arg1 + 40, toUint64(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-trailer-section-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 29, true);
+                var variant30 = e;
+                if (variant30 === null || variant30=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant30;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  dataView(memory0).setInt32(arg1 + 36, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-trailer-size': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 30, true);
+                var {fieldName: v31_0, fieldSize: v31_1 } = e;
+                var variant33 = v31_0;
+                if (variant33 === null || variant33=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant33;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr32 = utf8Encode(e, realloc0, memory0);
+                  var len32 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len32, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr32, true);
+                }
+                var variant34 = v31_1;
+                if (variant34 === null || variant34=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 44, 0, true);
+                } else {
+                  const e = variant34;
+                  dataView(memory0).setInt8(arg1 + 44, 1, true);
+                  dataView(memory0).setInt32(arg1 + 48, toUint32(e), true);
+                }
+                break;
+              }
+              case 'HTTP-response-transfer-coding': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 31, true);
+                var variant36 = e;
+                if (variant36 === null || variant36=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant36;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr35 = utf8Encode(e, realloc0, memory0);
+                  var len35 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len35, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr35, true);
+                }
+                break;
+              }
+              case 'HTTP-response-content-coding': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 32, true);
+                var variant38 = e;
+                if (variant38 === null || variant38=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant38;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr37 = utf8Encode(e, realloc0, memory0);
+                  var len37 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len37, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr37, true);
+                }
+                break;
+              }
+              case 'HTTP-response-timeout': {
+                dataView(memory0).setInt8(arg1 + 24, 33, true);
+                break;
+              }
+              case 'HTTP-upgrade-failed': {
+                dataView(memory0).setInt8(arg1 + 24, 34, true);
+                break;
+              }
+              case 'HTTP-protocol-error': {
+                dataView(memory0).setInt8(arg1 + 24, 35, true);
+                break;
+              }
+              case 'loop-detected': {
+                dataView(memory0).setInt8(arg1 + 24, 36, true);
+                break;
+              }
+              case 'configuration-error': {
+                dataView(memory0).setInt8(arg1 + 24, 37, true);
+                break;
+              }
+              case 'internal-error': {
+                const e = variant41.val;
+                dataView(memory0).setInt8(arg1 + 24, 38, true);
+                var variant40 = e;
+                if (variant40 === null || variant40=== undefined) {
+                  dataView(memory0).setInt8(arg1 + 32, 0, true);
+                } else {
+                  const e = variant40;
+                  dataView(memory0).setInt8(arg1 + 32, 1, true);
+                  var ptr39 = utf8Encode(e, realloc0, memory0);
+                  var len39 = utf8EncodedLen;
+                  dataView(memory0).setUint32(arg1 + 40, len39, true);
+                  dataView(memory0).setUint32(arg1 + 36, ptr39, true);
+                }
+                break;
+              }
+              default: {
+                throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant41.tag)}\` (received \`${variant41}\`) specified for \`ErrorCode\``);
+              }
+            }
+            break;
+          }
+          default: {
+            throw new TypeError('invalid variant specified for result');
+          }
+        }
+        break;
+      }
+      case 'err': {
+        const e = variant43.val;
+        dataView(memory0).setInt8(arg1 + 8, 1, true);
+        break;
+      }
+      default: {
+        throw new TypeError('invalid variant specified for result');
+      }
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"][Instruction::Return]', {
+    funcName: '[method]future-incoming-response.get',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable10 = [T_FLAG, 0];
+const captureTable10= new Map();
+let captureCnt10 = 0;
+handleTables[10] = handleTable10;
+
+function trampoline30(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable9.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(IncomingResponse.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-response.consume');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.consume()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  switch (variant4.tag) {
+    case 'ok': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e instanceof IncomingBody)) {
+        throw new TypeError('Resource error: Not a valid "IncomingBody" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt10;
+        captureTable10.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable10, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"][Instruction::Return]', {
+    funcName: '[method]incoming-response.consume',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline31(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable10.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(IncomingBody.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-body.stream');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.stream()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  switch (variant4.tag) {
+    case 'ok': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e instanceof InputStream)) {
+        throw new TypeError('Resource error: Not a valid "InputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"][Instruction::Return]', {
+    funcName: '[method]incoming-body.stream',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline32(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingRequest.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  else {
+    captureTable5.delete(rep2);
+  }
+  rscTableRemove(handleTable5, handle1);
+  let variant6;
+  if (arg1) {
+    var handle4 = arg2;
+    var rep5 = handleTable7[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable7.get(rep5);
+    if (!rsc3) {
+      rsc3 = Object.create(RequestOptions.prototype);
+      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
+      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
+    }
+    else {
+      captureTable7.delete(rep5);
+    }
+    rscTableRemove(handleTable7, handle4);
+    variant6 = rsc3;
+  } else {
+    variant6 = undefined;
+  }
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'handle');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: handle(rsc0, variant6)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var variant46 = ret;
+  switch (variant46.tag) {
+    case 'ok': {
+      const e = variant46.val;
+      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      if (!(e instanceof FutureIncomingResponse)) {
+        throw new TypeError('Resource error: Not a valid "FutureIncomingResponse" resource.');
+      }
+      var handle7 = e[symbolRscHandle];
+      if (!handle7) {
+        const rep = e[symbolRscRep] || ++captureCnt8;
+        captureTable8.set(rep, e);
+        handle7 = rscTableCreateOwn(handleTable8, rep);
+      }
+      dataView(memory0).setInt32(arg3 + 8, handle7, true);
+      break;
+    }
+    case 'err': {
+      const e = variant46.val;
+      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      var variant45 = e;
+      switch (variant45.tag) {
+        case 'DNS-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 0, true);
+          break;
+        }
+        case 'DNS-error': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 1, true);
+          var {rcode: v8_0, infoCode: v8_1 } = e;
+          var variant10 = v8_0;
+          if (variant10 === null || variant10=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant10;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr9 = utf8Encode(e, realloc0, memory0);
+            var len9 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len9, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr9, true);
+          }
+          var variant11 = v8_1;
+          if (variant11 === null || variant11=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant11;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt16(arg3 + 30, toUint16(e), true);
+          }
+          break;
+        }
+        case 'destination-not-found': {
+          dataView(memory0).setInt8(arg3 + 8, 2, true);
+          break;
+        }
+        case 'destination-unavailable': {
+          dataView(memory0).setInt8(arg3 + 8, 3, true);
+          break;
+        }
+        case 'destination-IP-prohibited': {
+          dataView(memory0).setInt8(arg3 + 8, 4, true);
+          break;
+        }
+        case 'destination-IP-unroutable': {
+          dataView(memory0).setInt8(arg3 + 8, 5, true);
+          break;
+        }
+        case 'connection-refused': {
+          dataView(memory0).setInt8(arg3 + 8, 6, true);
+          break;
+        }
+        case 'connection-terminated': {
+          dataView(memory0).setInt8(arg3 + 8, 7, true);
+          break;
+        }
+        case 'connection-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 8, true);
+          break;
+        }
+        case 'connection-read-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 9, true);
+          break;
+        }
+        case 'connection-write-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 10, true);
+          break;
+        }
+        case 'connection-limit-reached': {
+          dataView(memory0).setInt8(arg3 + 8, 11, true);
+          break;
+        }
+        case 'TLS-protocol-error': {
+          dataView(memory0).setInt8(arg3 + 8, 12, true);
+          break;
+        }
+        case 'TLS-certificate-error': {
+          dataView(memory0).setInt8(arg3 + 8, 13, true);
+          break;
+        }
+        case 'TLS-alert-received': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 14, true);
+          var {alertId: v12_0, alertMessage: v12_1 } = e;
+          var variant13 = v12_0;
+          if (variant13 === null || variant13=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant13;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt8(arg3 + 17, toUint8(e), true);
+          }
+          var variant15 = v12_1;
+          if (variant15 === null || variant15=== undefined) {
+            dataView(memory0).setInt8(arg3 + 20, 0, true);
+          } else {
+            const e = variant15;
+            dataView(memory0).setInt8(arg3 + 20, 1, true);
+            var ptr14 = utf8Encode(e, realloc0, memory0);
+            var len14 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 28, len14, true);
+            dataView(memory0).setUint32(arg3 + 24, ptr14, true);
+          }
+          break;
+        }
+        case 'HTTP-request-denied': {
+          dataView(memory0).setInt8(arg3 + 8, 15, true);
+          break;
+        }
+        case 'HTTP-request-length-required': {
+          dataView(memory0).setInt8(arg3 + 8, 16, true);
+          break;
+        }
+        case 'HTTP-request-body-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 17, true);
+          var variant16 = e;
+          if (variant16 === null || variant16=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant16;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setBigInt64(arg3 + 24, toUint64(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-method-invalid': {
+          dataView(memory0).setInt8(arg3 + 8, 18, true);
+          break;
+        }
+        case 'HTTP-request-URI-invalid': {
+          dataView(memory0).setInt8(arg3 + 8, 19, true);
+          break;
+        }
+        case 'HTTP-request-URI-too-long': {
+          dataView(memory0).setInt8(arg3 + 8, 20, true);
+          break;
+        }
+        case 'HTTP-request-header-section-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 21, true);
+          var variant17 = e;
+          if (variant17 === null || variant17=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant17;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-header-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 22, true);
+          var variant22 = e;
+          if (variant22 === null || variant22=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant22;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var {fieldName: v18_0, fieldSize: v18_1 } = e;
+            var variant20 = v18_0;
+            if (variant20 === null || variant20=== undefined) {
+              dataView(memory0).setInt8(arg3 + 20, 0, true);
+            } else {
+              const e = variant20;
+              dataView(memory0).setInt8(arg3 + 20, 1, true);
+              var ptr19 = utf8Encode(e, realloc0, memory0);
+              var len19 = utf8EncodedLen;
+              dataView(memory0).setUint32(arg3 + 28, len19, true);
+              dataView(memory0).setUint32(arg3 + 24, ptr19, true);
+            }
+            var variant21 = v18_1;
+            if (variant21 === null || variant21=== undefined) {
+              dataView(memory0).setInt8(arg3 + 32, 0, true);
+            } else {
+              const e = variant21;
+              dataView(memory0).setInt8(arg3 + 32, 1, true);
+              dataView(memory0).setInt32(arg3 + 36, toUint32(e), true);
+            }
+          }
+          break;
+        }
+        case 'HTTP-request-trailer-section-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 23, true);
+          var variant23 = e;
+          if (variant23 === null || variant23=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant23;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-request-trailer-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 24, true);
+          var {fieldName: v24_0, fieldSize: v24_1 } = e;
+          var variant26 = v24_0;
+          if (variant26 === null || variant26=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant26;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr25 = utf8Encode(e, realloc0, memory0);
+            var len25 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len25, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr25, true);
+          }
+          var variant27 = v24_1;
+          if (variant27 === null || variant27=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant27;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-incomplete': {
+          dataView(memory0).setInt8(arg3 + 8, 25, true);
+          break;
+        }
+        case 'HTTP-response-header-section-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 26, true);
+          var variant28 = e;
+          if (variant28 === null || variant28=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant28;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-header-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 27, true);
+          var {fieldName: v29_0, fieldSize: v29_1 } = e;
+          var variant31 = v29_0;
+          if (variant31 === null || variant31=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant31;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr30 = utf8Encode(e, realloc0, memory0);
+            var len30 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len30, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr30, true);
+          }
+          var variant32 = v29_1;
+          if (variant32 === null || variant32=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant32;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-body-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 28, true);
+          var variant33 = e;
+          if (variant33 === null || variant33=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant33;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setBigInt64(arg3 + 24, toUint64(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-trailer-section-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 29, true);
+          var variant34 = e;
+          if (variant34 === null || variant34=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant34;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            dataView(memory0).setInt32(arg3 + 20, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-trailer-size': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 30, true);
+          var {fieldName: v35_0, fieldSize: v35_1 } = e;
+          var variant37 = v35_0;
+          if (variant37 === null || variant37=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant37;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr36 = utf8Encode(e, realloc0, memory0);
+            var len36 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len36, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr36, true);
+          }
+          var variant38 = v35_1;
+          if (variant38 === null || variant38=== undefined) {
+            dataView(memory0).setInt8(arg3 + 28, 0, true);
+          } else {
+            const e = variant38;
+            dataView(memory0).setInt8(arg3 + 28, 1, true);
+            dataView(memory0).setInt32(arg3 + 32, toUint32(e), true);
+          }
+          break;
+        }
+        case 'HTTP-response-transfer-coding': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 31, true);
+          var variant40 = e;
+          if (variant40 === null || variant40=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant40;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr39 = utf8Encode(e, realloc0, memory0);
+            var len39 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len39, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr39, true);
+          }
+          break;
+        }
+        case 'HTTP-response-content-coding': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 32, true);
+          var variant42 = e;
+          if (variant42 === null || variant42=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant42;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr41 = utf8Encode(e, realloc0, memory0);
+            var len41 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len41, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr41, true);
+          }
+          break;
+        }
+        case 'HTTP-response-timeout': {
+          dataView(memory0).setInt8(arg3 + 8, 33, true);
+          break;
+        }
+        case 'HTTP-upgrade-failed': {
+          dataView(memory0).setInt8(arg3 + 8, 34, true);
+          break;
+        }
+        case 'HTTP-protocol-error': {
+          dataView(memory0).setInt8(arg3 + 8, 35, true);
+          break;
+        }
+        case 'loop-detected': {
+          dataView(memory0).setInt8(arg3 + 8, 36, true);
+          break;
+        }
+        case 'configuration-error': {
+          dataView(memory0).setInt8(arg3 + 8, 37, true);
+          break;
+        }
+        case 'internal-error': {
+          const e = variant45.val;
+          dataView(memory0).setInt8(arg3 + 8, 38, true);
+          var variant44 = e;
+          if (variant44 === null || variant44=== undefined) {
+            dataView(memory0).setInt8(arg3 + 16, 0, true);
+          } else {
+            const e = variant44;
+            dataView(memory0).setInt8(arg3 + 16, 1, true);
+            var ptr43 = utf8Encode(e, realloc0, memory0);
+            var len43 = utf8EncodedLen;
+            dataView(memory0).setUint32(arg3 + 24, len43, true);
+            dataView(memory0).setUint32(arg3 + 20, ptr43, true);
+          }
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant45.tag)}\` (received \`${variant45}\`) specified for \`ErrorCode\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"][Instruction::Return]', {
+    funcName: 'handle',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable1 = [T_FLAG, 0];
+const captureTable1= new Map();
+let captureCnt1 = 0;
+handleTables[1] = handleTable1;
+
+const trampoline33 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+  var handle1 = arg0;
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1035,9 +3196,9 @@ const trampoline8 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) 
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt0;
-            captureTable0.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable0, rep);
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable1, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -1065,10 +3226,87 @@ const trampoline8 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) 
 }
 );
 
-function trampoline9(arg0, arg1) {
+function trampoline34(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable0.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var ptr3 = arg1;
+  var len3 = arg2;
+  var result3 = new Uint8Array(memory0.buffer.slice(ptr3, ptr3 + len3 * 1));
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-write-and-flush');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.blockingWriteAndFlush(result3)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant6 = ret;
+  switch (variant6.tag) {
+    case 'ok': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      break;
+    }
+    case 'err': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      var variant5 = e;
+      switch (variant5.tag) {
+        case 'last-operation-failed': {
+          const e = variant5.val;
+          dataView(memory0).setInt8(arg3 + 4, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle4 = e[symbolRscHandle];
+          if (!handle4) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg3 + 8, handle4, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg3 + 4, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"][Instruction::Return]', {
+    funcName: '[method]output-stream.blocking-write-and-flush',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline35(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1097,7 +3335,7 @@ function trampoline9(arg0, arg1) {
 }
 
 
-function trampoline10(arg0) {
+function trampoline36(arg0) {
   _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
   const ret = insecureSeed();
@@ -1115,7 +3353,7 @@ function trampoline10(arg0) {
 }
 
 
-function trampoline11(arg0) {
+function trampoline37(arg0) {
   _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-environment');
   const ret = getEnvironment();
@@ -1147,7 +3385,33 @@ function trampoline11(arg0) {
 }
 
 let exports3;
-function trampoline0(handle) {
+function trampoline3(handle) {
+  const handleEntry = rscTableRemove(handleTable7, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable7.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable7.delete(handleEntry.rep);
+    } else if (RequestOptions[symbolCabiDispose]) {
+      RequestOptions[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline7(handle) {
+  const handleEntry = rscTableRemove(handleTable9, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable9.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable9.delete(handleEntry.rep);
+    } else if (IncomingResponse[symbolCabiDispose]) {
+      IncomingResponse[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline8(handle) {
   const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
     
@@ -1155,12 +3419,38 @@ function trampoline0(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable0.delete(handleEntry.rep);
-    } else if (Error$1[symbolCabiDispose]) {
-      Error$1[symbolCabiDispose](handleEntry.rep);
+    } else if (Pollable[symbolCabiDispose]) {
+      Pollable[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline3(handle) {
+function trampoline9(handle) {
+  const handleEntry = rscTableRemove(handleTable4, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable4.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable4.delete(handleEntry.rep);
+    } else if (Fields[symbolCabiDispose]) {
+      Fields[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline10(handle) {
+  const handleEntry = rscTableRemove(handleTable3, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable3.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable3.delete(handleEntry.rep);
+    } else if (InputStream[symbolCabiDispose]) {
+      InputStream[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline11(handle) {
   const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
     
@@ -1168,12 +3458,38 @@ function trampoline3(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable1.delete(handleEntry.rep);
-    } else if (OutputStream[symbolCabiDispose]) {
-      OutputStream[symbolCabiDispose](handleEntry.rep);
+    } else if (Error$1[symbolCabiDispose]) {
+      Error$1[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline4(handle) {
+function trampoline12(handle) {
+  const handleEntry = rscTableRemove(handleTable10, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable10.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable10.delete(handleEntry.rep);
+    } else if (IncomingBody[symbolCabiDispose]) {
+      IncomingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline13(handle) {
+  const handleEntry = rscTableRemove(handleTable6, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable6.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable6.delete(handleEntry.rep);
+    } else if (OutgoingBody[symbolCabiDispose]) {
+      OutgoingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline14(handle) {
   const handleEntry = rscTableRemove(handleTable2, handle);
   if (handleEntry.own) {
     
@@ -1181,8 +3497,34 @@ function trampoline4(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable2.delete(handleEntry.rep);
-    } else if (InputStream[symbolCabiDispose]) {
-      InputStream[symbolCabiDispose](handleEntry.rep);
+    } else if (OutputStream[symbolCabiDispose]) {
+      OutputStream[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline15(handle) {
+  const handleEntry = rscTableRemove(handleTable5, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable5.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable5.delete(handleEntry.rep);
+    } else if (OutgoingRequest[symbolCabiDispose]) {
+      OutgoingRequest[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline16(handle) {
+  const handleEntry = rscTableRemove(handleTable8, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable8.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable8.delete(handleEntry.rep);
+    } else if (FutureIncomingResponse[symbolCabiDispose]) {
+      FutureIncomingResponse[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
@@ -1211,36 +3553,68 @@ const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-agent-tui.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-agent-tui.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABIQZgBH9/f38AYAN/fn8AYAJ/fwBgAX8AYAJ/fwF/YAF/AAMKCQABAgMEBAUDAAQFAXABCQkHMAoBMAAAATEAAQEyAAIBMwADATQABAE1AAUBNgAGATcABwE4AAgIJGltcG9ydHMBAApxCQ8AIAAgASACIANBABEAAAsNACAAIAEgAkEBEQEACwsAIAAgAUECEQIACwkAIABBAxEDAAsLACAAIAFBBBEEAAsLACAAIAFBBREEAAsJACAAQQYRBQALCQAgAEEHEQMACw8AIAAgASACIANBCBEAAAsALwlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzOS4wAKoEBG5hbWUAExJ3aXQtY29tcG9uZW50OnNoaW0BjQQJAE1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaAFBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQCOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcDNmluZGlyZWN0LXdhc2k6cmFuZG9tL2luc2VjdXJlLXNlZWRAMC4yLjQtaW5zZWN1cmUtc2VlZAQoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldAUuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldAYmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQHM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudAhNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2g');
-    const module3 = base64Compile('AGFzbQEAAAABIQZgBH9/f38AYAN/fn8AYAJ/fwBgAX8AYAJ/fwF/YAF/AAI9CgABMAAAAAExAAEAATIAAgABMwADAAE0AAQAATUABAABNgAFAAE3AAMAATgAAAAIJGltcG9ydHMBcAEJCQkPAQBBAAsJAAECAwQFBgcIAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAAcBG5hbWUAFRR3aXQtY29tcG9uZW50OmZpeHVwcw');
+    const module2 = base64Compile('AGFzbQEAAAABQgpgBn9/f39/fwBgBH9/f38Bf2AFf39/f38Bf2ACf38AYAR/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAMWFQABAgEBAwMEAwMDBAUGAwcICAkHBgQFAXABFRUHaxYBMAAAATEAAQEyAAIBMwADATQABAE1AAUBNgAGATcABwE4AAgBOQAJAjEwAAoCMTEACwIxMgAMAjEzAA0CMTQADgIxNQAPAjE2ABACMTcAEQIxOAASAjE5ABMCMjAAFAgkaW1wb3J0cwEACqMCFRMAIAAgASACIAMgBCAFQQARAAALDwAgACABIAIgA0EBEQEACxEAIAAgASACIAMgBEECEQIACw8AIAAgASACIANBAxEBAAsPACAAIAEgAiADQQQRAQALCwAgACABQQURAwALCwAgACABQQYRAwALDwAgACABIAIgA0EHEQQACwsAIAAgAUEIEQMACwsAIAAgAUEJEQMACwsAIAAgAUEKEQMACw8AIAAgASACIANBCxEEAAsNACAAIAEgAkEMEQUACw8AIAAgASACIANBDREGAAsLACAAIAFBDhEDAAsJACAAQQ8RBwALCwAgACABQRARCAALCwAgACABQRERCAALCQAgAEESEQkACwkAIABBExEHAAsPACAAIAEgAiADQRQRBgALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMACpCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAYwKFQA0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAFCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtbWV0aG9kAkJpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1zY2hlbWUDRWluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LWF1dGhvcml0eQRLaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtcGF0aC13aXRoLXF1ZXJ5BTxpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LmJvZHkGOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUHO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoCENpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1mdXR1cmUtaW5jb21pbmctcmVzcG9uc2UuZ2V0CUBpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1yZXNwb25zZS5jb25zdW1lCjtpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1ib2R5LnN0cmVhbQswaW5kaXJlY3Qtd2FzaTpodHRwL291dGdvaW5nLWhhbmRsZXJAMC4yLjQtaGFuZGxlDEFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZA1NaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2gOOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcPNmluZGlyZWN0LXdhc2k6cmFuZG9tL2luc2VjdXJlLXNlZWRAMC4yLjQtaW5zZWN1cmUtc2VlZBAoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldBEuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldBImYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQTM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudBRNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2g');
+    const module3 = base64Compile('AGFzbQEAAAABQgpgBn9/f39/fwBgBH9/f38Bf2AFf39/f38Bf2ACf38AYAR/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAKEARYAATAAAAABMQABAAEyAAIAATMAAQABNAABAAE1AAMAATYAAwABNwAEAAE4AAMAATkAAwACMTAAAwACMTEABAACMTIABQACMTMABgACMTQAAwACMTUABwACMTYACAACMTcACAACMTgACQACMTkABwACMjAABgAIJGltcG9ydHMBcAEVFQkbAQBBAAsVAAECAwQFBgcICQoLDA0ODxAREhMUAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAAcBG5hbWUAFRR3aXQtY29tcG9uZW50OmZpeHVwcw');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'wasi:cli/stderr@0.2.4': {
-        'get-stderr': trampoline5,
+        'get-stderr': trampoline19,
       },
       'wasi:cli/stdin@0.2.4': {
-        'get-stdin': trampoline1,
+        'get-stdin': trampoline17,
       },
       'wasi:cli/stdout@0.2.4': {
-        'get-stdout': trampoline2,
+        'get-stdout': trampoline18,
+      },
+      'wasi:http/outgoing-handler@0.2.4': {
+        handle: exports0['11'],
+      },
+      'wasi:http/types@0.2.4': {
+        '[constructor]fields': trampoline0,
+        '[constructor]outgoing-request': trampoline1,
+        '[constructor]request-options': trampoline2,
+        '[method]fields.append': exports0['0'],
+        '[method]future-incoming-response.get': exports0['8'],
+        '[method]future-incoming-response.subscribe': trampoline4,
+        '[method]incoming-body.stream': exports0['10'],
+        '[method]incoming-response.consume': exports0['9'],
+        '[method]incoming-response.status': trampoline6,
+        '[method]outgoing-body.write': exports0['6'],
+        '[method]outgoing-request.body': exports0['5'],
+        '[method]outgoing-request.set-authority': exports0['3'],
+        '[method]outgoing-request.set-method': exports0['1'],
+        '[method]outgoing-request.set-path-with-query': exports0['4'],
+        '[method]outgoing-request.set-scheme': exports0['2'],
+        '[resource-drop]fields': trampoline9,
+        '[resource-drop]future-incoming-response': trampoline16,
+        '[resource-drop]incoming-body': trampoline12,
+        '[resource-drop]incoming-response': trampoline7,
+        '[resource-drop]outgoing-body': trampoline13,
+        '[resource-drop]outgoing-request': trampoline15,
+        '[resource-drop]request-options': trampoline3,
+        '[static]outgoing-body.finish': exports0['7'],
       },
       'wasi:io/error@0.2.4': {
-        '[method]error.to-debug-string': exports0['2'],
-        '[resource-drop]error': trampoline0,
+        '[method]error.to-debug-string': exports0['14'],
+        '[resource-drop]error': trampoline11,
+      },
+      'wasi:io/poll@0.2.4': {
+        '[method]pollable.block': trampoline5,
+        '[resource-drop]pollable': trampoline8,
       },
       'wasi:io/streams@0.2.4': {
-        '[method]input-stream.blocking-read': exports0['1'],
-        '[method]output-stream.blocking-write-and-flush': exports0['0'],
-        '[resource-drop]input-stream': trampoline4,
-        '[resource-drop]output-stream': trampoline3,
+        '[method]input-stream.blocking-read': exports0['12'],
+        '[method]output-stream.blocking-write-and-flush': exports0['13'],
+        '[resource-drop]input-stream': trampoline10,
+        '[resource-drop]output-stream': trampoline14,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['3'],
+        'insecure-seed': exports0['15'],
       },
       wasi_snapshot_preview1: {
-        environ_get: exports0['4'],
-        environ_sizes_get: exports0['5'],
-        proc_exit: exports0['6'],
+        environ_get: exports0['16'],
+        environ_sizes_get: exports0['17'],
+        proc_exit: exports0['18'],
       },
     }));
     ({ exports: exports2 } = yield instantiateCore(yield module1, {
@@ -1251,20 +3625,20 @@ const $init = (() => {
         memory: exports1.memory,
       },
       'wasi:cli/environment@0.2.6': {
-        'get-environment': exports0['7'],
+        'get-environment': exports0['19'],
       },
       'wasi:cli/exit@0.2.6': {
-        exit: trampoline6,
+        exit: trampoline20,
       },
       'wasi:cli/stderr@0.2.6': {
-        'get-stderr': trampoline5,
+        'get-stderr': trampoline19,
       },
       'wasi:io/error@0.2.6': {
-        '[resource-drop]error': trampoline0,
+        '[resource-drop]error': trampoline11,
       },
       'wasi:io/streams@0.2.6': {
-        '[method]output-stream.blocking-write-and-flush': exports0['8'],
-        '[resource-drop]output-stream': trampoline3,
+        '[method]output-stream.blocking-write-and-flush': exports0['20'],
+        '[resource-drop]output-stream': trampoline14,
       },
     }));
     memory0 = exports1.memory;
@@ -1273,15 +3647,27 @@ const $init = (() => {
     ({ exports: exports3 } = yield instantiateCore(yield module3, {
       '': {
         $imports: exports0.$imports,
-        '0': trampoline7,
-        '1': trampoline8,
-        '2': trampoline9,
-        '3': trampoline10,
-        '4': exports2.environ_get,
-        '5': exports2.environ_sizes_get,
-        '6': exports2.proc_exit,
-        '7': trampoline11,
-        '8': trampoline7,
+        '0': trampoline21,
+        '1': trampoline22,
+        '10': trampoline31,
+        '11': trampoline32,
+        '12': trampoline33,
+        '13': trampoline34,
+        '14': trampoline35,
+        '15': trampoline36,
+        '16': exports2.environ_get,
+        '17': exports2.environ_sizes_get,
+        '18': exports2.proc_exit,
+        '19': trampoline37,
+        '2': trampoline23,
+        '20': trampoline34,
+        '3': trampoline24,
+        '4': trampoline25,
+        '5': trampoline26,
+        '6': trampoline27,
+        '7': trampoline28,
+        '8': trampoline29,
+        '9': trampoline30,
       },
     }));
     exports1Run = WebAssembly.promising(exports1.run);

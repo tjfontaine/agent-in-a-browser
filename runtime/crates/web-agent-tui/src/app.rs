@@ -2,17 +2,30 @@
 //!
 //! Manages the TUI lifecycle: init, render, input handling, cleanup.
 
-use ratatui::prelude::*;
 use ratatui::Terminal;
 
 use crate::backend::{WasiBackend, enter_alternate_screen, leave_alternate_screen};
+use crate::bridge::{AiClient, McpClient};
 use crate::ui::{Mode, render_ui};
 use std::io::{Write, Read};
+
+/// App state enumeration
+#[derive(Clone, Copy, PartialEq)]
+pub enum AppState {
+    /// Normal operation - ready for input
+    Ready,
+    /// Waiting for API key input
+    NeedsApiKey,
+    /// Processing a request (AI or MCP)
+    Processing,
+}
 
 /// Main application state
 pub struct App<R: Read, W: Write> {
     /// Current mode
     mode: Mode,
+    /// Current state
+    state: AppState,
     /// Input buffer for current prompt
     input: String,
     /// Chat/output history  
@@ -23,6 +36,12 @@ pub struct App<R: Read, W: Write> {
     stdin: R,
     /// Should quit
     should_quit: bool,
+    /// AI client
+    ai_client: AiClient,
+    /// MCP client
+    mcp_client: McpClient,
+    /// Pending message to send after API key is set
+    pending_message: Option<String>,
 }
 
 /// A message in the chat history
@@ -49,8 +68,17 @@ impl<R: Read, W: Write> App<R, W> {
         let backend = WasiBackend::new(stdout, width, height);
         let terminal = Terminal::new(backend).expect("failed to create terminal");
         
+        // Create AI client (OpenAI by default)
+        // TODO: Make this configurable
+        let ai_client = AiClient::openai("gpt-4o");
+        
+        // Create MCP client pointing to sandbox
+        // The URL will be proxied by the frontend to the actual sandbox worker
+        let mcp_client = McpClient::new("http://localhost:3000/mcp");
+        
         Self {
             mode: Mode::Agent,
+            state: AppState::Ready,
             input: String::new(),
             messages: vec![
                 Message {
@@ -61,6 +89,9 @@ impl<R: Read, W: Write> App<R, W> {
             terminal,
             stdin,
             should_quit: false,
+            ai_client,
+            mcp_client,
+            pending_message: None,
         }
     }
     
@@ -157,30 +188,143 @@ impl<R: Read, W: Write> App<R, W> {
     fn submit_input(&mut self) {
         let input = std::mem::take(&mut self.input);
         
-        // Add user message
-        self.messages.push(Message {
-            role: Role::User,
-            content: input.clone(),
-        });
-        
-        // Handle slash commands
-        if input.starts_with('/') {
-            self.handle_slash_command(&input);
-        } else {
-            // Regular message - would send to AI
-            self.messages.push(Message {
-                role: Role::System,
-                content: format!("[AI response would go here for: {}]", input),
-            });
+        match self.state {
+            AppState::NeedsApiKey => {
+                // This input is the API key
+                self.ai_client.set_api_key(&input);
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "API key set.".to_string(),
+                });
+                self.state = AppState::Ready;
+                
+                // If we have a pending message, send it now
+                if let Some(pending) = self.pending_message.take() {
+                    self.send_to_ai(&pending);
+                }
+            }
+            AppState::Ready | AppState::Processing => {
+                // Add user message
+                self.messages.push(Message {
+                    role: Role::User,
+                    content: input.clone(),
+                });
+                
+                // Handle slash commands
+                if input.starts_with('/') {
+                    self.handle_slash_command(&input);
+                } else {
+                    // Regular message - send to AI
+                    self.send_to_ai(&input);
+                }
+            }
         }
     }
     
+    fn send_to_ai(&mut self, message: &str) {
+        // Check if API key is set
+        if !self.ai_client.has_api_key() {
+            // Store the message and prompt for API key
+            self.pending_message = Some(message.to_string());
+            self.state = AppState::NeedsApiKey;
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Please enter your API key:".to_string(),
+            });
+            return;
+        }
+        
+        self.state = AppState::Processing;
+        
+        // Get tools from MCP
+        let tools = match self.mcp_client.list_tools() {
+            Ok(t) => t,
+            Err(e) => {
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("MCP error: {}", e),
+                });
+                // Continue without tools
+                vec![]
+            }
+        };
+        
+        // Build message history for AI
+        let ai_messages: Vec<crate::bridge::ai_client::Message> = self.messages
+            .iter()
+            .filter_map(|m| match m.role {
+                Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
+                Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
+                Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
+                Role::Tool => None, // Tool messages need tool_call_id, skip for now
+            })
+            .collect();
+        
+        // Call AI
+        match self.ai_client.chat(&ai_messages, &tools) {
+            Ok(result) => {
+                // Handle text response
+                if let Some(text) = result.text {
+                    self.messages.push(Message {
+                        role: Role::Assistant,
+                        content: text,
+                    });
+                }
+                
+                // Handle tool calls
+                for tool_call in result.tool_calls {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("🔧 Calling tool: {}", tool_call.function.name),
+                    });
+                    
+                    // Parse arguments and call MCP
+                    match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
+                        Ok(args) => {
+                            match self.mcp_client.call_tool(&tool_call.function.name, args) {
+                                Ok(result) => {
+                                    self.messages.push(Message {
+                                        role: Role::Tool,
+                                        content: result,
+                                    });
+                                }
+                                Err(e) => {
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!("Tool error: {}", e),
+                                    });
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Invalid tool arguments: {}", e),
+                            });
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("AI error: {}", e),
+                });
+            }
+        }
+        
+        self.state = AppState::Ready;
+    }
+    
     fn handle_slash_command(&mut self, cmd: &str) {
-        match cmd.trim() {
+        let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
+        let command = parts.first().map(|s| *s).unwrap_or("");
+        
+        match command {
             "/help" | "/h" => {
                 self.messages.push(Message {
                     role: Role::System,
-                    content: "Commands: /help, /shell, /model, /clear, /quit".to_string(),
+                    content: "Commands: /help, /shell, /model, /key, /clear, /quit".to_string(),
                 });
             }
             "/shell" | "/sh" => {
@@ -188,6 +332,14 @@ impl<R: Read, W: Write> App<R, W> {
                 self.messages.push(Message {
                     role: Role::System,
                     content: "Entering shell mode...".to_string(),
+                });
+            }
+            "/key" => {
+                // Prompt for new API key
+                self.state = AppState::NeedsApiKey;
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "Enter API key:".to_string(),
                 });
             }
             "/clear" => {

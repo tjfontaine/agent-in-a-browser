@@ -10,12 +10,16 @@ crate-type = ["cdylib"]
 # TUI framework - no default features to avoid crossterm
 ratatui = { version = "0.29", default-features = false }
 
+# AI Agent framework (wasm feature for browser compatibility)
+rig-core = { version = "0.27", default-features = false, features = ["wasm"] }
+
 # WASM support
 wit-bindgen = "0.50"
 
-# Serialization for config
+# Serialization for config and AI messages
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [package.metadata.component]
 package = "agent:tui"
