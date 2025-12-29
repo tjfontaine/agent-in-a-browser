@@ -1,0 +1,94 @@
+package agent:tui@0.1.0;
+
+/// Main TUI world - runs the full agent interface
+world tui {
+    // WASIP2 base imports
+    import wasi:io/error@0.2.4;
+    import wasi:io/poll@0.2.4;
+    import wasi:io/streams@0.2.4;
+    import wasi:cli/stdin@0.2.4;
+    import wasi:cli/stdout@0.2.4;
+    import wasi:cli/stderr@0.2.4;
+    import wasi:cli/terminal-input@0.2.4;
+    import wasi:cli/terminal-output@0.2.4;
+    import wasi:cli/terminal-stdin@0.2.4;
+    import wasi:cli/terminal-stdout@0.2.4;
+    import wasi:cli/terminal-stderr@0.2.4;
+    import wasi:clocks/monotonic-clock@0.2.4;
+    
+    // Custom imports for agent functionality
+    import ai-bridge;
+    import mcp-bridge;
+    import config-store;
+    
+    // Main entry point
+    export run: func() -> s32;
+}
+
+/// Interface for AI/LLM communication
+interface ai-bridge {
+    use wasi:io/streams@0.2.4.{input-stream};
+    
+    /// Send a message to the AI, returns stream for response
+    send-message: func(text: string) -> input-stream;
+    
+    /// Cancel the current AI request
+    cancel-request: func();
+    
+    /// Provider information
+    record provider-info {
+        id: string,
+        name: string,
+        models: list<string>,
+        has-key: bool,
+    }
+    
+    /// List available providers
+    list-providers: func() -> list<provider-info>;
+    
+    /// Set the active provider and model
+    set-provider: func(provider-id: string, model-id: string);
+    
+    /// Get current provider/model
+    get-current-provider: func() -> tuple<string, string>;
+}
+
+/// Interface for MCP tool/shell communication  
+interface mcp-bridge {
+    /// Shell command result
+    record shell-result {
+        stdout: string,
+        stderr: string,
+        code: s32,
+    }
+    
+    /// Tool call result
+    record tool-result {
+        content: string,
+        success: bool,
+    }
+    
+    /// Execute a shell command
+    shell-eval: func(cmd: string) -> shell-result;
+    
+    /// Call an MCP tool
+    call-tool: func(name: string, args: string) -> tool-result;
+    
+    /// List available tools
+    list-tools: func() -> list<string>;
+}
+
+/// Interface for config persistence
+interface config-store {
+    /// Load config from OPFS
+    load-config: func() -> option<string>;
+    
+    /// Save config to OPFS
+    save-config: func(toml: string) -> bool;
+    
+    /// Set API key (stored securely)
+    set-api-key: func(provider: string, key: string);
+    
+    /// Check if API key exists
+    has-api-key: func(provider: string) -> bool;
+}

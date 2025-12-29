@@ -1,0 +1,27 @@
+// Shell command interface for interactive shell mode
+// Allows the main runtime to be used as an interactive REPL
+
+package shell:unix@0.1.0;
+
+interface command {
+    use wasi:io/streams@0.2.4.{input-stream, output-stream};
+    
+    /// Execution environment
+    record exec-env {
+        cwd: string,
+        vars: list<tuple<string, string>>,
+    }
+
+    /// Run an interactive command with streaming I/O
+    run: func(
+        name: string,
+        args: list<string>,
+        env: exec-env,
+        stdin: input-stream,
+        stdout: output-stream,
+        stderr: output-stream,
+    ) -> s32;
+    
+    /// List available commands
+    list-commands: func() -> list<string>;
+}

@@ -6,6 +6,7 @@ members = [
     "runtime/crates/sqlite-module",
     "runtime/crates/ratatui-demo",
     "runtime/crates/brush-shell",
+    "runtime/crates/web-agent-tui",
 ]
 resolver = "2"
 
