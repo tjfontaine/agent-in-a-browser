@@ -17,20 +17,12 @@ pub struct FetchResponse {
 }
 
 impl FetchResponse {
-    /// Get body as UTF-8 string (legacy compatibility)
-    pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
-        String::from_utf8(self.bytes.clone())
-    }
-    
     /// Get body as string, using lossy conversion for non-UTF8
     pub fn text_lossy(&self) -> String {
         String::from_utf8_lossy(&self.bytes).to_string()
     }
-}
-
-// Legacy compatibility - body as string
-impl FetchResponse {
-    #[allow(dead_code)]
+    
+    /// Get body as string (alias for text_lossy)
     pub fn body(&self) -> String {
         self.text_lossy()
     }
@@ -84,10 +76,7 @@ fn read_body_bytes(
     Ok(bytes)
 }
 
-/// Perform a synchronous HTTP GET request
-pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
-    fetch(Method::Get, url, &[], None)
-}
+
 
 /// Perform a synchronous HTTP request with full control
 pub fn fetch(
