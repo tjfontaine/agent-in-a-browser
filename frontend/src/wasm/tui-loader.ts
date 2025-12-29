@@ -14,6 +14,12 @@ import { run } from './web-agent-tui/web-agent-tui.js';
 // Import the CLI shim to set up the terminal
 import { setTerminal, setTerminalSize } from './ghostty-cli-shim.js';
 
+// Import transport handler for routing MCP requests  
+import { setTransportHandler } from './wasi-http-impl.js';
+
+// Import sandbox for MCP routing
+import { fetchFromSandbox, initializeSandbox } from '../agent/sandbox.js';
+
 export interface TuiLoaderOptions {
     container: HTMLElement;
     fontSize?: number;
@@ -25,12 +31,65 @@ export interface TuiLoaderOptions {
 }
 
 /**
+ * Create a transport handler that routes MCP requests through the sandbox worker
+ */
+function createSandboxTransport() {
+    return async (
+        method: string,
+        url: string,
+        headers: Record<string, string>,
+        body: Uint8Array | null
+    ): Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }> => {
+        // Extract path from URL (e.g., /mcp/message from http://localhost:3000/mcp/message)
+        const urlObj = new URL(url);
+        const path = urlObj.pathname;
+
+        console.log('[Transport] Routing to sandbox:', method, path);
+
+        // Build fetch options
+        const fetchOptions: RequestInit = {
+            method,
+            headers: headers,
+        };
+
+        if (body) {
+            fetchOptions.body = new Blob([body as BlobPart]);
+        }
+
+        // Route through sandbox worker
+        const response = await fetchFromSandbox(path, fetchOptions);
+
+        // Convert response
+        const responseBody = new Uint8Array(await response.arrayBuffer());
+        const responseHeaders: [string, Uint8Array][] = [];
+        response.headers.forEach((value, name) => {
+            responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
+        });
+
+        return {
+            status: response.status,
+            headers: responseHeaders,
+            body: responseBody
+        };
+    };
+}
+
+/**
  * Launch the TUI in a container element
  */
 export async function launchTui(options: TuiLoaderOptions): Promise<{
     terminal: Terminal;
     stop: () => void;
 }> {
+    // Initialize the sandbox worker first (for MCP)
+    console.log('[TUI Loader] Initializing sandbox...');
+    await initializeSandbox();
+    console.log('[TUI Loader] Sandbox ready');
+
+    // Set up transport handler to route MCP requests through sandbox
+    setTransportHandler(createSandboxTransport());
+    console.log('[TUI Loader] Transport handler configured');
+
     // Initialize ghostty-web
     await initGhostty();
 
@@ -62,6 +121,7 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     let _running = true;
     const stop = () => {
         _running = false;
+        setTransportHandler(null); // Clean up transport handler
     };
 
     // Run the TUI (async)

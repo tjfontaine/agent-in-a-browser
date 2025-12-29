@@ -4,6 +4,36 @@ import { InputStream, OutputStream, ReadyPollable } from './streams';
 // Type for WASM Result-like return values
 type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 
+// ============ Transport Interceptor ============
+// Allows routing requests to different backends (e.g., sandbox worker for local MCP)
+
+type TransportHandler = (
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: Uint8Array | null
+) => Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>;
+
+let transportHandler: TransportHandler | null = null;
+
+/**
+ * Set a custom transport handler for intercepting HTTP requests.
+ * The handler receives (method, url, headers, body) and returns a response.
+ * This allows routing requests to web workers instead of making actual HTTP calls.
+ */
+export function setTransportHandler(handler: TransportHandler | null): void {
+    transportHandler = handler;
+}
+
+/**
+ * Check if a URL should be intercepted by the transport handler.
+ * Returns true for localhost MCP endpoints.
+ */
+function shouldIntercept(url: string): boolean {
+    // Intercept localhost MCP calls
+    return url.includes('localhost') && url.includes('/mcp');
+}
+
 /**
  * Create an InputStream from a byte array
  * This allows the WASM component to read the request body
@@ -512,17 +542,19 @@ export class RequestOptions {
 }
 
 /**
- * The outgoing handler - makes actual HTTP requests using synchronous XMLHttpRequest
- * Note: sync XHR is deprecated but necessary for WASM components that expect sync I/O
+ * The outgoing handler - makes HTTP requests.
+ * 
+ * For localhost MCP requests: Uses transport handler if set (routes to sandbox worker)
+ * For other requests: Uses synchronous XMLHttpRequest
  * 
  * Returns FutureIncomingResponse directly (jco wraps in Result automatically)
  * Throws on error (jco catches and converts to Result.err)
  */
 export const outgoingHandler = {
-    handle(request: OutgoingRequest, _options: RequestOptions | null): FutureIncomingResponse {
+    async handle(request: OutgoingRequest, _options: RequestOptions | null): Promise<FutureIncomingResponse> {
         // Build the URL
         const scheme = request.scheme();
-        const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'https');
+        const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'http'); // Default to http for localhost
         const authority = request.authority() || '';
         const path = request.pathWithQuery() || '/';
         const url = `${schemeStr}://${authority}${path}`;
@@ -537,7 +569,24 @@ export const outgoingHandler = {
             headers[name] = new TextDecoder().decode(value);
         }
 
-        // Use synchronous XMLHttpRequest
+        // Get the request body
+        const bodyBytes = request.getBodyBytes();
+        const body = bodyBytes.length > 0 ? bodyBytes : null;
+
+        // Check if we should route through transport handler
+        if (transportHandler && shouldIntercept(url)) {
+            console.log('[http] Routing via transport handler:', method, url);
+            try {
+                const response = await transportHandler(method, url, headers, body);
+                return new FutureIncomingResponse(response);
+            } catch (e) {
+                console.error('[http] Transport handler error:', e);
+                throw e;
+            }
+        }
+
+        // Fallback to synchronous XMLHttpRequest for external requests
+        console.log('[http] Using XHR:', method, url);
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false); // false = synchronous
 
@@ -552,10 +601,8 @@ export const outgoingHandler = {
             }
         }
 
-        // Get the request body (if any was written)
-        const bodyBytes = request.getBodyBytes();
-        // Use Blob for XHR body - cast needed due to strict ArrayBuffer typing
-        const requestBody = bodyBytes.length > 0 ? new Blob([bodyBytes as BlobPart]) : null;
+        // Use Blob for XHR body
+        const requestBody = body ? new Blob([body as BlobPart]) : null;
 
         // Send request with body
         xhr.send(requestBody);
