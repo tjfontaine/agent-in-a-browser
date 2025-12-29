@@ -413,6 +413,7 @@ export class OutgoingRequest {
     private _pathWithQuery: string | null;
     private _headers: Fields;
     private _body: OutgoingBody | null = null;
+    public _bodyChunks: Uint8Array[] = [];
 
     constructor(headers: Fields) {
         this._headers = headers;
@@ -462,8 +463,35 @@ export class OutgoingRequest {
         if (this._body) {
             throw new Error('Body already retrieved');
         }
-        this._body = new OutgoingBody(null);
+        // Create a proper OutputStream that collects body chunks
+        const outputStream = new OutputStream({
+            write: (bytes: Uint8Array) => {
+                this._bodyChunks.push(bytes);
+                return BigInt(bytes.length);
+            },
+            flush: () => { },
+            blockingFlush: () => { },
+            blockingWriteAndFlush: (bytes: Uint8Array) => {
+                this._bodyChunks.push(bytes);
+            },
+            checkWrite: () => BigInt(1024 * 1024)
+        });
+        this._body = new OutgoingBody(outputStream);
         return this._body;
+    }
+
+    /**
+     * Get collected body as bytes
+     */
+    getBodyBytes(): Uint8Array {
+        const totalLength = this._bodyChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of this._bodyChunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return result;
     }
 }
 
@@ -524,8 +552,13 @@ export const outgoingHandler = {
             }
         }
 
-        // Send request
-        xhr.send(null);
+        // Get the request body (if any was written)
+        const bodyBytes = request.getBodyBytes();
+        // Use Blob for XHR body - cast needed due to strict ArrayBuffer typing
+        const requestBody = bodyBytes.length > 0 ? new Blob([bodyBytes as BlobPart]) : null;
+
+        // Send request with body
+        xhr.send(requestBody);
 
         // Build response
         const responseBody = xhr.responseText
