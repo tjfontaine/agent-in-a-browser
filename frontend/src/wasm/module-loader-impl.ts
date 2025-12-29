@@ -102,6 +102,7 @@ export class LazyProcess {
     private stderrBuffer: Uint8Array[] = [];
     private exitCode: number | undefined = undefined;
     private started = false;
+    private executionPromise: Promise<void> | null = null;
 
     private moduleName: string;
     private command: string;
@@ -149,19 +150,18 @@ export class LazyProcess {
         this.stdinClosed = true;
         if (!this.started) {
             this.started = true;
-            // Start async execution - store promise for tryWait/polling
-            this.executeAsync().catch(err => {
-                console.error('[LazyProcess] executeAsync error:', err);
-            });
+            // Start execution - store promise for tryWait to await
+            this.executionPromise = this.executeAsync();
         }
         console.log(`[LazyProcess] closeStdin() complete, stdoutBuffer.length=${this.stdoutBuffer.length}, stderrBuffer.length=${this.stderrBuffer.length}`);
     }
 
     readStdout(maxBytes: bigint): Uint8Array {
+        console.log(`[LazyProcess] readStdout(${maxBytes}) called, buffer.length=${this.stdoutBuffer.length}`);
         const result = this.readFromBuffer(this.stdoutBuffer, Number(maxBytes));
         if (result.length > 0) {
             const text = new TextDecoder().decode(result);
-            console.log(`[LazyProcess] readStdout(${maxBytes}) => ${result.length} bytes:`, JSON.stringify(text));
+            console.log(`[LazyProcess] readStdout => ${result.length} bytes:`, JSON.stringify(text));
         }
         return result;
     }
@@ -175,7 +175,13 @@ export class LazyProcess {
         return result;
     }
 
-    tryWait(): number | undefined {
+    async tryWait(): Promise<number | undefined> {
+        // Wait for execution to complete before checking exit code
+        // JSPI must be configured for this function via --async-imports 'mcp:module-loader/loader#try-wait'
+        if (this.executionPromise) {
+            await this.executionPromise;
+            this.executionPromise = null;
+        }
         console.log(`[LazyProcess] tryWait() => ${this.exitCode}`);
         return this.exitCode;
     }
@@ -233,35 +239,36 @@ export class LazyProcess {
             },
         });
 
-        const stdoutChunks: Uint8Array[] = [];
+
+        // Write directly to instance buffers so data is available for Rust reads immediately
         const stdoutStream = new CustomOutputStream({
             write: (buf: Uint8Array): bigint => {
                 const text = new TextDecoder().decode(buf);
                 console.log(`[LazyProcess] stdout.write(${buf.length} bytes):`, JSON.stringify(text));
-                stdoutChunks.push(new Uint8Array(buf));
+                this.stdoutBuffer.push(new Uint8Array(buf));
                 return BigInt(buf.length);
             },
             blockingWriteAndFlush: (buf: Uint8Array): void => {
                 const text = new TextDecoder().decode(buf);
                 console.log(`[LazyProcess] stdout.blockingWriteAndFlush(${buf.length} bytes):`, JSON.stringify(text));
-                stdoutChunks.push(new Uint8Array(buf));
+                this.stdoutBuffer.push(new Uint8Array(buf));
             },
             checkWrite: (): bigint => BigInt(65536),
             blockingFlush: (): void => { },
         });
 
-        const stderrChunks: Uint8Array[] = [];
+
         const stderrStream = new CustomOutputStream({
             write: (buf: Uint8Array): bigint => {
                 const text = new TextDecoder().decode(buf);
                 console.log(`[LazyProcess] stderr.write(${buf.length} bytes):`, JSON.stringify(text));
-                stderrChunks.push(new Uint8Array(buf));
+                this.stderrBuffer.push(new Uint8Array(buf));
                 return BigInt(buf.length);
             },
             blockingWriteAndFlush: (buf: Uint8Array): void => {
                 const text = new TextDecoder().decode(buf);
                 console.log(`[LazyProcess] stderr.blockingWriteAndFlush(${buf.length} bytes):`, JSON.stringify(text));
-                stderrChunks.push(new Uint8Array(buf));
+                this.stderrBuffer.push(new Uint8Array(buf));
             },
             checkWrite: (): bigint => BigInt(65536),
             blockingFlush: (): void => { },
@@ -289,15 +296,12 @@ export class LazyProcess {
             this.exitCode = await handle.resolve();
 
             console.log(`[LazyProcess] handle.resolve() returned exitCode: ${this.exitCode}`);
-            console.log(`[LazyProcess] stdoutChunks count: ${stdoutChunks.length}`);
-            console.log(`[LazyProcess] stderrChunks count: ${stderrChunks.length}`);
-
-            this.stdoutBuffer.push(...stdoutChunks);
-            this.stderrBuffer.push(...stderrChunks);
+            console.log(`[LazyProcess] stdoutBuffer count: ${this.stdoutBuffer.length}`);
+            console.log(`[LazyProcess] stderrBuffer count: ${this.stderrBuffer.length}`);
 
             // Log final buffer state
-            const totalStdout = stdoutChunks.reduce((sum, c) => sum + c.length, 0);
-            const totalStderr = stderrChunks.reduce((sum, c) => sum + c.length, 0);
+            const totalStdout = this.stdoutBuffer.reduce((sum: number, c: Uint8Array) => sum + c.length, 0);
+            const totalStderr = this.stderrBuffer.reduce((sum: number, c: Uint8Array) => sum + c.length, 0);
             console.log(`[LazyProcess] === EXECUTE END === stdout: ${totalStdout} bytes, stderr: ${totalStderr} bytes, exit: ${this.exitCode}`);
         } catch (error) {
             console.error(`[LazyProcess] EXCEPTION during module.spawn():`, error);

@@ -165,8 +165,10 @@ export function syncScanDirectory(path: string): boolean {
 // ============================================================
 
 export function normalizePath(path: string): string {
-    if (!path || path === '/' || path === '.') return '';
-    return path.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+    if (!path || path === '/') return '';
+    // Remove leading/trailing slashes, split, filter out empty and '.' components, rejoin
+    const parts = path.replace(/^\/+|\/+$/g, '').split('/').filter(p => p && p !== '.');
+    return parts.join('/');
 }
 
 /**

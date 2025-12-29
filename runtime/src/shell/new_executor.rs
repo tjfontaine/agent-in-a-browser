@@ -542,105 +542,106 @@ async fn execute_simple(
         return call_function(&body, &expanded_args, env, stdin).await;
     }
     
-    // Get the command implementation
-    let Some(cmd_fn) = ShellCommands::get_command(&expanded_name) else {
-        // Check if this is a lazy-loadable command via the WIT interface
-        // The frontend provides these functions (only available in WASM mode)
-        #[cfg(target_arch = "wasm32")]
-        {
-            use crate::bindings::mcp::module_loader::loader;
+    // Check if this is a lazy-loadable command FIRST (before built-in commands)
+    // This allows lazy modules like git-module to handle commands even if there's a stub
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::bindings::mcp::module_loader::loader;
+        
+        if let Some(module_name) = loader::get_lazy_module(&expanded_name) {
+            // Command needs a lazy module - spawn it via frontend
+            let exec_env = loader::ExecEnv {
+                cwd: env.cwd.to_string_lossy().to_string(),
+                vars: env.env_vars.iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            };
             
-            if let Some(module_name) = loader::get_lazy_module(&expanded_name) {
-                // Command needs a lazy module - spawn it via frontend
-                let exec_env = loader::ExecEnv {
-                    cwd: env.cwd.to_string_lossy().to_string(),
-                    vars: env.env_vars.iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect(),
-                };
-                
-                // Spawn the lazy command process
-                let process = loader::spawn_lazy_command(
-                    &module_name,
-                    &expanded_name,
-                    &expanded_args,
-                    &exec_env,
+            // Spawn the lazy command process
+            let process = loader::spawn_lazy_command(
+                &module_name,
+                &expanded_name,
+                &expanded_args,
+                &exec_env,
+            );
+            
+            // Wait for the module to be loaded before writing stdin
+            // Get the ready pollable and block on it
+            let ready_pollable = process.get_ready_pollable();
+            ready_pollable.block();
+            
+            // Verify module is ready
+            if !process.is_ready() {
+                return ShellResult::error(
+                    format!("{}: failed to load lazy module '{}'", expanded_name, module_name), 
+                    127
                 );
+            }
+            
+            // Get stdin data and write it to the process
+            let stdin_data = match get_stdin_data(stdin, redirects, env) {
+                Ok(data) => data,
+                Err(err_result) => return err_result,
+            };
+            if let Some(data) = stdin_data {
+                // Stream stdin in chunks to avoid memory issues
+                let mut offset = 0;
+                while offset < data.len() {
+                    let chunk = &data[offset..std::cmp::min(offset + 65536, data.len())];
+                    let written = process.write_stdin(chunk);
+                    if written == 0 {
+                        break;
+                    }
+                    offset += written as usize;
+                }
+            }
+            process.close_stdin();
+            
+            // Stream stdout and stderr while waiting for completion
+            let mut stdout_buf = Vec::new();
+            let mut stderr_buf = Vec::new();
+            
+            loop {
+                // Read available output
+                let stdout_chunk = process.read_stdout(65536);
+                if !stdout_chunk.is_empty() {
+                    stdout_buf.extend_from_slice(&stdout_chunk);
+                }
                 
-                // Wait for the module to be loaded before writing stdin
-                // Get the ready pollable and block on it
-                let ready_pollable = process.get_ready_pollable();
-                ready_pollable.block();
+                let stderr_chunk = process.read_stderr(65536);
+                if !stderr_chunk.is_empty() {
+                    stderr_buf.extend_from_slice(&stderr_chunk);
+                }
                 
-                // Verify module is ready
-                if !process.is_ready() {
-                    return ShellResult::error(
-                        format!("{}: failed to load lazy module '{}'", expanded_name, module_name), 
-                        127
+                // Check if process completed
+                if let Some(code) = process.try_wait() {
+                    // Drain remaining output
+                    loop {
+                        let chunk = process.read_stdout(65536);
+                        if chunk.is_empty() { break; }
+                        stdout_buf.extend_from_slice(&chunk);
+                    }
+                    loop {
+                        let chunk = process.read_stderr(65536);
+                        if chunk.is_empty() { break; }
+                        stderr_buf.extend_from_slice(&chunk);
+                    }
+                    
+                    // Handle output redirects
+                    let (stdout, stderr) = handle_output_redirects(
+                        stdout_buf,
+                        stderr_buf,
+                        redirects,
+                        &env.cwd.to_string_lossy(),
                     );
-                }
-                
-                // Get stdin data and write it to the process
-                let stdin_data = match get_stdin_data(stdin, redirects, env) {
-                    Ok(data) => data,
-                    Err(err_result) => return err_result,
-                };
-                if let Some(data) = stdin_data {
-                    // Stream stdin in chunks to avoid memory issues
-                    let mut offset = 0;
-                    while offset < data.len() {
-                        let chunk = &data[offset..std::cmp::min(offset + 65536, data.len())];
-                        let written = process.write_stdin(chunk);
-                        if written == 0 {
-                            break;
-                        }
-                        offset += written as usize;
-                    }
-                }
-                process.close_stdin();
-                
-                // Stream stdout and stderr while waiting for completion
-                let mut stdout_buf = Vec::new();
-                let mut stderr_buf = Vec::new();
-                
-                loop {
-                    // Read available output
-                    let stdout_chunk = process.read_stdout(65536);
-                    if !stdout_chunk.is_empty() {
-                        stdout_buf.extend_from_slice(&stdout_chunk);
-                    }
-                    
-                    let stderr_chunk = process.read_stderr(65536);
-                    if !stderr_chunk.is_empty() {
-                        stderr_buf.extend_from_slice(&stderr_chunk);
-                    }
-                    
-                    // Check if process completed
-                    if let Some(code) = process.try_wait() {
-                        // Drain remaining output
-                        loop {
-                            let chunk = process.read_stdout(65536);
-                            if chunk.is_empty() { break; }
-                            stdout_buf.extend_from_slice(&chunk);
-                        }
-                        loop {
-                            let chunk = process.read_stderr(65536);
-                            if chunk.is_empty() { break; }
-                            stderr_buf.extend_from_slice(&chunk);
-                        }
-                        
-                        // Handle output redirects
-                        let (stdout, stderr) = handle_output_redirects(
-                            stdout_buf,
-                            stderr_buf,
-                            redirects,
-                            &env.cwd.to_string_lossy(),
-                        );
-                        return ShellResult { stdout, stderr, code };
-                    }
+                    return ShellResult { stdout, stderr, code };
                 }
             }
         }
+    }
+    
+    // Get the built-in command implementation (after checking lazy modules)
+    let Some(cmd_fn) = ShellCommands::get_command(&expanded_name) else {
         return ShellResult::error(format!("{}: command not found", expanded_name), 127);
     };
     

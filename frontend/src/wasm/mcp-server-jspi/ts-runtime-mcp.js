@@ -1625,7 +1625,7 @@ function trampoline45(arg0, arg1, arg2) {
 }
 
 
-function trampoline46(arg0, arg1) {
+const trampoline46 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable15.get(rep2);
@@ -1637,7 +1637,7 @@ function trampoline46(arg0, arg1) {
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.try-wait"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]lazy-process.try-wait');
-  const ret = rsc0.tryWait();
+  const ret = await rsc0.tryWait();
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.try-wait"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
@@ -1659,7 +1659,7 @@ function trampoline46(arg0, arg1) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline47(arg0, arg1, arg2) {
   var handle1 = arg0;

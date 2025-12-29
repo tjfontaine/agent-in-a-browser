@@ -68,6 +68,15 @@ function hashPath(path: string): number {
 }
 
 /**
+ * Create a Node.js-style error with code property for isomorphic-git compatibility
+ */
+function createFsError(code: string, message: string): Error {
+    const err = new Error(message) as Error & { code: string };
+    err.code = code;
+    return err;
+}
+
+/**
  * OPFS-backed filesystem for isomorphic-git
  */
 export const opfsFs = {
@@ -79,7 +88,7 @@ export const opfsFs = {
             const path = normalizePath(filepath);
             const data = syncReadFileBinary(path);
             if (!data) {
-                throw new Error(`ENOENT: no such file '${filepath}'`);
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, open '${filepath}'`);
             }
 
             const encoding = typeof options === 'string' ? options : options?.encoding;
@@ -118,13 +127,13 @@ export const opfsFs = {
                 syncScanDirectory(path);
                 const scannedEntry = path === '' ? directoryTree : getTreeEntry(path);
                 if (!scannedEntry?.dir) {
-                    throw new Error(`ENOENT: no such directory '${dirpath}'`);
+                    throw createFsError('ENOENT', `ENOENT: no such file or directory, scandir '${dirpath}'`);
                 }
                 return Object.keys(scannedEntry.dir);
             }
 
             if (!entry.dir) {
-                throw new Error(`ENOTDIR: not a directory '${dirpath}'`);
+                throw createFsError('ENOTDIR', `ENOTDIR: not a directory, scandir '${dirpath}'`);
             }
 
             return Object.keys(entry.dir);
@@ -151,11 +160,12 @@ export const opfsFs = {
 
         async stat(filepath: string): Promise<Stats> {
             const path = normalizePath(filepath);
-            const entry = getTreeEntry(path);
+            // Handle root/current directory (empty path from normalizing '.' or '/')
+            const entry = path === '' ? directoryTree : getTreeEntry(path);
             if (!entry) {
-                throw new Error(`ENOENT: no such file '${filepath}'`);
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, stat '${filepath}'`);
             }
-            return createStats(entry, path);
+            return createStats(entry, path || '/');
         },
 
         async lstat(filepath: string): Promise<Stats> {
@@ -167,7 +177,7 @@ export const opfsFs = {
             const path = normalizePath(filepath);
             const entry = getTreeEntry(path);
             if (!entry?.symlink) {
-                throw new Error(`EINVAL: not a symlink '${filepath}'`);
+                throw createFsError('EINVAL', `EINVAL: invalid argument, readlink '${filepath}'`);
             }
             return entry.symlink;
         },
@@ -186,7 +196,7 @@ export const opfsFs = {
             const newNorm = normalizePath(newPath);
             const entry = getTreeEntry(oldNorm);
             if (!entry) {
-                throw new Error(`ENOENT: no such file '${oldPath}'`);
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, rename '${oldPath}'`);
             }
             setTreeEntry(newNorm, entry);
             removeTreeEntry(oldNorm);

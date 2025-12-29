@@ -88,11 +88,20 @@ export function getModuleForCommand(commandName: string): string | undefined {
 function wrapSyncModule(syncModule: any): CommandModule {
     return {
         spawn(name, args, env, stdin, stdout, stderr) {
+            console.log(`[wrapSyncModule] spawn() called: name=${name}, args=`, args);
+            console.log(`[wrapSyncModule] Calling syncModule.run()...`);
             // Execute synchronously and return immediately-resolved handle
             const exitCode = syncModule.run(name, args, env, stdin, stdout, stderr) as number;
+            console.log(`[wrapSyncModule] syncModule.run() returned exitCode=${exitCode}`);
             return {
-                poll: () => exitCode,
-                resolve: () => Promise.resolve(exitCode),
+                poll: () => {
+                    console.log(`[wrapSyncModule] poll() called, returning ${exitCode}`);
+                    return exitCode;
+                },
+                resolve: () => {
+                    console.log(`[wrapSyncModule] resolve() called, resolving with ${exitCode}`);
+                    return Promise.resolve(exitCode);
+                },
             };
         },
         listCommands: () => syncModule.listCommands() as string[],

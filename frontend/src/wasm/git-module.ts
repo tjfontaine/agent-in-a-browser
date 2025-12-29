@@ -205,6 +205,11 @@ async function gitClone(args: string[], cwd: string, stdout: OutputStream, stder
 
 async function gitStatus(_args: string[], cwd: string, stdout: OutputStream, stderr: OutputStream): Promise<number> {
     try {
+        // Get current branch
+        const branch = await git.currentBranch({ fs: opfsFs, dir: cwd, fullname: false }) || 'HEAD detached';
+        write(stdout, `On branch ${branch}`);
+        write(stdout, '');
+
         const matrix = await git.statusMatrix({ fs: opfsFs, dir: cwd });
         const staged: string[] = [];
         const unstaged: string[] = [];

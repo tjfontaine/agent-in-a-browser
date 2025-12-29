@@ -409,8 +409,7 @@ test.describe('Git Commands', () => {
         }, { timeout: 30000 });
     });
 
-    // NOTE: git commands require gix crate which has WASI compatibility issues
-    test.skip('git init creates a repository', async ({ page }) => {
+    test('git init creates a repository', async ({ page }) => {
         // Create directory and init
         const mkdirResult = await shellEval(page, 'mkdir -p /gitrepo');
         expect(mkdirResult.success).toBe(true);
@@ -425,7 +424,7 @@ test.describe('Git Commands', () => {
         expect(lsResult.output).toContain('.git');
     });
 
-    test.skip('git status shows repository state', async ({ page }) => {
+    test('git status shows repository state', async ({ page }) => {
         // Create and init repo
         await shellEval(page, 'mkdir -p /gitrepo2');
         await shellEval(page, 'cd /gitrepo2 && git init');
