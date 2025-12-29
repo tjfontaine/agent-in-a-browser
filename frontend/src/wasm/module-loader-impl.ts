@@ -210,10 +210,26 @@ export class LazyProcess {
         console.log(`[LazyProcess] === INTERACTIVE EXECUTE START === command: ${this.command}`);
 
         // Create stdin stream that reads from live buffer
+        // With JSPI, blockingRead can return a Promise that waits for data
         const stdinStream = new CustomInputStream({
-            blockingRead: (len: bigint): Uint8Array => {
-                // Read from live buffer - this is called on-demand
-                return this.readFromBuffer(this.stdinBuffer, Number(len));
+            blockingRead: (len: bigint): Promise<Uint8Array> => {
+                // If buffer has data, return it immediately
+                const immediate = this.readFromBuffer(this.stdinBuffer, Number(len));
+                if (immediate.length > 0) {
+                    return Promise.resolve(immediate);
+                }
+
+                // No data available - return a Promise that polls for data
+                // This allows JSPI to suspend the WASM stack while we wait
+                return new Promise<Uint8Array>((resolve) => {
+                    const checkInterval = setInterval(() => {
+                        const data = this.readFromBuffer(this.stdinBuffer, Number(len));
+                        if (data.length > 0) {
+                            clearInterval(checkInterval);
+                            resolve(data);
+                        }
+                    }, 16); // Check every 16ms (~60fps)
+                });
             },
         });
 

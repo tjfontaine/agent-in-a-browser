@@ -38,11 +38,14 @@ const symbolDispose = Symbol.dispose || Symbol.for('dispose');
 /**
  * Custom InputStream that properly returns Pollable from subscribe().
  * The preview2-shim's InputStream.subscribe() returns undefined, breaking WASM.
+ * 
+ * In JSPI mode, blockingRead can return a Promise that will cause JSPI
+ * to suspend the WASM execution until data is available.
  */
 export class CustomInputStream extends BaseInputStream {
     constructor(handler: {
         read?: (len: bigint) => Uint8Array;
-        blockingRead: (len: bigint) => Uint8Array;
+        blockingRead: (len: bigint) => Uint8Array | Promise<Uint8Array>;
     }) {
         super(handler);
     }
