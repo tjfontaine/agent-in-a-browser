@@ -5,7 +5,7 @@
 use ratatui::Terminal;
 
 use crate::backend::{WasiBackend, enter_alternate_screen, leave_alternate_screen};
-use crate::bridge::{AiClient, McpClient, try_execute_local_tool, get_local_tool_definitions, format_tasks_for_display, Task};
+use crate::bridge::{AiClient, McpClient, try_execute_local_tool, get_local_tool_definitions, format_tasks_for_display, Task, get_system_message};
 use crate::ui::{Mode, render_ui, AuxContent, AuxContentKind, ServerStatus};
 use std::io::{Write, Read};
 
@@ -383,16 +383,25 @@ impl<R: Read, W: Write> App<R, W> {
         let local_tools = get_local_tool_definitions();
         tools.extend(local_tools);
         
-        // Build message history for AI
-        let ai_messages: Vec<crate::bridge::ai_client::Message> = self.messages
-            .iter()
-            .filter_map(|m| match m.role {
-                Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
-                Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
-                Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
-                Role::Tool => None, // Tool messages need tool_call_id, skip for now
-            })
-            .collect();
+        // Build message history for AI with system prompt first
+        let mut ai_messages: Vec<crate::bridge::ai_client::Message> = vec![get_system_message()];
+        
+        // Add conversation history (skip UI system messages like "Welcome...")
+        ai_messages.extend(
+            self.messages
+                .iter()
+                .filter_map(|m| match m.role {
+                    Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
+                    Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
+                    // Skip system messages from UI (like "Welcome to...")
+                    Role::System if m.content.starts_with("Welcome") => None,
+                    Role::System if m.content.starts_with("Please enter") => None,
+                    Role::System if m.content.starts_with("API key") => None,
+                    Role::System if m.content.contains("Calling tool") => None,
+                    Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
+                    Role::Tool => None, // Tool messages need tool_call_id
+                })
+        );
         
         // Call AI
         match self.ai_client.chat(&ai_messages, &tools) {

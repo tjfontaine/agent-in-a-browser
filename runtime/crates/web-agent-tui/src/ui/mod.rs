@@ -1,4 +1,6 @@
 //! UI rendering components
+//!
+//! Uses ratatui widgets for the TUI interface.
 
 mod agent_mode;
 mod shell_mode;
@@ -18,6 +20,15 @@ pub enum Mode {
     Agent,
     Shell,
     Plan,
+}
+
+/// UI state for scrollable widgets
+#[derive(Default)]
+pub struct UiState {
+    /// Scroll offset for messages list
+    pub messages_scroll: usize,
+    /// Cursor position in input
+    pub cursor_pos: usize,
 }
 
 /// Main render function with split layout
@@ -82,86 +93,178 @@ fn render_main_panel(
         ])
         .split(area);
     
-    render_messages(frame, chunks[0], messages);
+    render_messages(frame, chunks[0], messages, state);
     render_input(frame, chunks[1], mode, state, input);
 }
 
-fn render_messages(frame: &mut Frame, area: Rect, messages: &[Message]) {
-    // Calculate scroll position to show latest messages
-    let visible_height = area.height.saturating_sub(2) as usize; // -2 for borders
-    let scroll_offset = if messages.len() > visible_height {
-        messages.len() - visible_height
+/// Render messages with proper text wrapping and scrolling
+fn render_messages(frame: &mut Frame, area: Rect, messages: &[Message], state: AppState) {
+    let inner_width = area.width.saturating_sub(4) as usize; // Account for borders + prefix
+    let visible_height = area.height.saturating_sub(2) as usize;
+    
+    // Build wrapped lines with styling
+    let mut lines: Vec<Line> = Vec::new();
+    
+    for msg in messages {
+        let (prefix, style) = match msg.role {
+            crate::app::Role::User => (
+                "› ",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+            crate::app::Role::Assistant => (
+                "◆ ",
+                Style::default().fg(Color::Green),
+            ),
+            crate::app::Role::System => (
+                "• ",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM),
+            ),
+            crate::app::Role::Tool => (
+                "⚙ ",
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::ITALIC),
+            ),
+        };
+        
+        // Word-wrap the content manually for better control
+        let content = &msg.content;
+        let wrapped = wrap_text(content, inner_width.saturating_sub(2));
+        
+        for (i, line_text) in wrapped.iter().enumerate() {
+            let line_prefix = if i == 0 { prefix } else { "  " };
+            lines.push(Line::from(vec![
+                Span::styled(line_prefix, style),
+                Span::styled(line_text.clone(), style.remove_modifier(Modifier::BOLD)),
+            ]));
+        }
+    }
+    
+    // Add processing indicator
+    if state == AppState::Processing {
+        lines.push(Line::from(vec![
+            Span::styled("⏳ ", Style::default().fg(Color::Blue).add_modifier(Modifier::SLOW_BLINK)),
+            Span::styled("Thinking...", Style::default().fg(Color::Blue).add_modifier(Modifier::DIM)),
+        ]));
+    }
+    
+    // Calculate scroll offset to show latest
+    let scroll_offset = if lines.len() > visible_height {
+        lines.len() - visible_height
     } else {
         0
     };
     
-    let items: Vec<ListItem> = messages
-        .iter()
-        .skip(scroll_offset)
-        .map(|msg| {
-            let style = match msg.role {
-                crate::app::Role::User => Style::default().fg(Color::Cyan),
-                crate::app::Role::Assistant => Style::default().fg(Color::Green),
-                crate::app::Role::System => Style::default().fg(Color::Yellow),
-                crate::app::Role::Tool => Style::default().fg(Color::Magenta),
-            };
-            let prefix = match msg.role {
-                crate::app::Role::User => "> ",
-                crate::app::Role::Assistant => "◆ ",
-                crate::app::Role::System => "• ",
-                crate::app::Role::Tool => "⚙ ",
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(prefix, style),
-                Span::raw(&msg.content),
-            ]))
-        })
-        .collect();
+    // Use Paragraph with scroll for wrapped text
+    let text = Text::from(lines);
+    let paragraph = Paragraph::new(text)
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(" Messages ", Style::default().add_modifier(Modifier::BOLD)))
+            .border_type(BorderType::Rounded))
+        .scroll((scroll_offset as u16, 0));
     
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Messages"));
+    frame.render_widget(paragraph, area);
+}
+
+/// Simple word wrap implementation
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    if max_width == 0 {
+        return vec![text.to_string()];
+    }
     
-    frame.render_widget(list, area);
+    let mut lines = Vec::new();
+    
+    for paragraph in text.split('\n') {
+        if paragraph.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+        
+        let words: Vec<&str> = paragraph.split_whitespace().collect();
+        if words.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+        
+        let mut current_line = String::new();
+        
+        for word in words {
+            if current_line.is_empty() {
+                current_line = word.to_string();
+            } else if current_line.len() + 1 + word.len() <= max_width {
+                current_line.push(' ');
+                current_line.push_str(word);
+            } else {
+                lines.push(current_line);
+                current_line = word.to_string();
+            }
+        }
+        
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+    }
+    
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    
+    lines
 }
 
 fn render_input(frame: &mut Frame, area: Rect, mode: Mode, state: AppState, input: &str) {
     let (prompt, title, display_input) = match state {
         AppState::NeedsApiKey => {
-            // Mask the API key input
-            let masked: String = "*".repeat(input.len());
-            ("🔑 ", "API Key (hidden)", masked)
+            let masked: String = "•".repeat(input.len());
+            ("🔑 ", " API Key ", masked)
         }
         AppState::Processing => {
-            ("⏳ ", "Processing...", input.to_string())
+            ("⏳ ", " Processing ", input.to_string())
         }
         AppState::Ready => {
             let prompt = match mode {
-                Mode::Agent => "> ",
+                Mode::Agent => "› ",
                 Mode::Shell => "$ ",
                 Mode::Plan => "📋 ",
             };
             let title = match mode {
-                Mode::Agent => "Agent",
-                Mode::Shell => "Shell",
-                Mode::Plan => "Plan (read-only)",
+                Mode::Agent => " Agent ",
+                Mode::Shell => " Shell ",
+                Mode::Plan => " Plan (read-only) ",
             };
             (prompt, title, input.to_string())
         }
     };
     
-    let border_style = match state {
-        AppState::NeedsApiKey => Style::default().fg(Color::Yellow),
-        AppState::Processing => Style::default().fg(Color::Blue),
-        AppState::Ready => Style::default(),
+    let (border_style, border_type) = match state {
+        AppState::NeedsApiKey => (
+            Style::default().fg(Color::Yellow),
+            BorderType::Double,
+        ),
+        AppState::Processing => (
+            Style::default().fg(Color::Blue),
+            BorderType::Rounded,
+        ),
+        AppState::Ready => (
+            Style::default().fg(Color::White),
+            BorderType::Rounded,
+        ),
     };
     
-    let paragraph = Paragraph::new(format!("{}{}", prompt, display_input))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(border_style)
-        );
+    // Show cursor with blinking block
+    let cursor = if state != AppState::Processing { "▋" } else { "" };
+    
+    let paragraph = Paragraph::new(Line::from(vec![
+        Span::styled(prompt, Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(&display_input),
+        Span::styled(cursor, Style::default().fg(Color::White).add_modifier(Modifier::SLOW_BLINK)),
+    ]))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(title, Style::default().add_modifier(Modifier::BOLD)))
+            .border_style(border_style)
+            .border_type(border_type)
+    );
     
     frame.render_widget(paragraph, area);
 }
@@ -174,19 +277,19 @@ fn render_status_bar(frame: &mut Frame, area: Rect, mode: Mode, state: AppState,
     };
     
     let mode_style = match mode {
-        Mode::Agent => Style::default().bg(Color::Blue).fg(Color::White),
-        Mode::Shell => Style::default().bg(Color::Green).fg(Color::Black),
-        Mode::Plan => Style::default().bg(Color::Yellow).fg(Color::Black),
+        Mode::Agent => Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
+        Mode::Shell => Style::default().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD),
+        Mode::Plan => Style::default().bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD),
     };
     
-    // State indicator
+    // State indicator with animation hint
     let (state_str, state_style) = match state {
         AppState::Ready => ("", Style::default()),
-        AppState::NeedsApiKey => (" 🔑 API KEY ", Style::default().bg(Color::Yellow).fg(Color::Black)),
-        AppState::Processing => (" ⏳ WORKING ", Style::default().bg(Color::Magenta).fg(Color::White)),
+        AppState::NeedsApiKey => (" 🔑 KEY ", Style::default().bg(Color::Yellow).fg(Color::Black)),
+        AppState::Processing => (" ⏳ WORKING ", Style::default().bg(Color::Magenta).fg(Color::White).add_modifier(Modifier::BOLD)),
     };
     
-    // Server status indicator
+    // Server status
     let local_indicator = if servers.local_connected { "●" } else { "○" };
     let local_style = if servers.local_connected {
         Style::default().fg(Color::Green)
@@ -215,20 +318,20 @@ fn render_status_bar(frame: &mut Frame, area: Rect, mode: Mode, state: AppState,
     }
     
     spans.extend([
-        Span::raw(" | "),
+        Span::raw(" │ "),
         Span::styled("gpt-4o", Style::default().fg(Color::Cyan)),
-        Span::raw(" | L:"),
+        Span::raw(" │ L:"),
         Span::styled(local_indicator, local_style),
         Span::raw(" R:"),
         Span::styled(&remote_indicator, remote_style),
-        Span::raw(" | "),
-        Span::styled("/help", Style::default().fg(Color::DarkGray)),
+        Span::raw(" │ "),
+        Span::styled("^C quit  /help", Style::default().fg(Color::DarkGray)),
     ]);
     
     let status = Line::from(spans);
     
     let paragraph = Paragraph::new(status)
-        .style(Style::default().bg(Color::Rgb(20, 20, 30)));
+        .style(Style::default().bg(Color::Rgb(25, 25, 35)));
     
     frame.render_widget(paragraph, area);
 }
