@@ -507,18 +507,89 @@ impl<R: Read, W: Write> App<R, W> {
             "/help" | "/h" => {
                 self.messages.push(Message {
                     role: Role::System,
-                    content: "Commands: /help, /shell, /model, /key, /clear, /quit".to_string(),
+                    content: [
+                        "Commands:",
+                        "  /help     - Show this help",
+                        "  /tools    - List available tools",
+                        "  /servers  - Show MCP server status",
+                        "  /shell    - Enter shell mode (^D to exit)",
+                        "  /key      - Set API key",
+                        "  /clear    - Clear messages",
+                        "  /quit     - Exit (or ^C)",
+                    ].join("\n"),
+                });
+            }
+            "/tools" => {
+                // List all available tools
+                let mut tool_list = vec!["Available tools:".to_string()];
+                
+                // Local tools
+                let local_tools = get_local_tool_definitions();
+                if !local_tools.is_empty() {
+                    tool_list.push("  [local]".to_string());
+                    for tool in &local_tools {
+                        tool_list.push(format!("    • {}", tool.name));
+                    }
+                }
+                
+                // MCP tools
+                match self.mcp_client.list_tools() {
+                    Ok(mcp_tools) => {
+                        self.server_status.local_connected = true;
+                        self.server_status.local_tool_count = mcp_tools.len();
+                        if !mcp_tools.is_empty() {
+                            tool_list.push("  [sandbox]".to_string());
+                            for tool in mcp_tools {
+                                tool_list.push(format!("    • {}", tool.name));
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        self.server_status.local_connected = false;
+                        tool_list.push("  [sandbox] not connected".to_string());
+                    }
+                }
+                
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: tool_list.join("\n"),
+                });
+            }
+            "/servers" => {
+                let mut status = vec![format!(
+                    "MCP Servers:\n  Local sandbox: {} ({} tools)",
+                    if self.server_status.local_connected { "●" } else { "○" },
+                    self.server_status.local_tool_count
+                )];
+                
+                if self.server_status.remote_servers.is_empty() {
+                    status.push("  Remote: none connected".to_string());
+                    status.push("  Use /connect <url> to add".to_string());
+                } else {
+                    for server in &self.server_status.remote_servers {
+                        status.push(format!(
+                            "  {} {}: {} ({} tools)",
+                            if server.connected { "●" } else { "○" },
+                            server.name,
+                            server.url,
+                            server.tool_count
+                        ));
+                    }
+                }
+                
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: status.join("\n"),
                 });
             }
             "/shell" | "/sh" => {
                 self.mode = Mode::Shell;
                 self.messages.push(Message {
                     role: Role::System,
-                    content: "Entering shell mode...".to_string(),
+                    content: "Entering shell mode (^D to exit)".to_string(),
                 });
             }
             "/key" => {
-                // Prompt for new API key
                 self.state = AppState::NeedsApiKey;
                 self.messages.push(Message {
                     role: Role::System,
@@ -527,6 +598,10 @@ impl<R: Read, W: Write> App<R, W> {
             }
             "/clear" => {
                 self.messages.clear();
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "Messages cleared.".to_string(),
+                });
             }
             "/quit" | "/q" => {
                 self.should_quit = true;
@@ -534,7 +609,7 @@ impl<R: Read, W: Write> App<R, W> {
             _ => {
                 self.messages.push(Message {
                     role: Role::System,
-                    content: format!("Unknown command: {}", cmd),
+                    content: format!("Unknown: {}. Try /help", cmd),
                 });
             }
         }
