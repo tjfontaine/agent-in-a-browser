@@ -14,7 +14,7 @@ import { hasJSPI } from './async-mode.js';
 // Import types from generated modules
 type TsxEngineModule = typeof import('./tsx-engine/tsx-engine.js');
 type SqliteModule = typeof import('./sqlite-module/sqlite-module.js');
-type RatatuiDemoModule = typeof import('./ratatui-demo/ratatui-demo.js');
+type _RatatuiDemoModule = typeof import('./ratatui-demo/ratatui-demo.js');
 
 // Re-export stream types from the generated WASM module for consumers
 // These are the actual WASI interfaces that the WASM modules use
@@ -165,9 +165,64 @@ async function loadGitModule(): Promise<CommandModule> {
 }
 
 /**
+ * Wrap a JSPI-transpiled module (with async run()) to provide spawn() interface
+ * 
+ * Unlike wrapSyncModule, the run() function returns a Promise that resolves
+ * when the command completes. JSPI allows the WASM stack to suspend on
+ * blocking-read calls, returning control to JavaScript.
+ */
+function wrapJspiModule(jspiModule: {
+    run: (name: string, args: string[], env: ExecEnv, stdin: InputStream, stdout: OutputStream, stderr: OutputStream) => Promise<number>;
+    listCommands: TsxEngineModule['command']['listCommands']
+}): CommandModule {
+    return {
+        spawn(name, args, env, stdin, stdout, stderr) {
+            console.log(`[wrapJspiModule] spawn() called: name=${name}, args=`, args);
+
+            // Start the async execution
+            let exitCode: number | undefined = undefined;
+            let resolvePromise: ((code: number) => void) | null = null;
+            let rejectPromise: ((err: Error) => void) | null = null;
+
+            // Create the execution promise
+            const executionPromise = new Promise<number>((resolve, reject) => {
+                resolvePromise = resolve;
+                rejectPromise = reject;
+            });
+
+            // Start the JSPI run - this will suspend on blocking-read
+            console.log(`[wrapJspiModule] Calling jspiModule.run() (async)...`);
+            jspiModule.run(name, args, env, stdin, stdout, stderr)
+                .then(code => {
+                    console.log(`[wrapJspiModule] jspiModule.run() resolved with exitCode=${code}`);
+                    exitCode = code;
+                    resolvePromise?.(code);
+                })
+                .catch(err => {
+                    console.error(`[wrapJspiModule] jspiModule.run() rejected:`, err);
+                    exitCode = 1;
+                    rejectPromise?.(err);
+                });
+
+            return {
+                poll: () => {
+                    console.log(`[wrapJspiModule] poll() called, exitCode=${exitCode}`);
+                    return exitCode;
+                },
+                resolve: () => {
+                    console.log(`[wrapJspiModule] resolve() called`);
+                    return executionPromise;
+                },
+            };
+        },
+        listCommands: () => jspiModule.listCommands(),
+    };
+}
+
+/**
  * Load the ratatui-demo module (interactive TUI demo)
  * 
- * This module is transpiled with JSPI mode and async stdin imports.
+ * This module is transpiled with JSPI mode and async stdin imports/exports.
  * When the TUI calls stdin.blockingRead(), JSPI suspends the WASM stack
  * and returns control to JavaScript, allowing the event loop to deliver
  * keyboard input.
@@ -185,7 +240,8 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // Dynamic import of the JSPI-transpiled module
-    const module: RatatuiDemoModule = await import('./ratatui-demo/ratatui-demo.js');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const module = await import('./ratatui-demo/ratatui-demo.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {
@@ -195,9 +251,10 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] ratatui-demo loaded in ${loadTime.toFixed(0)}ms`);
 
-    // With JSPI mode, blocking-read will suspend via JSPI instead of blocking
-    // We still use wrapSyncModule because the WIT interface uses run() not spawn()
-    return wrapSyncModule(module.command);
+    // Use JSPI wrapper since run() returns a Promise with async exports
+    // Note: jco generates types showing run() -> number, but with --async-exports
+    // it actually returns Promise<number>. We cast through unknown.
+    return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
 }
 
 

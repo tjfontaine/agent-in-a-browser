@@ -1117,7 +1117,7 @@ function trampoline2(handle) {
 }
 let command010Run;
 
-function run(arg0, arg1, arg2, arg3, arg4, arg5) {
+async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
   var ptr0 = utf8Encode(arg0, realloc0, memory0);
   var len0 = utf8EncodedLen;
   var vec2 = arg1;
@@ -1182,7 +1182,7 @@ function run(arg0, arg1, arg2, arg3, arg4, arg5) {
     postReturn: false,
   });
   const _wasm_call_currentTaskID = startCurrentTask(0, false, 'command010Run');
-  const ret = command010Run(ptr0, len0, result2, len2, ptr4, len4, result8, len8, handle9, handle10, handle11);
+  const ret = await command010Run(ptr0, len0, result2, len2, ptr4, len4, result8, len8, handle9, handle10, handle11);
   endCurrentTask(0);
   _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::Return]', {
     funcName: 'run',
@@ -1298,7 +1298,7 @@ const $init = (() => {
       },
     }));
     postReturn0 = exports1['cabi_post_shell:unix/command@0.1.0#list-commands'];
-    command010Run = exports1['shell:unix/command@0.1.0#run'];
+    command010Run = WebAssembly.promising(exports1['shell:unix/command@0.1.0#run']);
     command010ListCommands = exports1['shell:unix/command@0.1.0#list-commands'];
   })();
   let promise, resolve, reject;
