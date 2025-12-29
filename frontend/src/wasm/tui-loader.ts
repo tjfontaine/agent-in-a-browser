@@ -12,7 +12,7 @@ import { init as initGhostty, Terminal } from 'ghostty-web';
 import { run } from './web-agent-tui/web-agent-tui.js';
 
 // Import the CLI shim to set up the terminal
-import { setTerminal } from './ghostty-cli-shim.js';
+import { setTerminal, setTerminalSize } from './ghostty-cli-shim.js';
 
 export interface TuiLoaderOptions {
     container: HTMLElement;
@@ -34,7 +34,7 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Initialize ghostty-web
     await initGhostty();
 
-    // Create terminal
+    // Create terminal with sensible defaults
     const terminal = new Terminal({
         fontSize: options.fontSize ?? 14,
         theme: {
@@ -49,6 +49,15 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
 
     // Wire terminal to our CLI shims
     setTerminal(terminal);
+
+    // Set initial size
+    setTerminalSize(terminal.cols, terminal.rows);
+
+    // Listen for resize events
+    terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+        console.log('[TUI Loader] Terminal resized:', cols, 'x', rows);
+        setTerminalSize(cols, rows);
+    });
 
     let _running = true;
     const stop = () => {

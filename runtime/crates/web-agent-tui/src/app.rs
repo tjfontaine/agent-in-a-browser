@@ -6,7 +6,7 @@ use ratatui::Terminal;
 
 use crate::backend::{WasiBackend, enter_alternate_screen, leave_alternate_screen};
 use crate::bridge::{AiClient, McpClient};
-use crate::ui::{Mode, render_ui};
+use crate::ui::{Mode, render_ui, AuxContent, AuxContentKind, ServerStatus};
 use std::io::{Write, Read};
 
 /// App state enumeration
@@ -42,10 +42,14 @@ pub struct App<R: Read, W: Write> {
     should_quit: bool,
     /// AI client
     ai_client: AiClient,
-    /// MCP client
+    /// MCP client (local sandbox)
     mcp_client: McpClient,
     /// Pending message to send after API key is set
     pending_message: Option<String>,
+    /// Auxiliary panel content
+    aux_content: AuxContent,
+    /// Server connection status
+    server_status: ServerStatus,
 }
 
 /// A message in the chat history
@@ -98,6 +102,12 @@ impl<R: Read, W: Write> App<R, W> {
             ai_client,
             mcp_client,
             pending_message: None,
+            aux_content: AuxContent::default(),
+            server_status: ServerStatus {
+                local_connected: false, // Will be set after MCP init
+                local_tool_count: 0,
+                remote_servers: Vec::new(),
+            },
         }
     }
     
@@ -137,9 +147,11 @@ impl<R: Read, W: Write> App<R, W> {
         let state = self.state;
         let input = self.input.clone();
         let messages = self.messages.clone();
+        let aux_content = self.aux_content.clone();
+        let server_status = self.server_status.clone();
         
         let _ = self.terminal.draw(|frame| {
-            render_ui(frame, mode, state, &input, &messages);
+            render_ui(frame, mode, state, &input, &messages, &aux_content, &server_status);
         });
     }
     
@@ -200,9 +212,9 @@ impl<R: Read, W: Write> App<R, W> {
         }
     }
     
-    fn handle_escape_sequence(&mut self, seq: &[u8]) {
+    fn handle_escape_sequence(&mut self, first_bytes: &[u8]) {
         // Handle bare Escape (seq would be empty or not '[')
-        if seq.len() < 2 || seq[0] != b'[' {
+        if first_bytes.len() < 2 || first_bytes[0] != b'[' {
             // Bare Escape key - cancel API key entry
             if self.state == AppState::NeedsApiKey {
                 self.state = AppState::Ready;
@@ -216,7 +228,42 @@ impl<R: Read, W: Write> App<R, W> {
             return;
         }
         
-        match seq[1] {
+        let second = first_bytes[1];
+        
+        // Check for extended sequences (like resize: ESC [ 8 ; rows ; cols t)
+        if second == b'8' {
+            // This might be a resize sequence - read until 't'
+            let mut params = vec![b'8'];
+            loop {
+                let mut buf = [0u8; 1];
+                if self.stdin.read(&mut buf).is_err() {
+                    break;
+                }
+                if buf[0] == b't' {
+                    // Parse resize: 8;rows;cols
+                    let param_str = String::from_utf8_lossy(&params);
+                    let parts: Vec<&str> = param_str.split(';').collect();
+                    if parts.len() == 3 {
+                        if let (Ok(_), Ok(rows), Ok(cols)) = (
+                            parts[0].parse::<u16>(),
+                            parts[1].parse::<u16>(),
+                            parts[2].parse::<u16>(),
+                        ) {
+                            self.handle_resize(cols, rows);
+                        }
+                    }
+                    return;
+                }
+                params.push(buf[0]);
+                if params.len() > 20 {
+                    // Too long, abort
+                    break;
+                }
+            }
+            return;
+        }
+        
+        match second {
             // Up arrow - history previous
             b'A' => {
                 if self.history_index > 0 {
@@ -243,6 +290,13 @@ impl<R: Read, W: Write> App<R, W> {
             b'D' => {}
             _ => {}
         }
+    }
+    
+    fn handle_resize(&mut self, cols: u16, rows: u16) {
+        // Update the terminal backend size
+        self.terminal.backend_mut().set_size(cols, rows);
+        // Force a redraw
+        let _ = self.terminal.clear();
     }
     
     fn submit_input(&mut self) {
@@ -305,8 +359,14 @@ impl<R: Read, W: Write> App<R, W> {
         
         // Get tools from MCP
         let tools = match self.mcp_client.list_tools() {
-            Ok(t) => t,
+            Ok(t) => {
+                // Update server status
+                self.server_status.local_connected = true;
+                self.server_status.local_tool_count = t.len();
+                t
+            }
             Err(e) => {
+                self.server_status.local_connected = false;
                 self.messages.push(Message {
                     role: Role::System,
                     content: format!("MCP error: {}", e),
@@ -340,19 +400,31 @@ impl<R: Read, W: Write> App<R, W> {
                 
                 // Handle tool calls
                 for tool_call in result.tool_calls {
+                    let tool_name = tool_call.function.name.clone();
                     self.messages.push(Message {
                         role: Role::System,
-                        content: format!("🔧 Calling tool: {}", tool_call.function.name),
+                        content: format!("🔧 Calling tool: {}", tool_name),
                     });
                     
                     // Parse arguments and call MCP
                     match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
                         Ok(args) => {
-                            match self.mcp_client.call_tool(&tool_call.function.name, args) {
+                            match self.mcp_client.call_tool(&tool_name, args) {
                                 Ok(result) => {
+                                    // Update aux panel with tool output
+                                    self.aux_content = AuxContent {
+                                        kind: AuxContentKind::ToolOutput,
+                                        title: tool_name.clone(),
+                                        content: result.clone(),
+                                    };
+                                    
                                     self.messages.push(Message {
                                         role: Role::Tool,
-                                        content: result,
+                                        content: if result.len() > 100 {
+                                            format!("{}... [see aux panel →]", &result[..100])
+                                        } else {
+                                            result
+                                        },
                                     });
                                 }
                                 Err(e) => {

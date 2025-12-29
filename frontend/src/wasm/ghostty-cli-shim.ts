@@ -17,11 +17,19 @@ const stdinWaiters: Array<(data: Uint8Array) => void> = [];
 // Terminal reference
 let currentTerminal: Terminal | null = null;
 
+// Terminal size (updated on resize)
+let terminalCols = 80;
+let terminalRows = 24;
+
 /**
  * Set the terminal that will be used for stdin/stdout
  */
 export function setTerminal(terminal: Terminal): void {
     currentTerminal = terminal;
+
+    // Set initial size from terminal
+    terminalCols = terminal.cols;
+    terminalRows = terminal.rows;
 
     // Wire terminal input → stdin buffer
     terminal.onData((data: string) => {
@@ -35,6 +43,34 @@ export function setTerminal(terminal: Terminal): void {
             stdinBuffer.push(bytes);
         }
     });
+}
+
+/**
+ * Set terminal size (called on resize)
+ */
+export function setTerminalSize(cols: number, rows: number): void {
+    terminalCols = cols;
+    terminalRows = rows;
+
+    // Send resize escape sequence to stdin
+    // CSI 8 ; rows ; cols t (DECSLPP - Set terminal size)
+    // But for simplicity, inject a special sequence the TUI can detect
+    const resizeSequence = `\x1b[8;${rows};${cols}t`;
+    const bytes = new TextEncoder().encode(resizeSequence);
+
+    if (stdinWaiters.length > 0) {
+        const waiter = stdinWaiters.shift()!;
+        waiter(bytes);
+    } else {
+        stdinBuffer.push(bytes);
+    }
+}
+
+/**
+ * Get current terminal dimensions
+ */
+export function getTerminalSize(): { cols: number; rows: number } {
+    return { cols: terminalCols, rows: terminalRows };
 }
 
 /**
