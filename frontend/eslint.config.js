@@ -14,6 +14,7 @@ export default tseslint.config(
             'src/wasm/mcp-server-sync/**',
             'src/wasm/tsx-engine/**',
             'src/wasm/sqlite-module/**',
+            'src/wasm/ratatui-demo/**',
         ],
     },
     {
