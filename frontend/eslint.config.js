@@ -6,7 +6,15 @@ export default tseslint.config(
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     {
-        ignores: ['dist/**', 'src/wasm/mcp-server/**', 'node_modules/**'],
+        ignores: [
+            'dist/**',
+            'node_modules/**',
+            // Auto-generated WASM transpiled code
+            'src/wasm/mcp-server-jspi/**',
+            'src/wasm/mcp-server-sync/**',
+            'src/wasm/tsx-engine/**',
+            'src/wasm/sqlite-module/**',
+        ],
     },
     {
         files: ['**/*.ts', '**/*.tsx'],

@@ -8,11 +8,14 @@
  * - Safari/Firefox: Uses Sync mode (eager loading, no async suspension)
  */
 
+// JSPI feature detection - Suspending is not yet in TypeScript's lib.dom.d.ts
+// Using a type-safe check that avoids 'any'
+const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown };
+
 /**
  * Check if the browser supports JSPI (JavaScript Promise Integration)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const hasJSPI = typeof (WebAssembly as any)?.Suspending !== 'undefined';
+export const hasJSPI = typeof webAssembly.Suspending !== 'undefined';
 
 // Log the detected mode at startup
 console.log(`[AsyncMode] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
@@ -21,6 +24,9 @@ console.log(`[AsyncMode] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
 interface IncomingHandler {
     handle: (request: unknown, responseOutparam: unknown) => void | Promise<void>;
 }
+
+// Import types from generated modules (for $init Promise)
+type McpServerModule = typeof import('./mcp-server-sync/ts-runtime-mcp.js');
 
 // Cached module references
 let cachedIncomingHandler: IncomingHandler | null = null;
@@ -46,12 +52,10 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
             console.log('[AsyncMode] Loading Sync-mode MCP server...');
-            const module = await import('./mcp-server-sync/ts-runtime-mcp.js');
+            const module: McpServerModule = await import('./mcp-server-sync/ts-runtime-mcp.js');
             // With --tla-compat, we must await $init before accessing exports
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const $init = (module as any).$init;
-            if ($init) {
-                await $init;
+            if (module.$init) {
+                await module.$init;
             }
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         }
@@ -77,3 +81,4 @@ export function getIncomingHandler(): IncomingHandler {
 export function isMcpServerLoaded(): boolean {
     return cachedIncomingHandler !== null;
 }
+

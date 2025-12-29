@@ -4,7 +4,7 @@
  * Tests PKCE generation, token storage, callback parsing, URL building,
  * and discovery functions.
  */
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     generateCodeVerifier,
     generateCodeChallenge,

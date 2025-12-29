@@ -168,7 +168,7 @@ describe('Model Discovery', () => {
                 }),
             });
 
-            const models = await refreshModels('groq');
+            const _models = await refreshModels('groq');
 
             expect(mockFetch).toHaveBeenCalledWith(
                 'https://api.groq.com/openai/v1/models',

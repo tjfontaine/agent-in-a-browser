@@ -11,23 +11,15 @@
 
 import { hasJSPI } from './async-mode.js';
 
-// Type for WASI stream interfaces (simplified for our needs)
-export interface InputStream {
-    read(n: bigint): Uint8Array;
-    blockingRead(n: bigint): Uint8Array;
-    subscribe(): { block(): void };
-}
+// Import types from generated modules
+type TsxEngineModule = typeof import('./tsx-engine/tsx-engine.js');
+type SqliteModule = typeof import('./sqlite-module/sqlite-module.js');
 
-export interface OutputStream {
-    write(data: Uint8Array): void;
-    blockingWriteAndFlush(data: Uint8Array): void;
-    subscribe(): { block(): void };
-}
-
-export interface ExecEnv {
-    cwd: string;
-    vars: [string, string][];
-}
+// Re-export stream types from the generated WASM module for consumers
+// These are the actual WASI interfaces that the WASM modules use
+export type InputStream = import('./tsx-engine/interfaces/wasi-io-streams.js').InputStream;
+export type OutputStream = import('./tsx-engine/interfaces/wasi-io-streams.js').OutputStream;
+export type ExecEnv = import('./tsx-engine/interfaces/shell-unix-command.js').ExecEnv;
 
 // Handle for a spawned command - supports poll and resolve patterns
 export interface CommandHandle {
@@ -84,14 +76,13 @@ export function getModuleForCommand(commandName: string): string | undefined {
 /**
  * Wrap a sync module (with run()) to provide spawn() interface
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function wrapSyncModule(syncModule: any): CommandModule {
+function wrapSyncModule(syncModule: { run: TsxEngineModule['command']['run']; listCommands: TsxEngineModule['command']['listCommands'] }): CommandModule {
     return {
         spawn(name, args, env, stdin, stdout, stderr) {
             console.log(`[wrapSyncModule] spawn() called: name=${name}, args=`, args);
             console.log(`[wrapSyncModule] Calling syncModule.run()...`);
             // Execute synchronously and return immediately-resolved handle
-            const exitCode = syncModule.run(name, args, env, stdin, stdout, stderr) as number;
+            const exitCode = syncModule.run(name, args, env, stdin, stdout, stderr);
             console.log(`[wrapSyncModule] syncModule.run() returned exitCode=${exitCode}`);
             return {
                 poll: () => {
@@ -104,7 +95,7 @@ function wrapSyncModule(syncModule: any): CommandModule {
                 },
             };
         },
-        listCommands: () => syncModule.listCommands() as string[],
+        listCommands: () => syncModule.listCommands(),
     };
 }
 
@@ -115,14 +106,12 @@ async function loadTsxEngine(): Promise<CommandModule> {
     console.log('[LazyLoader] Loading tsx-engine module...');
     const startTime = performance.now();
 
-    // Dynamic import of the transpiled module
-    const module = await import('./tsx-engine/tsx-engine.js');
+    // Dynamic import of the transpiled module (typed)
+    const module: TsxEngineModule = await import('./tsx-engine/tsx-engine.js');
 
     // With --tla-compat, we must await $init before accessing exports
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const $init = (module as any).$init;
-    if ($init) {
-        await $init;
+    if (module.$init) {
+        await module.$init;
     }
 
     const loadTime = performance.now() - startTime;
@@ -139,14 +128,12 @@ async function loadSqliteModule(): Promise<CommandModule> {
     console.log('[LazyLoader] Loading sqlite-module...');
     const startTime = performance.now();
 
-    // Dynamic import of the transpiled module
-    const module = await import('./sqlite-module/sqlite-module.js');
+    // Dynamic import of the transpiled module (typed)
+    const module: SqliteModule = await import('./sqlite-module/sqlite-module.js');
 
     // With --tla-compat, we must await $init before accessing exports
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const $init = (module as any).$init;
-    if ($init) {
-        await $init;
+    if (module.$init) {
+        await module.$init;
     }
 
     const loadTime = performance.now() - startTime;

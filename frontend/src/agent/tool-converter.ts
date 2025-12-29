@@ -5,10 +5,13 @@
  * Uses AI SDK's jsonSchema() for JSON Schema validation.
  */
 
-import { dynamicTool, jsonSchema } from 'ai';
+import { dynamicTool, jsonSchema, type Tool } from 'ai';
 import type { McpTool } from '../mcp';
 import { callMcpTool } from './mcp-bridge';
 import { AgentMode, isToolAllowedInPlanMode } from './AgentMode';
+
+// Type alias for dynamic tools (Tool with unknown input/output)
+type DynamicTool = Tool<unknown, unknown>;
 
 // ============================================================
 // TOOL CONVERSION
@@ -24,13 +27,11 @@ import { AgentMode, isToolAllowedInPlanMode } from './AgentMode';
  * @param getModeCallback - Optional callback to get current agent mode for filtering
  * @returns Record of AI SDK tool instances
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createAiSdkTools(
     mcpTools: McpTool[],
     getModeCallback?: () => AgentMode
-): Record<string, any> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: Record<string, any> = {};
+): Record<string, DynamicTool> {
+    const tools: Record<string, DynamicTool> = {};
 
     for (const mcpTool of mcpTools) {
         const properties = (mcpTool.inputSchema?.properties || {}) as Record<string, unknown>;
@@ -38,8 +39,7 @@ export function createAiSdkTools(
 
         const inputSchemaObj = {
             type: 'object' as const,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            properties: properties as any,
+            properties: properties as Record<string, object>,
             required: required,
         };
 
@@ -75,8 +75,7 @@ export function createAiSdkTools(
  * Create the task_write tool for managing the task display.
  * This is a frontend-only tool that doesn't go through WASM.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createTaskWriteTool(): any {
+export function createTaskWriteTool(): DynamicTool {
     return dynamicTool({
         description: 'Manage task list for tracking multi-step work. Updates the task display shown to the user. Use frequently to plan complex tasks and show progress.',
         inputSchema: jsonSchema({
@@ -122,12 +121,12 @@ export function createTaskWriteTool(): any {
  * @param getModeCallback - Optional callback to get current agent mode for filtering
  * @returns Record of all tool instances
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createAllTools(
     mcpTools: McpTool[],
     getModeCallback?: () => AgentMode
-): Record<string, any> {
+): Record<string, DynamicTool> {
     const tools = createAiSdkTools(mcpTools, getModeCallback);
     tools['task_write'] = createTaskWriteTool();
     return tools;
 }
+

@@ -17,7 +17,7 @@ import {
     setCustomModel,
     resolveModelId,
     getAvailableModelIds,
-    getModelsForCurrentProvider,
+
     setApiKey,
     getApiKey,
     hasApiKey,
@@ -57,7 +57,7 @@ describe('Provider Configuration', () => {
         });
 
         it('includes custom providers when added', () => {
-            const custom = addCustomProvider({
+            const _custom = addCustomProvider({
                 id: 'test-provider',
                 name: 'Test Provider',
                 baseURL: 'https://api.test.com',
