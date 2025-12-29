@@ -291,8 +291,8 @@ export class LazyProcess {
     }
 
     readStdout(maxBytes: bigint): Uint8Array {
-        console.log(`[LazyProcess] readStdout(${maxBytes}) called, buffer.length=${this.stdoutBuffer.length}`);
         const result = this.readFromBuffer(this.stdoutBuffer, Number(maxBytes));
+        // Only log when there's actual data to reduce noise
         if (result.length > 0) {
             const text = new TextDecoder().decode(result);
             console.log(`[LazyProcess] readStdout => ${result.length} bytes:`, JSON.stringify(text));

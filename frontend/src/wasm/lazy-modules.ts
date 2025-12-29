@@ -205,14 +205,8 @@ function wrapJspiModule(jspiModule: {
                 });
 
             return {
-                poll: () => {
-                    console.log(`[wrapJspiModule] poll() called, exitCode=${exitCode}`);
-                    return exitCode;
-                },
-                resolve: () => {
-                    console.log(`[wrapJspiModule] resolve() called`);
-                    return executionPromise;
-                },
+                poll: () => exitCode,
+                resolve: () => executionPromise,
             };
         },
         listCommands: () => jspiModule.listCommands(),
