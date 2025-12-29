@@ -1,4 +1,4 @@
-import { environment, exit as exit$1, stderr, stdin, stdout } from '@bytecodealliance/preview2-shim/cli';
+import { environment, exit as exit$1, stderr, stdin, stdout } from '../ghostty-cli-shim.js';
 import { error, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
 const { getEnvironment } = environment;

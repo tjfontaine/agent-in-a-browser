@@ -23,7 +23,7 @@
         "transpile:sqlite-module": "jco transpile ../target/wasm32-wasip2/release/sqlite_module.wasm -o src/wasm/sqlite-module --tla-compat --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --valid-lifting-optimization --name sqlite-module",
         "transpile:ratatui-demo": "jco transpile ../target/wasm32-wasip2/release/ratatui_demo.wasm -o src/wasm/ratatui-demo --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read' --async-exports 'shell:unix/command@0.1.0#run' --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --valid-lifting-optimization --name ratatui-demo",
         "transpile:brush-shell": "jco transpile ../target/wasm32-wasip2/release/brush_shell.wasm -o src/wasm/brush-shell --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read' --async-exports 'shell:unix/command@0.1.0#run' --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --valid-lifting-optimization --name brush-shell",
-        "transpile:web-agent-tui": "jco transpile ../target/wasm32-wasip2/release/web_agent_tui.wasm -o src/wasm/web-agent-tui --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read' --async-exports 'run' --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --valid-lifting-optimization --name web-agent-tui",
+        "transpile:web-agent-tui": "jco transpile ../target/wasm32-wasip2/release/web_agent_tui.wasm -o src/wasm/web-agent-tui --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read' --async-exports 'run' --map 'wasi:cli/*=../ghostty-cli-shim.js#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --valid-lifting-optimization --name web-agent-tui",
         "transpile:all": "npm run transpile:component && npm run transpile:tsx-engine && npm run transpile:sqlite-module && npm run transpile:ratatui-demo && npm run transpile:brush-shell && npm run transpile:web-agent-tui",
         "clean:wasm": "rm -rf src/wasm/mcp-server-jspi src/wasm/mcp-server-sync src/wasm/tsx-engine src/wasm/sqlite-module src/wasm/ratatui-demo src/wasm/brush-shell src/wasm/web-agent-tui"
     },
@@ -39,6 +39,7 @@
         "@xterm/xterm": "^5.5.0",
         "ai": "^5.0.116",
         "buffer": "^6.0.3",
+        "ghostty-web": "^0.4.0",
         "ink": "^6.5.1",
         "ink-web": "^0.1.11",
         "isomorphic-git": "^1.36.1",
