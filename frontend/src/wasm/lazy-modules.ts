@@ -167,21 +167,27 @@ async function loadGitModule(): Promise<CommandModule> {
 /**
  * Load the ratatui-demo module (interactive TUI demo)
  * 
- * KNOWN ISSUE: This module is transpiled with --tla-compat (sync mode) instead of
- * --async-mode jspi. This means stdin.blockingRead will block the main thread,
- * causing the browser to hang when the TUI waits for keyboard input.
- * 
- * To fix this, ratatui-demo needs to be transpiled with JSPI support:
- * --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read'
+ * This module is transpiled with JSPI mode and async stdin imports.
+ * When the TUI calls stdin.blockingRead(), JSPI suspends the WASM stack
+ * and returns control to JavaScript, allowing the event loop to deliver
+ * keyboard input.
  */
 async function loadRatatuiDemo(): Promise<CommandModule> {
-    console.log('[LazyLoader] Loading ratatui-demo...');
+    // Interactive TUI requires JSPI for stdin to work
+    if (!hasJSPI) {
+        throw new Error(
+            'Interactive TUI apps require JSPI (JavaScript Promise Integration). ' +
+            'Please use Chrome with JSPI enabled.'
+        );
+    }
+
+    console.log('[LazyLoader] Loading ratatui-demo (JSPI mode)...');
     const startTime = performance.now();
 
-    // Dynamic import of the transpiled module
+    // Dynamic import of the JSPI-transpiled module
     const module: RatatuiDemoModule = await import('./ratatui-demo/ratatui-demo.js');
 
-    // With --tla-compat, we must await $init before accessing exports
+    // Await $init for the JSPI module initialization
     if (module.$init) {
         await module.$init;
     }
@@ -189,17 +195,9 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] ratatui-demo loaded in ${loadTime.toFixed(0)}ms`);
 
-    // FIXME: This sync wrapper will cause the browser to hang when the TUI
-    // tries to read from stdin. The module needs JSPI transpilation for
-    // interactive input to work. For now, throw an error to prevent hang.
-    throw new Error(
-        'Interactive TUI demo is not yet supported. ' +
-        'The ratatui-demo module needs to be transpiled with JSPI support for stdin to work. ' +
-        'See lazy-modules.ts for details.'
-    );
-
-    // Wrap the sync command interface to provide spawn()
-    // return wrapSyncModule(module.command);
+    // With JSPI mode, blocking-read will suspend via JSPI instead of blocking
+    // We still use wrapSyncModule because the WIT interface uses run() not spawn()
+    return wrapSyncModule(module.command);
 }
 
 

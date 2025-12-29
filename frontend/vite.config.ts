@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => ({
     resolve: {
         alias: {
             // Required for ink-web: redirect ink imports to ink-web
-            ink: 'ink-web',
+            ink: path.resolve(__dirname, 'node_modules/ink-web'),
             '@': path.resolve(__dirname, './src'),
             // Custom util polyfill that adds isDeepStrictEqual for @inkjs/ui
             'node:util': path.resolve(__dirname, './src/polyfills/util-polyfill.ts'),

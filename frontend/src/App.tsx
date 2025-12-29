@@ -21,6 +21,7 @@ import { SecretInput } from './components/SecretInput';
 import { McpServerList } from './mcp';
 import { useAgent, AgentOutput } from './agent/useAgent';
 import type { AgentMode } from './agent/AgentMode';
+import { INTERACTIVE_COMMANDS } from './agent/useAgent';
 import { executeCommand, getCommandCompletions } from './commands';
 import { registerModeCallbacks as registerPlanModeCallbacks } from './commands/cmd-plan';
 import { registerModeCallbacks as registerModeModeCallbacks } from './commands/cmd-mode';
@@ -248,6 +249,7 @@ export default function App() {
         executeShellDirect,
         shellHistoryUp,
         shellHistoryDown,
+        launchInteractive,
     } = useAgent();
 
     const initialized = useRef(false);
@@ -299,8 +301,17 @@ export default function App() {
     const handleSubmit = useCallback(async (input: string) => {
         if (!input.trim()) return;
 
-        // In shell mode, route to direct shell execution (no slash commands)
+        // In shell mode, route to direct shell execution (or interactive mode for TUI apps)
         if (mode === 'shell') {
+            // Check if this is an interactive command
+            const command = input.trim().split(/\s+/)[0];
+            if (INTERACTIVE_COMMANDS.has(command)) {
+                // Launch in interactive mode
+                const moduleName = 'ratatui-demo'; // All these commands are in ratatui-demo
+                await launchInteractive(moduleName, command, []);
+                return;
+            }
+            // Regular shell command
             await executeShellDirect(input);
             return;
         }

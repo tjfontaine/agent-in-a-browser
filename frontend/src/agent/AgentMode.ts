@@ -10,8 +10,9 @@
  * - 'normal': Full access to all tools
  * - 'plan': Read-only mode for planning, only /plan.md is writable
  * - 'shell': Direct shell command execution (no AI processing)
+ * - 'interactive': Raw terminal mode for TUI applications (editors, etc.)
  */
-export type AgentMode = 'normal' | 'plan' | 'shell';
+export type AgentMode = 'normal' | 'plan' | 'shell' | 'interactive';
 
 /**
  * Shell mode prompt indicator

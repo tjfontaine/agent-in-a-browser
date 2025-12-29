@@ -1,0 +1,22 @@
+[package]
+name = "ratatui-demo"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# WASI bindings
+wasm-bindgen = "0.2"
+wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "shell:unix"
+
+[package.metadata.component.target]
+path = "wit"
+world = "ratatui-demo"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = { path = "wit/deps/io" }

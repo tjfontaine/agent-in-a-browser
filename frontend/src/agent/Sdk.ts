@@ -7,7 +7,7 @@
  * - Multi-step tool calling with max steps limit
  */
 
-import { generateText, streamText, tool, stepCountIs, type CoreMessage } from 'ai';
+import { generateText, streamText, stepCountIs, type CoreMessage, type Tool } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { McpTool } from '../mcp';
@@ -60,7 +60,7 @@ export type AgentMessage =
 export class WasmAgent {
     private config: AgentConfig;
     private provider: ReturnType<typeof createAnthropic> | ReturnType<typeof createOpenAI> | null = null;
-    private tools: Record<string, ReturnType<typeof tool>> = {};
+    private tools: Record<string, Tool<unknown, unknown>> = {};
     private mcpTools: McpTool[] = [];
     private initialized = false;
     private messages: CoreMessage[] = [];

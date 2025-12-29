@@ -15,6 +15,18 @@ import { SYSTEM_PROMPT } from './SystemPrompt';
 import { AgentMode, PLAN_MODE_SYSTEM_PROMPT, SHELL_EXIT_COMMANDS } from './AgentMode';
 import { shellHistory } from './shell-history';
 import {
+    InteractiveProcessBridge,
+} from '../wasm/interactive-process-bridge.js';
+import {
+    spawnInteractive,
+    type ExecEnv,
+} from '../wasm/module-loader-impl.js';
+
+// Commands that should launch in interactive mode
+// These are TUI applications that need unbuffered I/O
+export const INTERACTIVE_COMMANDS = new Set(['counter', 'ansi-demo', 'tui-demo', 'ratatui-demo']);
+
+import {
     getCurrentModel,
     getCurrentModelInfo,
     getCurrentProvider,
@@ -46,7 +58,7 @@ export interface UseAgentReturn {
     isReady: boolean;
     isBusy: boolean;
     messageQueue: string[];  // Queued messages waiting to be sent
-    mode: AgentMode;  // Current agent mode (normal, plan, or shell)
+    mode: AgentMode;  // Current agent mode (normal, plan, shell, or interactive)
 
     // Actions
     initialize: () => Promise<void>;
@@ -63,6 +75,11 @@ export interface UseAgentReturn {
     shellHistoryUp: (currentInput?: string) => string | undefined;  // Navigate shell history
     shellHistoryDown: () => string | undefined;  // Navigate shell history
     resetShellHistoryCursor: () => void;  // Reset shell history cursor
+
+    // Interactive mode (TUI applications)
+    interactiveBridge: InteractiveProcessBridge | null;  // Bridge for interactive process
+    launchInteractive: (moduleName: string, command: string, args?: string[]) => Promise<void>;
+    exitInteractive: () => void;
 
     // Low-level output function for non-agent messages
     addOutput: (type: AgentOutput['type'], content: string, color?: string) => void;
@@ -93,6 +110,9 @@ export function useAgent(): UseAgentReturn {
     const textBufferRef = useRef<string>('');  // Buffer for accumulating streaming text
     const pendingOutputsRef = useRef<AgentOutput[]>([]);  // Pending outputs to batch
     const flushScheduledRef = useRef(false);  // Whether a flush is scheduled
+
+    // Interactive mode state
+    const [interactiveBridge, setInteractiveBridge] = useState<InteractiveProcessBridge | null>(null);
 
     // Flush pending outputs - batches multiple addOutput calls into single state update
     // This helps mitigate xterm.js issue #5011 by reducing re-render frequency
@@ -422,6 +442,86 @@ export function useAgent(): UseAgentReturn {
         shellHistory.resetCursor();
     }, []);
 
+    // Launch an interactive TUI application
+    const launchInteractive = useCallback(async (moduleName: string, command: string, _args: string[] = []) => {
+        if (!isMcpInitialized()) {
+            addOutput('error', 'Sandbox not initialized. Please wait for initialization.', colors.red);
+            return;
+        }
+
+        if (interactiveBridge) {
+            addOutput('error', 'Interactive process already running. Exit first.', colors.red);
+            return;
+        }
+
+        addOutput('system', `🖥️ Launching ${command}...`, colors.cyan);
+
+        // Create the interactive bridge with callbacks
+        const bridge = new InteractiveProcessBridge({
+            onStdout: (data: Uint8Array) => {
+                // ANSI output goes directly to terminal - decode and display
+                const text = new TextDecoder().decode(data);
+                addOutput('text', text);
+            },
+            onStderr: (data: Uint8Array) => {
+                const text = new TextDecoder().decode(data);
+                addOutput('error', text, colors.red);
+            },
+            onExit: (exitCode: number) => {
+                addOutput('system', `Process exited with code ${exitCode}`, colors.dim);
+                exitInteractive();
+            },
+        });
+
+        setInteractiveBridge(bridge);
+        setModeState('interactive');
+        setStatus({ text: 'Interactive', color: colors.magenta });
+
+        try {
+            // Build exec environment
+            const env: ExecEnv = {
+                cwd: '/',
+                vars: [],
+            };
+
+            // Default terminal size (TODO: get from actual terminal)
+            const terminalSize = { cols: 80, rows: 24 };
+
+            // Spawn the interactive process
+            const process = await spawnInteractive(moduleName, command, _args, env, terminalSize);
+
+            // Attach bridge to process - this starts polling for output
+            bridge.attach(process);
+
+            // Execute the process (runs the command)
+            process.execute();
+
+            addOutput('system', `[Interactive mode] Press Ctrl+D or 'q' to exit`, colors.dim);
+        } catch (err) {
+            console.error('[launchInteractive] Failed to spawn process:', err);
+            addOutput('error', `Failed to launch ${command}: ${err instanceof Error ? err.message : String(err)}`, colors.red);
+            // Clean up on error - inline the exit logic since exitInteractive is defined after
+            if (bridge) {
+                bridge.detach();
+            }
+            setInteractiveBridge(null);
+            setModeState('shell');
+            setStatus({ text: 'Shell Ready', color: colors.green });
+        }
+    }, [addOutput, interactiveBridge]);
+
+    // Exit interactive mode
+    const exitInteractive = useCallback(() => {
+        if (interactiveBridge) {
+            interactiveBridge.detach();
+            setInteractiveBridge(null);
+        }
+        setModeState('shell');  // Return to shell mode after interactive
+        setStatus({ text: 'Shell Ready', color: colors.green });
+        addOutput('system', '📤 Exited interactive mode', colors.dim);
+    }, [interactiveBridge, addOutput]);
+
+
     // Process queued messages when agent becomes idle
     useEffect(() => {
         if (!isBusy && messageQueue.length > 0 && isReady) {
@@ -476,6 +576,9 @@ export function useAgent(): UseAgentReturn {
         shellHistoryUp,
         shellHistoryDown,
         resetShellHistoryCursor,
+        interactiveBridge,
+        launchInteractive,
+        exitInteractive,
         addOutput,
     };
 }

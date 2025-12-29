@@ -21,8 +21,9 @@
         "transpile:component": "npm run transpile:component:jspi && npm run transpile:component:sync",
         "transpile:tsx-engine": "jco transpile ../target/wasm32-wasip2/release/tsx_engine.wasm -o src/wasm/tsx-engine --tla-compat --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --map 'wasi:http/types=../wasi-http-impl.js' --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler' --valid-lifting-optimization --name tsx-engine",
         "transpile:sqlite-module": "jco transpile ../target/wasm32-wasip2/release/sqlite_module.wasm -o src/wasm/sqlite-module --tla-compat --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --map 'wasi:random/*=@bytecodealliance/preview2-shim/random#*' --map 'wasi:sockets/*=@bytecodealliance/preview2-shim/sockets#*' --valid-lifting-optimization --name sqlite-module",
-        "transpile:all": "npm run transpile:component && npm run transpile:tsx-engine && npm run transpile:sqlite-module",
-        "clean:wasm": "rm -rf src/wasm/mcp-server-jspi src/wasm/mcp-server-sync src/wasm/tsx-engine src/wasm/sqlite-module"
+        "transpile:ratatui-demo": "jco transpile ../target/wasm32-wasip2/release/ratatui_demo.wasm -o src/wasm/ratatui-demo --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read' --map 'wasi:cli/*=@bytecodealliance/preview2-shim/cli#*' --map 'wasi:clocks/*=../clocks-impl.js#*' --map 'wasi:io/*=@bytecodealliance/preview2-shim/io#*' --valid-lifting-optimization --name ratatui-demo",
+        "transpile:all": "npm run transpile:component && npm run transpile:tsx-engine && npm run transpile:sqlite-module && npm run transpile:ratatui-demo",
+        "clean:wasm": "rm -rf src/wasm/mcp-server-jspi src/wasm/mcp-server-sync src/wasm/tsx-engine src/wasm/sqlite-module src/wasm/ratatui-demo"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^2.0.56",

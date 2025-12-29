@@ -9,6 +9,12 @@ interface loader {
     vars: list<tuple<string, string>>,
   }
 
+  /// Terminal dimensions (columns, rows)
+  record terminal-size {
+    cols: u32,
+    rows: u32,
+  }
+
   /// A pollable resource (from wasi:io/poll)
   use wasi:io/poll@0.2.4.{pollable};
 
@@ -34,6 +40,24 @@ interface loader {
     
     /// Try to get exit status without blocking (none if still running)
     try-wait: func() -> option<s32>;
+    
+    // ===== Terminal Control Methods =====
+    
+    /// Get current terminal dimensions
+    get-terminal-size: func() -> terminal-size;
+    
+    /// Set terminal dimensions (for resize events from frontend)
+    set-terminal-size: func(size: terminal-size);
+    
+    /// Enable/disable raw mode (unbuffered input, no echo)
+    /// When enabled: each keystroke sent immediately, no line editing
+    set-raw-mode: func(enabled: bool);
+    
+    /// Check if raw mode is currently enabled
+    is-raw-mode: func() -> bool;
+    
+    /// Send signal to process (SIGINT=2, SIGTERM=15, etc.)
+    send-signal: func(signum: u8);
   }
 
   /// Get the module name for a lazy-loaded command (none if not a lazy command)
@@ -45,5 +69,15 @@ interface loader {
     command: string,
     args: list<string>,
     env: exec-env,
+  ) -> lazy-process;
+
+  /// Spawn an interactive command (enters raw mode automatically)
+  /// Used for TUI applications that need character-by-character I/O
+  spawn-interactive: func(
+    module: string,
+    command: string,
+    args: list<string>,
+    env: exec-env,
+    size: terminal-size,
   ) -> lazy-process;
 }
