@@ -14,6 +14,7 @@ import { hasJSPI } from './async-mode.js';
 // Import types from generated modules
 type TsxEngineModule = typeof import('./tsx-engine/tsx-engine.js');
 type SqliteModule = typeof import('./sqlite-module/sqlite-module.js');
+type RatatuiDemoModule = typeof import('./ratatui-demo/ratatui-demo.js');
 
 // Re-export stream types from the generated WASM module for consumers
 // These are the actual WASI interfaces that the WASM modules use
@@ -57,6 +58,11 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'tsc': 'tsx-engine',
     'sqlite3': 'sqlite-module',
     'git': 'git-module',
+    // Interactive TUI demos
+    'ratatui-demo': 'ratatui-demo',
+    'tui-demo': 'ratatui-demo',
+    'counter': 'ratatui-demo',
+    'ansi-demo': 'ratatui-demo',
 };
 
 /**
@@ -159,6 +165,45 @@ async function loadGitModule(): Promise<CommandModule> {
 }
 
 /**
+ * Load the ratatui-demo module (interactive TUI demo)
+ * 
+ * KNOWN ISSUE: This module is transpiled with --tla-compat (sync mode) instead of
+ * --async-mode jspi. This means stdin.blockingRead will block the main thread,
+ * causing the browser to hang when the TUI waits for keyboard input.
+ * 
+ * To fix this, ratatui-demo needs to be transpiled with JSPI support:
+ * --async-mode jspi --async-imports 'wasi:io/streams#[method]input-stream.blocking-read'
+ */
+async function loadRatatuiDemo(): Promise<CommandModule> {
+    console.log('[LazyLoader] Loading ratatui-demo...');
+    const startTime = performance.now();
+
+    // Dynamic import of the transpiled module
+    const module: RatatuiDemoModule = await import('./ratatui-demo/ratatui-demo.js');
+
+    // With --tla-compat, we must await $init before accessing exports
+    if (module.$init) {
+        await module.$init;
+    }
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] ratatui-demo loaded in ${loadTime.toFixed(0)}ms`);
+
+    // FIXME: This sync wrapper will cause the browser to hang when the TUI
+    // tries to read from stdin. The module needs JSPI transpilation for
+    // interactive input to work. For now, throw an error to prevent hang.
+    throw new Error(
+        'Interactive TUI demo is not yet supported. ' +
+        'The ratatui-demo module needs to be transpiled with JSPI support for stdin to work. ' +
+        'See lazy-modules.ts for details.'
+    );
+
+    // Wrap the sync command interface to provide spawn()
+    // return wrapSyncModule(module.command);
+}
+
+
+/**
  * Load a lazy module by name
  */
 export async function loadLazyModule(moduleName: string): Promise<CommandModule> {
@@ -188,6 +233,9 @@ export async function loadLazyModule(moduleName: string): Promise<CommandModule>
             break;
         case 'git-module':
             loadPromise = loadGitModule();
+            break;
+        case 'ratatui-demo':
+            loadPromise = loadRatatuiDemo();
             break;
         default:
             throw new Error(`Unknown lazy module: ${moduleName}`);
