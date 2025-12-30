@@ -114,6 +114,13 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Mount terminal
     terminal.open(options.container);
 
+    // Load FitAddon for proper sizing - cast because types may be incomplete
+    const fitAddon = new (await import('ghostty-web')).FitAddon();
+    terminal.loadAddon(fitAddon);
+    fitAddon.fit();
+    fitAddon.observeResize();
+    console.log('[TUI Loader] Terminal fitted:', terminal.cols, 'x', terminal.rows);
+
     // Add keyboard handler for copy/paste
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
         const isMac = navigator.platform.includes('Mac');
