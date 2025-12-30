@@ -105,11 +105,32 @@ pub enum ProviderWizardStep {
 }
 
 /// Available API format types for custom providers
-pub const API_FORMATS: &[(&str, &str)] = &[
-    ("openai", "OpenAI (GPT, Groq, Together, local LLMs)"),
-    ("anthropic", "Anthropic (Claude)"),
-    // Future: ("google", "Google (Gemini)"),
-    // Future: ("cohere", "Cohere"),
+/// (id, name, default_url, example_model)
+pub const API_FORMATS: &[(&str, &str, &str, &str)] = &[
+    (
+        "openai",
+        "OpenAI Compatible",
+        "https://api.openai.com/v1",
+        "o3-mini", // OpenAI's latest codex/reasoning model
+    ),
+    (
+        "anthropic",
+        "Anthropic (Claude)",
+        "https://api.anthropic.com/v1",
+        "claude-haiku-4-5-20251001", // Claude Haiku 4.5
+    ),
+    (
+        "google",
+        "Google (Gemini)",
+        "https://generativelanguage.googleapis.com/v1beta",
+        "gemini-3-flash-preview", // Gemini 3 Flash
+    ),
+    (
+        "openrouter",
+        "OpenRouter (Multi-Provider)",
+        "https://openrouter.ai/api/v1",
+        "anthropic/claude-haiku-4-5", // Haiku 4.5 via OpenRouter
+    ),
 ];
 
 /// Create a centered rectangle for popups
@@ -685,11 +706,24 @@ pub fn render_provider_wizard(
 
             let items: Vec<ListItem> = API_FORMATS
                 .iter()
-                .map(|(id, name)| {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(*name, Style::default().fg(Color::White)),
-                        Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
-                    ]))
+                .map(|(id, name, default_url, example_model)| {
+                    ListItem::new(vec![
+                        Line::from(vec![
+                            Span::styled(*name, Style::default().fg(Color::White)),
+                            Span::styled(
+                                format!(" ({})", id),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  URL: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(*default_url, Style::default().fg(Color::Cyan)),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  Model: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(*example_model, Style::default().fg(Color::Yellow)),
+                        ]),
+                    ])
                 })
                 .collect();
 

@@ -1112,7 +1112,18 @@ impl<R: Read, W: Write> App<R, W> {
                                 }
                             }
                             0x0D => {
-                                // Proceed to URL step
+                                // Proceeding to URL step - pre-fill with format defaults
+                                if let Some((_, _, default_url, default_model)) =
+                                    API_FORMATS.get(*selected_api_format)
+                                {
+                                    // Only pre-fill if currently empty
+                                    if base_url_input.is_empty() {
+                                        *base_url_input = default_url.to_string();
+                                    }
+                                    if model_input.is_empty() {
+                                        *model_input = default_model.to_string();
+                                    }
+                                }
                                 *step = ProviderWizardStep::EnterBaseUrl;
                             }
                             _ => {}
@@ -1174,9 +1185,9 @@ impl<R: Read, W: Write> App<R, W> {
                                 let _ = self.config.save();
 
                                 // Create AI client with correct provider type based on selected API format
-                                let (api_format_id, _) = API_FORMATS
+                                let (api_format_id, _, _, _) = API_FORMATS
                                     .get(*selected_api_format)
-                                    .unwrap_or(&("openai", "OpenAI"));
+                                    .unwrap_or(&("openai", "OpenAI", "", ""));
 
                                 let provider_type = if *api_format_id == "anthropic" {
                                     crate::bridge::ai_client::ProviderType::Anthropic
