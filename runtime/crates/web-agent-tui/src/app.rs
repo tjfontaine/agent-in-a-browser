@@ -38,6 +38,8 @@ pub struct App<R: Read, W: Write> {
     state: AppState,
     /// Input buffer for current prompt
     input: String,
+    /// Cursor position within input (0 = start, input.len() = end)
+    cursor_pos: usize,
     /// Chat/output history  
     messages: Vec<Message>,
     /// Command history for up/down navigation
@@ -117,6 +119,7 @@ impl<R: Read, W: Write> App<R, W> {
             mode: Mode::Agent,
             state: AppState::Ready,
             input: String::new(),
+            cursor_pos: 0,
             messages: vec![Message {
                 role: Role::System,
                 content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
@@ -182,6 +185,7 @@ impl<R: Read, W: Write> App<R, W> {
         let mode = self.mode;
         let state = self.state;
         let input = self.input.clone();
+        let cursor_pos = self.cursor_pos;
         let messages = self.messages.clone();
         let aux_content = self.aux_content.clone();
         let server_status = self.server_status.clone();
@@ -196,6 +200,7 @@ impl<R: Read, W: Write> App<R, W> {
                 mode,
                 state,
                 &input,
+                cursor_pos,
                 &messages,
                 &aux_content,
                 &server_status,
@@ -327,26 +332,68 @@ impl<R: Read, W: Write> App<R, W> {
                 if !self.input.is_empty() {
                     self.submit_input();
                 }
+                self.cursor_pos = 0;
                 true // Stop reading after enter
             }
-            // Backspace
+            // Backspace - delete char before cursor
             0x7F | 0x08 => {
-                self.input.pop();
+                if self.cursor_pos > 0 {
+                    self.cursor_pos -= 1;
+                    self.input.remove(self.cursor_pos);
+                }
                 false // Continue reading
             }
-            // Ctrl+U - clear input line
+            // Ctrl+A - move cursor to beginning
+            0x01 => {
+                self.cursor_pos = 0;
+                false
+            }
+            // Ctrl+E - move cursor to end
+            0x05 => {
+                self.cursor_pos = self.input.len();
+                false
+            }
+            // Ctrl+W - delete word backwards
+            0x17 => {
+                if self.cursor_pos > 0 {
+                    // Skip trailing spaces
+                    while self.cursor_pos > 0
+                        && self.input.chars().nth(self.cursor_pos - 1) == Some(' ')
+                    {
+                        self.cursor_pos -= 1;
+                        self.input.remove(self.cursor_pos);
+                    }
+                    // Delete until space or start
+                    while self.cursor_pos > 0
+                        && self.input.chars().nth(self.cursor_pos - 1) != Some(' ')
+                    {
+                        self.cursor_pos -= 1;
+                        self.input.remove(self.cursor_pos);
+                    }
+                }
+                false
+            }
+            // Ctrl+K - delete from cursor to end
+            0x0B => {
+                self.input.truncate(self.cursor_pos);
+                false
+            }
+            // Ctrl+U - clear entire line
             0x15 => {
                 self.input.clear();
+                self.cursor_pos = 0;
                 false
             }
             // Tab - autocomplete slash commands
             0x09 => {
                 self.try_tab_complete();
+                self.cursor_pos = self.input.len();
                 false
             }
-            // Printable ASCII
+            // Printable ASCII - insert at cursor
             0x20..=0x7E => {
-                self.input.push(byte as char);
+                self.input.insert(self.cursor_pos, byte as char);
+                self.cursor_pos += 1;
                 false // Continue reading (for paste)
             }
             // Escape sequence start
@@ -420,6 +467,7 @@ impl<R: Read, W: Write> App<R, W> {
                     self.history_index -= 1;
                     if let Some(cmd) = self.history.get(self.history_index) {
                         self.input = cmd.clone();
+                        self.cursor_pos = self.input.len();
                     }
                 }
             }
@@ -429,15 +477,25 @@ impl<R: Read, W: Write> App<R, W> {
                     self.history_index += 1;
                     if self.history_index >= self.history.len() {
                         self.input.clear();
+                        self.cursor_pos = 0;
                     } else if let Some(cmd) = self.history.get(self.history_index) {
                         self.input = cmd.clone();
+                        self.cursor_pos = self.input.len();
                     }
                 }
             }
-            // Right arrow - move cursor right (placeholder)
-            b'C' => {}
-            // Left arrow - move cursor left (placeholder)
-            b'D' => {}
+            // Right arrow - move cursor right
+            b'C' => {
+                if self.cursor_pos < self.input.len() {
+                    self.cursor_pos += 1;
+                }
+            }
+            // Left arrow - move cursor left
+            b'D' => {
+                if self.cursor_pos > 0 {
+                    self.cursor_pos -= 1;
+                }
+            }
             _ => {}
         }
     }
@@ -639,6 +697,7 @@ impl<R: Read, W: Write> App<R, W> {
                                     self.mode,
                                     self.state,
                                     &self.input,
+                                    self.cursor_pos,
                                     &self.messages,
                                     &self.aux_content,
                                     &self.server_status,

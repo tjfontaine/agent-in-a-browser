@@ -42,6 +42,7 @@ pub fn render_ui(
     mode: Mode,
     state: AppState,
     input: &str,
+    cursor_pos: usize,
     messages: &[Message],
     aux_content: &AuxContent,
     server_status: &ServerStatus,
@@ -70,11 +71,11 @@ pub fn render_ui(
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(v_chunks[0]);
 
-        render_main_panel(frame, h_chunks[0], mode, state, input, messages);
+        render_main_panel(frame, h_chunks[0], mode, state, input, cursor_pos, messages);
         render_aux_panel(frame, h_chunks[1], aux_content, server_status);
     } else {
         // Single column layout for narrow terminals
-        render_main_panel(frame, v_chunks[0], mode, state, input, messages);
+        render_main_panel(frame, v_chunks[0], mode, state, input, cursor_pos, messages);
     }
 
     // Status bar
@@ -99,6 +100,7 @@ fn render_main_panel(
     mode: Mode,
     state: AppState,
     input: &str,
+    cursor_pos: usize,
     messages: &[Message],
 ) {
     let chunks = Layout::default()
@@ -110,7 +112,7 @@ fn render_main_panel(
         .split(area);
 
     render_messages(frame, chunks[0], messages, state);
-    render_input(frame, chunks[1], mode, state, input);
+    render_input(frame, chunks[1], mode, state, input, cursor_pos);
 }
 
 /// Render messages with proper text wrapping and scrolling
@@ -243,7 +245,14 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     lines
 }
 
-fn render_input(frame: &mut Frame, area: Rect, mode: Mode, state: AppState, input: &str) {
+fn render_input(
+    frame: &mut Frame,
+    area: Rect,
+    mode: Mode,
+    state: AppState,
+    input: &str,
+    cursor_pos: usize,
+) {
     let (prompt, title, display_input) = match state {
         AppState::NeedsApiKey => {
             let masked: String = "•".repeat(input.len());
@@ -271,22 +280,9 @@ fn render_input(frame: &mut Frame, area: Rect, mode: Mode, state: AppState, inpu
         AppState::Ready => (Style::default().fg(Color::White), BorderType::Rounded),
     };
 
-    // Show cursor with blinking block
-    let cursor = if state != AppState::Processing {
-        "▋"
-    } else {
-        ""
-    };
-
     let paragraph = Paragraph::new(Line::from(vec![
         Span::styled(prompt, Style::default().add_modifier(Modifier::BOLD)),
         Span::raw(&display_input),
-        Span::styled(
-            cursor,
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::SLOW_BLINK),
-        ),
     ]))
     .block(
         Block::default()
@@ -300,6 +296,15 @@ fn render_input(frame: &mut Frame, area: Rect, mode: Mode, state: AppState, inpu
     );
 
     frame.render_widget(paragraph, area);
+
+    // Set cursor position if not processing
+    if state != AppState::Processing {
+        // Calculate cursor X position: border(1) + prompt_width + cursor_pos
+        let prompt_width = prompt.chars().count() as u16;
+        let cursor_x = area.x + 1 + prompt_width + cursor_pos.min(input.len()) as u16;
+        let cursor_y = area.y + 1; // Inside the border
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
 }
 
 fn render_status_bar(
