@@ -120,6 +120,17 @@ fn run_interactive_shell(
                     continue;
                 }
 
+                // Handle history -c BEFORE adding to history (so it doesn't get saved first)
+                if line == "history -c" {
+                    // Clear history
+                    history.clear();
+                    history_index = 0;
+                    // Delete the history file
+                    let _ = fs::remove_file(SHELL_HISTORY_FILE);
+                    write_str(&stdout, "History cleared.\n");
+                    continue;
+                }
+
                 // Add to history and persist
                 add_to_history(&mut history, line.to_string());
                 history_index = history.len();
@@ -131,21 +142,10 @@ fn run_interactive_shell(
                     return 0;
                 }
 
-                // Handle history builtin
-                if line == "history" || line.starts_with("history ") {
-                    let args: Vec<&str> = line.split_whitespace().collect();
-                    if args.len() > 1 && args[1] == "-c" {
-                        // Clear history
-                        history.clear();
-                        history_index = 0;
-                        // Delete the history file
-                        let _ = fs::remove_file(SHELL_HISTORY_FILE);
-                        write_str(&stdout, "History cleared.\n");
-                    } else {
-                        // List history
-                        for (i, entry) in history.iter().enumerate() {
-                            write_str(&stdout, &format!("{:5}  {}\n", i + 1, entry));
-                        }
+                // Handle history builtin (list only, -c handled above)
+                if line == "history" {
+                    for (i, entry) in history.iter().enumerate() {
+                        write_str(&stdout, &format!("{:5}  {}\n", i + 1, entry));
                     }
                     continue;
                 }
