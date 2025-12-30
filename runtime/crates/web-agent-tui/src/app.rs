@@ -1019,55 +1019,32 @@ impl<R: Read, W: Write> App<R, W> {
                         }
                     }
                     0x0D => {
-                        // Enter - select provider
+                        // Enter - select provider and open wizard for configuration
                         if let Some((provider_id, _name, base_url)) = PROVIDERS.get(*selected) {
-                            if *provider_id == "custom" {
-                                // Custom provider - launch wizard for URL input
-                                self.overlay = Some(Overlay::ProviderWizard {
-                                    step: ProviderWizardStep::EnterBaseUrl,
-                                    selected_provider: *selected,
-                                    base_url_input: String::new(),
-                                    model_input: String::new(),
-                                });
+                            // All providers go to wizard for configuration
+                            // Pre-fill base URL for preconfigured providers
+                            let prefilled_url = base_url.unwrap_or("").to_string();
+                            let prefilled_model = if *provider_id == "anthropic" {
+                                self.config.models.anthropic.clone()
+                            } else if *provider_id == "openai" {
+                                self.config.models.openai.clone()
                             } else {
-                                // Preconfigured provider - apply directly
-                                self.config.provider.default = provider_id.to_string();
-                                self.config.provider.base_url = base_url.map(|s| s.to_string());
-                                let _ = self.config.save();
+                                String::new()
+                            };
 
-                                // Create new AI client for selected provider
-                                let default_model = if *provider_id == "anthropic" {
-                                    &self.config.models.anthropic
-                                } else {
-                                    &self.config.models.openai
-                                };
+                            // Start at URL step for custom, model step for preconfigured
+                            let start_step = if *provider_id == "custom" {
+                                ProviderWizardStep::EnterBaseUrl
+                            } else {
+                                ProviderWizardStep::EnterModel
+                            };
 
-                                if *provider_id == "anthropic" {
-                                    self.ai_client =
-                                        crate::bridge::AiClient::anthropic(default_model);
-                                } else {
-                                    self.ai_client = crate::bridge::AiClient::openai(default_model);
-                                }
-
-                                // Apply base URL if specified
-                                if let Some(url) = base_url {
-                                    self.ai_client.set_base_url(url);
-                                }
-
-                                // Re-apply API key if we have one
-                                if let Some(ref api_key) = self.config.provider.api_key {
-                                    self.ai_client.set_api_key(api_key);
-                                }
-
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!(
-                                        "Switched to {} with model: {}",
-                                        provider_id, default_model
-                                    ),
-                                });
-                                self.overlay = None;
-                            }
+                            self.overlay = Some(Overlay::ProviderWizard {
+                                step: start_step,
+                                selected_provider: *selected,
+                                base_url_input: prefilled_url,
+                                model_input: prefilled_model,
+                            });
                         }
                     }
                     _ => {}
