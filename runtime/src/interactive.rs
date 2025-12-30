@@ -107,7 +107,13 @@ fn run_interactive_shell(
         write_str(&stdout, &prompt);
 
         // Read a line with history support
-        match read_line(&stdin, &stdout, &mut history, &mut history_index) {
+        match read_line(
+            &stdin,
+            &stdout,
+            &mut history,
+            &mut history_index,
+            &shell_env.cwd,
+        ) {
             LineResult::Line(line) => {
                 let line = line.trim();
                 if line.is_empty() {
@@ -191,6 +197,7 @@ fn read_line(
     stdout: &OutputStream,
     history: &mut Vec<String>,
     history_index: &mut usize,
+    cwd: &std::path::Path,
 ) -> LineResult {
     let mut buffer = String::new();
     let mut cursor_pos: usize = 0;
@@ -211,6 +218,64 @@ fn read_line(
                 // Ctrl+D - EOF on empty line, otherwise ignore
                 if buffer.is_empty() {
                     return LineResult::Eof;
+                }
+            }
+            Some(0x09) => {
+                // Tab - file/path completion
+                let (_word_start, partial) = get_current_word(&buffer, cursor_pos);
+                let completions = get_path_completions(&partial, cwd);
+
+                if completions.is_empty() {
+                    // No completions - do nothing (could beep)
+                } else if completions.len() == 1 {
+                    // Single match - complete it
+                    let completion = &completions[0];
+                    let suffix = &completion[partial.len()..];
+                    // Insert suffix into buffer
+                    buffer.insert_str(cursor_pos, suffix);
+                    write_str(stdout, suffix);
+                    cursor_pos += suffix.len();
+                } else {
+                    // Multiple matches - show them and complete common prefix
+                    let prefix = common_prefix(&completions);
+                    if prefix.len() > partial.len() {
+                        // Complete the common part
+                        let suffix = &prefix[partial.len()..];
+                        buffer.insert_str(cursor_pos, suffix);
+                        write_str(stdout, suffix);
+                        cursor_pos += suffix.len();
+                    } else {
+                        // Show all completions
+                        write_str(stdout, "\r\n");
+                        for c in &completions {
+                            write_str(stdout, c);
+                            write_str(stdout, "  ");
+                        }
+                        write_str(stdout, "\r\n");
+                        // Redraw prompt and buffer
+                        let prompt = format!("{}$ {}", cwd.display(), buffer);
+                        write_str(stdout, &prompt);
+                        // Position cursor correctly
+                        if cursor_pos < buffer.len() {
+                            let move_back = format!("\x1b[{}D", buffer.len() - cursor_pos);
+                            write_bytes(stdout, move_back.as_bytes());
+                        }
+                    }
+                }
+            }
+            Some(0x12) => {
+                // Ctrl+R - reverse history search
+                if let Some(found) = reverse_search(stdin, stdout, history, "") {
+                    // Replace buffer with found command
+                    buffer = found.clone();
+                    cursor_pos = buffer.len();
+                    // Redraw with the found command
+                    let display = format!("{}$ {}", cwd.display(), buffer);
+                    write_str(stdout, &display);
+                } else {
+                    // Search cancelled, redraw prompt
+                    let display = format!("{}$ {}", cwd.display(), buffer);
+                    write_str(stdout, &display);
                 }
             }
             Some(0x01) => {
@@ -520,4 +585,157 @@ fn ensure_config_dir() -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+// ============================================================================
+// Tab Completion
+// ============================================================================
+
+/// Get completions for a partial path
+fn get_path_completions(partial: &str, cwd: &std::path::Path) -> Vec<String> {
+    let (dir_path, prefix) = if partial.contains('/') {
+        let last_slash = partial.rfind('/').unwrap();
+        (&partial[..=last_slash], &partial[last_slash + 1..])
+    } else {
+        ("", partial)
+    };
+
+    // Resolve the directory to search
+    let search_dir = if dir_path.is_empty() {
+        cwd.to_path_buf()
+    } else if dir_path.starts_with('/') {
+        PathBuf::from(dir_path)
+    } else {
+        cwd.join(dir_path)
+    };
+
+    let mut completions = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&search_dir) {
+        for entry in entries.flatten() {
+            if let Ok(name) = entry.file_name().into_string() {
+                if name.starts_with(prefix) {
+                    let mut completion = format!("{}{}", dir_path, name);
+                    // Add trailing slash for directories
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        completion.push('/');
+                    }
+                    completions.push(completion);
+                }
+            }
+        }
+    }
+
+    completions.sort();
+    completions
+}
+
+/// Find the longest common prefix among completions
+fn common_prefix(completions: &[String]) -> String {
+    if completions.is_empty() {
+        return String::new();
+    }
+    if completions.len() == 1 {
+        return completions[0].clone();
+    }
+
+    let first = &completions[0];
+    let mut prefix_len = first.len();
+
+    for s in &completions[1..] {
+        let common = first
+            .chars()
+            .zip(s.chars())
+            .take_while(|(a, b)| a == b)
+            .count();
+        prefix_len = prefix_len.min(common);
+    }
+
+    first[..prefix_len].to_string()
+}
+
+/// Extract the word being completed (last space-separated token)
+fn get_current_word(buffer: &str, cursor_pos: usize) -> (usize, String) {
+    let before_cursor = &buffer[..cursor_pos];
+    let word_start = before_cursor.rfind(' ').map(|i| i + 1).unwrap_or(0);
+    let word = before_cursor[word_start..].to_string();
+    (word_start, word)
+}
+
+// ============================================================================
+// Reverse History Search (Ctrl+R)
+// ============================================================================
+
+/// Perform reverse incremental search through history
+fn reverse_search(
+    stdin: &InputStream,
+    stdout: &OutputStream,
+    history: &[String],
+    initial_query: &str,
+) -> Option<String> {
+    let mut query = initial_query.to_string();
+    let mut match_idx: Option<usize> = None;
+
+    loop {
+        // Find matching history entry (searching backwards)
+        match_idx = None;
+        if !query.is_empty() {
+            for (i, entry) in history.iter().enumerate().rev() {
+                if entry.contains(&query) {
+                    match_idx = Some(i);
+                    break;
+                }
+            }
+        }
+
+        // Display search prompt
+        let display = match match_idx {
+            Some(idx) => &history[idx],
+            None => "",
+        };
+        let prompt = format!("\r\x1b[K(reverse-i-search)`{}': {}", query, display);
+        write_str(stdout, &prompt);
+
+        // Read next key
+        match read_byte(stdin) {
+            Some(b'\r') | Some(b'\n') => {
+                // Accept match
+                write_str(stdout, "\r\x1b[K");
+                return match_idx.map(|i| history[i].clone());
+            }
+            Some(0x07) | Some(0x1B) => {
+                // Ctrl+G or Escape - cancel
+                write_str(stdout, "\r\x1b[K");
+                return None;
+            }
+            Some(0x12) => {
+                // Ctrl+R again - find next match
+                if !query.is_empty() {
+                    if let Some(current) = match_idx {
+                        // Search for next match before current
+                        for (i, entry) in history[..current].iter().enumerate().rev() {
+                            if entry.contains(&query) {
+                                match_idx = Some(i);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            Some(0x7F) | Some(0x08) => {
+                // Backspace - remove last char from query
+                query.pop();
+            }
+            Some(0x03) => {
+                // Ctrl+C - cancel
+                write_str(stdout, "^C\r\n\x1b[K");
+                return None;
+            }
+            Some(c) if c >= 0x20 && c < 0x7F => {
+                // Printable character - add to query
+                query.push(c as char);
+            }
+            _ => {}
+        }
+    }
 }
