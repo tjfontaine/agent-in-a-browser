@@ -22,6 +22,8 @@ enum LineResult {
     Eof,
     /// Interrupt was received (Ctrl+C)
     Interrupt,
+    /// Screen was cleared (Ctrl+L), contains any pending input
+    ClearScreen(String),
 }
 
 /// Main entry point - dispatches to interactive REPL or -c command execution
@@ -142,6 +144,13 @@ fn run_interactive_shell(
                     continue;
                 }
 
+                // Handle clear/reset builtins
+                if line == "clear" || line == "reset" {
+                    // Clear screen and move cursor to top-left
+                    write_bytes(&stdout, b"\x1b[2J\x1b[H");
+                    continue;
+                }
+
                 // Execute using the full shell executor!
                 let result = futures_lite::future::block_on(run_pipeline(line, &mut shell_env));
 
@@ -167,6 +176,10 @@ fn run_interactive_shell(
             LineResult::Interrupt => {
                 // Ctrl+C - cancel current line, show new prompt
                 write_str(&stdout, "^C\n");
+            }
+            LineResult::ClearScreen(_pending_input) => {
+                // Screen was cleared by Ctrl+L, just continue to redraw prompt
+                // We don't restore the pending input to keep it simple
             }
         }
     }
@@ -234,6 +247,14 @@ fn read_line(
                     buffer.clear();
                     cursor_pos = 0;
                 }
+            }
+            Some(0x0C) => {
+                // Ctrl+L - clear screen and redraw
+                // Clear screen and move to top-left
+                write_bytes(stdout, b"\x1b[2J\x1b[H");
+                // Return a special result to indicate screen was cleared
+                // The caller will redraw the prompt
+                return LineResult::ClearScreen(buffer);
             }
             Some(0x17) => {
                 // Ctrl+W - delete word backwards
