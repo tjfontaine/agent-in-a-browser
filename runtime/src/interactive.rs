@@ -123,6 +123,25 @@ fn run_interactive_shell(
                     return 0;
                 }
 
+                // Handle history builtin
+                if line == "history" || line.starts_with("history ") {
+                    let args: Vec<&str> = line.split_whitespace().collect();
+                    if args.len() > 1 && args[1] == "-c" {
+                        // Clear history
+                        history.clear();
+                        history_index = 0;
+                        // Delete the history file
+                        let _ = fs::remove_file(SHELL_HISTORY_FILE);
+                        write_str(&stdout, "History cleared.\n");
+                    } else {
+                        // List history
+                        for (i, entry) in history.iter().enumerate() {
+                            write_str(&stdout, &format!("{:5}  {}\n", i + 1, entry));
+                        }
+                    }
+                    continue;
+                }
+
                 // Execute using the full shell executor!
                 let result = futures_lite::future::block_on(run_pipeline(line, &mut shell_env));
 
