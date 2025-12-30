@@ -308,13 +308,15 @@ class Descriptor {
             },
             async blockingRead(len: bigint): Promise<Uint8Array> {
                 // Lazy load file on first read
-                if (!fileData) {
+                if (fileData === null) {
                     try {
                         fileData = await asyncReadFile(asyncPath);
                         fileSize = fileData.length;
                     } catch (e) {
                         console.error('[opfs-fs] readViaStream async fallback error:', e);
-                        throw { tag: 'last-operation-failed', val: new Error('File not found') };
+                        // Set to empty array to signal EOF rather than hanging
+                        fileData = new Uint8Array(0);
+                        fileSize = 0;
                     }
                 }
 
