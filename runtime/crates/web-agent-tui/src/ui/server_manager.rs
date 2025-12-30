@@ -111,7 +111,7 @@ pub const API_FORMATS: &[(&str, &str, &str, &str)] = &[
         "openai",
         "OpenAI Compatible",
         "https://api.openai.com/v1",
-        "o3-mini", // OpenAI's latest codex/reasoning model
+        "codex-mini-latest", // OpenAI's Codex model (o4-mini fine-tuned)
     ),
     (
         "anthropic",
