@@ -362,14 +362,21 @@ export function createJsonRpcRequest(body: string): IncomingRequest {
 
 // ============ Outgoing HTTP Handler ============
 
+// Get BasePollable from preview2-shim for proper instanceof checks
+import { poll } from '@bytecodealliance/preview2-shim/io';
+// @ts-expect-error - Pollable is exported at runtime
+const { Pollable: BasePollable } = poll as { Pollable: new () => { ready(): boolean; block(): void } };
+
 /**
  * AsyncPollable - a pollable that waits on a Promise
+ * Must extend BasePollable for JCO instanceof checks to pass.
  */
-class AsyncPollable {
+class AsyncPollable extends BasePollable {
     private _ready: boolean = false;
     private _promise: Promise<void>;
 
     constructor(promise: Promise<void>) {
+        super();
         this._promise = promise;
         promise.then(() => {
             this._ready = true;
