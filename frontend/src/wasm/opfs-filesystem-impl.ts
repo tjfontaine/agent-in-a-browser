@@ -28,6 +28,7 @@ import {
     // OPFS-direct functions
     getEntryFromOpfs,
     getTreeEntryWithScan,
+    listDirectory,
     type TreeEntry
 } from './directory-tree';
 import {
@@ -508,16 +509,23 @@ class Descriptor {
 
 
 
-    readDirectory(): DirectoryEntryStream {
-        console.log('[opfs-fs] readDirectory called, path:', this.path, 'hasDir:', !!this.treeEntry.dir);
+    async readDirectory(): Promise<DirectoryEntryStream> {
+        console.log('[opfs-fs] readDirectory called, path:', this.path);
         if (!this.treeEntry.dir) {
             throw 'bad-descriptor';
         }
 
-        // Get directory entries directly from OPFS
-        // Note: This creates a new DirectoryEntryStream from current treeEntry.dir
-        // but with OPFS-direct approach, we should fetch from OPFS instead
-        const entries = Object.entries(this.treeEntry.dir || {}).sort(([a], [b]) => a > b ? 1 : -1);
+        // Query OPFS directly instead of using stale in-memory treeEntry.dir
+        const opfsEntries = await listDirectory(this.path);
+
+        // Convert to [name, TreeEntry] format for DirectoryEntryStream
+        const entries: Array<[string, TreeEntry]> = opfsEntries.map(e => [
+            e.name,
+            e.isDirectory
+                ? { dir: {} }
+                : { size: e.size || 0, mtime: e.mtime || Date.now() }
+        ]);
+
         console.log('[opfs-fs] readDirectory returning', entries.length, 'entries:', entries.map(e => e[0]));
         return new DirectoryEntryStream(entries);
     }
