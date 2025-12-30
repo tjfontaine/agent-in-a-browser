@@ -12,7 +12,7 @@ use crate::bridge::{
     get_system_message, mcp_client::ToolDefinition, try_execute_local_tool, AiClient, McpClient,
     Task,
 };
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
     ServerConnectionStatus, ServerManagerView, ServerStatus,
@@ -124,8 +124,8 @@ impl<R: Read, W: Write> App<R, W> {
                 role: Role::System,
                 content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
             }],
-            history: Vec::new(),
-            history_index: 0,
+            history: config::load_agent_history(),
+            history_index: config::load_agent_history().len(),
             terminal,
             stdin,
             should_quit: false,
@@ -232,20 +232,6 @@ impl<R: Read, W: Write> App<R, W> {
 
     /// Process a slice of input bytes, returns true if we should stop reading
     fn process_input_bytes(&mut self, bytes: &[u8]) -> bool {
-        // Debug: log incoming bytes
-        if !bytes.is_empty() {
-            let debug_str: String = bytes
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<Vec<_>>()
-                .join(" ");
-            eprintln!(
-                "[DEBUG] Input bytes: {} [{}]",
-                debug_str,
-                String::from_utf8_lossy(bytes)
-            );
-        }
-
         let mut i = 0;
         while i < bytes.len() {
             let byte = bytes[i];
@@ -559,10 +545,9 @@ impl<R: Read, W: Write> App<R, W> {
                 }
             }
             AppState::Ready | AppState::Processing => {
-                // Add to command history (don't add duplicates)
-                if self.history.last() != Some(&input) {
-                    self.history.push(input.clone());
-                }
+                // Add to command history and save
+                config::add_to_history(&mut self.history, input.clone());
+                config::save_agent_history(&self.history);
                 // Reset history navigation to end
                 self.history_index = self.history.len();
 

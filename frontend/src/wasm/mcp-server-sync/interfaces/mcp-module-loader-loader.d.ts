@@ -1,16 +1,11 @@
 /** @module Interface mcp:module-loader/loader@0.1.0 **/
 export function getLazyModule(command: string): string | undefined;
 export function spawnLazyCommand(module: string, command: string, args: Array<string>, env: ExecEnv): LazyProcess;
-export function spawnInteractive(module: string, command: string, args: Array<string>, env: ExecEnv, size: TerminalSize): LazyProcess;
 export interface ExecEnv {
   cwd: string,
   vars: Array<[string, string]>,
 }
 export type Pollable = import('./wasi-io-poll.js').Pollable;
-export interface TerminalSize {
-  cols: number,
-  rows: number,
-}
 
 export class LazyProcess {
   /**

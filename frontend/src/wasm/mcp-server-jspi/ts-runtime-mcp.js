@@ -4315,7 +4315,7 @@ const trampoline69 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 }
 );
 
-function trampoline70(arg0, arg1, arg2, arg3) {
+const trampoline70 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -4332,7 +4332,7 @@ function trampoline70(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-write-and-flush');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.blockingWriteAndFlush(result3)};
+    ret = { tag: 'ok', val: await rsc0.blockingWriteAndFlush(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4390,7 +4390,7 @@ function trampoline70(arg0, arg1, arg2, arg3) {
     postReturn: false
   });
 }
-
+);
 const handleTable14 = [T_FLAG, 0];
 const captureTable14= new Map();
 let captureCnt14 = 0;

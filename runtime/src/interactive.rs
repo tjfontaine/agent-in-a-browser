@@ -8,6 +8,8 @@ use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
 use crate::shell::{run_pipeline, ShellEnv};
 use std::path::PathBuf;
 
+const MAX_HISTORY_ENTRIES: usize = 1000;
+
 /// Result of reading a line
 enum LineResult {
     /// A complete line was read
@@ -89,18 +91,29 @@ fn run_interactive_shell(
         let _ = shell_env.set_var(key, value);
     }
 
+    // Note: Shell history persistence is disabled due to WASI preview1 adapter
+    // not supporting async I/O through the jco transpiler. History works
+    // in-memory during the session but doesn't persist across browser reloads.
+    // TODO: Implement proper async file I/O or move history to TUI layer.
+    let mut history: Vec<String> = Vec::new();
+    let mut history_index = 0;
+
     loop {
         // Render prompt: /current/path$
         let prompt = format!("{}$ ", shell_env.cwd.display());
         write_str(&stdout, &prompt);
 
-        // Read a line
-        match read_line(&stdin, &stdout) {
+        // Read a line with history support
+        match read_line(&stdin, &stdout, &mut history, &mut history_index) {
             LineResult::Line(line) => {
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
                 }
+
+                // Add to history (skip duplicates) - in-memory only
+                add_to_history(&mut history, line.to_string());
+                history_index = history.len();
 
                 // Handle exit command
                 if line == "exit" || line.starts_with("exit ") {
@@ -139,9 +152,15 @@ fn run_interactive_shell(
 }
 
 /// Read a line from stdin with echo and readline-style editing
-fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
+fn read_line(
+    stdin: &InputStream,
+    stdout: &OutputStream,
+    history: &mut Vec<String>,
+    history_index: &mut usize,
+) -> LineResult {
     let mut buffer = String::new();
     let mut cursor_pos: usize = 0;
+    let mut saved_input = String::new(); // Save current input when navigating history
 
     loop {
         match read_byte(stdin) {
@@ -247,8 +266,33 @@ fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
                 // Escape sequence - read additional bytes
                 if let Some(b'[') = read_byte(stdin) {
                     match read_byte(stdin) {
-                        Some(b'A') => {} // Up arrow - TODO: history
-                        Some(b'B') => {} // Down arrow - TODO: history
+                        Some(b'A') => {
+                            // Up arrow - history previous
+                            if !history.is_empty() && *history_index > 0 {
+                                // Save current input if at end
+                                if *history_index == history.len() {
+                                    saved_input = buffer.clone();
+                                }
+                                *history_index -= 1;
+                                replace_line(stdout, &buffer, cursor_pos, &history[*history_index]);
+                                buffer = history[*history_index].clone();
+                                cursor_pos = buffer.len();
+                            }
+                        }
+                        Some(b'B') => {
+                            // Down arrow - history next
+                            if *history_index < history.len() {
+                                *history_index += 1;
+                                let new_line = if *history_index >= history.len() {
+                                    saved_input.clone()
+                                } else {
+                                    history[*history_index].clone()
+                                };
+                                replace_line(stdout, &buffer, cursor_pos, &new_line);
+                                buffer = new_line;
+                                cursor_pos = buffer.len();
+                            }
+                        }
                         Some(b'C') => {
                             // Right arrow - move cursor right
                             if cursor_pos < buffer.len() {
@@ -321,6 +365,21 @@ fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
     }
 }
 
+/// Replace the current line on screen with a new one
+fn replace_line(stdout: &OutputStream, old: &str, cursor_pos: usize, new: &str) {
+    // Move to start of line
+    if cursor_pos > 0 {
+        let move_left = format!("\x1b[{}D", cursor_pos);
+        write_bytes(stdout, move_left.as_bytes());
+    }
+    // Clear the line
+    write_bytes(stdout, b"\x1b[K");
+    // Write new content
+    write_bytes(stdout, new.as_bytes());
+    // If new is shorter, pad might be needed (already cleared via \x1b[K])
+    let _ = old; // suppress unused warning
+}
+
 /// Read a single byte from stdin (blocking)
 fn read_byte(stdin: &InputStream) -> Option<u8> {
     match stdin.blocking_read(1) {
@@ -340,4 +399,19 @@ fn write_str(stream: &OutputStream, s: &str) {
 /// Write bytes to an output stream
 fn write_bytes(stream: &OutputStream, data: &[u8]) {
     let _ = stream.blocking_write_and_flush(data);
+}
+
+/// Add a command to history (handles deduplication)
+fn add_to_history(history: &mut Vec<String>, command: String) {
+    if command.trim().is_empty() {
+        return;
+    }
+    if history.last().map(|s| s.as_str()) == Some(command.trim()) {
+        return;
+    }
+    history.push(command.trim().to_string());
+    if history.len() > MAX_HISTORY_ENTRIES {
+        let excess = history.len() - MAX_HISTORY_ENTRIES;
+        history.drain(0..excess);
+    }
 }
