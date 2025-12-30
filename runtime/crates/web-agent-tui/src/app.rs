@@ -290,6 +290,34 @@ impl<R: Read, W: Write> App<R, W> {
                 }
                 true
             }
+            // Ctrl+N - switch to normal (agent) mode
+            0x0E => {
+                if self.mode != Mode::Agent {
+                    self.mode = Mode::Agent;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Switched to normal mode.".to_string(),
+                    });
+                }
+                true
+            }
+            // Ctrl+P - toggle plan mode
+            0x10 => {
+                if self.mode == Mode::Plan {
+                    self.mode = Mode::Agent;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Exiting plan mode.".to_string(),
+                    });
+                } else if self.mode != Mode::Shell {
+                    self.mode = Mode::Plan;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Entering plan mode. Type 'go' to execute plan, or /mode normal to exit.".to_string(),
+                    });
+                }
+                true
+            }
             // Enter - submit
             0x0D | 0x0A => {
                 if !self.input.is_empty() {
@@ -1187,6 +1215,8 @@ impl<R: Read, W: Write> App<R, W> {
         "/provider",
         "/theme",
         "/shell",
+        "/plan",
+        "/mode",
         "/config",
         "/key",
         "/clear",
@@ -1245,6 +1275,8 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /provider - Select AI provider (Anthropic/OpenAI)",
                         "  /theme    - Change theme (dark, light, gruvbox, catppuccin)",
                         "  /shell    - Enter shell mode (^D to exit)",
+                        "  /plan     - Enter plan mode (Ctrl+P to toggle)",
+                        "  /mode     - View/change mode (normal, plan, shell)",
                         "  /config   - View current configuration",
                         "  /key      - Set API key",
                         "  /clear    - Clear messages",
@@ -1290,10 +1322,205 @@ impl<R: Read, W: Write> App<R, W> {
                 });
             }
             "/servers" | "/mcp" => {
-                // Open server manager wizard overlay
-                self.overlay = Some(Overlay::ServerManager(ServerManagerView::ServerList {
-                    selected: 0,
-                }));
+                // Handle MCP subcommands or open overlay
+                if let Some(subcmd) = parts.get(1) {
+                    match *subcmd {
+                        "list" => {
+                            // List all servers
+                            let mut server_list = vec!["MCP Servers:".to_string()];
+                            server_list.push(format!(
+                                "  Local sandbox: {}",
+                                if self.server_status.local_connected {
+                                    "● connected"
+                                } else {
+                                    "○ disconnected"
+                                }
+                            ));
+                            server_list.push(format!(
+                                "    Tools: {}",
+                                self.server_status.local_tool_count
+                            ));
+
+                            for (i, server) in self.remote_servers.iter().enumerate() {
+                                let status = match server.status {
+                                    ServerConnectionStatus::Connected => "● connected",
+                                    ServerConnectionStatus::Connecting => "◐ connecting",
+                                    ServerConnectionStatus::Disconnected => "○ disconnected",
+                                    ServerConnectionStatus::AuthRequired => "🔐 auth required",
+                                    ServerConnectionStatus::Error(_) => "✗ error",
+                                };
+                                server_list.push(format!(
+                                    "  [{}] {}: {}",
+                                    i + 1,
+                                    server.name,
+                                    status
+                                ));
+                                server_list.push(format!("      URL: {}", server.url));
+                            }
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: server_list.join("\n"),
+                            });
+                        }
+                        "add" => {
+                            // Add new server: /mcp add <url> [name]
+                            if let Some(url) = parts.get(2) {
+                                let name =
+                                    parts.get(3).map(|s| s.to_string()).unwrap_or_else(|| {
+                                        // Extract name from URL
+                                        url.replace("http://", "")
+                                            .replace("https://", "")
+                                            .split('/')
+                                            .next()
+                                            .unwrap_or("Remote")
+                                            .to_string()
+                                    });
+                                // Generate a unique ID for the server
+                                let id = format!("remote-{}", self.remote_servers.len() + 1);
+                                self.remote_servers.push(RemoteServerEntry {
+                                    id,
+                                    name: name.clone(),
+                                    url: url.to_string(),
+                                    status: ServerConnectionStatus::Disconnected,
+                                    tools: vec![],
+                                    bearer_token: None,
+                                });
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!(
+                                        "Added MCP server '{}'. Use /mcp connect {} to connect.",
+                                        name,
+                                        self.remote_servers.len()
+                                    ),
+                                });
+                            } else {
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: "Usage: /mcp add <url> [name]".to_string(),
+                                });
+                            }
+                        }
+                        "remove" => {
+                            // Remove server by index: /mcp remove <id>
+                            if let Some(id_str) = parts.get(2) {
+                                if let Ok(id) = id_str.parse::<usize>() {
+                                    if id > 0 && id <= self.remote_servers.len() {
+                                        let removed = self.remote_servers.remove(id - 1);
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Removed MCP server '{}'.",
+                                                removed.name
+                                            ),
+                                        });
+                                    } else {
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Invalid server ID. Use /mcp list to see IDs."
+                                            ),
+                                        });
+                                    }
+                                } else {
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: "Usage: /mcp remove <id>".to_string(),
+                                    });
+                                }
+                            } else {
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: "Usage: /mcp remove <id>".to_string(),
+                                });
+                            }
+                        }
+                        "connect" => {
+                            // Connect to server by index: /mcp connect <id>
+                            if let Some(id_str) = parts.get(2) {
+                                if let Ok(id) = id_str.parse::<usize>() {
+                                    if id > 0 && id <= self.remote_servers.len() {
+                                        // Mark as connecting and trigger connection
+                                        self.remote_servers[id - 1].status =
+                                            ServerConnectionStatus::Connecting;
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Connecting to '{}'...",
+                                                self.remote_servers[id - 1].name
+                                            ),
+                                        });
+                                        // TODO: Actually connect to the server
+                                    } else {
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: "Invalid server ID. Use /mcp list to see IDs."
+                                                .to_string(),
+                                        });
+                                    }
+                                } else {
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: "Usage: /mcp connect <id>".to_string(),
+                                    });
+                                }
+                            } else {
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: "Usage: /mcp connect <id>".to_string(),
+                                });
+                            }
+                        }
+                        "disconnect" => {
+                            // Disconnect from server by index: /mcp disconnect <id>
+                            if let Some(id_str) = parts.get(2) {
+                                if let Ok(id) = id_str.parse::<usize>() {
+                                    if id > 0 && id <= self.remote_servers.len() {
+                                        self.remote_servers[id - 1].status =
+                                            ServerConnectionStatus::Disconnected;
+                                        self.remote_servers[id - 1].tools.clear();
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Disconnected from '{}'.",
+                                                self.remote_servers[id - 1].name
+                                            ),
+                                        });
+                                    } else {
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: "Invalid server ID. Use /mcp list to see IDs."
+                                                .to_string(),
+                                        });
+                                    }
+                                } else {
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: "Usage: /mcp disconnect <id>".to_string(),
+                                    });
+                                }
+                            } else {
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: "Usage: /mcp disconnect <id>".to_string(),
+                                });
+                            }
+                        }
+                        _ => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!(
+                                    "Unknown subcommand: {}. Available: list, add, remove, connect, disconnect", 
+                                    subcmd
+                                ),
+                            });
+                        }
+                    }
+                } else {
+                    // No subcommand - open server manager wizard overlay
+                    self.overlay = Some(Overlay::ServerManager(ServerManagerView::ServerList {
+                        selected: 0,
+                    }));
+                }
             }
             "/model" => {
                 // Open model selector overlay
@@ -1305,6 +1532,78 @@ impl<R: Read, W: Write> App<R, W> {
             "/provider" => {
                 // Open provider selector overlay
                 self.overlay = Some(Overlay::ProviderSelector { selected: 0 });
+            }
+            "/plan" => {
+                // Enter plan mode
+                if self.mode == Mode::Plan {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content:
+                            "Already in plan mode. Type 'go' to execute or /mode normal to exit."
+                                .to_string(),
+                    });
+                } else if self.mode == Mode::Shell {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Exit shell mode first (^D or 'exit').".to_string(),
+                    });
+                } else {
+                    self.mode = Mode::Plan;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "📋 PLAN MODE - Describe what you want to accomplish.\nType 'go' to execute plan, Ctrl+P to toggle, or /mode normal to exit.".to_string(),
+                    });
+                }
+            }
+            "/mode" => {
+                // View or change mode
+                if let Some(mode_arg) = parts.get(1) {
+                    match *mode_arg {
+                        "normal" | "agent" => {
+                            self.mode = Mode::Agent;
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: "Switched to normal mode.".to_string(),
+                            });
+                        }
+                        "plan" => {
+                            self.mode = Mode::Plan;
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: "📋 Switched to plan mode. Type 'go' to execute or /mode normal to exit.".to_string(),
+                            });
+                        }
+                        "shell" => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: "Use /shell to enter shell mode.".to_string(),
+                            });
+                        }
+                        _ => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!(
+                                    "Unknown mode: {}. Available: normal, plan, shell",
+                                    mode_arg
+                                ),
+                            });
+                        }
+                    }
+                } else {
+                    // Show current mode
+                    let mode_str = match self.mode {
+                        Mode::Agent => "normal",
+                        Mode::Plan => "plan",
+                        Mode::Shell => "shell",
+                    };
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!(
+                            "Current mode: {}\nUsage: /mode <normal|plan|shell>",
+                            mode_str
+                        ),
+                    });
+                }
             }
             "/shell" | "/sh" => {
                 // Launch interactive shell mode
