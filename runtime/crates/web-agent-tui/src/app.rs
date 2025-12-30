@@ -652,9 +652,10 @@ impl<R: Read, W: Write> App<R, W> {
                             // set from JS but won't be checked until stream completes.
                         }
                         Ok(Some(StreamEvent::ToolCallStart { id: _, name })) => {
+                            let display_name = Self::format_tool_for_display(&name);
                             self.messages.push(Message {
                                 role: Role::System,
-                                content: format!("🔧 Calling tool: {}", name),
+                                content: format!("🔧 Calling tool: {}", display_name),
                             });
                         }
                         Ok(Some(StreamEvent::ToolCallDelta { .. })) => {
@@ -1236,6 +1237,33 @@ impl<R: Read, W: Write> App<R, W> {
         } else {
             Err(format!("Unknown tool: {}", prefixed_name))
         }
+    }
+
+    /// Format a prefixed tool name for user-friendly display
+    ///
+    /// - Built-in tools (__sandbox__, __local__): Show just the tool name
+    /// - Remote servers: Show "server → tool" format
+    fn format_tool_for_display(prefixed_name: &str) -> String {
+        // Hide prefix for built-in tools
+        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
+            return tool_name.to_string();
+        }
+        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
+            return tool_name.to_string();
+        }
+
+        // For remote servers, show "server → tool" format
+        if let Some(pos) = prefixed_name.find('_') {
+            let (server_id, tool_name) = prefixed_name.split_at(pos);
+            let tool_name = &tool_name[1..]; // Skip the underscore
+                                             // Don't format if server_id looks like a reserved prefix
+            if !server_id.starts_with("_") {
+                return format!("{} → {}", server_id, tool_name);
+            }
+        }
+
+        // Fallback: return as-is
+        prefixed_name.to_string()
     }
 
     /// Slash commands for tab completion
