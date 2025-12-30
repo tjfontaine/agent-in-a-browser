@@ -1022,7 +1022,7 @@ impl<R: Read, W: Write> App<R, W> {
                         // Enter - select provider and open wizard for configuration
                         if let Some((provider_id, _name, base_url)) = PROVIDERS.get(*selected) {
                             // All providers go to wizard for configuration
-                            // Pre-fill base URL for preconfigured providers
+                            // Pre-fill base URL for preconfigured providers (can be overridden)
                             let prefilled_url = base_url.unwrap_or("").to_string();
                             let prefilled_model = if *provider_id == "anthropic" {
                                 self.config.models.anthropic.clone()
@@ -1032,15 +1032,9 @@ impl<R: Read, W: Write> App<R, W> {
                                 String::new()
                             };
 
-                            // Start at URL step for custom, model step for preconfigured
-                            let start_step = if *provider_id == "custom" {
-                                ProviderWizardStep::EnterBaseUrl
-                            } else {
-                                ProviderWizardStep::EnterModel
-                            };
-
+                            // All providers start at URL step so users can override defaults
                             self.overlay = Some(Overlay::ProviderWizard {
-                                step: start_step,
+                                step: ProviderWizardStep::EnterBaseUrl,
                                 selected_provider: *selected,
                                 base_url_input: prefilled_url,
                                 model_input: prefilled_model,
@@ -1145,10 +1139,21 @@ impl<R: Read, W: Write> App<R, W> {
                                 self.config.provider.base_url = Some(base_url_input.clone());
                                 let _ = self.config.save();
 
-                                // Create new AI client with custom base URL
-                                // Always use OpenAI-compatible for custom providers
-                                self.ai_client = crate::bridge::AiClient::openai(model_input);
-                                self.ai_client.set_base_url(base_url_input);
+                                // Create AI client with correct provider type
+                                if *provider_id == "anthropic" {
+                                    self.ai_client = crate::bridge::AiClient::new(
+                                        base_url_input,
+                                        model_input,
+                                        crate::bridge::ai_client::ProviderType::Anthropic,
+                                    );
+                                } else {
+                                    // OpenAI and custom providers use OpenAI API format
+                                    self.ai_client = crate::bridge::AiClient::new(
+                                        base_url_input,
+                                        model_input,
+                                        crate::bridge::ai_client::ProviderType::OpenAI,
+                                    );
+                                }
 
                                 // Re-apply API key if we have one
                                 if let Some(ref api_key) = self.config.provider.api_key {
