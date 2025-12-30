@@ -516,6 +516,11 @@ impl AiClient {
         &self.model
     }
 
+    /// Set the model (for runtime switching)
+    pub fn set_model(&mut self, model: &str) {
+        self.model = model.to_string();
+    }
+
     /// Send a chat completion request
     pub fn chat(
         &self,

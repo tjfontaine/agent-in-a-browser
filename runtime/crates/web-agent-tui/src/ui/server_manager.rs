@@ -70,6 +70,11 @@ impl Default for ServerManagerView {
 #[derive(Clone)]
 pub enum Overlay {
     ServerManager(ServerManagerView),
+    /// Model selection overlay
+    ModelSelector {
+        selected: usize,
+        provider: String,
+    },
 }
 
 /// Create a centered rectangle for popups
@@ -472,5 +477,73 @@ pub fn render_overlay(
                 }
             }
         },
+        Overlay::ModelSelector { selected, provider } => {
+            render_model_selector(frame, area, provider, *selected);
+        }
+    }
+}
+
+/// Model options for each provider
+pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static str)> {
+    match provider {
+        "anthropic" => vec![
+            ("claude-sonnet-4-20250514", "Claude Sonnet 4 (Latest)"),
+            ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet"),
+            ("claude-3-5-haiku-20241022", "Claude 3.5 Haiku (Fast)"),
+            ("claude-3-opus-20240229", "Claude 3 Opus"),
+        ],
+        "openai" => vec![
+            ("gpt-4o", "GPT-4o (Latest)"),
+            ("gpt-4o-mini", "GPT-4o Mini (Fast)"),
+            ("gpt-4-turbo", "GPT-4 Turbo"),
+            ("o1-preview", "o1 Preview (Reasoning)"),
+        ],
+        _ => vec![],
+    }
+}
+
+/// Render model selection overlay
+fn render_model_selector(frame: &mut Frame, area: Rect, provider: &str, selected: usize) {
+    let popup = centered_rect(50, 50, area);
+    frame.render_widget(Clear, popup);
+
+    let models = get_models_for_provider(provider);
+
+    let items: Vec<ListItem> = models
+        .iter()
+        .map(|(id, name)| {
+            ListItem::new(Line::from(vec![
+                Span::styled(*name, Style::default().fg(Color::White)),
+                Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+            ]))
+        })
+        .collect();
+
+    let title = format!("🤖 Select {} Model", provider);
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
+        .highlight_style(
+            Style::default()
+                .add_modifier(Modifier::REVERSED)
+                .fg(Color::Cyan),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    state.select(Some(selected));
+    frame.render_stateful_widget(list, popup, &mut state);
+
+    // Hints at bottom
+    let hints = Paragraph::new("↑↓ Navigate │ Enter Select │ Esc Close")
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+    if hint_area.y < area.height {
+        frame.render_widget(hints, hint_area);
     }
 }

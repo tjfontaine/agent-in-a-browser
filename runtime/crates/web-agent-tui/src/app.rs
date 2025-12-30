@@ -915,6 +915,51 @@ impl<R: Read, W: Write> App<R, W> {
                     }
                 }
             }
+            Overlay::ModelSelector { selected, provider } => {
+                let models = crate::ui::server_manager::get_models_for_provider(provider);
+                let max_items = models.len();
+
+                match byte {
+                    0x1B => {
+                        // Esc - close overlay
+                        self.overlay = None;
+                    }
+                    0xF0 | 0x6B => {
+                        // Up arrow or 'k'
+                        if *selected > 0 {
+                            *selected -= 1;
+                        }
+                    }
+                    0xF1 | 0x6A => {
+                        // Down arrow or 'j'
+                        if *selected + 1 < max_items {
+                            *selected += 1;
+                        }
+                    }
+                    0x0D => {
+                        // Enter - select model
+                        if let Some((model_id, _name)) = models.get(*selected) {
+                            // Update AI client model
+                            self.ai_client.set_model(model_id);
+
+                            // Update config and save
+                            if provider == "anthropic" {
+                                self.config.models.anthropic = model_id.to_string();
+                            } else if provider == "openai" {
+                                self.config.models.openai = model_id.to_string();
+                            }
+                            let _ = self.config.save();
+
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Model changed to: {}", model_id),
+                            });
+                            self.overlay = None;
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -1084,6 +1129,7 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /help     - Show this help",
                         "  /tools    - List available tools",
                         "  /mcp      - MCP server manager (j/k=nav, Enter=select)",
+                        "  /model    - Select AI model",
                         "  /shell    - Enter shell mode (^D to exit)",
                         "  /config   - View current configuration",
                         "  /key      - Set API key",
@@ -1134,6 +1180,13 @@ impl<R: Read, W: Write> App<R, W> {
                 self.overlay = Some(Overlay::ServerManager(ServerManagerView::ServerList {
                     selected: 0,
                 }));
+            }
+            "/model" => {
+                // Open model selector overlay
+                self.overlay = Some(Overlay::ModelSelector {
+                    selected: 0,
+                    provider: self.config.provider.default.clone(),
+                });
             }
             "/shell" | "/sh" => {
                 // Launch interactive shell mode
