@@ -1,4 +1,5 @@
 // world root:component/root
+export type * as McpModuleLoaderLoader010 from './interfaces/mcp-module-loader-loader.js'; // import mcp:module-loader/loader@0.1.0
 export type * as WasiCliEnvironment026 from './interfaces/wasi-cli-environment.js'; // import wasi:cli/environment@0.2.6
 export type * as WasiCliExit026 from './interfaces/wasi-cli-exit.js'; // import wasi:cli/exit@0.2.6
 export type * as WasiCliStderr026 from './interfaces/wasi-cli-stderr.js'; // import wasi:cli/stderr@0.2.6

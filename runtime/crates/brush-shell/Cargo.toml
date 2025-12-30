@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # WASI bindings
 wasm-bindgen = "0.2"
-wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+wit-bindgen = "0.50"
 
 # Shell parsing (for future use)
 # brush-parser = "0.3.0"

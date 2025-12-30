@@ -28,9 +28,7 @@ impl Guest for BrushShell {
         stderr: OutputStream,
     ) -> i32 {
         match name.as_str() {
-            "sh" | "shell" | "bash" | "brush-shell" => {
-                run_shell(env, stdin, stdout, stderr)
-            }
+            "sh" | "shell" | "bash" | "brush-shell" => run_shell(env, stdin, stdout, stderr),
             _ => {
                 write_str(&stderr, &format!("Unknown command: {}\n", name));
                 127
@@ -61,13 +59,14 @@ impl ShellState {
             env_vars: env.vars.clone(),
         }
     }
-    
+
     fn get_var(&self, name: &str) -> Option<&str> {
-        self.env_vars.iter()
+        self.env_vars
+            .iter()
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
     }
-    
+
     fn set_var(&mut self, name: String, value: String) {
         // Update existing or add new
         if let Some((_, v)) = self.env_vars.iter_mut().find(|(k, _)| k == &name) {
@@ -79,19 +78,14 @@ impl ShellState {
 }
 
 /// Main shell REPL loop
-fn run_shell(
-    env: ExecEnv,
-    stdin: InputStream,
-    stdout: OutputStream,
-    stderr: OutputStream,
-) -> i32 {
+fn run_shell(env: ExecEnv, stdin: InputStream, stdout: OutputStream, stderr: OutputStream) -> i32 {
     let mut state = ShellState::new(&env);
     let mut editor = LineEditor::new();
-    
+
     loop {
         // Render prompt
         render_prompt(&stdout, &state);
-        
+
         // Read a line from stdin
         match editor.read_line(&stdin, &stdout) {
             line_editor::LineResult::Line(line) => {
@@ -99,13 +93,13 @@ fn run_shell(
                 if line.is_empty() {
                     continue;
                 }
-                
+
                 // Check for exit command
                 if line == "exit" || line.starts_with("exit ") {
                     write_str(&stdout, "Bye!\n");
                     return 0;
                 }
-                
+
                 // Execute the command
                 execute_command(line, &mut state, &stdout, &stderr);
             }
@@ -137,15 +131,17 @@ fn execute_command(
     stdout: &OutputStream,
     stderr: &OutputStream,
 ) {
+    use bindings::mcp::module_loader::loader::{get_lazy_module, spawn_lazy_command, ExecEnv};
+
     // Very simple parsing for MVP - split on whitespace
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.is_empty() {
         return;
     }
-    
+
     let cmd = parts[0];
     let args = &parts[1..];
-    
+
     match cmd {
         "cd" => {
             cmd_cd(args, state, stderr);
@@ -165,11 +161,59 @@ fn execute_command(
             }
         }
         "help" => {
-            write_str(stdout, "Built-in commands: cd, pwd, echo, export, env, help, exit\n");
+            write_str(
+                stdout,
+                "Built-in commands: cd, pwd, echo, export, env, help, exit\n",
+            );
+            write_str(stdout, "Lazy commands: ls, cat, node, tsx, sqlite, etc.\n");
         }
         _ => {
-            // Unknown command
-            write_str(stderr, &format!("brush: command not found: {}\n", cmd));
+            // Check module-loader for lazy commands
+            if let Some(module_name) = get_lazy_module(cmd) {
+                // Found a lazy module - spawn the command
+                let env = ExecEnv {
+                    cwd: state.cwd.clone(),
+                    vars: state.env_vars.clone(),
+                };
+                let args_strings: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+                let proc = spawn_lazy_command(&module_name, cmd, &args_strings, &env);
+
+                // Close stdin to signal we're done (simple non-interactive execution)
+                proc.close_stdin();
+
+                // Wait for completion and read output
+                loop {
+                    // Read any available stdout
+                    let stdout_data = proc.read_stdout(4096);
+                    if !stdout_data.is_empty() {
+                        let _ = stdout.blocking_write_and_flush(&stdout_data);
+                    }
+
+                    // Read any available stderr
+                    let stderr_data = proc.read_stderr(4096);
+                    if !stderr_data.is_empty() {
+                        let _ = stderr.blocking_write_and_flush(&stderr_data);
+                    }
+
+                    // Check if process has finished
+                    if let Some(_exit_code) = proc.try_wait() {
+                        // Process done - read any remaining output
+                        let final_stdout = proc.read_stdout(65536);
+                        if !final_stdout.is_empty() {
+                            let _ = stdout.blocking_write_and_flush(&final_stdout);
+                        }
+                        let final_stderr = proc.read_stderr(65536);
+                        if !final_stderr.is_empty() {
+                            let _ = stderr.blocking_write_and_flush(&final_stderr);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                // Unknown command
+                write_str(stderr, &format!("brush: command not found: {}\n", cmd));
+            }
         }
     }
 }
@@ -203,7 +247,7 @@ fn cmd_cd(args: &[&str], state: &mut ShellState, stderr: &OutputStream) {
             }
         }
     };
-    
+
     // TODO: validate that directory exists using WASI filesystem
     // For now, just update the state
     state.cwd = target;
@@ -211,16 +255,19 @@ fn cmd_cd(args: &[&str], state: &mut ShellState, stderr: &OutputStream) {
 
 /// echo - print arguments
 fn cmd_echo(args: &[&str], state: &ShellState, stdout: &OutputStream) {
-    let output: Vec<String> = args.iter().map(|arg| {
-        // Simple variable expansion
-        if arg.starts_with('$') {
-            let var_name = &arg[1..];
-            state.get_var(var_name).unwrap_or("").to_string()
-        } else {
-            arg.to_string()
-        }
-    }).collect();
-    
+    let output: Vec<String> = args
+        .iter()
+        .map(|arg| {
+            // Simple variable expansion
+            if arg.starts_with('$') {
+                let var_name = &arg[1..];
+                state.get_var(var_name).unwrap_or("").to_string()
+            } else {
+                arg.to_string()
+            }
+        })
+        .collect();
+
     write_str(stdout, &format!("{}\n", output.join(" ")));
 }
 
