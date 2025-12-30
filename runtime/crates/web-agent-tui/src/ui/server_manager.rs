@@ -75,10 +75,30 @@ pub enum Overlay {
         selected: usize,
         provider: String,
     },
-    /// Provider selection overlay
+    /// Provider selection overlay (simple quick-select)
     ProviderSelector {
         selected: usize,
     },
+    /// Provider configuration wizard (multi-step)
+    ProviderWizard {
+        step: ProviderWizardStep,
+        selected_provider: usize,
+        base_url_input: String,
+        model_input: String,
+    },
+}
+
+/// Steps in the provider wizard
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProviderWizardStep {
+    /// Select provider from list
+    SelectProvider,
+    /// Enter custom base URL (for custom providers)
+    EnterBaseUrl,
+    /// Enter model name
+    EnterModel,
+    /// Review and confirm
+    Confirm,
 }
 
 /// Create a centered rectangle for popups
@@ -487,6 +507,21 @@ pub fn render_overlay(
         Overlay::ProviderSelector { selected } => {
             render_provider_selector(frame, area, *selected);
         }
+        Overlay::ProviderWizard {
+            step,
+            selected_provider,
+            base_url_input,
+            model_input,
+        } => {
+            render_provider_wizard(
+                frame,
+                area,
+                step,
+                *selected_provider,
+                base_url_input,
+                model_input,
+            );
+        }
     }
 }
 
@@ -555,23 +590,36 @@ fn render_model_selector(frame: &mut Frame, area: Rect, provider: &str, selected
     }
 }
 
-/// Available AI providers
-pub const PROVIDERS: &[(&str, &str)] = &[
-    ("anthropic", "Anthropic (Claude)"),
-    ("openai", "OpenAI (GPT)"),
+/// Available AI providers (id, name, default_base_url)
+/// If base_url is None, the user must provide one (custom provider)
+pub const PROVIDERS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "anthropic",
+        "Anthropic (Claude)",
+        Some("https://api.anthropic.com/v1"),
+    ),
+    ("openai", "OpenAI (GPT)", Some("https://api.openai.com/v1")),
+    ("custom", "Custom (OpenAI-compatible)", None),
 ];
 
 /// Render provider selection overlay
 fn render_provider_selector(frame: &mut Frame, area: Rect, selected: usize) {
-    let popup = centered_rect(40, 30, area);
+    let popup = centered_rect(50, 35, area);
     frame.render_widget(Clear, popup);
 
     let items: Vec<ListItem> = PROVIDERS
         .iter()
-        .map(|(id, name)| {
+        .map(|(id, name, base_url)| {
+            let url_hint = match base_url {
+                Some(_) => "",
+                None => " (enter URL)",
+            };
             ListItem::new(Line::from(vec![
                 Span::styled(*name, Style::default().fg(Color::White)),
-                Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" ({}){}", id, url_hint),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]))
         })
         .collect();
@@ -601,5 +649,153 @@ fn render_provider_selector(frame: &mut Frame, area: Rect, selected: usize) {
     let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
     if hint_area.y < area.height {
         frame.render_widget(hints, hint_area);
+    }
+}
+
+/// Render provider configuration wizard
+pub fn render_provider_wizard(
+    frame: &mut Frame,
+    area: Rect,
+    step: &ProviderWizardStep,
+    selected_provider: usize,
+    base_url_input: &str,
+    model_input: &str,
+) {
+    match step {
+        ProviderWizardStep::SelectProvider => {
+            render_provider_selector(frame, area, selected_provider);
+        }
+        ProviderWizardStep::EnterBaseUrl => {
+            let popup = centered_rect(60, 25, area);
+            frame.render_widget(Clear, popup);
+
+            let block = Block::default()
+                .title("🔗 Enter Base URL")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+
+            let inner = block.inner(popup);
+            frame.render_widget(block, popup);
+
+            // Instructions
+            let instructions = Paragraph::new(vec![
+                Line::from("Enter the base URL for your OpenAI-compatible API."),
+                Line::from("Examples: http://localhost:11434/v1 (Ollama)"),
+                Line::from("         https://api.groq.com/openai/v1 (Groq)"),
+                Line::from(""),
+            ])
+            .style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(instructions, Rect::new(inner.x, inner.y, inner.width, 4));
+
+            // Input field
+            let input_area = Rect::new(inner.x, inner.y + 4, inner.width, 3);
+            let input_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Cyan));
+            let input_inner = input_block.inner(input_area);
+            frame.render_widget(input_block, input_area);
+
+            let input_text = Paragraph::new(format!("{}▋", base_url_input));
+            frame.render_widget(input_text, input_inner);
+
+            // Hints
+            let hints = Paragraph::new("Enter to continue │ Esc to cancel")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+            if hint_area.y < area.height {
+                frame.render_widget(hints, hint_area);
+            }
+        }
+        ProviderWizardStep::EnterModel => {
+            let popup = centered_rect(60, 25, area);
+            frame.render_widget(Clear, popup);
+
+            let block = Block::default()
+                .title("🤖 Enter Model Name")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+
+            let inner = block.inner(popup);
+            frame.render_widget(block, popup);
+
+            // Get provider name for hint
+            let provider_name = PROVIDERS
+                .get(selected_provider)
+                .map(|p| p.1)
+                .unwrap_or("Custom");
+
+            // Instructions
+            let instructions = Paragraph::new(vec![
+                Line::from(format!("Enter the model name for {}.", provider_name)),
+                Line::from("Examples: gpt-4o, llama3.1, mixtral-8x7b"),
+                Line::from(""),
+            ])
+            .style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(instructions, Rect::new(inner.x, inner.y, inner.width, 3));
+
+            // Input field
+            let input_area = Rect::new(inner.x, inner.y + 3, inner.width, 3);
+            let input_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Cyan));
+            let input_inner = input_block.inner(input_area);
+            frame.render_widget(input_block, input_area);
+
+            let input_text = Paragraph::new(format!("{}▋", model_input));
+            frame.render_widget(input_text, input_inner);
+
+            // Hints
+            let hints = Paragraph::new("Enter to continue │ Esc to cancel")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+            if hint_area.y < area.height {
+                frame.render_widget(hints, hint_area);
+            }
+        }
+        ProviderWizardStep::Confirm => {
+            let popup = centered_rect(50, 30, area);
+            frame.render_widget(Clear, popup);
+
+            let block = Block::default()
+                .title("✓ Confirm Configuration")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+
+            let inner = block.inner(popup);
+            frame.render_widget(block, popup);
+
+            let (provider_id, provider_name, _) = PROVIDERS
+                .get(selected_provider)
+                .unwrap_or(&("custom", "Custom", None));
+
+            let summary = Paragraph::new(vec![
+                Line::from(vec![
+                    Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(*provider_name, Style::default().fg(Color::White)),
+                ]),
+                Line::from(vec![
+                    Span::styled("ID: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(*provider_id, Style::default().fg(Color::Cyan)),
+                ]),
+                Line::from(vec![
+                    Span::styled("Base URL: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(base_url_input, Style::default().fg(Color::Green)),
+                ]),
+                Line::from(vec![
+                    Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(model_input, Style::default().fg(Color::Yellow)),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Press Enter to apply, Esc to cancel",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ]);
+            frame.render_widget(summary, inner);
+        }
     }
 }

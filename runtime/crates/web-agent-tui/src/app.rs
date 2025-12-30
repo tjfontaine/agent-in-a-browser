@@ -998,8 +998,8 @@ impl<R: Read, W: Write> App<R, W> {
                 }
             }
             Overlay::ProviderSelector { selected } => {
-                let providers = crate::ui::server_manager::PROVIDERS;
-                let max_items = providers.len();
+                use crate::ui::server_manager::{ProviderWizardStep, PROVIDERS};
+                let max_items = PROVIDERS.len();
 
                 match byte {
                     0x1B => {
@@ -1020,40 +1020,176 @@ impl<R: Read, W: Write> App<R, W> {
                     }
                     0x0D => {
                         // Enter - select provider
-                        if let Some((provider_id, _name)) = providers.get(*selected) {
-                            // Update config
-                            self.config.provider.default = provider_id.to_string();
-                            let _ = self.config.save();
-
-                            // Create new AI client for selected provider
-                            let default_model = if *provider_id == "anthropic" {
-                                &self.config.models.anthropic
+                        if let Some((provider_id, _name, base_url)) = PROVIDERS.get(*selected) {
+                            if *provider_id == "custom" {
+                                // Custom provider - launch wizard for URL input
+                                self.overlay = Some(Overlay::ProviderWizard {
+                                    step: ProviderWizardStep::EnterBaseUrl,
+                                    selected_provider: *selected,
+                                    base_url_input: String::new(),
+                                    model_input: String::new(),
+                                });
                             } else {
-                                &self.config.models.openai
-                            };
+                                // Preconfigured provider - apply directly
+                                self.config.provider.default = provider_id.to_string();
+                                self.config.provider.base_url = base_url.map(|s| s.to_string());
+                                let _ = self.config.save();
 
-                            if *provider_id == "anthropic" {
-                                self.ai_client = crate::bridge::AiClient::anthropic(default_model);
-                            } else {
-                                self.ai_client = crate::bridge::AiClient::openai(default_model);
+                                // Create new AI client for selected provider
+                                let default_model = if *provider_id == "anthropic" {
+                                    &self.config.models.anthropic
+                                } else {
+                                    &self.config.models.openai
+                                };
+
+                                if *provider_id == "anthropic" {
+                                    self.ai_client =
+                                        crate::bridge::AiClient::anthropic(default_model);
+                                } else {
+                                    self.ai_client = crate::bridge::AiClient::openai(default_model);
+                                }
+
+                                // Apply base URL if specified
+                                if let Some(url) = base_url {
+                                    self.ai_client.set_base_url(url);
+                                }
+
+                                // Re-apply API key if we have one
+                                if let Some(ref api_key) = self.config.provider.api_key {
+                                    self.ai_client.set_api_key(api_key);
+                                }
+
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!(
+                                        "Switched to {} with model: {}",
+                                        provider_id, default_model
+                                    ),
+                                });
+                                self.overlay = None;
                             }
-
-                            // Re-apply API key if we have one
-                            if let Some(ref api_key) = self.config.provider.api_key {
-                                self.ai_client.set_api_key(api_key);
-                            }
-
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!(
-                                    "Switched to {} with model: {}",
-                                    provider_id, default_model
-                                ),
-                            });
-                            self.overlay = None;
                         }
                     }
                     _ => {}
+                }
+            }
+            Overlay::ProviderWizard {
+                step,
+                selected_provider,
+                base_url_input,
+                model_input,
+            } => {
+                use crate::ui::server_manager::{ProviderWizardStep, PROVIDERS};
+
+                match step {
+                    ProviderWizardStep::SelectProvider => {
+                        // Handle selection like ProviderSelector
+                        let max_items = PROVIDERS.len();
+                        match byte {
+                            0x1B => self.overlay = None,
+                            0xF0 | 0x6B => {
+                                if *selected_provider > 0 {
+                                    *selected_provider -= 1;
+                                }
+                            }
+                            0xF1 | 0x6A => {
+                                if *selected_provider + 1 < max_items {
+                                    *selected_provider += 1;
+                                }
+                            }
+                            0x0D => {
+                                if let Some((provider_id, _, base_url)) =
+                                    PROVIDERS.get(*selected_provider)
+                                {
+                                    if *provider_id == "custom" || base_url.is_none() {
+                                        *step = ProviderWizardStep::EnterBaseUrl;
+                                    } else {
+                                        // Pre-fill base URL and go to model step
+                                        *base_url_input = base_url.unwrap_or("").to_string();
+                                        *step = ProviderWizardStep::EnterModel;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    ProviderWizardStep::EnterBaseUrl => {
+                        match byte {
+                            0x1B => self.overlay = None,
+                            0x0D => {
+                                // Enter - proceed to model step if URL is valid
+                                if base_url_input.starts_with("http://")
+                                    || base_url_input.starts_with("https://")
+                                {
+                                    *step = ProviderWizardStep::EnterModel;
+                                }
+                            }
+                            0x7F | 0x08 => {
+                                // Backspace
+                                base_url_input.pop();
+                            }
+                            b if b >= 0x20 && b < 0x7F => {
+                                // Printable ASCII
+                                base_url_input.push(b as char);
+                            }
+                            _ => {}
+                        }
+                    }
+                    ProviderWizardStep::EnterModel => {
+                        match byte {
+                            0x1B => self.overlay = None,
+                            0x0D => {
+                                // Enter - proceed to confirm if model is not empty
+                                if !model_input.is_empty() {
+                                    *step = ProviderWizardStep::Confirm;
+                                }
+                            }
+                            0x7F | 0x08 => {
+                                // Backspace
+                                model_input.pop();
+                            }
+                            b if b >= 0x20 && b < 0x7F => {
+                                // Printable ASCII
+                                model_input.push(b as char);
+                            }
+                            _ => {}
+                        }
+                    }
+                    ProviderWizardStep::Confirm => {
+                        match byte {
+                            0x1B => self.overlay = None,
+                            0x0D => {
+                                // Enter - apply configuration
+                                let (provider_id, _, _) = PROVIDERS
+                                    .get(*selected_provider)
+                                    .unwrap_or(&("custom", "Custom", None));
+
+                                self.config.provider.default = provider_id.to_string();
+                                self.config.provider.base_url = Some(base_url_input.clone());
+                                let _ = self.config.save();
+
+                                // Create new AI client with custom base URL
+                                // Always use OpenAI-compatible for custom providers
+                                self.ai_client = crate::bridge::AiClient::openai(model_input);
+                                self.ai_client.set_base_url(base_url_input);
+
+                                // Re-apply API key if we have one
+                                if let Some(ref api_key) = self.config.provider.api_key {
+                                    self.ai_client.set_api_key(api_key);
+                                }
+
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!(
+                                        "Configured {} provider:\nURL: {}\nModel: {}",
+                                        provider_id, base_url_input, model_input
+                                    ),
+                                });
+                                self.overlay = None;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
         }
