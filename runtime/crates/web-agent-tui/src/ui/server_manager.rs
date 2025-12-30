@@ -565,20 +565,33 @@ pub fn render_overlay(
     }
 }
 
-/// Model options for each provider
+/// Model options for each provider (static fallback when API refresh not used)
 pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static str)> {
     match provider {
         "anthropic" => vec![
-            ("claude-sonnet-4-20250514", "Claude Sonnet 4 (Latest)"),
+            ("claude-haiku-4-5-20251001", "Claude Haiku 4.5 (Fast)"),
+            ("claude-sonnet-4-20250514", "Claude Sonnet 4"),
             ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet"),
-            ("claude-3-5-haiku-20241022", "Claude 3.5 Haiku (Fast)"),
             ("claude-3-opus-20240229", "Claude 3 Opus"),
         ],
         "openai" => vec![
-            ("gpt-4o", "GPT-4o (Latest)"),
+            ("codex-mini-latest", "Codex Mini (Coding)"),
+            ("o3-mini", "o3 Mini (Reasoning)"),
+            ("gpt-4o", "GPT-4o"),
             ("gpt-4o-mini", "GPT-4o Mini (Fast)"),
-            ("gpt-4-turbo", "GPT-4 Turbo"),
-            ("o1-preview", "o1 Preview (Reasoning)"),
+            ("o1", "o1 (Reasoning)"),
+        ],
+        "google" | "gemini" => vec![
+            ("gemini-3-flash-preview", "Gemini 3 Flash"),
+            ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+            ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite (Fastest)"),
+            ("gemini-2.0-flash", "Gemini 2.0 Flash"),
+        ],
+        "openrouter" => vec![
+            ("anthropic/claude-haiku-4-5", "Claude Haiku 4.5"),
+            ("anthropic/claude-sonnet-4", "Claude Sonnet 4"),
+            ("openai/gpt-4o", "GPT-4o"),
+            ("google/gemini-2.5-flash", "Gemini 2.5 Flash"),
         ],
         _ => vec![],
     }
