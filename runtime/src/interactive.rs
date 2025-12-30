@@ -9,9 +9,9 @@ use crate::shell::{run_pipeline, ShellEnv};
 use std::fs;
 use std::path::PathBuf;
 
-/// Config paths (same as web-agent-tui)
-const CONFIG_DIR: &str = ".config/web-agent";
-const SHELL_HISTORY_FILE: &str = ".config/web-agent/shell_history";
+/// Config paths (absolute from OPFS root)
+const CONFIG_DIR: &str = "/.config/web-agent";
+const SHELL_HISTORY_FILE: &str = "/.config/web-agent/shell_history";
 const MAX_HISTORY_ENTRIES: usize = 1000;
 
 /// Result of reading a line
@@ -95,9 +95,9 @@ fn run_interactive_shell(
         let _ = shell_env.set_var(key, value);
     }
 
-    // Temporarily disabled history load for testing
-    let mut history: Vec<String> = Vec::new();
-    let mut history_index = 0;
+    // Load persistent shell history
+    let mut history = load_shell_history();
+    let mut history_index = history.len();
 
     loop {
         // Render prompt: /current/path$
@@ -112,10 +112,10 @@ fn run_interactive_shell(
                     continue;
                 }
 
-                // Add to history (in-memory only for now)
+                // Add to history and persist
                 add_to_history(&mut history, line.to_string());
                 history_index = history.len();
-                // save_shell_history(&history); // disabled for testing
+                save_shell_history(&history);
 
                 // Handle exit command
                 if line == "exit" || line.starts_with("exit ") {
@@ -432,20 +432,45 @@ fn add_to_history(history: &mut Vec<String>, command: String) {
 // ============================================================================
 
 fn load_shell_history() -> Vec<String> {
+    eprintln!("[shell] Loading history from: {}", SHELL_HISTORY_FILE);
     match fs::read_to_string(SHELL_HISTORY_FILE) {
-        Ok(contents) => contents.lines().map(|s| s.to_string()).collect(),
-        Err(_) => Vec::new(),
+        Ok(contents) => {
+            // Filter out empty lines
+            let lines: Vec<String> = contents
+                .lines()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            eprintln!("[shell] Loaded {} history entries", lines.len());
+            lines
+        }
+        Err(e) => {
+            eprintln!("[shell] Failed to load history: {:?}", e);
+            Vec::new()
+        }
     }
 }
 
 fn save_shell_history(history: &[String]) {
+    eprintln!(
+        "[shell] Saving {} history entries to: {}",
+        history.len(),
+        SHELL_HISTORY_FILE
+    );
     if ensure_config_dir().is_err() {
+        eprintln!("[shell] Failed to ensure config dir");
         return;
     }
     let start = history.len().saturating_sub(MAX_HISTORY_ENTRIES);
     let trimmed = &history[start..];
     let contents = trimmed.join("\n");
-    let _ = fs::write(SHELL_HISTORY_FILE, contents);
+    match fs::write(SHELL_HISTORY_FILE, &contents) {
+        Ok(_) => eprintln!(
+            "[shell] History saved successfully ({} bytes)",
+            contents.len()
+        ),
+        Err(e) => eprintln!("[shell] Failed to save history: {:?}", e),
+    }
 }
 
 fn ensure_config_dir() -> Result<(), std::io::Error> {

@@ -13,6 +13,7 @@ import { InputStream, OutputStream } from './streams';
 import {
     directoryTree,
     getTreeEntry, setTreeEntry, removeTreeEntry,
+    getTreeEntryWithScan,
     getOpfsRoot, setOpfsRoot,
     isInitialized, setInitialized,
     getCwd, setCwd,
@@ -22,6 +23,7 @@ import {
     getOpfsDirectory, getOpfsFile,
     syncHandleCache,
     asyncWriteFile,
+    asyncReadFile,
     type TreeEntry
 } from './directory-tree';
 import {
@@ -144,15 +146,17 @@ class Descriptor {
         };
     }
 
-    openAt(
+    async openAt(
         _pathFlags: number,
         subpath: string,
         openFlags: { create?: boolean; directory?: boolean; truncate?: boolean },
         _descriptorFlags: number,
         _modes: number
-    ): Descriptor {
+    ): Promise<Descriptor> {
         const fullPath = this.resolvePath(subpath);
-        let entry = getTreeEntry(fullPath);
+
+        // Use async tree entry lookup that scans directories lazily
+        let entry = await getTreeEntryWithScan(fullPath);
 
         if (!entry && openFlags.create) {
             // Create new entry with current timestamp
@@ -279,35 +283,46 @@ class Descriptor {
             });
         }
 
-        // Fallback: read entire file via sync helper (binary-safe), then stream from memory
-        console.log('[opfs-fs] No cached handle for stream, using syncReadFileBinary:', normalizedPath);
-        let fileData: Uint8Array | null = null;
-        try {
-            fileData = syncReadFileBinary(normalizedPath);
-        } catch (e) {
-            console.error('[opfs-fs] readViaStream sync fallback error:', e);
-            throw 'no-entry';
-        }
+        // Fallback: use async read via OPFS APIs (JSPI will suspend on the Promise)
+        // We need to read the file lazily on first blockingRead call
+        console.log('[opfs-fs] No cached handle for stream, using asyncReadFile:', normalizedPath);
 
-        const size = fileData.length;
-        const data = fileData;
+        let fileData: Uint8Array | null = null;
+        let fileSize = 0;
+        const asyncPath = normalizedPath;
 
         return new InputStream({
             read(len: bigint): Uint8Array {
-                if (offset >= size) {
+                // For non-blocking read, if we haven't loaded yet, return empty
+                // (caller should use blockingRead for actual data)
+                if (!fileData) {
                     return new Uint8Array(0);
                 }
-                const readLen = Math.min(Number(len), size - offset);
-                const result = data.slice(offset, offset + readLen);
+                if (offset >= fileSize) {
+                    return new Uint8Array(0);
+                }
+                const readLen = Math.min(Number(len), fileSize - offset);
+                const result = fileData.slice(offset, offset + readLen);
                 offset += readLen;
                 return result;
             },
-            blockingRead(len: bigint): Uint8Array {
-                if (offset >= size) {
+            async blockingRead(len: bigint): Promise<Uint8Array> {
+                // Lazy load file on first read
+                if (!fileData) {
+                    try {
+                        fileData = await asyncReadFile(asyncPath);
+                        fileSize = fileData.length;
+                    } catch (e) {
+                        console.error('[opfs-fs] readViaStream async fallback error:', e);
+                        throw { tag: 'last-operation-failed', val: new Error('File not found') };
+                    }
+                }
+
+                if (offset >= fileSize) {
                     return new Uint8Array(0);
                 }
-                const readLen = Math.min(Number(len), size - offset);
-                const result = data.slice(offset, offset + readLen);
+                const readLen = Math.min(Number(len), fileSize - offset);
+                const result = fileData.slice(offset, offset + readLen);
                 offset += readLen;
                 return result;
             }

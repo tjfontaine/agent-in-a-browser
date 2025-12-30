@@ -226,6 +226,41 @@ export function getTreeEntry(path: string): TreeEntry | undefined {
     return current;
 }
 
+/**
+ * Get tree entry, scanning parent directories along the path if needed.
+ * This ensures lazy-loaded directories are scanned before checking for the entry.
+ * Returns a Promise that JSPI will suspend on.
+ */
+export async function getTreeEntryWithScan(path: string): Promise<TreeEntry | undefined> {
+    const parts = normalizePath(path).split('/').filter(p => p);
+    let current = directoryTree;
+    let currentPath = '';
+
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+
+        // If this directory hasn't been scanned yet, scan it
+        if (current.dir !== undefined && !current._scanned) {
+            await syncScanDirectory(currentPath);
+        }
+
+        if (!current.dir || !current.dir[part]) {
+            // Maybe the entry exists in OPFS but wasn't in the tree - try scanning parent
+            if (current.dir !== undefined && !current._scanned) {
+                await syncScanDirectory(currentPath);
+            }
+            // Check again after scan
+            if (!current.dir || !current.dir[part]) {
+                return undefined;
+            }
+        }
+
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        current = current.dir[part];
+    }
+    return current;
+}
+
 export function setTreeEntry(path: string, entry: TreeEntry): void {
     const parts = normalizePath(path).split('/').filter(p => p);
     if (parts.length === 0) return;
@@ -383,6 +418,46 @@ export async function asyncWriteFile(path: string, data: Uint8Array): Promise<vo
         await writable.close();
     } catch (e) {
         console.error('[opfs-fs] Failed to write file:', path, e);
+        throw e;
+    }
+}
+
+/**
+ * Read file content asynchronously using OPFS APIs.
+ * Returns a Promise that JSPI will suspend on.
+ * This avoids Atomics.wait() which doesn't work in all contexts.
+ */
+export async function asyncReadFile(path: string): Promise<Uint8Array> {
+    if (!opfsRoot) {
+        throw new Error('OPFS not initialized');
+    }
+
+    const parts = path.split('/').filter(p => p && p !== '.');
+    if (parts.length === 0) {
+        throw new Error('Invalid path');
+    }
+
+    const fileName = parts.pop()!;
+
+    // Navigate to parent directory
+    let dir = opfsRoot;
+    for (const part of parts) {
+        try {
+            dir = await dir.getDirectoryHandle(part);
+        } catch (e) {
+            console.error('[opfs-fs] Failed to find directory:', part, e);
+            throw e;
+        }
+    }
+
+    // Read the file
+    try {
+        const fileHandle = await dir.getFileHandle(fileName);
+        const file = await fileHandle.getFile();
+        const arrayBuffer = await file.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+    } catch (e) {
+        console.error('[opfs-fs] Failed to read file:', path, e);
         throw e;
     }
 }
