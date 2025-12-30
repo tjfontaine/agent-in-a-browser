@@ -27,6 +27,134 @@ macro_rules! __export_world_tui_cabi{
 #[doc(hidden)]
 pub(crate) use __export_world_tui_cabi;
 #[allow(dead_code, clippy::all)]
+pub mod shell {
+  pub mod unix {
+
+    #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+    pub mod command {
+      #[used]
+      #[doc(hidden)]
+      static __FORCE_SECTION_REF: fn() =
+      super::super::super::__link_custom_section_describing_imports;
+      
+      use super::super::super::_rt;
+      pub type InputStream = super::super::super::wasi::io::streams::InputStream;
+      pub type OutputStream = super::super::super::wasi::io::streams::OutputStream;
+      #[derive(Clone)]
+      pub struct ExecEnv {
+        pub cwd: _rt::String,
+        pub vars: _rt::Vec::<(_rt::String,_rt::String,)>,
+      }
+      impl ::core::fmt::Debug for ExecEnv {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+          f.debug_struct("ExecEnv").field("cwd", &self.cwd).field("vars", &self.vars).finish()
+        }
+      }
+      #[allow(unused_unsafe, clippy::all)]
+      #[allow(async_fn_in_trait)]
+      pub fn run(name: &str,args: &[_rt::String],env: &ExecEnv,stdin: InputStream,stdout: OutputStream,stderr: OutputStream,) -> i32{
+        unsafe {
+          let vec0 = name;
+          let ptr0 = vec0.as_ptr().cast::<u8>();
+          let len0 = vec0.len();
+          let vec2 = args;
+          let len2 = vec2.len();
+          let layout2 = _rt::alloc::Layout::from_size_align(vec2.len() * (2*::core::mem::size_of::<*const u8>()), ::core::mem::size_of::<*const u8>()).unwrap();
+          let (result2, _cleanup2) = wit_bindgen::rt::Cleanup::new(layout2);for (i, e) in vec2.into_iter().enumerate() {
+            let base = result2.add(i * (2*::core::mem::size_of::<*const u8>()));
+            {
+              let vec1 = e;
+              let ptr1 = vec1.as_ptr().cast::<u8>();
+              let len1 = vec1.len();
+              *base.add(::core::mem::size_of::<*const u8>()).cast::<usize>() = len1;
+              *base.add(0).cast::<*mut u8>() = ptr1.cast_mut();
+            }
+          }
+          let ExecEnv{ cwd:cwd3, vars:vars3, } = env;
+          let vec4 = cwd3;
+          let ptr4 = vec4.as_ptr().cast::<u8>();
+          let len4 = vec4.len();
+          let vec8 = vars3;
+          let len8 = vec8.len();
+          let layout8 = _rt::alloc::Layout::from_size_align(vec8.len() * (4*::core::mem::size_of::<*const u8>()), ::core::mem::size_of::<*const u8>()).unwrap();
+          let (result8, _cleanup8) = wit_bindgen::rt::Cleanup::new(layout8);for (i, e) in vec8.into_iter().enumerate() {
+            let base = result8.add(i * (4*::core::mem::size_of::<*const u8>()));
+            {
+              let (t5_0, t5_1, ) = e;
+              let vec6 = t5_0;
+              let ptr6 = vec6.as_ptr().cast::<u8>();
+              let len6 = vec6.len();
+              *base.add(::core::mem::size_of::<*const u8>()).cast::<usize>() = len6;
+              *base.add(0).cast::<*mut u8>() = ptr6.cast_mut();
+              let vec7 = t5_1;
+              let ptr7 = vec7.as_ptr().cast::<u8>();
+              let len7 = vec7.len();
+              *base.add(3*::core::mem::size_of::<*const u8>()).cast::<usize>() = len7;
+              *base.add(2*::core::mem::size_of::<*const u8>()).cast::<*mut u8>() = ptr7.cast_mut();
+            }
+          }
+
+          #[cfg(target_arch = "wasm32")]
+          #[link(wasm_import_module = "shell:unix/command@0.1.0")]
+          unsafe extern "C" {
+            #[link_name = "run"]
+            fn wit_import9(_: *mut u8, _: usize, _: *mut u8, _: usize, _: *mut u8, _: usize, _: *mut u8, _: usize, _: i32, _: i32, _: i32, ) -> i32;
+          }
+
+          #[cfg(not(target_arch = "wasm32"))]
+          unsafe extern "C" fn wit_import9(_: *mut u8, _: usize, _: *mut u8, _: usize, _: *mut u8, _: usize, _: *mut u8, _: usize, _: i32, _: i32, _: i32, ) -> i32 { unreachable!() }
+          let ret = wit_import9(ptr0.cast_mut(), len0, result2, len2, ptr4.cast_mut(), len4, result8, len8, (&stdin).take_handle() as i32, (&stdout).take_handle() as i32, (&stderr).take_handle() as i32);
+          ret
+        }
+      }
+      #[allow(unused_unsafe, clippy::all)]
+      #[allow(async_fn_in_trait)]
+      pub fn list_commands() -> _rt::Vec::<_rt::String>{
+        unsafe {
+
+          #[cfg_attr(target_pointer_width="64", repr(align(8)))]
+          #[cfg_attr(target_pointer_width="32", repr(align(4)))]
+          struct RetArea([::core::mem::MaybeUninit::<u8>; 2*::core::mem::size_of::<*const u8>()]);
+          let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 2*::core::mem::size_of::<*const u8>()]);
+          let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+          #[cfg(target_arch = "wasm32")]
+          #[link(wasm_import_module = "shell:unix/command@0.1.0")]
+          unsafe extern "C" {
+            #[link_name = "list-commands"]
+            fn wit_import1(_: *mut u8, );
+          }
+
+          #[cfg(not(target_arch = "wasm32"))]
+          unsafe extern "C" fn wit_import1(_: *mut u8, ) { unreachable!() }
+          wit_import1(ptr0);
+          let l2 = *ptr0.add(0).cast::<*mut u8>();
+          let l3 = *ptr0.add(::core::mem::size_of::<*const u8>()).cast::<usize>();
+          let base7 = l2;
+          let len7 = l3;
+          let mut result7 = _rt::Vec::with_capacity(len7);
+          for i in 0..len7 {
+            let base = base7.add(i * (2*::core::mem::size_of::<*const u8>()));
+            let e7 = {
+              let l4 = *base.add(0).cast::<*mut u8>();
+              let l5 = *base.add(::core::mem::size_of::<*const u8>()).cast::<usize>();
+              let len6 = l5;
+              let bytes6 = _rt::Vec::from_raw_parts(l4.cast(), len6, len6);
+
+              _rt::string_lift(bytes6)
+            };
+            result7.push(e7);
+          }
+          _rt::cabi_dealloc(base7, len7 * (2*::core::mem::size_of::<*const u8>()), ::core::mem::size_of::<*const u8>());
+          let result8 = result7;
+          result8
+        }
+      }
+
+    }
+
+  }
+}
+#[allow(dead_code, clippy::all)]
 pub mod wasi {
   pub mod cli {
 
@@ -8183,8 +8311,8 @@ pub(crate) use __export_tui_impl as export;
 #[unsafe(link_section = "component-type:wit-bindgen:0.50.0:agent:tui@0.1.0:tui:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 7120] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xd66\x01A\x02\x01A)\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 7320] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x9e8\x01A\x02\x01A+\x01\
 B\x04\x04\0\x05error\x03\x01\x01h\0\x01@\x01\x04self\x01\0s\x04\0\x1d[method]err\
 or.to-debug-string\x01\x02\x03\0\x13wasi:io/error@0.2.4\x05\0\x01B\x0a\x04\0\x08\
 pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[method]pollable.rea\
@@ -8324,10 +8452,15 @@ ture-incoming-response.get\x01\x8a\x01\x01h\x07\x01k\x1b\x01@\x01\x03err\x8b\x01
 options\x03\0\x02\x02\x03\x02\x01\x16\x04\0\x18future-incoming-response\x03\0\x04\
 \x02\x03\x02\x01\x17\x04\0\x0aerror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01\
 i\x05\x01j\x01\x0b\x01\x07\x01@\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06\
-handle\x01\x0d\x03\0\x20wasi:http/outgoing-handler@0.2.4\x05\x18\x01@\0\0z\x04\0\
-\x03run\x01\x19\x04\0\x13agent:tui/tui@0.1.0\x04\0\x0b\x09\x01\0\x03tui\x03\0\0\0\
-G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.243.0\x10wit-bindge\
-n-rust\x060.50.0";
+handle\x01\x0d\x03\0\x20wasi:http/outgoing-handler@0.2.4\x05\x18\x01B\x0f\x02\x03\
+\x02\x01\x05\x04\0\x0cinput-stream\x03\0\0\x02\x03\x02\x01\x07\x04\0\x0doutput-s\
+tream\x03\0\x02\x01o\x02ss\x01p\x04\x01r\x02\x03cwds\x04vars\x05\x04\0\x08exec-e\
+nv\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01@\x06\x04names\x04args\x08\x03env\x07\x05\
+stdin\x09\x06stdout\x0a\x06stderr\x0a\0z\x04\0\x03run\x01\x0b\x01@\0\0\x08\x04\0\
+\x0dlist-commands\x01\x0c\x03\0\x18shell:unix/command@0.1.0\x05\x19\x01@\0\0z\x04\
+\0\x03run\x01\x1a\x04\0\x13agent:tui/tui@0.1.0\x04\0\x0b\x09\x01\0\x03tui\x03\0\0\
+\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.243.0\x10wit-bind\
+gen-rust\x060.50.0";
 
 #[inline(never)]
 #[doc(hidden)]

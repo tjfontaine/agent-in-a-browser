@@ -4,10 +4,13 @@
 
 use ratatui::Terminal;
 
-use crate::backend::{WasiBackend, enter_alternate_screen, leave_alternate_screen};
-use crate::bridge::{AiClient, McpClient, try_execute_local_tool, get_local_tool_definitions, format_tasks_for_display, Task, get_system_message};
-use crate::ui::{Mode, render_ui, AuxContent, AuxContentKind, ServerStatus};
-use std::io::{Write, Read};
+use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
+use crate::bridge::{
+    format_tasks_for_display, get_local_tool_definitions, get_system_message,
+    try_execute_local_tool, AiClient, McpClient, Task,
+};
+use crate::ui::{render_ui, AuxContent, AuxContentKind, Mode, ServerStatus};
+use std::io::{Read, Write};
 
 /// App state enumeration
 #[derive(Clone, Copy, PartialEq)]
@@ -74,28 +77,26 @@ impl<R: Read, W: Write> App<R, W> {
     pub fn new(stdin: R, mut stdout: W, width: u16, height: u16) -> Self {
         // Enter alternate screen mode
         let _ = enter_alternate_screen(&mut stdout);
-        
+
         let backend = WasiBackend::new(stdout, width, height);
         let terminal = Terminal::new(backend).expect("failed to create terminal");
-        
+
         // Create AI client (OpenAI by default)
         // TODO: Make this configurable
         let ai_client = AiClient::openai("gpt-4o");
-        
+
         // Create MCP client pointing to sandbox
         // The URL will be proxied by the frontend to the actual sandbox worker
         let mcp_client = McpClient::new("http://localhost:3000/mcp");
-        
+
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
             input: String::new(),
-            messages: vec![
-                Message {
-                    role: Role::System,
-                    content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
-                }
-            ],
+            messages: vec![Message {
+                role: Role::System,
+                content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
+            }],
             history: Vec::new(),
             history_index: 0,
             terminal,
@@ -113,38 +114,38 @@ impl<R: Read, W: Write> App<R, W> {
             tasks: Vec::new(),
         }
     }
-    
+
     /// Main run loop
     pub fn run(&mut self) -> i32 {
         // Setup
         self.setup_terminal();
-        
+
         // Main loop
         while !self.should_quit {
             // Render
             self.render();
-            
+
             // Handle input
             self.handle_input();
         }
-        
+
         // Cleanup
         self.cleanup_terminal();
-        
+
         0
     }
-    
+
     fn setup_terminal(&mut self) {
         let _ = self.terminal.clear();
         let _ = self.terminal.hide_cursor();
     }
-    
+
     fn cleanup_terminal(&mut self) {
         let _ = self.terminal.show_cursor();
         // Leave alternate screen - need to access writer through backend
         let _ = leave_alternate_screen(self.terminal.backend_mut().writer_mut());
     }
-    
+
     fn render(&mut self) {
         let mode = self.mode;
         let state = self.state;
@@ -152,12 +153,20 @@ impl<R: Read, W: Write> App<R, W> {
         let messages = self.messages.clone();
         let aux_content = self.aux_content.clone();
         let server_status = self.server_status.clone();
-        
+
         let _ = self.terminal.draw(|frame| {
-            render_ui(frame, mode, state, &input, &messages, &aux_content, &server_status);
+            render_ui(
+                frame,
+                mode,
+                state,
+                &input,
+                &messages,
+                &aux_content,
+                &server_status,
+            );
         });
     }
-    
+
     fn handle_input(&mut self) {
         // Read one byte from stdin
         let mut buf = [0u8; 1];
@@ -214,7 +223,7 @@ impl<R: Read, W: Write> App<R, W> {
             }
         }
     }
-    
+
     fn handle_escape_sequence(&mut self, first_bytes: &[u8]) {
         // Handle bare Escape (seq would be empty or not '[')
         if first_bytes.len() < 2 || first_bytes[0] != b'[' {
@@ -230,9 +239,9 @@ impl<R: Read, W: Write> App<R, W> {
             }
             return;
         }
-        
+
         let second = first_bytes[1];
-        
+
         // Check for extended sequences (like resize: ESC [ 8 ; rows ; cols t)
         if second == b'8' {
             // This might be a resize sequence - read until 't'
@@ -265,7 +274,7 @@ impl<R: Read, W: Write> App<R, W> {
             }
             return;
         }
-        
+
         match second {
             // Up arrow - history previous
             b'A' => {
@@ -294,17 +303,17 @@ impl<R: Read, W: Write> App<R, W> {
             _ => {}
         }
     }
-    
+
     fn handle_resize(&mut self, cols: u16, rows: u16) {
         // Update the terminal backend size
         self.terminal.backend_mut().set_size(cols, rows);
         // Force a redraw
         let _ = self.terminal.clear();
     }
-    
+
     fn submit_input(&mut self) {
         let input = std::mem::take(&mut self.input);
-        
+
         match self.state {
             AppState::NeedsApiKey => {
                 // This input is the API key - don't add to history
@@ -314,7 +323,7 @@ impl<R: Read, W: Write> App<R, W> {
                     content: "API key set.".to_string(),
                 });
                 self.state = AppState::Ready;
-                
+
                 // If we have a pending message, send it now
                 if let Some(pending) = self.pending_message.take() {
                     self.send_to_ai(&pending);
@@ -327,7 +336,7 @@ impl<R: Read, W: Write> App<R, W> {
                 }
                 // Reset history navigation to end
                 self.history_index = self.history.len();
-                
+
                 // Handle based on mode
                 match self.mode {
                     Mode::Shell => {
@@ -340,7 +349,7 @@ impl<R: Read, W: Write> App<R, W> {
                             role: Role::User,
                             content: input.clone(),
                         });
-                        
+
                         // Handle slash commands
                         if input.starts_with('/') {
                             self.handle_slash_command(&input);
@@ -353,7 +362,7 @@ impl<R: Read, W: Write> App<R, W> {
             }
         }
     }
-    
+
     /// Execute a shell command via MCP shell_eval
     fn execute_shell_command(&mut self, command: &str) {
         // Show the command with shell prompt
@@ -361,7 +370,7 @@ impl<R: Read, W: Write> App<R, W> {
             role: Role::User,
             content: format!("$ {}", command),
         });
-        
+
         // Handle shell-local commands
         if command.trim() == "exit" {
             self.mode = Mode::Agent;
@@ -371,7 +380,7 @@ impl<R: Read, W: Write> App<R, W> {
             });
             return;
         }
-        
+
         if command.trim() == "clear" {
             self.messages.clear();
             self.messages.push(Message {
@@ -380,14 +389,14 @@ impl<R: Read, W: Write> App<R, W> {
             });
             return;
         }
-        
+
         self.state = AppState::Processing;
-        
+
         // Call shell_eval via MCP
         let args = serde_json::json!({
             "command": command
         });
-        
+
         match self.mcp_client.call_tool("shell_eval", args) {
             Ok(output) => {
                 // Update aux panel with full output
@@ -396,14 +405,14 @@ impl<R: Read, W: Write> App<R, W> {
                     title: "Shell Output".to_string(),
                     content: output.clone(),
                 };
-                
+
                 // Show output in messages (truncate if long)
                 let display = if output.len() > 500 {
                     format!("{}...\n[see aux panel →]", &output[..500])
                 } else {
                     output
                 };
-                
+
                 self.messages.push(Message {
                     role: Role::Tool,
                     content: display,
@@ -416,10 +425,10 @@ impl<R: Read, W: Write> App<R, W> {
                 });
             }
         }
-        
+
         self.state = AppState::Ready;
     }
-    
+
     fn send_to_ai(&mut self, message: &str) {
         // Check if API key is set
         if !self.ai_client.has_api_key() {
@@ -432,9 +441,9 @@ impl<R: Read, W: Write> App<R, W> {
             });
             return;
         }
-        
+
         self.state = AppState::Processing;
-        
+
         // Get tools from MCP (sandbox)
         let mut tools = match self.mcp_client.list_tools() {
             Ok(t) => {
@@ -453,31 +462,27 @@ impl<R: Read, W: Write> App<R, W> {
                 vec![]
             }
         };
-        
+
         // Add local tools (task_write, etc.)
         let local_tools = get_local_tool_definitions();
         tools.extend(local_tools);
-        
+
         // Build message history for AI with system prompt first
         let mut ai_messages: Vec<crate::bridge::ai_client::Message> = vec![get_system_message()];
-        
+
         // Add conversation history (skip UI system messages like "Welcome...")
-        ai_messages.extend(
-            self.messages
-                .iter()
-                .filter_map(|m| match m.role {
-                    Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
-                    Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
-                    // Skip system messages from UI (like "Welcome to...")
-                    Role::System if m.content.starts_with("Welcome") => None,
-                    Role::System if m.content.starts_with("Please enter") => None,
-                    Role::System if m.content.starts_with("API key") => None,
-                    Role::System if m.content.contains("Calling tool") => None,
-                    Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
-                    Role::Tool => None, // Tool messages need tool_call_id
-                })
-        );
-        
+        ai_messages.extend(self.messages.iter().filter_map(|m| match m.role {
+            Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
+            Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
+            // Skip system messages from UI (like "Welcome to...")
+            Role::System if m.content.starts_with("Welcome") => None,
+            Role::System if m.content.starts_with("Please enter") => None,
+            Role::System if m.content.starts_with("API key") => None,
+            Role::System if m.content.contains("Calling tool") => None,
+            Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
+            Role::Tool => None, // Tool messages need tool_call_id
+        }));
+
         // Call AI
         match self.ai_client.chat(&ai_messages, &tools) {
             Ok(result) => {
@@ -488,7 +493,7 @@ impl<R: Read, W: Write> App<R, W> {
                         content: text,
                     });
                 }
-                
+
                 // Handle tool calls
                 for tool_call in result.tool_calls {
                     let tool_name = tool_call.function.name.clone();
@@ -496,9 +501,11 @@ impl<R: Read, W: Write> App<R, W> {
                         role: Role::System,
                         content: format!("🔧 Calling tool: {}", tool_name),
                     });
-                    
+
                     // Parse arguments
-                    let args = match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
+                    let args = match serde_json::from_str::<serde_json::Value>(
+                        &tool_call.function.arguments,
+                    ) {
                         Ok(a) => a,
                         Err(e) => {
                             self.messages.push(Message {
@@ -508,7 +515,7 @@ impl<R: Read, W: Write> App<R, W> {
                             continue;
                         }
                     };
-                    
+
                     // Try local tool first
                     if let Some(local_result) = try_execute_local_tool(&tool_name, args.clone()) {
                         // Handle local tool result
@@ -543,7 +550,7 @@ impl<R: Read, W: Write> App<R, W> {
                                     title: tool_name.clone(),
                                     content: result.clone(),
                                 };
-                                
+
                                 self.messages.push(Message {
                                     role: Role::Tool,
                                     content: if result.len() > 100 {
@@ -570,14 +577,14 @@ impl<R: Read, W: Write> App<R, W> {
                 });
             }
         }
-        
+
         self.state = AppState::Ready;
     }
-    
+
     fn handle_slash_command(&mut self, cmd: &str) {
         let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
         let command = parts.first().map(|s| *s).unwrap_or("");
-        
+
         match command {
             "/help" | "/h" => {
                 self.messages.push(Message {
@@ -591,13 +598,14 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /key      - Set API key",
                         "  /clear    - Clear messages",
                         "  /quit     - Exit (or ^C)",
-                    ].join("\n"),
+                    ]
+                    .join("\n"),
                 });
             }
             "/tools" => {
                 // List all available tools
                 let mut tool_list = vec!["Available tools:".to_string()];
-                
+
                 // Local tools
                 let local_tools = get_local_tool_definitions();
                 if !local_tools.is_empty() {
@@ -606,7 +614,7 @@ impl<R: Read, W: Write> App<R, W> {
                         tool_list.push(format!("    • {}", tool.name));
                     }
                 }
-                
+
                 // MCP tools
                 match self.mcp_client.list_tools() {
                     Ok(mcp_tools) => {
@@ -624,7 +632,7 @@ impl<R: Read, W: Write> App<R, W> {
                         tool_list.push("  [sandbox] not connected".to_string());
                     }
                 }
-                
+
                 self.messages.push(Message {
                     role: Role::System,
                     content: tool_list.join("\n"),
@@ -633,10 +641,14 @@ impl<R: Read, W: Write> App<R, W> {
             "/servers" => {
                 let mut status = vec![format!(
                     "MCP Servers:\n  Local sandbox: {} ({} tools)",
-                    if self.server_status.local_connected { "●" } else { "○" },
+                    if self.server_status.local_connected {
+                        "●"
+                    } else {
+                        "○"
+                    },
                     self.server_status.local_tool_count
                 )];
-                
+
                 if self.server_status.remote_servers.is_empty() {
                     status.push("  Remote: none connected".to_string());
                     status.push("  Use /connect <url> to add".to_string());
@@ -651,17 +663,51 @@ impl<R: Read, W: Write> App<R, W> {
                         ));
                     }
                 }
-                
+
                 self.messages.push(Message {
                     role: Role::System,
                     content: status.join("\n"),
                 });
             }
             "/shell" | "/sh" => {
-                self.mode = Mode::Shell;
+                // Launch interactive shell mode
+                // 1. Clear terminal for fresh shell session
+                let stdout = crate::bindings::wasi::cli::stdout::get_stdout();
+                let _ = stdout.blocking_write_and_flush(b"\x1b[2J\x1b[H"); // Clear screen, cursor home
+
+                // 2. Get fresh stdin/stdout/stderr for shell
+                let stdin = crate::bindings::wasi::cli::stdin::get_stdin();
+                let stdout = crate::bindings::wasi::cli::stdout::get_stdout();
+                let stderr = crate::bindings::wasi::cli::stderr::get_stderr();
+
+                // 3. Create execution environment
+                let env = crate::bindings::shell::unix::command::ExecEnv {
+                    cwd: "/".to_string(),
+                    vars: vec![
+                        ("HOME".to_string(), "/".to_string()),
+                        ("PATH".to_string(), "/bin:/usr/bin".to_string()),
+                        ("TERM".to_string(), "xterm-256color".to_string()),
+                    ],
+                };
+
+                // 4. Run brush-shell (blocks until exit)
+                let _exit_code = crate::bindings::shell::unix::command::run(
+                    "sh",
+                    &[],
+                    &env,
+                    stdin,
+                    stdout,
+                    stderr,
+                );
+
+                // 5. Restore TUI - clear screen and redraw
+                let stdout = crate::bindings::wasi::cli::stdout::get_stdout();
+                let _ = stdout.blocking_write_and_flush(b"\x1b[2J\x1b[H");
+                let _ = self.terminal.clear();
+
                 self.messages.push(Message {
                     role: Role::System,
-                    content: "Entering shell mode (^D to exit)".to_string(),
+                    content: "Returned from shell".to_string(),
                 });
             }
             "/key" => {

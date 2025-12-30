@@ -1,4 +1,5 @@
 // world root:component/root
+export type * as ShellUnixCommand010 from './interfaces/shell-unix-command.js'; // import shell:unix/command@0.1.0
 export type * as WasiCliEnvironment026 from './interfaces/wasi-cli-environment.js'; // import wasi:cli/environment@0.2.6
 export type * as WasiCliExit026 from './interfaces/wasi-cli-exit.js'; // import wasi:cli/exit@0.2.6
 export type * as WasiCliStderr026 from './interfaces/wasi-cli-stderr.js'; // import wasi:cli/stderr@0.2.6
