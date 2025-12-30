@@ -17,37 +17,41 @@ pub struct WasiBackend<W: Write> {
 
 impl<W: Write> WasiBackend<W> {
     pub fn new(writer: W, width: u16, height: u16) -> Self {
-        Self { writer, width, height }
+        Self {
+            writer,
+            width,
+            height,
+        }
     }
-    
+
     pub fn set_size(&mut self, width: u16, height: u16) {
         self.width = width;
         self.height = height;
     }
-    
+
     /// Get mutable reference to the writer
     pub fn writer_mut(&mut self) -> &mut W {
         &mut self.writer
     }
-    
+
     fn write_ansi(&mut self, s: &str) -> IOResult<()> {
         self.writer.write_all(s.as_bytes())
     }
-    
+
     fn apply_style(&mut self, style: Style) -> IOResult<()> {
         // Reset first
         self.write_ansi("\x1b[0m")?;
-        
+
         // Apply foreground color
         if let Some(fg) = style.fg {
             self.write_ansi(&color_to_ansi_fg(fg))?;
         }
-        
+
         // Apply background color
         if let Some(bg) = style.bg {
             self.write_ansi(&color_to_ansi_bg(bg))?;
         }
-        
+
         // Apply modifiers
         let mods = style.add_modifier;
         if mods.contains(Modifier::BOLD) {
@@ -62,7 +66,7 @@ impl<W: Write> WasiBackend<W> {
         if mods.contains(Modifier::UNDERLINED) {
             self.write_ansi("\x1b[4m")?;
         }
-        
+
         Ok(())
     }
 }
@@ -74,66 +78,69 @@ impl<W: Write> Backend for WasiBackend<W> {
     {
         let mut last_pos: Option<(u16, u16)> = None;
         let mut last_style: Option<Style> = None;
-        
+
         for (x, y, cell) in content {
             // Move cursor if not sequential
             if last_pos.map_or(true, |(lx, ly)| y != ly || x != lx + 1) {
                 // Move cursor to (x, y) - ANSI is 1-indexed
                 self.write_ansi(&format!("\x1b[{};{}H", y + 1, x + 1))?;
             }
-            
+
             // Apply style if changed
             if last_style != Some(cell.style()) {
                 self.apply_style(cell.style())?;
                 last_style = Some(cell.style());
             }
-            
+
             // Write character
             self.writer.write_all(cell.symbol().as_bytes())?;
-            
+
             last_pos = Some((x, y));
         }
-        
+
         // Reset style
         self.write_ansi("\x1b[0m")?;
         self.writer.flush()?;
-        
+
         Ok(())
     }
-    
+
     fn hide_cursor(&mut self) -> IOResult<()> {
         self.write_ansi("\x1b[?25l")?;
         self.writer.flush()
     }
-    
+
     fn show_cursor(&mut self) -> IOResult<()> {
         self.write_ansi("\x1b[?25h")?;
         self.writer.flush()
     }
-    
+
     fn get_cursor_position(&mut self) -> IOResult<Position> {
         Ok(Position::new(0, 0))
     }
-    
+
     fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> IOResult<()> {
         let pos = position.into();
         self.write_ansi(&format!("\x1b[{};{}H", pos.y + 1, pos.x + 1))?;
         self.writer.flush()
     }
-    
+
     fn clear(&mut self) -> IOResult<()> {
         self.write_ansi("\x1b[2J\x1b[H")?;
         self.writer.flush()
     }
-    
+
     fn size(&self) -> IOResult<Size> {
-        Ok(Size::new(self.width, self.height))
+        // Poll terminal size from JS via WIT import
+        use crate::bindings::terminal::info::size::get_terminal_size;
+        let dims = get_terminal_size();
+        Ok(Size::new(dims.cols, dims.rows))
     }
-    
+
     fn flush(&mut self) -> IOResult<()> {
         self.writer.flush()
     }
-    
+
     fn window_size(&mut self) -> IOResult<WindowSize> {
         Ok(WindowSize {
             columns_rows: Size::new(self.width, self.height),

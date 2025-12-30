@@ -39,3 +39,4 @@ world = "tui"
 "wasi:filesystem" = { path = "wit/deps/filesystem" }
 "mcp:module-loader" = { path = "wit/deps/module-loader" }
 "shell:unix" = { path = "wit/deps/shell-unix" }
+"terminal:info" = { path = "wit/deps/terminal-info" }

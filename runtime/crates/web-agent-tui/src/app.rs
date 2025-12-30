@@ -148,13 +148,17 @@ impl<R: Read, W: Write> App<R, W> {
         // Setup
         self.setup_terminal();
 
-        // Main loop
+        // Initial render
+        self.render();
+
+        // Main loop: input then render
+        // (This order ensures resize events are processed before drawing)
         while !self.should_quit {
+            // Handle input (including resize events from stdin)
+            self.handle_input();
+
             // Render
             self.render();
-
-            // Handle input
-            self.handle_input();
         }
 
         // Cleanup

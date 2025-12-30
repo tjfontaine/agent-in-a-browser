@@ -252,6 +252,64 @@ pub mod shell {
 }
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
+pub mod terminal {
+    pub mod info {
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod size {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            /// Terminal dimensions
+            #[repr(C)]
+            #[derive(Clone, Copy)]
+            pub struct Dimensions {
+                pub cols: u16,
+                pub rows: u16,
+            }
+            impl ::core::fmt::Debug for Dimensions {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Dimensions")
+                        .field("cols", &self.cols)
+                        .field("rows", &self.rows)
+                        .finish()
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Get current terminal dimensions
+            pub fn get_terminal_size() -> Dimensions {
+                unsafe {
+                    #[repr(align(2))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 4]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 4]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "terminal:info/size@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "get-terminal-size"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u16>());
+                    let l3 = i32::from(*ptr0.add(2).cast::<u16>());
+                    let result4 = Dimensions {
+                        cols: l2 as u16,
+                        rows: l3 as u16,
+                    };
+                    result4
+                }
+            }
+        }
+    }
+}
+#[rustfmt::skip]
+#[allow(dead_code, clippy::all)]
 pub mod wasi {
     pub mod cli {
         #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
@@ -9224,8 +9282,8 @@ pub(crate) use __export_tui_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 7320] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x9e8\x01A\x02\x01A+\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 7410] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xf88\x01A\x02\x01A-\x01\
 B\x04\x04\0\x05error\x03\x01\x01h\0\x01@\x01\x04self\x01\0s\x04\0\x1d[method]err\
 or.to-debug-string\x01\x02\x03\0\x13wasi:io/error@0.2.4\x05\0\x01B\x0a\x04\0\x08\
 pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[method]pollable.rea\
@@ -9370,10 +9428,12 @@ handle\x01\x0d\x03\0\x20wasi:http/outgoing-handler@0.2.4\x05\x18\x01B\x0f\x02\x0
 tream\x03\0\x02\x01o\x02ss\x01p\x04\x01r\x02\x03cwds\x04vars\x05\x04\0\x08exec-e\
 nv\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01@\x06\x04names\x04args\x08\x03env\x07\x05\
 stdin\x09\x06stdout\x0a\x06stderr\x0a\0z\x04\0\x03run\x01\x0b\x01@\0\0\x08\x04\0\
-\x0dlist-commands\x01\x0c\x03\0\x18shell:unix/command@0.1.0\x05\x19\x01@\0\0z\x04\
-\0\x03run\x01\x1a\x04\0\x13agent:tui/tui@0.1.0\x04\0\x0b\x09\x01\0\x03tui\x03\0\0\
-\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bind\
-gen-rust\x060.41.0";
+\x0dlist-commands\x01\x0c\x03\0\x18shell:unix/command@0.1.0\x05\x19\x01B\x04\x01\
+r\x02\x04cols{\x04rows{\x04\0\x0adimensions\x03\0\0\x01@\0\0\x01\x04\0\x11get-te\
+rminal-size\x01\x02\x03\0\x18terminal:info/size@0.1.0\x05\x1a\x01@\0\0z\x04\0\x03\
+run\x01\x1b\x04\0\x13agent:tui/tui@0.1.0\x04\0\x0b\x09\x01\0\x03tui\x03\0\0\0G\x09\
+producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rus\
+t\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

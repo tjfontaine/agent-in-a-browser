@@ -23,6 +23,9 @@ world tui {
     // Interactive shell (brush-shell)
     import shell:unix/command@0.1.0;
     
+    // Terminal size for resize handling
+    import terminal:info/size@0.1.0;
+    
     // Main entry point
     export run: func() -> s32;
 }

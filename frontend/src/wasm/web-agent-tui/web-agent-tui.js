@@ -1,5 +1,6 @@
 import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '../ghostty-cli-shim.js';
 import { command } from '../mcp-server-jspi/ts-runtime-mcp.js';
+import { getTerminalSize } from '../terminal-info-impl.js';
 import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../wasi-http-impl.js';
 import { preopens, types } from '@bytecodealliance/preview2-shim/filesystem';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
@@ -3435,6 +3436,24 @@ function trampoline44(arg0, arg1) {
 
 
 function trampoline45(arg0) {
+  _debugLog('[iface="terminal:info/size@0.1.0", function="get-terminal-size"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-size');
+  const ret = getTerminalSize();
+  _debugLog('[iface="terminal:info/size@0.1.0", function="get-terminal-size"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var {cols: v0_0, rows: v0_1 } = ret;
+  dataView(memory0).setInt16(arg0 + 0, toUint16(v0_0), true);
+  dataView(memory0).setInt16(arg0 + 2, toUint16(v0_1), true);
+  _debugLog('[iface="terminal:info/size@0.1.0", function="get-terminal-size"][Instruction::Return]', {
+    funcName: 'get-terminal-size',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline46(arg0) {
   _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
   const ret = insecureSeed();
@@ -3452,7 +3471,7 @@ function trampoline45(arg0) {
 }
 
 
-function trampoline46(arg0) {
+function trampoline47(arg0) {
   _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-environment');
   const ret = getEnvironment();
@@ -3484,7 +3503,7 @@ function trampoline46(arg0) {
 }
 
 
-function trampoline47(arg0, arg1) {
+function trampoline48(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable1.get(rep2);
@@ -3680,7 +3699,7 @@ const captureTable14= new Map();
 let captureCnt14 = 0;
 handleTables[14] = handleTable14;
 
-function trampoline48(arg0, arg1, arg2, arg3) {
+function trampoline49(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -3889,7 +3908,7 @@ function trampoline48(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline49(arg0, arg1, arg2, arg3, arg4) {
+function trampoline50(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4175,7 +4194,7 @@ function trampoline49(arg0, arg1, arg2, arg3, arg4) {
 }
 
 
-function trampoline50(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+function trampoline51(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4411,7 +4430,7 @@ function trampoline50(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
 }
 
 
-function trampoline51(arg0, arg1, arg2) {
+function trampoline52(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4627,7 +4646,7 @@ function trampoline51(arg0, arg1, arg2) {
 }
 
 
-function trampoline52(arg0, arg1, arg2) {
+function trampoline53(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4843,7 +4862,7 @@ function trampoline52(arg0, arg1, arg2) {
 }
 
 
-function trampoline53(arg0, arg1) {
+function trampoline54(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -5059,7 +5078,7 @@ function trampoline53(arg0, arg1) {
 }
 
 
-function trampoline54(arg0, arg1) {
+function trampoline55(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -5306,7 +5325,7 @@ function trampoline54(arg0, arg1) {
 }
 
 
-function trampoline55(arg0, arg1) {
+function trampoline56(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -5586,7 +5605,7 @@ function trampoline55(arg0, arg1) {
 }
 
 
-function trampoline56(arg0, arg1) {
+function trampoline57(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -5795,7 +5814,7 @@ function trampoline56(arg0, arg1) {
 }
 
 
-function trampoline57(arg0, arg1, arg2, arg3, arg4) {
+function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -6010,7 +6029,7 @@ function trampoline57(arg0, arg1, arg2, arg3, arg4) {
 }
 
 
-const trampoline58 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+const trampoline59 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -6091,7 +6110,7 @@ const trampoline58 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 }
 );
 
-function trampoline59(arg0, arg1, arg2) {
+function trampoline60(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -6172,7 +6191,7 @@ function trampoline59(arg0, arg1, arg2) {
 }
 
 
-function trampoline60(arg0, arg1) {
+function trampoline61(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -6247,7 +6266,7 @@ function trampoline60(arg0, arg1) {
 }
 
 
-function trampoline61(arg0, arg1, arg2, arg3) {
+function trampoline62(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -6324,7 +6343,7 @@ function trampoline61(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline62(arg0, arg1) {
+function trampoline63(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -6398,7 +6417,7 @@ function trampoline62(arg0, arg1) {
 }
 
 
-function trampoline63(arg0) {
+function trampoline64(arg0) {
   _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-directories');
   const ret = getDirectories();
@@ -6440,7 +6459,7 @@ const captureTable11= new Map();
 let captureCnt11 = 0;
 handleTables[11] = handleTable11;
 
-function trampoline64(arg0) {
+function trampoline65(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdin');
   const ret = getTerminalStdin();
@@ -6476,7 +6495,7 @@ const captureTable12= new Map();
 let captureCnt12 = 0;
 handleTables[12] = handleTable12;
 
-function trampoline65(arg0) {
+function trampoline66(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdout');
   const ret = getTerminalStdout();
@@ -6508,7 +6527,7 @@ function trampoline65(arg0) {
 }
 
 
-function trampoline66(arg0) {
+function trampoline67(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stderr');
   const ret = getTerminalStderr();
@@ -6797,12 +6816,15 @@ const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-agent-tui.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-agent-tui.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwADNTQAAAECAwICAAAABAUGBwgJCgYHBwsHCAwLDQ4BAA8PAA4QEQ0NAAAAABANDQAOAA4PDw8PBAUBcAE0NAeGAjUBMAAAATEAAQEyAAIBMwADATQABAE1AAUBNgAGATcABwE4AAgBOQAJAjEwAAoCMTEACwIxMgAMAjEzAA0CMTQADgIxNQAPAjE2ABACMTcAEQIxOAASAjE5ABMCMjAAFAIyMQAVAjIyABYCMjMAFwIyNAAYAjI1ABkCMjYAGgIyNwAbAjI4ABwCMjkAHQIzMAAeAjMxAB8CMzIAIAIzMwAhAjM0ACICMzUAIwIzNgAkAjM3ACUCMzgAJgIzOQAnAjQwACgCNDEAKQI0MgAqAjQzACsCNDQALAI0NQAtAjQ2AC4CNDcALwI0OAAwAjQ5ADECNTAAMgI1MQAzCCRpbXBvcnRzAQAK4wU0CwAgACABQQARAAALCwAgACABQQERAAALDwAgACABIAIgA0ECEQEACw8AIAAgASACIANBAxECAAsRACAAIAEgAiADIARBBBEDAAsPACAAIAEgAiADQQURAgALDwAgACABIAIgA0EGEQIACwsAIAAgAUEHEQAACwsAIAAgAUEIEQAACwsAIAAgAUEJEQAACxMAIAAgASACIAMgBCAFQQoRBAALHQAgACABIAIgAyAEIAUgBiAHIAggCSAKQQsRBQALDwAgACABIAIgA0EMEQYACwsAIAAgAUENEQcACw0AIAAgASACQQ4RCAALEQAgACABIAIgAyAEQQ8RCQALGQAgACABIAIgAyAEIAUgBiAHIAhBEBEKAAsPACAAIAEgAiADQRERBgALCwAgACABQRIRBwALCwAgACABQRMRBwALCQAgAEEUEQsACwsAIAAgAUEVEQcACw0AIAAgASACQRYRCAALCQAgAEEXEQwACwkAIABBGBELAAsNACAAIAEgAkEZEQ0ACw8AIAAgASACIANBGhEOAAsPACAAIAEgAiADQRsRAQALCwAgACABQRwRAAALCQAgAEEdEQ8ACwkAIABBHhEPAAsLACAAIAFBHxEAAAsPACAAIAEgAiADQSARDgALEQAgACABIAIgAyAEQSEREAALFQAgACABIAIgAyAEIAUgBkEiEREACw0AIAAgASACQSMRDQALDQAgACABIAJBJBENAAsLACAAIAFBJREAAAsLACAAIAFBJhEAAAsLACAAIAFBJxEAAAsLACAAIAFBKBEAAAsRACAAIAEgAiADIARBKREQAAsNACAAIAEgAkEqEQ0ACw0AIAAgASACQSsRDQALCwAgACABQSwRAAALDwAgACABIAIgA0EtEQ4ACwsAIAAgAUEuEQAACw8AIAAgASACIANBLxEOAAsJACAAQTARDwALCQAgAEExEQ8ACwkAIABBMhEPAAsJACAAQTMRDwALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAC3GARuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAZoYNAA7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctYm9keS5zdHJlYW0BOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUCO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoA0JpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1tZXRob2QEQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXNjaGVtZQVFaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtYXV0aG9yaXR5BktpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1wYXRoLXdpdGgtcXVlcnkHPGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3QuYm9keQhAaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctcmVzcG9uc2UuY29uc3VtZQlDaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZnV0dXJlLWluY29taW5nLXJlc3BvbnNlLmdldAo0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAslaW5kaXJlY3Qtc2hlbGw6dW5peC9jb21tYW5kQDAuMS4wLXJ1bgwlYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF93cml0ZQ0sYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9maWxlc3RhdF9nZXQOMmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcGF0aF9jcmVhdGVfZGlyZWN0b3J5Dy5hZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXBhdGhfZmlsZXN0YXRfZ2V0ECZhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXBhdGhfb3BlbhEkYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9yZWFkEihhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWVudmlyb25fZ2V0Ey5hZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWVudmlyb25fc2l6ZXNfZ2V0FCVhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX2Nsb3NlFSthZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3ByZXN0YXRfZ2V0FjBhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3ByZXN0YXRfZGlyX25hbWUXJmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcHJvY19leGl0GDBhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWFkYXB0ZXJfY2xvc2VfYmFkZmQZQWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXWlucHV0LXN0cmVhbS5ibG9ja2luZy1yZWFkGk1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaBswaW5kaXJlY3Qtd2FzaTpodHRwL291dGdvaW5nLWhhbmRsZXJAMC4yLjQtaGFuZGxlHDppbmRpcmVjdC13YXNpOmlvL2Vycm9yQDAuMi40LVttZXRob2RdZXJyb3IudG8tZGVidWctc3RyaW5nHTZpbmRpcmVjdC13YXNpOnJhbmRvbS9pbnNlY3VyZS1zZWVkQDAuMi40LWluc2VjdXJlLXNlZWQeM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudB86aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LWZpbGVzeXN0ZW0tZXJyb3ItY29kZSBLaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5jcmVhdGUtZGlyZWN0b3J5LWF0IT9pbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLnN0YXQtYXQiP2luZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iub3Blbi1hdCNHaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5yZWFkLXZpYS1zdHJlYW0kSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iud3JpdGUtdmlhLXN0cmVhbSVJaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5hcHBlbmQtdmlhLXN0cmVhbSZAaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5nZXQtdHlwZSc8aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5zdGF0KEVpbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLm1ldGFkYXRhLWhhc2gpSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3IubWV0YWRhdGEtaGFzaC1hdCpBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQrOGluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXWlucHV0LXN0cmVhbS5yZWFkLEBpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmNoZWNrLXdyaXRlLTppbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLndyaXRlLkNpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLWZsdXNoL01pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaDA3aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3ByZW9wZW5zQDAuMi42LWdldC1kaXJlY3RvcmllczE5aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkaW5AMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZGluMjtpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRvdXRAMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZG91dDM7aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkZXJyQDAuMi42LWdldC10ZXJtaW5hbC1zdGRlcnI');
-    const module3 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwACvgI1AAEwAAAAATEAAAABMgABAAEzAAIAATQAAwABNQACAAE2AAIAATcAAAABOAAAAAE5AAAAAjEwAAQAAjExAAUAAjEyAAYAAjEzAAcAAjE0AAgAAjE1AAkAAjE2AAoAAjE3AAYAAjE4AAcAAjE5AAcAAjIwAAsAAjIxAAcAAjIyAAgAAjIzAAwAAjI0AAsAAjI1AA0AAjI2AA4AAjI3AAEAAjI4AAAAAjI5AA8AAjMwAA8AAjMxAAAAAjMyAA4AAjMzABAAAjM0ABEAAjM1AA0AAjM2AA0AAjM3AAAAAjM4AAAAAjM5AAAAAjQwAAAAAjQxABAAAjQyAA0AAjQzAA0AAjQ0AAAAAjQ1AA4AAjQ2AAAAAjQ3AA4AAjQ4AA8AAjQ5AA8AAjUwAA8AAjUxAA8ACCRpbXBvcnRzAXABNDQJOgEAQQALNAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjMALwlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzOS4wABwEbmFtZQAVFHdpdC1jb21wb25lbnQ6Zml4dXBz');
+    const module2 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwADNjUAAAECAwICAAAABAUGBwgJCgYHBwsHCAwLDQ4BAA8PDwAOEBENDQAAAAAQDQ0ADgAODw8PDwQFAXABNTUHiwI2ATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQIyMgAWAjIzABcCMjQAGAIyNQAZAjI2ABoCMjcAGwIyOAAcAjI5AB0CMzAAHgIzMQAfAjMyACACMzMAIQIzNAAiAjM1ACMCMzYAJAIzNwAlAjM4ACYCMzkAJwI0MAAoAjQxACkCNDIAKgI0MwArAjQ0ACwCNDUALQI0NgAuAjQ3AC8CNDgAMAI0OQAxAjUwADICNTEAMwI1MgA0CCRpbXBvcnRzAQAK7QU1CwAgACABQQARAAALCwAgACABQQERAAALDwAgACABIAIgA0ECEQEACw8AIAAgASACIANBAxECAAsRACAAIAEgAiADIARBBBEDAAsPACAAIAEgAiADQQURAgALDwAgACABIAIgA0EGEQIACwsAIAAgAUEHEQAACwsAIAAgAUEIEQAACwsAIAAgAUEJEQAACxMAIAAgASACIAMgBCAFQQoRBAALHQAgACABIAIgAyAEIAUgBiAHIAggCSAKQQsRBQALDwAgACABIAIgA0EMEQYACwsAIAAgAUENEQcACw0AIAAgASACQQ4RCAALEQAgACABIAIgAyAEQQ8RCQALGQAgACABIAIgAyAEIAUgBiAHIAhBEBEKAAsPACAAIAEgAiADQRERBgALCwAgACABQRIRBwALCwAgACABQRMRBwALCQAgAEEUEQsACwsAIAAgAUEVEQcACw0AIAAgASACQRYRCAALCQAgAEEXEQwACwkAIABBGBELAAsNACAAIAEgAkEZEQ0ACw8AIAAgASACIANBGhEOAAsPACAAIAEgAiADQRsRAQALCwAgACABQRwRAAALCQAgAEEdEQ8ACwkAIABBHhEPAAsJACAAQR8RDwALCwAgACABQSARAAALDwAgACABIAIgA0EhEQ4ACxEAIAAgASACIAMgBEEiERAACxUAIAAgASACIAMgBCAFIAZBIxERAAsNACAAIAEgAkEkEQ0ACw0AIAAgASACQSURDQALCwAgACABQSYRAAALCwAgACABQScRAAALCwAgACABQSgRAAALCwAgACABQSkRAAALEQAgACABIAIgAyAEQSoREAALDQAgACABIAJBKxENAAsNACAAIAEgAkEsEQ0ACwsAIAAgAUEtEQAACw8AIAAgASACIANBLhEOAAsLACAAIAFBLxEAAAsPACAAIAEgAiADQTARDgALCQAgAEExEQ8ACwkAIABBMhEPAAsJACAAQTMRDwALCQAgAEE0EQ8ACwAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAA7BgEbmFtZQATEndpdC1jb21wb25lbnQ6c2hpbQHPGDUAO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWluY29taW5nLWJvZHkuc3RyZWFtATppbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1ib2R5LndyaXRlAjtpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW3N0YXRpY11vdXRnb2luZy1ib2R5LmZpbmlzaANCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtbWV0aG9kBEJpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1zY2hlbWUFRWluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LWF1dGhvcml0eQZLaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtcGF0aC13aXRoLXF1ZXJ5BzxpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LmJvZHkIQGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWluY29taW5nLXJlc3BvbnNlLmNvbnN1bWUJQ2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWZ1dHVyZS1pbmNvbWluZy1yZXNwb25zZS5nZXQKNGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWZpZWxkcy5hcHBlbmQLJWluZGlyZWN0LXNoZWxsOnVuaXgvY29tbWFuZEAwLjEuMC1ydW4MJWFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfd3JpdGUNLGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfZmlsZXN0YXRfZ2V0DjJhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXBhdGhfY3JlYXRlX2RpcmVjdG9yeQ8uYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wYXRoX2ZpbGVzdGF0X2dldBAmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wYXRoX29wZW4RJGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfcmVhZBIoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldBMuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldBQlYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9jbG9zZRUrYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9wcmVzdGF0X2dldBYwYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9wcmVzdGF0X2Rpcl9uYW1lFyZhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXByb2NfZXhpdBgwYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1hZGFwdGVyX2Nsb3NlX2JhZGZkGUFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZBpNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2gbMGluZGlyZWN0LXdhc2k6aHR0cC9vdXRnb2luZy1oYW5kbGVyQDAuMi40LWhhbmRsZRw6aW5kaXJlY3Qtd2FzaTppby9lcnJvckAwLjIuNC1bbWV0aG9kXWVycm9yLnRvLWRlYnVnLXN0cmluZx0zaW5kaXJlY3QtdGVybWluYWw6aW5mby9zaXplQDAuMS4wLWdldC10ZXJtaW5hbC1zaXplHjZpbmRpcmVjdC13YXNpOnJhbmRvbS9pbnNlY3VyZS1zZWVkQDAuMi40LWluc2VjdXJlLXNlZWQfM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudCA6aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LWZpbGVzeXN0ZW0tZXJyb3ItY29kZSFLaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5jcmVhdGUtZGlyZWN0b3J5LWF0Ij9pbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLnN0YXQtYXQjP2luZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iub3Blbi1hdCRHaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5yZWFkLXZpYS1zdHJlYW0lSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iud3JpdGUtdmlhLXN0cmVhbSZJaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5hcHBlbmQtdmlhLXN0cmVhbSdAaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5nZXQtdHlwZSg8aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5zdGF0KUVpbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLm1ldGFkYXRhLWhhc2gqSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3IubWV0YWRhdGEtaGFzaC1hdCtBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQsOGluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXWlucHV0LXN0cmVhbS5yZWFkLUBpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmNoZWNrLXdyaXRlLjppbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLndyaXRlL0NpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLWZsdXNoME1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaDE3aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3ByZW9wZW5zQDAuMi42LWdldC1kaXJlY3RvcmllczI5aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkaW5AMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZGluMztpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRvdXRAMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZG91dDQ7aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkZXJyQDAuMi42LWdldC10ZXJtaW5hbC1zdGRlcnI');
+    const module3 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwACxAI2AAEwAAAAATEAAAABMgABAAEzAAIAATQAAwABNQACAAE2AAIAATcAAAABOAAAAAE5AAAAAjEwAAQAAjExAAUAAjEyAAYAAjEzAAcAAjE0AAgAAjE1AAkAAjE2AAoAAjE3AAYAAjE4AAcAAjE5AAcAAjIwAAsAAjIxAAcAAjIyAAgAAjIzAAwAAjI0AAsAAjI1AA0AAjI2AA4AAjI3AAEAAjI4AAAAAjI5AA8AAjMwAA8AAjMxAA8AAjMyAAAAAjMzAA4AAjM0ABAAAjM1ABEAAjM2AA0AAjM3AA0AAjM4AAAAAjM5AAAAAjQwAAAAAjQxAAAAAjQyABAAAjQzAA0AAjQ0AA0AAjQ1AAAAAjQ2AA4AAjQ3AAAAAjQ4AA4AAjQ5AA8AAjUwAA8AAjUxAA8AAjUyAA8ACCRpbXBvcnRzAXABNTUJOwEAQQALNQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0AC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAAcBG5hbWUAFRR3aXQtY29tcG9uZW50OmZpeHVwcw');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'shell:unix/command@0.1.0': {
         run: exports0['11'],
+      },
+      'terminal:info/size@0.1.0': {
+        'get-terminal-size': exports0['29'],
       },
       'wasi:cli/stderr@0.2.4': {
         'get-stderr': trampoline4,
@@ -6863,7 +6885,7 @@ const $init = (() => {
         '[resource-drop]output-stream': trampoline16,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['29'],
+        'insecure-seed': exports0['30'],
       },
       'wasi:sockets/tcp@0.2.0': {
         '[resource-drop]tcp-socket': trampoline23,
@@ -6897,7 +6919,7 @@ const $init = (() => {
         memory: exports1.memory,
       },
       'wasi:cli/environment@0.2.6': {
-        'get-environment': exports0['30'],
+        'get-environment': exports0['31'],
       },
       'wasi:cli/exit@0.2.6': {
         exit: trampoline28,
@@ -6918,42 +6940,42 @@ const $init = (() => {
         '[resource-drop]terminal-output': trampoline27,
       },
       'wasi:cli/terminal-stderr@0.2.6': {
-        'get-terminal-stderr': exports0['51'],
+        'get-terminal-stderr': exports0['52'],
       },
       'wasi:cli/terminal-stdin@0.2.6': {
-        'get-terminal-stdin': exports0['49'],
+        'get-terminal-stdin': exports0['50'],
       },
       'wasi:cli/terminal-stdout@0.2.6': {
-        'get-terminal-stdout': exports0['50'],
+        'get-terminal-stdout': exports0['51'],
       },
       'wasi:filesystem/preopens@0.2.6': {
-        'get-directories': exports0['48'],
+        'get-directories': exports0['49'],
       },
       'wasi:filesystem/types@0.2.6': {
-        '[method]descriptor.append-via-stream': exports0['37'],
-        '[method]descriptor.create-directory-at': exports0['32'],
-        '[method]descriptor.get-type': exports0['38'],
-        '[method]descriptor.metadata-hash': exports0['40'],
-        '[method]descriptor.metadata-hash-at': exports0['41'],
-        '[method]descriptor.open-at': exports0['34'],
-        '[method]descriptor.read-via-stream': exports0['35'],
-        '[method]descriptor.stat': exports0['39'],
-        '[method]descriptor.stat-at': exports0['33'],
-        '[method]descriptor.write-via-stream': exports0['36'],
+        '[method]descriptor.append-via-stream': exports0['38'],
+        '[method]descriptor.create-directory-at': exports0['33'],
+        '[method]descriptor.get-type': exports0['39'],
+        '[method]descriptor.metadata-hash': exports0['41'],
+        '[method]descriptor.metadata-hash-at': exports0['42'],
+        '[method]descriptor.open-at': exports0['35'],
+        '[method]descriptor.read-via-stream': exports0['36'],
+        '[method]descriptor.stat': exports0['40'],
+        '[method]descriptor.stat-at': exports0['34'],
+        '[method]descriptor.write-via-stream': exports0['37'],
         '[resource-drop]descriptor': trampoline25,
         '[resource-drop]directory-entry-stream': trampoline24,
-        'filesystem-error-code': exports0['31'],
+        'filesystem-error-code': exports0['32'],
       },
       'wasi:io/error@0.2.6': {
         '[resource-drop]error': trampoline13,
       },
       'wasi:io/streams@0.2.6': {
-        '[method]input-stream.blocking-read': exports0['42'],
-        '[method]input-stream.read': exports0['43'],
-        '[method]output-stream.blocking-flush': exports0['46'],
-        '[method]output-stream.blocking-write-and-flush': exports0['47'],
-        '[method]output-stream.check-write': exports0['44'],
-        '[method]output-stream.write': exports0['45'],
+        '[method]input-stream.blocking-read': exports0['43'],
+        '[method]input-stream.read': exports0['44'],
+        '[method]output-stream.blocking-flush': exports0['47'],
+        '[method]output-stream.blocking-write-and-flush': exports0['48'],
+        '[method]output-stream.check-write': exports0['45'],
+        '[method]output-stream.write': exports0['46'],
         '[resource-drop]input-stream': trampoline12,
         '[resource-drop]output-stream': trampoline16,
       },
@@ -7006,12 +7028,13 @@ const $init = (() => {
         '44': trampoline60,
         '45': trampoline61,
         '46': trampoline62,
-        '47': trampoline42,
-        '48': trampoline63,
+        '47': trampoline63,
+        '48': trampoline42,
         '49': trampoline64,
         '5': trampoline34,
         '50': trampoline65,
         '51': trampoline66,
+        '52': trampoline67,
         '6': trampoline35,
         '7': trampoline36,
         '8': trampoline37,
