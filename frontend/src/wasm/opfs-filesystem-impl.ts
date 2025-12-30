@@ -25,18 +25,9 @@ import {
     addSymlinkToCache,
     removeSymlinkFromCache,
     getSymlinkTarget,
-    fileExistsInOpfs,
-    directoryExistsInOpfs,
-    getFileStats,
-    listDirectory,
-    closeHandlesUnderPath,
-    // Compatibility exports (OPFS-direct or no-ops)
+    // OPFS-direct functions
     getEntryFromOpfs,
-    getTreeEntry,
     getTreeEntryWithScan,
-    setTreeEntry,
-    removeTreeEntry,
-    syncScanDirectory,
     type TreeEntry
 } from './directory-tree';
 import {
@@ -175,7 +166,6 @@ class Descriptor {
         if (!entry && openFlags.create) {
             // Create new entry with current timestamp
             entry = openFlags.directory ? { dir: {} } : { size: 0, mtime: Date.now() };
-            setTreeEntry(fullPath, entry);
 
             // Create in OPFS (async, but we'll handle sync access later)
             if (!openFlags.directory) {
@@ -183,6 +173,12 @@ class Descriptor {
             } else {
                 this.createOpfsDirectory(fullPath);
             }
+        }
+
+        // Handle truncate: clear any buffered data for this file
+        if (openFlags.truncate && entry && !entry.dir) {
+            fileBufferCache.delete(normalizedPath);
+            console.log('[opfs-fs] openAt truncate: cleared buffer cache for', normalizedPath);
         }
 
         if (!entry) {
@@ -198,9 +194,8 @@ class Descriptor {
                 try {
                     await getOpfsFile(normalizedPath, false);
                 } catch (_e) {
-                    // File doesn't exist in OPFS, remove from tree and throw
-                    console.warn('[opfs-fs] openAt: file in tree but not in OPFS:', normalizedPath);
-                    removeTreeEntry(normalizedPath);
+                    // File doesn't exist in OPFS
+                    console.warn('[opfs-fs] openAt: file not in OPFS:', normalizedPath);
                     throw 'no-entry';
                 }
             }
@@ -670,24 +665,22 @@ class Descriptor {
     readlinkAt(subpath: string): string {
         const fullPath = this.resolvePath(subpath);
         const normalizedPath = normalizePath(fullPath);
-        const entry = getTreeEntry(normalizedPath);
 
-        if (!entry) {
-            throw 'no-entry';
-        }
-        if (!entry.symlink) {
-            throw 'invalid'; // Not a symlink
+        // Check symlink cache (populated from IndexedDB)
+        const target = getSymlinkTarget(normalizedPath);
+        if (!target) {
+            throw 'no-entry'; // Not a symlink or doesn't exist
         }
 
-        return entry.symlink;
+        return target;
     }
 
-    removeDirectoryAt(subpath: string): void {
+    async removeDirectoryAt(subpath: string): Promise<void> {
         const fullPath = this.resolvePath(subpath);
         const normalizedPath = normalizePath(fullPath);
 
-        // Check if directory exists in tree
-        const entry = getTreeEntry(normalizedPath);
+        // Check if directory exists in OPFS directly
+        const entry = await getEntryFromOpfs(normalizedPath);
         if (!entry) {
             throw 'no-entry';
         }
@@ -702,17 +695,14 @@ class Descriptor {
 
         // Remove from OPFS (async)
         this.removeOpfsEntry(normalizedPath, true);
-
-        // Remove from tree
-        removeTreeEntry(normalizedPath);
     }
 
-    renameAt(
+    async renameAt(
         _oldPathFlags: number,
         oldPath: string,
         newDescriptor: Descriptor,
         newPath: string
-    ): void {
+    ): Promise<void> {
         const oldFullPath = this.resolvePath(oldPath);
         const oldNormalized = normalizePath(oldFullPath);
 
@@ -722,14 +712,14 @@ class Descriptor {
 
         console.log('[opfs-fs] renameAt:', oldNormalized, '->', newNormalized);
 
-        // Get old entry
-        const oldEntry = getTreeEntry(oldNormalized);
+        // Get old entry from OPFS
+        const oldEntry = await getEntryFromOpfs(oldNormalized);
         if (!oldEntry) {
             throw 'no-entry';
         }
 
-        // Check if new path already exists
-        const existingEntry = getTreeEntry(newNormalized);
+        // Check if new path already exists in OPFS
+        const existingEntry = await getEntryFromOpfs(newNormalized);
         if (existingEntry) {
             throw 'exist';
         }
@@ -746,12 +736,6 @@ class Descriptor {
                 syncHandleCache.delete(oldNormalized);
             }
         }
-
-        // Copy entry to new location in tree
-        setTreeEntry(newNormalized, oldEntry);
-
-        // Remove from old location in tree
-        removeTreeEntry(oldNormalized);
 
         // Move in OPFS (async operation)
         this.moveInOpfs(oldNormalized, newNormalized, oldEntry.dir !== undefined);
@@ -817,20 +801,20 @@ class Descriptor {
     }
 
     /**
-     * Create symbolic link - stored in TreeEntry and persisted to IndexedDB
+     * Create symbolic link - stored in symlink cache and persisted to IndexedDB
      */
-    symlinkAt(targetPath: string, linkName: string): void {
+    async symlinkAt(targetPath: string, linkName: string): Promise<void> {
         const fullPath = this.resolvePath(linkName);
         const normalizedPath = normalizePath(fullPath);
 
-        // Check if something already exists at link path
-        const existing = getTreeEntry(normalizedPath);
+        // Check if something already exists at link path in OPFS
+        const existing = await getEntryFromOpfs(normalizedPath);
         if (existing) {
             throw 'exist';
         }
 
-        // Create symlink entry in tree
-        setTreeEntry(normalizedPath, { symlink: targetPath, mtime: Date.now() });
+        // Add to symlink cache
+        addSymlinkToCache(normalizedPath, targetPath);
 
         // Persist to IndexedDB (async, fire-and-forget)
         saveSymlink(normalizedPath, targetPath).catch(e => {
@@ -1000,16 +984,11 @@ export async function initFilesystem(): Promise<void> {
         // Initialize bridge
         await initHelperWorker();
 
-        console.log('[opfs-fs] Helper worker ready, scanning root directory...');
-        syncScanDirectory('');
+        console.log('[opfs-fs] Helper worker ready, loading symlinks...');
 
-        // Load symlinks from IndexedDB into tree
-        const { loadAllSymlinks } = await import('./symlink-store');
-        const symlinks = await loadAllSymlinks();
-        for (const [path, target] of symlinks) {
-            setTreeEntry(path, { symlink: target, mtime: Date.now() });
-        }
-        console.log('[opfs-fs] Loaded', symlinks.size, 'symlinks from IndexedDB');
+        // Load symlinks from IndexedDB into cache
+        await loadSymlinksIntoCache();
+        console.log('[opfs-fs] Symlinks loaded into cache');
 
         setInitialized(true);
         console.log('[opfs-fs] Filesystem initialized with lazy loading');
