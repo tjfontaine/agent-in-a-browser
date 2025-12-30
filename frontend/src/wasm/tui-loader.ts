@@ -20,6 +20,9 @@ import { setTransportHandler } from './wasi-http-impl.js';
 // Import sandbox for MCP routing
 import { fetchFromSandbox, initializeSandbox } from '../agent/sandbox.js';
 
+// Import OPFS filesystem init for shell access
+import { initFilesystem } from './opfs-filesystem-impl.js';
+
 export interface TuiLoaderOptions {
     container: HTMLElement;
     fontSize?: number;
@@ -89,6 +92,11 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Set up transport handler to route MCP requests through sandbox
     setTransportHandler(createSandboxTransport());
     console.log('[TUI Loader] Transport handler configured');
+
+    // Initialize OPFS filesystem for shell access (touch, mkdir, ls, etc.)
+    console.log('[TUI Loader] Initializing OPFS filesystem...');
+    await initFilesystem();
+    console.log('[TUI Loader] OPFS filesystem ready');
 
     // Initialize ghostty-web
     await initGhostty();

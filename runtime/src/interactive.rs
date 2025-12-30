@@ -5,7 +5,7 @@
 
 use crate::bindings::exports::shell::unix::command::ExecEnv;
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
-use crate::shell::{ShellEnv, run_pipeline};
+use crate::shell::{run_pipeline, ShellEnv};
 use std::path::PathBuf;
 
 /// Result of reading a line
@@ -32,7 +32,7 @@ pub fn run_shell(
         let command = &args[1];
         return run_command_string(command, &env, &stdout, &stderr);
     }
-    
+
     // Otherwise, enter interactive REPL
     run_interactive_shell(env, stdin, stdout, stderr)
 }
@@ -47,17 +47,15 @@ fn run_command_string(
     // Create shell environment
     let mut shell_env = ShellEnv::new();
     shell_env.cwd = PathBuf::from(&env.cwd);
-    
+
     // Copy environment variables
     for (key, value) in &env.vars {
         let _ = shell_env.set_var(key, value);
     }
-    
+
     // Execute the command
-    let result = futures_lite::future::block_on(
-        run_pipeline(command, &mut shell_env)
-    );
-    
+    let result = futures_lite::future::block_on(run_pipeline(command, &mut shell_env));
+
     // Output results
     if !result.stdout.is_empty() {
         write_str(stdout, &result.stdout);
@@ -71,7 +69,7 @@ fn run_command_string(
             write_str(stderr, "\n");
         }
     }
-    
+
     result.code
 }
 
@@ -85,17 +83,17 @@ fn run_interactive_shell(
     // Create shell environment from exec-env
     let mut shell_env = ShellEnv::new();
     shell_env.cwd = PathBuf::from(&env.cwd);
-    
+
     // Copy environment variables
     for (key, value) in &env.vars {
         let _ = shell_env.set_var(key, value);
     }
-    
+
     loop {
-        // Render prompt: /current/path$ 
+        // Render prompt: /current/path$
         let prompt = format!("{}$ ", shell_env.cwd.display());
         write_str(&stdout, &prompt);
-        
+
         // Read a line
         match read_line(&stdin, &stdout) {
             LineResult::Line(line) => {
@@ -103,43 +101,44 @@ fn run_interactive_shell(
                 if line.is_empty() {
                     continue;
                 }
-                
+
                 // Handle exit command
                 if line == "exit" || line.starts_with("exit ") {
                     write_str(&stdout, "Bye!\n");
                     return 0;
                 }
-                
+
                 // Check if this is a TUI command that needs direct stdin/stdout
                 // Extract command name (first word)
                 let cmd_name = line.split_whitespace().next().unwrap_or("");
-                
+
                 // List of TUI commands that need real-time I/O
-                const TUI_COMMANDS: &[&str] = &[
-                    "counter", "ansi-demo", "tui-demo", "ratatui-demo"
-                ];
-                
+                const TUI_COMMANDS: &[&str] = &["counter", "ansi-demo", "tui-demo", "ratatui-demo"];
+
                 if TUI_COMMANDS.contains(&cmd_name) {
                     // TUI command - spawn it directly with our stdin/stdout
                     #[cfg(target_arch = "wasm32")]
                     {
                         use crate::bindings::mcp::module_loader::loader;
-                        
+
                         if let Some(module_name) = loader::get_lazy_module(cmd_name) {
                             // Get arguments after command name
-                            let args: Vec<String> = line.split_whitespace()
+                            let args: Vec<String> = line
+                                .split_whitespace()
                                 .skip(1)
                                 .map(|s| s.to_string())
                                 .collect();
-                            
+
                             // Build exec environment
                             let exec_env = loader::ExecEnv {
                                 cwd: shell_env.cwd.to_string_lossy().to_string(),
-                                vars: shell_env.env_vars.iter()
+                                vars: shell_env
+                                    .env_vars
+                                    .iter()
                                     .map(|(k, v)| (k.clone(), v.clone()))
                                     .collect(),
                             };
-                            
+
                             // Use spawn_interactive for TUI apps
                             let term_size = loader::TerminalSize { cols: 80, rows: 24 };
                             let process = loader::spawn_interactive(
@@ -149,48 +148,52 @@ fn run_interactive_shell(
                                 &exec_env,
                                 term_size,
                             );
-                            
+
                             // Wait for module to load
                             let ready_pollable = process.get_ready_pollable();
                             ready_pollable.block();
-                            
+
                             // Stream I/O until process exits
                             loop {
                                 // Check for input from stdin (non-blocking peek)
                                 // We can't easily do non-blocking reads with WASI streams,
                                 // but the stdin is already in raw mode from the frontend.
                                 // The key is forwarding any data we get.
-                                
+
                                 // Read stdin and forward to process
                                 // Use blocking read since we're waiting for user input
                                 let stdin_data = blocking_read(&stdin, 1);
                                 if !stdin_data.is_empty() {
                                     process.write_stdin(&stdin_data);
                                 }
-                                
+
                                 // Read stdout and write to terminal
                                 let stdout_data = process.read_stdout(4096);
                                 if !stdout_data.is_empty() {
                                     write_bytes(&stdout, &stdout_data);
                                 }
-                                
-                                // Read stderr and write to terminal  
+
+                                // Read stderr and write to terminal
                                 let stderr_data = process.read_stderr(4096);
                                 if !stderr_data.is_empty() {
                                     write_bytes(&stderr, &stderr_data);
                                 }
-                                
+
                                 // Check if process exited
                                 if let Some(_exit_code) = process.try_wait() {
                                     // Drain remaining output
                                     loop {
                                         let chunk = process.read_stdout(4096);
-                                        if chunk.is_empty() { break; }
+                                        if chunk.is_empty() {
+                                            break;
+                                        }
                                         write_bytes(&stdout, &chunk);
                                     }
                                     loop {
                                         let chunk = process.read_stderr(4096);
-                                        if chunk.is_empty() { break; }
+                                        if chunk.is_empty() {
+                                            break;
+                                        }
                                         write_bytes(&stderr, &chunk);
                                     }
                                     break;
@@ -200,12 +203,10 @@ fn run_interactive_shell(
                         }
                     }
                 }
-                
+
                 // Execute using the full shell executor!
-                let result = futures_lite::future::block_on(
-                    run_pipeline(line, &mut shell_env)
-                );
-                
+                let result = futures_lite::future::block_on(run_pipeline(line, &mut shell_env));
+
                 // Output result
                 if !result.stdout.is_empty() {
                     write_str(&stdout, &result.stdout);
@@ -236,7 +237,7 @@ fn run_interactive_shell(
 /// Read a line from stdin with echo and basic editing
 fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
     let mut buffer = String::new();
-    
+
     loop {
         match read_byte(stdin) {
             Some(b'\r') | Some(b'\n') => {
@@ -275,7 +276,7 @@ fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
                         Some(b'3') => {
                             // Delete key - 3~
                             let _ = read_byte(stdin); // consume ~
-                            // TODO: handle delete at cursor
+                                                      // TODO: handle delete at cursor
                         }
                         _ => {}
                     }
@@ -311,8 +312,11 @@ fn blocking_read(stdin: &InputStream, n: u64) -> Vec<u8> {
 }
 
 /// Write a string to an output stream
+/// Converts \n to \r\n for raw terminal mode
 fn write_str(stream: &OutputStream, s: &str) {
-    let _ = stream.blocking_write_and_flush(s.as_bytes());
+    // In raw terminal mode, we need \r\n instead of just \n
+    let normalized = s.replace("\n", "\r\n");
+    let _ = stream.blocking_write_and_flush(normalized.as_bytes());
 }
 
 /// Write bytes to an output stream

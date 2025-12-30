@@ -5426,7 +5426,7 @@ const captureTable18= new Map();
 let captureCnt18 = 0;
 handleTables[18] = handleTable18;
 
-function trampoline79(arg0, arg1) {
+const trampoline79 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -5440,7 +5440,7 @@ function trampoline79(arg0, arg1) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-directory');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.readDirectory()};
+    ret = { tag: 'ok', val: await rsc0.readDirectory()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -5640,7 +5640,7 @@ function trampoline79(arg0, arg1) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline80(arg0, arg1) {
   var handle1 = arg0;
@@ -6620,7 +6620,7 @@ function trampoline83(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
 }
 
 
-function trampoline84(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -6654,7 +6654,7 @@ function trampoline84(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.open-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.openAt(flags3, result4, flags5, flags6)};
+    ret = { tag: 'ok', val: await rsc0.openAt(flags3, result4, flags5, flags6)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6854,7 +6854,7 @@ function trampoline84(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline85(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
@@ -8390,7 +8390,7 @@ function trampoline91(arg0, arg1) {
 }
 
 
-function trampoline92(arg0, arg1) {
+const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -8404,7 +8404,7 @@ function trampoline92(arg0, arg1) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.stat()};
+    ret = { tag: 'ok', val: await rsc0.stat()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -8668,7 +8668,7 @@ function trampoline92(arg0, arg1) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline93(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;

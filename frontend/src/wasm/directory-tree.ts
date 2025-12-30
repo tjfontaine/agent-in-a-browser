@@ -5,13 +5,8 @@
  * File content is persisted via OPFS, tree is loaded on startup.
  */
 
-import {
-    isHelperReady,
-    getControlArray,
-    getDataArray,
-    type OPFSRequest,
-    type OPFSResponse,
-} from './opfs-sync-bridge';
+// Note: With JSPI, we no longer use Atomics.wait for sync operations.
+// Instead, we use async OPFS APIs and JSPI suspends the WASM stack automatically.
 
 // ============================================================
 // TYPES
@@ -38,14 +33,6 @@ let cwd = '/';
 
 // Cache of open SyncAccessHandles for files
 export const syncHandleCache = new Map<string, FileSystemSyncAccessHandle>();
-
-// Control array layout (matches opfs-async-helper.ts)
-const CONTROL = {
-    REQUEST_READY: 0,
-    RESPONSE_READY: 1,
-    DATA_LENGTH: 2,
-    SHUTDOWN: 3,
-};
 
 // ============================================================
 // CWD MANAGEMENT
@@ -80,84 +67,77 @@ export function setOpfsRoot(root: FileSystemDirectoryHandle): void {
 }
 
 // ============================================================
-// SYNC DIRECTORY SCAN
+// ASYNC DIRECTORY SCAN (for JSPI)
 // ============================================================
 
 /**
- * Synchronously scan a directory via the async helper worker.
- * Uses Atomics.wait() to block until the helper completes.
+ * Scan a directory using async OPFS APIs.
+ * With JSPI, returning a Promise will suspend the WASM stack automatically.
+ * No Atomics.wait needed!
  */
-export function syncScanDirectory(path: string): boolean {
-    const controlArray = getControlArray();
-    const dataArray = getDataArray();
-
-    if (!controlArray || !dataArray || !isHelperReady()) {
-        console.warn('[opfs-fs] Helper not ready, falling back to empty directory');
+export async function syncScanDirectory(path: string): Promise<boolean> {
+    if (!opfsRoot) {
+        console.warn('[opfs-fs] OPFS root not set, cannot scan:', path);
         return false;
     }
 
-    // Prepare request
-    const request: OPFSRequest = { type: 'scanDirectory', path };
-    const requestBytes = new TextEncoder().encode(JSON.stringify(request));
-
-    // Write request to shared buffer
-    dataArray.set(requestBytes);
-    Atomics.store(controlArray, CONTROL.DATA_LENGTH, requestBytes.length);
-
-    // Reset response flag before signaling request
-    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
-
-    // Signal request ready and wake up helper
-    Atomics.store(controlArray, CONTROL.REQUEST_READY, 1);
-    Atomics.notify(controlArray, CONTROL.REQUEST_READY);
-
-    console.log('[opfs-fs] Waiting for helper to scan:', path);
-
-    // Wait for response - THIS BLOCKS SYNCHRONOUSLY
-    const waitResult = Atomics.wait(controlArray, CONTROL.RESPONSE_READY, 0, 30000); // 30s timeout
-
-    if (waitResult === 'timed-out') {
-        console.error('[opfs-fs] Timeout waiting for helper response');
-        return false;
-    }
-
-    // Read response
-    const responseLength = Atomics.load(controlArray, CONTROL.DATA_LENGTH);
-    const responseJson = new TextDecoder().decode(dataArray.slice(0, responseLength));
-
-    // Reset response flag
-    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
-
-    let response: OPFSResponse;
     try {
-        response = JSON.parse(responseJson);
-    } catch (_e) {
-        console.error('[opfs-fs] Failed to parse response:', responseJson);
-        return false;
-    }
+        // Navigate to the target directory
+        let targetDir: FileSystemDirectoryHandle = opfsRoot;
+        const parts = path.split('/').filter(p => p && p !== '.');
 
-    if (!response.success || !response.entries) {
-        console.warn('[opfs-fs] Helper scan failed:', response.error);
-        return false;
-    }
-
-    // Update tree with scan results
-    const entry = path === '' || path === '/' ? directoryTree : getTreeEntry(path);
-    if (entry && entry.dir !== undefined) {
-        for (const item of response.entries) {
-            if (item.kind === 'directory') {
-                if (!entry.dir[item.name]) {
-                    entry.dir[item.name] = { dir: {}, _scanned: false };
-                }
-            } else {
-                entry.dir[item.name] = { size: item.size, mtime: item.mtime };
+        for (const part of parts) {
+            try {
+                targetDir = await targetDir.getDirectoryHandle(part);
+            } catch {
+                console.warn('[opfs-fs] Directory not found:', path);
+                return false;
             }
         }
-        entry._scanned = true;
-        console.log('[opfs-fs] Scanned', path || '/', 'with', response.entries.length, 'entries');
-    }
 
-    return true;
+        // Scan directory entries
+        const entries: Array<{ name: string; kind: 'file' | 'directory'; size?: number; mtime?: number }> = [];
+
+        for await (const [name, handle] of (targetDir as any).entries()) {
+            if (handle.kind === 'file') {
+                // Get file size if possible
+                try {
+                    const file = await (handle as FileSystemFileHandle).getFile();
+                    entries.push({
+                        name,
+                        kind: 'file',
+                        size: file.size,
+                        mtime: file.lastModified
+                    });
+                } catch {
+                    entries.push({ name, kind: 'file', size: 0, mtime: Date.now() });
+                }
+            } else {
+                entries.push({ name, kind: 'directory' });
+            }
+        }
+
+        // Update tree with scan results
+        const entry = path === '' || path === '/' ? directoryTree : getTreeEntry(path);
+        if (entry && entry.dir !== undefined) {
+            for (const item of entries) {
+                if (item.kind === 'directory') {
+                    if (!entry.dir[item.name]) {
+                        entry.dir[item.name] = { dir: {}, _scanned: false };
+                    }
+                } else {
+                    entry.dir[item.name] = { size: item.size, mtime: item.mtime };
+                }
+            }
+            entry._scanned = true;
+            console.log('[opfs-fs] Scanned', path || '/', 'with', entries.length, 'entries');
+        }
+
+        return true;
+    } catch (e) {
+        console.error('[opfs-fs] Error scanning directory:', path, e);
+        return false;
+    }
 }
 
 // ============================================================
