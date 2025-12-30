@@ -34,6 +34,7 @@ import {
     initHelperWorker,
     syncReadFileBinary,
     syncWriteFileBinary,
+    syncStat,
     msToDatetime
 } from './opfs-sync-bridge';
 import {
@@ -116,39 +117,52 @@ class Descriptor {
         };
     }
 
-    async statAt(pathFlags: number, subpath: string) {
+    statAt(pathFlags: number, subpath: string) {
         const fullPath = this.resolvePath(subpath);
         const shouldFollow = (pathFlags & 1) !== 0; // symlinkFollow flag
         const resolvedPath = shouldFollow ? resolveSymlinks(fullPath) : fullPath;
-        const entry = await getEntryFromOpfs(resolvedPath);
+        const normalizedPath = normalizePath(resolvedPath);
 
-        if (!entry) {
+        // Check symlink cache first
+        const symlinkTarget = getSymlinkTarget(normalizedPath);
+        if (symlinkTarget !== undefined) {
+            return {
+                type: 'symbolic-link',
+                linkCount: BigInt(0),
+                size: BigInt(0),
+                dataAccessTimestamp: msToDatetime(Date.now()),
+                dataModificationTimestamp: msToDatetime(Date.now()),
+                statusChangeTimestamp: msToDatetime(Date.now()),
+            };
+        }
+
+        // Use synchronous stat via SharedArrayBuffer bridge
+        try {
+            const stats = syncStat(normalizedPath);
+
+            let type: string;
+            let size = BigInt(0);
+
+            if (stats.isDirectory) {
+                type = 'directory';
+            } else {
+                type = 'regular-file';
+                size = BigInt(stats.size || 0);
+            }
+
+            const mtime = msToDatetime(stats.mtime);
+
+            return {
+                type,
+                linkCount: BigInt(0),
+                size,
+                dataAccessTimestamp: mtime,
+                dataModificationTimestamp: mtime,
+                statusChangeTimestamp: mtime,
+            };
+        } catch (_e) {
             throw 'no-entry';
         }
-
-        let type: string;
-        let size = BigInt(0);
-
-        if (entry.dir !== undefined) {
-            type = 'directory';
-        } else if (entry.symlink !== undefined) {
-            type = 'symbolic-link';
-        } else {
-            // File (size may be 0 or undefined for newly created files)
-            type = 'regular-file';
-            size = BigInt(entry.size || 0);
-        }
-
-        const mtime = msToDatetime(entry.mtime);
-
-        return {
-            type,
-            linkCount: BigInt(0),
-            size,
-            dataAccessTimestamp: mtime,
-            dataModificationTimestamp: mtime,
-            statusChangeTimestamp: mtime,
-        };
     }
 
     async openAt(
