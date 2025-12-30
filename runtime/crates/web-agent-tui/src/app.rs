@@ -154,6 +154,8 @@ impl<R: Read, W: Write> App<R, W> {
         let aux_content = self.aux_content.clone();
         let server_status = self.server_status.clone();
 
+        let model_name = self.ai_client.model_name().to_string();
+
         let _ = self.terminal.draw(|frame| {
             render_ui(
                 frame,
@@ -163,6 +165,7 @@ impl<R: Read, W: Write> App<R, W> {
                 &messages,
                 &aux_content,
                 &server_status,
+                &model_name,
             );
         });
     }
@@ -532,6 +535,7 @@ impl<R: Read, W: Write> App<R, W> {
                                     &self.messages,
                                     &self.aux_content,
                                     &self.server_status,
+                                    self.ai_client.model_name(),
                                 );
                             });
                         }

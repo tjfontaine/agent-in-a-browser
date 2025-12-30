@@ -498,7 +498,7 @@ impl AiClient {
 
     /// Create default client (Anthropic Claude 3.5 Haiku)
     pub fn default_claude() -> Self {
-        Self::anthropic("claude-3-5-haiku-latest")
+        Self::anthropic("claude-haiku-4-5-20251001")
     }
 
     /// Set API key (ephemeral, per-session)
@@ -509,6 +509,11 @@ impl AiClient {
     /// Check if API key is configured
     pub fn has_api_key(&self) -> bool {
         self.api_key.is_some()
+    }
+
+    /// Get the model name
+    pub fn model_name(&self) -> &str {
+        &self.model
     }
 
     /// Send a chat completion request
