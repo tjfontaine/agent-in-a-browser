@@ -5838,7 +5838,7 @@ function trampoline79(arg0, arg1) {
 }
 
 
-function trampoline80(arg0, arg1, arg2, arg3) {
+const trampoline80 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -5855,7 +5855,7 @@ function trampoline80(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.create-directory-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.createDirectoryAt(result3)};
+    ret = { tag: 'ok', val: await rsc0.createDirectoryAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6045,9 +6045,9 @@ function trampoline80(arg0, arg1, arg2, arg3) {
     postReturn: false
   });
 }
+);
 
-
-function trampoline81(arg0, arg1, arg2, arg3, arg4) {
+const trampoline81 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -6067,7 +6067,7 @@ function trampoline81(arg0, arg1, arg2, arg3, arg4) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.statAt(flags3, result4)};
+    ret = { tag: 'ok', val: await rsc0.statAt(flags3, result4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6331,7 +6331,7 @@ function trampoline81(arg0, arg1, arg2, arg3, arg4) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline82(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var handle1 = arg0;
@@ -6793,7 +6793,7 @@ const trampoline83 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 }
 );
 
-function trampoline84(arg0, arg1, arg2, arg3) {
+const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -6810,7 +6810,7 @@ function trampoline84(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.remove-directory-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.removeDirectoryAt(result3)};
+    ret = { tag: 'ok', val: await rsc0.removeDirectoryAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7000,9 +7000,9 @@ function trampoline84(arg0, arg1, arg2, arg3) {
     postReturn: false
   });
 }
+);
 
-
-function trampoline85(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+const trampoline85 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -7031,7 +7031,7 @@ function trampoline85(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.rename-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.renameAt(result3, rsc4, result7)};
+    ret = { tag: 'ok', val: await rsc0.renameAt(result3, rsc4, result7)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7221,9 +7221,9 @@ function trampoline85(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
     postReturn: false
   });
 }
+);
 
-
-function trampoline86(arg0, arg1, arg2, arg3) {
+const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
@@ -7240,7 +7240,7 @@ function trampoline86(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.unlink-file-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.unlinkFileAt(result3)};
+    ret = { tag: 'ok', val: await rsc0.unlinkFileAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7430,7 +7430,7 @@ function trampoline86(arg0, arg1, arg2, arg3) {
     postReturn: false
   });
 }
-
+);
 
 function trampoline87(arg0, arg1, arg2) {
   var handle1 = arg0;
