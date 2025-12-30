@@ -154,6 +154,7 @@ class Descriptor {
         _modes: number
     ): Promise<Descriptor> {
         const fullPath = this.resolvePath(subpath);
+        const normalizedPath = normalizePath(fullPath);
 
         // Use async tree entry lookup that scans directories lazily
         let entry = await getTreeEntryWithScan(fullPath);
@@ -173,6 +174,23 @@ class Descriptor {
 
         if (!entry) {
             throw 'no-entry';
+        }
+
+        // For files (not directories), verify the file actually exists in OPFS
+        // This catches race conditions where tree is updated but OPFS is out of sync
+        if (entry.dir === undefined && entry.symlink === undefined && !openFlags.create) {
+            // Check if we have a cached sync handle (confirms file exists)
+            if (!syncHandleCache.has(normalizedPath)) {
+                // Try to verify file exists in OPFS
+                try {
+                    await getOpfsFile(normalizedPath, false);
+                } catch (_e) {
+                    // File doesn't exist in OPFS, remove from tree and throw
+                    console.warn('[opfs-fs] openAt: file in tree but not in OPFS:', normalizedPath);
+                    removeTreeEntry(normalizedPath);
+                    throw 'no-entry';
+                }
+            }
         }
 
         return new Descriptor(fullPath, entry);
