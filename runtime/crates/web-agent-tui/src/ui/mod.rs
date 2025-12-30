@@ -8,6 +8,7 @@ pub mod panels;
 pub mod server_manager;
 mod shell_mode;
 mod status_bar;
+pub mod theme;
 
 use ratatui::prelude::*;
 use ratatui::widgets::*;

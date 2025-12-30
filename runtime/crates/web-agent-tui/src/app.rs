@@ -307,8 +307,11 @@ impl<R: Read, W: Write> App<R, W> {
                 self.input.clear();
                 false
             }
-            // Tab - potential autocomplete (placeholder)
-            0x09 => false,
+            // Tab - autocomplete slash commands
+            0x09 => {
+                self.try_tab_complete();
+                false
+            }
             // Printable ASCII
             0x20..=0x7E => {
                 self.input.push(byte as char);
@@ -1175,6 +1178,56 @@ impl<R: Read, W: Write> App<R, W> {
         }
     }
 
+    /// Slash commands for tab completion
+    const SLASH_COMMANDS: &'static [&'static str] = &[
+        "/help",
+        "/tools",
+        "/mcp",
+        "/model",
+        "/provider",
+        "/theme",
+        "/shell",
+        "/config",
+        "/key",
+        "/clear",
+        "/quit",
+    ];
+
+    /// Try to complete the current input with Tab
+    fn try_tab_complete(&mut self) {
+        // Only complete slash commands for now
+        if !self.input.starts_with('/') {
+            return;
+        }
+
+        let prefix = self.input.as_str();
+
+        // Find matching commands
+        let matches: Vec<&str> = Self::SLASH_COMMANDS
+            .iter()
+            .filter(|cmd| cmd.starts_with(prefix) && **cmd != prefix)
+            .copied()
+            .collect();
+
+        match matches.len() {
+            0 => {
+                // No matches - do nothing
+            }
+            1 => {
+                // Single match - complete it
+                self.input = matches[0].to_string();
+            }
+            _ => {
+                // Multiple matches - show them
+                let options = matches.join("  ");
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("Completions: {}", options),
+                });
+            }
+        }
+    }
+
     fn handle_slash_command(&mut self, cmd: &str) {
         let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
         let command = parts.first().map(|s| *s).unwrap_or("");
@@ -1190,6 +1243,7 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /mcp      - MCP server manager (j/k=nav, Enter=select)",
                         "  /model    - Select AI model",
                         "  /provider - Select AI provider (Anthropic/OpenAI)",
+                        "  /theme    - Change theme (dark, light, gruvbox, catppuccin)",
                         "  /shell    - Enter shell mode (^D to exit)",
                         "  /config   - View current configuration",
                         "  /key      - Set API key",
@@ -1319,6 +1373,37 @@ impl<R: Read, W: Write> App<R, W> {
                         if self.config.ui.aux_panel { "enabled" } else { "disabled" }
                     ),
                 });
+            }
+            "/theme" => {
+                // Change theme - usage: /theme dark|light|gruvbox|catppuccin
+                if let Some(theme_name) = parts.get(1) {
+                    let valid_themes = ["dark", "light", "gruvbox", "catppuccin", "tokyo-night"];
+                    if valid_themes.contains(&theme_name.to_lowercase().as_str()) {
+                        self.config.ui.theme = theme_name.to_string();
+                        let _ = self.config.save();
+                        self.messages.push(Message {
+                            role: Role::System,
+                            content: format!("Theme changed to: {}", theme_name),
+                        });
+                    } else {
+                        self.messages.push(Message {
+                            role: Role::System,
+                            content: format!(
+                                "Unknown theme: {}. Available: {}",
+                                theme_name,
+                                valid_themes.join(", ")
+                            ),
+                        });
+                    }
+                } else {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!(
+                            "Current theme: {}. Usage: /theme <name>\nAvailable: dark, light, gruvbox, catppuccin",
+                            self.config.ui.theme
+                        ),
+                    });
+                }
             }
             "/clear" => {
                 self.messages.clear();
