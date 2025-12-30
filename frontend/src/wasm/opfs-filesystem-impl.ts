@@ -125,11 +125,11 @@ class Descriptor {
         };
     }
 
-    statAt(pathFlags: number, subpath: string) {
+    async statAt(pathFlags: number, subpath: string) {
         const fullPath = this.resolvePath(subpath);
         const shouldFollow = (pathFlags & 1) !== 0; // symlinkFollow flag
         const resolvedPath = shouldFollow ? resolveSymlinks(fullPath) : fullPath;
-        const entry = getTreeEntry(resolvedPath);
+        const entry = await getEntryFromOpfs(resolvedPath);
 
         if (!entry) {
             throw 'no-entry';
@@ -226,15 +226,15 @@ class Descriptor {
         });
     }
 
-    createDirectoryAt(subpath: string): void {
+    async createDirectoryAt(subpath: string): Promise<void> {
         const fullPath = this.resolvePath(subpath);
-        const existing = getTreeEntry(fullPath);
+        const existing = await getEntryFromOpfs(fullPath);
 
         if (existing) {
             throw 'exist';
         }
 
-        setTreeEntry(fullPath, { dir: {} });
+        // Just create in OPFS directly - no tree update needed
         this.createOpfsDirectory(fullPath);
     }
 
@@ -838,12 +838,12 @@ class Descriptor {
         });
     }
 
-    unlinkFileAt(subpath: string): void {
+    async unlinkFileAt(subpath: string): Promise<void> {
         const fullPath = this.resolvePath(subpath);
         const normalizedPath = normalizePath(fullPath);
 
-        // Check if file exists in tree
-        const entry = getTreeEntry(normalizedPath);
+        // Check if file exists in OPFS directly
+        const entry = await getEntryFromOpfs(normalizedPath);
         if (!entry) {
             throw 'no-entry';
         }
@@ -851,12 +851,12 @@ class Descriptor {
             throw 'is-directory';
         }
 
-        // If it's a symlink, delete from IndexedDB
+        // If it's a symlink, delete from IndexedDB and cache
         if (entry.symlink !== undefined) {
             deleteSymlink(normalizedPath).catch(e => {
                 console.error('[opfs-fs] Failed to delete symlink from IndexedDB:', normalizedPath, e);
             });
-            removeTreeEntry(normalizedPath);
+            removeSymlinkFromCache(normalizedPath);
             return;
         }
 
@@ -873,9 +873,6 @@ class Descriptor {
 
         // Remove from OPFS (async)
         this.removeOpfsEntry(normalizedPath, false);
-
-        // Remove from tree
-        removeTreeEntry(normalizedPath);
     }
 
     private removeOpfsEntry(path: string, isDirectory: boolean): void {
