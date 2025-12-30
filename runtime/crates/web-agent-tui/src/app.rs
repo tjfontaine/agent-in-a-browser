@@ -12,6 +12,7 @@ use crate::bridge::{
     get_system_message, mcp_client::ToolDefinition, try_execute_local_tool, AiClient, McpClient,
     Task,
 };
+use crate::config::Config;
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
     ServerConnectionStatus, ServerManagerView, ServerStatus,
@@ -67,6 +68,8 @@ pub struct App<R: Read, W: Write> {
     remote_servers: Vec<RemoteServerEntry>,
     /// Current overlay (modal popup)
     overlay: Option<Overlay>,
+    /// Loaded configuration
+    config: Config,
 }
 
 /// A message in the chat history
@@ -101,6 +104,15 @@ impl<R: Read, W: Write> App<R, W> {
         // The URL will be proxied by the frontend to the actual sandbox worker
         let mcp_client = McpClient::new("http://localhost:3000/mcp");
 
+        // Load config from OPFS (or use defaults)
+        let config = Config::load();
+
+        // Apply saved API key if available
+        let mut ai_client = ai_client;
+        if let Some(ref api_key) = config.provider.api_key {
+            ai_client.set_api_key(api_key);
+        }
+
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
@@ -127,6 +139,7 @@ impl<R: Read, W: Write> App<R, W> {
             cancelled: false,
             remote_servers: Vec::new(),
             overlay: None,
+            config,
         }
     }
 
@@ -408,9 +421,19 @@ impl<R: Read, W: Write> App<R, W> {
             AppState::NeedsApiKey => {
                 // This input is the API key - don't add to history
                 self.ai_client.set_api_key(&input);
+
+                // Save API key to config for persistence
+                self.config.provider.api_key = Some(input.clone());
+                if let Err(e) = self.config.save() {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Warning: Could not save config: {}", e),
+                    });
+                }
+
                 self.messages.push(Message {
                     role: Role::System,
-                    content: "API key set.".to_string(),
+                    content: "API key set and saved.".to_string(),
                 });
                 self.state = AppState::Ready;
 
@@ -1062,6 +1085,7 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /tools    - List available tools",
                         "  /mcp      - MCP server manager (j/k=nav, Enter=select)",
                         "  /shell    - Enter shell mode (^D to exit)",
+                        "  /config   - View current configuration",
                         "  /key      - Set API key",
                         "  /clear    - Clear messages",
                         "  /quit     - Exit (or ^C)",
@@ -1157,6 +1181,26 @@ impl<R: Read, W: Write> App<R, W> {
                 self.messages.push(Message {
                     role: Role::System,
                     content: "Enter API key:".to_string(),
+                });
+            }
+            "/config" => {
+                // Display current configuration
+                let api_key_status = if self.ai_client.has_api_key() {
+                    "configured ✓"
+                } else {
+                    "not set"
+                };
+
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!(
+                        "Configuration:\n  Provider: {}\n  Model: {}\n  API Key: {}\n  Theme: {}\n  Aux Panel: {}",
+                        self.config.provider.default,
+                        self.ai_client.model_name(),
+                        api_key_status,
+                        self.config.ui.theme,
+                        if self.config.ui.aux_panel { "enabled" } else { "disabled" }
+                    ),
                 });
             }
             "/clear" => {

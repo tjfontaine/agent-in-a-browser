@@ -14,6 +14,7 @@ export class InputStream {
    * This type does not have a public constructor.
    */
   private constructor();
+  read(len: bigint): Uint8Array;
   blockingRead(len: bigint): Uint8Array;
 }
 

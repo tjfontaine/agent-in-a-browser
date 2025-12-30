@@ -1,6 +1,7 @@
-import { environment, exit as exit$1, stderr, stdin, stdout } from '../ghostty-cli-shim.js';
+import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '../ghostty-cli-shim.js';
 import { command } from '../mcp-server-jspi/ts-runtime-mcp.js';
 import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../wasi-http-impl.js';
+import { preopens, types } from '@bytecodealliance/preview2-shim/filesystem';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
 const { getEnvironment } = environment;
@@ -8,8 +9,16 @@ const { exit } = exit$1;
 const { getStderr } = stderr;
 const { getStdin } = stdin;
 const { getStdout } = stdout;
+const { TerminalInput } = terminalInput;
+const { TerminalOutput } = terminalOutput;
+const { getTerminalStderr } = terminalStderr;
+const { getTerminalStdin } = terminalStdin;
+const { getTerminalStdout } = terminalStdout;
 const { run } = command;
 const { handle } = outgoingHandler;
+const { getDirectories } = preopens;
+const { Descriptor,
+  filesystemErrorCode } = types;
 const { Error: Error$1 } = error;
 const { Pollable } = poll;
 const { InputStream,
@@ -1105,7 +1114,7 @@ function trampoline9(arg0) {
 
 let exports1;
 
-function trampoline20(arg0) {
+function trampoline28(arg0) {
   let variant0;
   if (arg0) {
     variant0= {
@@ -1140,7 +1149,7 @@ const captureTable6= new Map();
 let captureCnt6 = 0;
 handleTables[6] = handleTable6;
 
-function trampoline21(arg0, arg1) {
+function trampoline29(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable6.get(rep2);
@@ -1203,7 +1212,7 @@ const captureTable7= new Map();
 let captureCnt7 = 0;
 handleTables[7] = handleTable7;
 
-function trampoline22(arg0, arg1) {
+function trampoline30(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable7.get(rep2);
@@ -1262,7 +1271,7 @@ function trampoline22(arg0, arg1) {
 }
 
 
-function trampoline23(arg0, arg1, arg2, arg3) {
+function trampoline31(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable7.get(rep2);
@@ -1713,7 +1722,7 @@ function trampoline23(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline24(arg0, arg1, arg2, arg3) {
+function trampoline32(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -1831,7 +1840,7 @@ function trampoline24(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline25(arg0, arg1, arg2, arg3, arg4) {
+function trampoline33(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -1913,7 +1922,7 @@ function trampoline25(arg0, arg1, arg2, arg3, arg4) {
 }
 
 
-function trampoline26(arg0, arg1, arg2, arg3) {
+function trampoline34(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -1973,7 +1982,7 @@ function trampoline26(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline27(arg0, arg1, arg2, arg3) {
+function trampoline35(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -2033,7 +2042,7 @@ function trampoline27(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline28(arg0, arg1) {
+function trampoline36(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -2092,7 +2101,7 @@ function trampoline28(arg0, arg1) {
 }
 
 
-function trampoline29(arg0, arg1) {
+function trampoline37(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -2151,7 +2160,7 @@ function trampoline29(arg0, arg1) {
 }
 
 
-function trampoline30(arg0, arg1) {
+function trampoline38(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable10.get(rep2);
@@ -2613,7 +2622,7 @@ function trampoline30(arg0, arg1) {
 }
 
 
-function trampoline31(arg0, arg1, arg2, arg3, arg4, arg5) {
+function trampoline39(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
   var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable4.get(rep2);
@@ -2686,7 +2695,7 @@ function trampoline31(arg0, arg1, arg2, arg3, arg4, arg5) {
 }
 
 
-const trampoline32 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+const trampoline40 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
   var ptr0 = arg0;
   var len0 = arg1;
   var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
@@ -2774,7 +2783,7 @@ const captureTable1= new Map();
 let captureCnt1 = 0;
 handleTables[1] = handleTable1;
 
-const trampoline33 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+const trampoline41 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -2855,7 +2864,7 @@ const trampoline33 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 }
 );
 
-function trampoline34(arg0, arg1, arg2, arg3) {
+function trampoline42(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -2932,7 +2941,7 @@ function trampoline34(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline35(arg0, arg1, arg2, arg3) {
+function trampoline43(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -3393,7 +3402,7 @@ function trampoline35(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline36(arg0, arg1) {
+function trampoline44(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable1.get(rep2);
@@ -3425,7 +3434,7 @@ function trampoline36(arg0, arg1) {
 }
 
 
-function trampoline37(arg0) {
+function trampoline45(arg0) {
   _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
   const ret = insecureSeed();
@@ -3443,7 +3452,7 @@ function trampoline37(arg0) {
 }
 
 
-function trampoline38(arg0) {
+function trampoline46(arg0) {
   _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-environment');
   const ret = getEnvironment();
@@ -3468,6 +3477,1694 @@ function trampoline38(arg0) {
   dataView(memory0).setUint32(arg0 + 0, result3, true);
   _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"][Instruction::Return]', {
     funcName: 'get-environment',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline47(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Error$1.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'filesystem-error-code');
+  const ret = filesystemErrorCode(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  if (variant4 === null || variant4=== undefined) {
+    dataView(memory0).setInt8(arg1 + 0, 0, true);
+  } else {
+    const e = variant4;
+    dataView(memory0).setInt8(arg1 + 0, 1, true);
+    var val3 = e;
+    let enum3;
+    switch (val3) {
+      case 'access': {
+        enum3 = 0;
+        break;
+      }
+      case 'would-block': {
+        enum3 = 1;
+        break;
+      }
+      case 'already': {
+        enum3 = 2;
+        break;
+      }
+      case 'bad-descriptor': {
+        enum3 = 3;
+        break;
+      }
+      case 'busy': {
+        enum3 = 4;
+        break;
+      }
+      case 'deadlock': {
+        enum3 = 5;
+        break;
+      }
+      case 'quota': {
+        enum3 = 6;
+        break;
+      }
+      case 'exist': {
+        enum3 = 7;
+        break;
+      }
+      case 'file-too-large': {
+        enum3 = 8;
+        break;
+      }
+      case 'illegal-byte-sequence': {
+        enum3 = 9;
+        break;
+      }
+      case 'in-progress': {
+        enum3 = 10;
+        break;
+      }
+      case 'interrupted': {
+        enum3 = 11;
+        break;
+      }
+      case 'invalid': {
+        enum3 = 12;
+        break;
+      }
+      case 'io': {
+        enum3 = 13;
+        break;
+      }
+      case 'is-directory': {
+        enum3 = 14;
+        break;
+      }
+      case 'loop': {
+        enum3 = 15;
+        break;
+      }
+      case 'too-many-links': {
+        enum3 = 16;
+        break;
+      }
+      case 'message-size': {
+        enum3 = 17;
+        break;
+      }
+      case 'name-too-long': {
+        enum3 = 18;
+        break;
+      }
+      case 'no-device': {
+        enum3 = 19;
+        break;
+      }
+      case 'no-entry': {
+        enum3 = 20;
+        break;
+      }
+      case 'no-lock': {
+        enum3 = 21;
+        break;
+      }
+      case 'insufficient-memory': {
+        enum3 = 22;
+        break;
+      }
+      case 'insufficient-space': {
+        enum3 = 23;
+        break;
+      }
+      case 'not-directory': {
+        enum3 = 24;
+        break;
+      }
+      case 'not-empty': {
+        enum3 = 25;
+        break;
+      }
+      case 'not-recoverable': {
+        enum3 = 26;
+        break;
+      }
+      case 'unsupported': {
+        enum3 = 27;
+        break;
+      }
+      case 'no-tty': {
+        enum3 = 28;
+        break;
+      }
+      case 'no-such-device': {
+        enum3 = 29;
+        break;
+      }
+      case 'overflow': {
+        enum3 = 30;
+        break;
+      }
+      case 'not-permitted': {
+        enum3 = 31;
+        break;
+      }
+      case 'pipe': {
+        enum3 = 32;
+        break;
+      }
+      case 'read-only': {
+        enum3 = 33;
+        break;
+      }
+      case 'invalid-seek': {
+        enum3 = 34;
+        break;
+      }
+      case 'text-file-busy': {
+        enum3 = 35;
+        break;
+      }
+      case 'cross-device': {
+        enum3 = 36;
+        break;
+      }
+      default: {
+        
+        throw new TypeError(`"${val3}" is not one of the cases of error-code`);
+      }
+    }
+    dataView(memory0).setInt8(arg1 + 1, enum3, true);
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"][Instruction::Return]', {
+    funcName: 'filesystem-error-code',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable14 = [T_FLAG, 0];
+const captureTable14= new Map();
+let captureCnt14 = 0;
+handleTables[14] = handleTable14;
+
+function trampoline48(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var flags3 = {
+    symlinkFollow: Boolean(arg1 & 1),
+  };
+  var ptr4 = arg2;
+  var len4 = arg3;
+  var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
+  var flags5 = {
+    create: Boolean(arg4 & 1),
+    directory: Boolean(arg4 & 2),
+    exclusive: Boolean(arg4 & 4),
+    truncate: Boolean(arg4 & 8),
+  };
+  var flags6 = {
+    read: Boolean(arg5 & 1),
+    write: Boolean(arg5 & 2),
+    fileIntegritySync: Boolean(arg5 & 4),
+    dataIntegritySync: Boolean(arg5 & 8),
+    requestedWriteSync: Boolean(arg5 & 16),
+    mutateDirectory: Boolean(arg5 & 32),
+  };
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.open-at');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.openAt(flags3, result4, flags5, flags6)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant9 = ret;
+  switch (variant9.tag) {
+    case 'ok': {
+      const e = variant9.val;
+      dataView(memory0).setInt8(arg6 + 0, 0, true);
+      if (!(e instanceof Descriptor)) {
+        throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
+      }
+      var handle7 = e[symbolRscHandle];
+      if (!handle7) {
+        const rep = e[symbolRscRep] || ++captureCnt14;
+        captureTable14.set(rep, e);
+        handle7 = rscTableCreateOwn(handleTable14, rep);
+      }
+      dataView(memory0).setInt32(arg6 + 4, handle7, true);
+      break;
+    }
+    case 'err': {
+      const e = variant9.val;
+      dataView(memory0).setInt8(arg6 + 0, 1, true);
+      var val8 = e;
+      let enum8;
+      switch (val8) {
+        case 'access': {
+          enum8 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum8 = 1;
+          break;
+        }
+        case 'already': {
+          enum8 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum8 = 3;
+          break;
+        }
+        case 'busy': {
+          enum8 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum8 = 5;
+          break;
+        }
+        case 'quota': {
+          enum8 = 6;
+          break;
+        }
+        case 'exist': {
+          enum8 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum8 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum8 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum8 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum8 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum8 = 12;
+          break;
+        }
+        case 'io': {
+          enum8 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum8 = 14;
+          break;
+        }
+        case 'loop': {
+          enum8 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum8 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum8 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum8 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum8 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum8 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum8 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum8 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum8 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum8 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum8 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum8 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum8 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum8 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum8 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum8 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum8 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum8 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum8 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum8 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum8 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum8 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val8}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg6 + 4, enum8, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"][Instruction::Return]', {
+    funcName: '[method]descriptor.open-at',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline49(arg0, arg1, arg2) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-via-stream');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.readViaStream(BigInt.asUintN(64, arg1))};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg2 + 0, 0, true);
+      if (!(e instanceof InputStream)) {
+        throw new TypeError('Resource error: Not a valid "InputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt2;
+        captureTable2.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable2, rep);
+      }
+      dataView(memory0).setInt32(arg2 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg2 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg2 + 4, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"][Instruction::Return]', {
+    funcName: '[method]descriptor.read-via-stream',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline50(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.get-type');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.getType()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      var val3 = e;
+      let enum3;
+      switch (val3) {
+        case 'unknown': {
+          enum3 = 0;
+          break;
+        }
+        case 'block-device': {
+          enum3 = 1;
+          break;
+        }
+        case 'character-device': {
+          enum3 = 2;
+          break;
+        }
+        case 'directory': {
+          enum3 = 3;
+          break;
+        }
+        case 'fifo': {
+          enum3 = 4;
+          break;
+        }
+        case 'symbolic-link': {
+          enum3 = 5;
+          break;
+        }
+        case 'regular-file': {
+          enum3 = 6;
+          break;
+        }
+        case 'socket': {
+          enum3 = 7;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val3}" is not one of the cases of descriptor-type`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 1, enum3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 1, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"][Instruction::Return]', {
+    funcName: '[method]descriptor.get-type',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline51(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.stat()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant12 = ret;
+  switch (variant12.tag) {
+    case 'ok': {
+      const e = variant12.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      var {type: v3_0, linkCount: v3_1, size: v3_2, dataAccessTimestamp: v3_3, dataModificationTimestamp: v3_4, statusChangeTimestamp: v3_5 } = e;
+      var val4 = v3_0;
+      let enum4;
+      switch (val4) {
+        case 'unknown': {
+          enum4 = 0;
+          break;
+        }
+        case 'block-device': {
+          enum4 = 1;
+          break;
+        }
+        case 'character-device': {
+          enum4 = 2;
+          break;
+        }
+        case 'directory': {
+          enum4 = 3;
+          break;
+        }
+        case 'fifo': {
+          enum4 = 4;
+          break;
+        }
+        case 'symbolic-link': {
+          enum4 = 5;
+          break;
+        }
+        case 'regular-file': {
+          enum4 = 6;
+          break;
+        }
+        case 'socket': {
+          enum4 = 7;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of descriptor-type`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 8, enum4, true);
+      dataView(memory0).setBigInt64(arg1 + 16, toUint64(v3_1), true);
+      dataView(memory0).setBigInt64(arg1 + 24, toUint64(v3_2), true);
+      var variant6 = v3_3;
+      if (variant6 === null || variant6=== undefined) {
+        dataView(memory0).setInt8(arg1 + 32, 0, true);
+      } else {
+        const e = variant6;
+        dataView(memory0).setInt8(arg1 + 32, 1, true);
+        var {seconds: v5_0, nanoseconds: v5_1 } = e;
+        dataView(memory0).setBigInt64(arg1 + 40, toUint64(v5_0), true);
+        dataView(memory0).setInt32(arg1 + 48, toUint32(v5_1), true);
+      }
+      var variant8 = v3_4;
+      if (variant8 === null || variant8=== undefined) {
+        dataView(memory0).setInt8(arg1 + 56, 0, true);
+      } else {
+        const e = variant8;
+        dataView(memory0).setInt8(arg1 + 56, 1, true);
+        var {seconds: v7_0, nanoseconds: v7_1 } = e;
+        dataView(memory0).setBigInt64(arg1 + 64, toUint64(v7_0), true);
+        dataView(memory0).setInt32(arg1 + 72, toUint32(v7_1), true);
+      }
+      var variant10 = v3_5;
+      if (variant10 === null || variant10=== undefined) {
+        dataView(memory0).setInt8(arg1 + 80, 0, true);
+      } else {
+        const e = variant10;
+        dataView(memory0).setInt8(arg1 + 80, 1, true);
+        var {seconds: v9_0, nanoseconds: v9_1 } = e;
+        dataView(memory0).setBigInt64(arg1 + 88, toUint64(v9_0), true);
+        dataView(memory0).setInt32(arg1 + 96, toUint32(v9_1), true);
+      }
+      break;
+    }
+    case 'err': {
+      const e = variant12.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var val11 = e;
+      let enum11;
+      switch (val11) {
+        case 'access': {
+          enum11 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum11 = 1;
+          break;
+        }
+        case 'already': {
+          enum11 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum11 = 3;
+          break;
+        }
+        case 'busy': {
+          enum11 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum11 = 5;
+          break;
+        }
+        case 'quota': {
+          enum11 = 6;
+          break;
+        }
+        case 'exist': {
+          enum11 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum11 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum11 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum11 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum11 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum11 = 12;
+          break;
+        }
+        case 'io': {
+          enum11 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum11 = 14;
+          break;
+        }
+        case 'loop': {
+          enum11 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum11 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum11 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum11 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum11 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum11 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum11 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum11 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum11 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum11 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum11 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum11 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum11 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum11 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum11 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum11 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum11 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum11 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum11 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum11 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum11 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum11 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val11}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 8, enum11, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"][Instruction::Return]', {
+    funcName: '[method]descriptor.stat',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline52(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.metadataHash()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      var {lower: v3_0, upper: v3_1 } = e;
+      dataView(memory0).setBigInt64(arg1 + 8, toUint64(v3_0), true);
+      dataView(memory0).setBigInt64(arg1 + 16, toUint64(v3_1), true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 8, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"][Instruction::Return]', {
+    funcName: '[method]descriptor.metadata-hash',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+  var handle1 = arg0;
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(InputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.blocking-read');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: await rsc0.blockingRead(BigInt.asUintN(64, arg1))};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant6 = ret;
+  switch (variant6.tag) {
+    case 'ok': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg2 + 0, 0, true);
+      var val3 = e;
+      var len3 = val3.byteLength;
+      var ptr3 = realloc1(0, 0, 1, len3 * 1);
+      var src3 = new Uint8Array(val3.buffer || val3, val3.byteOffset, len3 * 1);
+      (new Uint8Array(memory0.buffer, ptr3, len3 * 1)).set(src3);
+      dataView(memory0).setUint32(arg2 + 8, len3, true);
+      dataView(memory0).setUint32(arg2 + 4, ptr3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg2 + 0, 1, true);
+      var variant5 = e;
+      switch (variant5.tag) {
+        case 'last-operation-failed': {
+          const e = variant5.val;
+          dataView(memory0).setInt8(arg2 + 4, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle4 = e[symbolRscHandle];
+          if (!handle4) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg2 + 8, handle4, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg2 + 4, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"][Instruction::Return]', {
+    funcName: '[method]input-stream.blocking-read',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+);
+
+function trampoline54(arg0, arg1, arg2) {
+  var handle1 = arg0;
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(InputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.read');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.read(BigInt.asUintN(64, arg1))};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant6 = ret;
+  switch (variant6.tag) {
+    case 'ok': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg2 + 0, 0, true);
+      var val3 = e;
+      var len3 = val3.byteLength;
+      var ptr3 = realloc1(0, 0, 1, len3 * 1);
+      var src3 = new Uint8Array(val3.buffer || val3, val3.byteOffset, len3 * 1);
+      (new Uint8Array(memory0.buffer, ptr3, len3 * 1)).set(src3);
+      dataView(memory0).setUint32(arg2 + 8, len3, true);
+      dataView(memory0).setUint32(arg2 + 4, ptr3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg2 + 0, 1, true);
+      var variant5 = e;
+      switch (variant5.tag) {
+        case 'last-operation-failed': {
+          const e = variant5.val;
+          dataView(memory0).setInt8(arg2 + 4, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle4 = e[symbolRscHandle];
+          if (!handle4) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg2 + 8, handle4, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg2 + 4, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"][Instruction::Return]', {
+    funcName: '[method]input-stream.read',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline55(arg0) {
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-directories');
+  const ret = getDirectories();
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var vec3 = ret;
+  var len3 = vec3.length;
+  var result3 = realloc1(0, 0, 4, len3 * 12);
+  for (let i = 0; i < vec3.length; i++) {
+    const e = vec3[i];
+    const base = result3 + i * 12;var [tuple0_0, tuple0_1] = e;
+    if (!(tuple0_0 instanceof Descriptor)) {
+      throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
+    }
+    var handle1 = tuple0_0[symbolRscHandle];
+    if (!handle1) {
+      const rep = tuple0_0[symbolRscRep] || ++captureCnt14;
+      captureTable14.set(rep, tuple0_0);
+      handle1 = rscTableCreateOwn(handleTable14, rep);
+    }
+    dataView(memory0).setInt32(base + 0, handle1, true);
+    var ptr2 = utf8Encode(tuple0_1, realloc1, memory0);
+    var len2 = utf8EncodedLen;
+    dataView(memory0).setUint32(base + 8, len2, true);
+    dataView(memory0).setUint32(base + 4, ptr2, true);
+  }
+  dataView(memory0).setUint32(arg0 + 4, len3, true);
+  dataView(memory0).setUint32(arg0 + 0, result3, true);
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"][Instruction::Return]', {
+    funcName: 'get-directories',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable11 = [T_FLAG, 0];
+const captureTable11= new Map();
+let captureCnt11 = 0;
+handleTables[11] = handleTable11;
+
+function trampoline56(arg0) {
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdin');
+  const ret = getTerminalStdin();
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var variant1 = ret;
+  if (variant1 === null || variant1=== undefined) {
+    dataView(memory0).setInt8(arg0 + 0, 0, true);
+  } else {
+    const e = variant1;
+    dataView(memory0).setInt8(arg0 + 0, 1, true);
+    if (!(e instanceof TerminalInput)) {
+      throw new TypeError('Resource error: Not a valid "TerminalInput" resource.');
+    }
+    var handle0 = e[symbolRscHandle];
+    if (!handle0) {
+      const rep = e[symbolRscRep] || ++captureCnt11;
+      captureTable11.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable11, rep);
+    }
+    dataView(memory0).setInt32(arg0 + 4, handle0, true);
+  }
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"][Instruction::Return]', {
+    funcName: 'get-terminal-stdin',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+const handleTable12 = [T_FLAG, 0];
+const captureTable12= new Map();
+let captureCnt12 = 0;
+handleTables[12] = handleTable12;
+
+function trampoline57(arg0) {
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdout');
+  const ret = getTerminalStdout();
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var variant1 = ret;
+  if (variant1 === null || variant1=== undefined) {
+    dataView(memory0).setInt8(arg0 + 0, 0, true);
+  } else {
+    const e = variant1;
+    dataView(memory0).setInt8(arg0 + 0, 1, true);
+    if (!(e instanceof TerminalOutput)) {
+      throw new TypeError('Resource error: Not a valid "TerminalOutput" resource.');
+    }
+    var handle0 = e[symbolRscHandle];
+    if (!handle0) {
+      const rep = e[symbolRscRep] || ++captureCnt12;
+      captureTable12.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable12, rep);
+    }
+    dataView(memory0).setInt32(arg0 + 4, handle0, true);
+  }
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"][Instruction::Return]', {
+    funcName: 'get-terminal-stdout',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline58(arg0) {
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stderr');
+  const ret = getTerminalStderr();
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var variant1 = ret;
+  if (variant1 === null || variant1=== undefined) {
+    dataView(memory0).setInt8(arg0 + 0, 0, true);
+  } else {
+    const e = variant1;
+    dataView(memory0).setInt8(arg0 + 0, 1, true);
+    if (!(e instanceof TerminalOutput)) {
+      throw new TypeError('Resource error: Not a valid "TerminalOutput" resource.');
+    }
+    var handle0 = e[symbolRscHandle];
+    if (!handle0) {
+      const rep = e[symbolRscRep] || ++captureCnt12;
+      captureTable12.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable12, rep);
+    }
+    dataView(memory0).setInt32(arg0 + 4, handle0, true);
+  }
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"][Instruction::Return]', {
+    funcName: 'get-terminal-stderr',
     paramCount: 0,
     async: false,
     postReturn: false
@@ -3618,6 +5315,95 @@ function trampoline19(handle) {
     }
   }
 }
+const handleTable15 = [T_FLAG, 0];
+const captureTable15= new Map();
+let captureCnt15 = 0;
+handleTables[15] = handleTable15;
+function trampoline20(handle) {
+  const handleEntry = rscTableRemove(handleTable15, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(15)]')
+  }
+}
+const handleTable16 = [T_FLAG, 0];
+const captureTable16= new Map();
+let captureCnt16 = 0;
+handleTables[16] = handleTable16;
+function trampoline21(handle) {
+  const handleEntry = rscTableRemove(handleTable16, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(16)]')
+  }
+}
+const handleTable17 = [T_FLAG, 0];
+const captureTable17= new Map();
+let captureCnt17 = 0;
+handleTables[17] = handleTable17;
+function trampoline22(handle) {
+  const handleEntry = rscTableRemove(handleTable17, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(17)]')
+  }
+}
+const handleTable18 = [T_FLAG, 0];
+const captureTable18= new Map();
+let captureCnt18 = 0;
+handleTables[18] = handleTable18;
+function trampoline23(handle) {
+  const handleEntry = rscTableRemove(handleTable18, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(18)]')
+  }
+}
+const handleTable13 = [T_FLAG, 0];
+const captureTable13= new Map();
+let captureCnt13 = 0;
+handleTables[13] = handleTable13;
+function trampoline24(handle) {
+  const handleEntry = rscTableRemove(handleTable13, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(13)]')
+  }
+}
+function trampoline25(handle) {
+  const handleEntry = rscTableRemove(handleTable14, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable14.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable14.delete(handleEntry.rep);
+    } else if (Descriptor[symbolCabiDispose]) {
+      Descriptor[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline26(handle) {
+  const handleEntry = rscTableRemove(handleTable11, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable11.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable11.delete(handleEntry.rep);
+    } else if (TerminalInput[symbolCabiDispose]) {
+      TerminalInput[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline27(handle) {
+  const handleEntry = rscTableRemove(handleTable12, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable12.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable12.delete(handleEntry.rep);
+    } else if (TerminalOutput[symbolCabiDispose]) {
+      TerminalOutput[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
 let exports1Run;
 
 async function run$1() {
@@ -3643,8 +5429,8 @@ const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-agent-tui.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-agent-tui.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAMXFgAAAQIDAgIAAAAEBQYHAQAICQkKCAcEBQFwARYWB3AXATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQgkaW1wb3J0cwEACsECFgsAIAAgAUEAEQAACwsAIAAgAUEBEQAACw8AIAAgASACIANBAhEBAAsPACAAIAEgAiADQQMRAgALEQAgACABIAIgAyAEQQQRAwALDwAgACABIAIgA0EFEQIACw8AIAAgASACIANBBhECAAsLACAAIAFBBxEAAAsLACAAIAFBCBEAAAsLACAAIAFBCREAAAsTACAAIAEgAiADIAQgBUEKEQQACx0AIAAgASACIAMgBCAFIAYgByAIIAkgCkELEQUACw0AIAAgASACQQwRBgALDwAgACABIAIgA0ENEQcACw8AIAAgASACIANBDhEBAAsLACAAIAFBDxEAAAsJACAAQRARCAALCwAgACABQRERCQALCwAgACABQRIRCQALCQAgAEETEQoACwkAIABBFBEIAAsPACAAIAEgAiADQRURBwALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMADQCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAbMKFgA7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctYm9keS5zdHJlYW0BOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUCO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoA0JpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1tZXRob2QEQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXNjaGVtZQVFaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtYXV0aG9yaXR5BktpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1wYXRoLXdpdGgtcXVlcnkHPGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3QuYm9keQhAaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctcmVzcG9uc2UuY29uc3VtZQlDaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZnV0dXJlLWluY29taW5nLXJlc3BvbnNlLmdldAo0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAslaW5kaXJlY3Qtc2hlbGw6dW5peC9jb21tYW5kQDAuMS4wLXJ1bgxBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQNTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNoDjBpbmRpcmVjdC13YXNpOmh0dHAvb3V0Z29pbmctaGFuZGxlckAwLjIuNC1oYW5kbGUPOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcQNmluZGlyZWN0LXdhc2k6cmFuZG9tL2luc2VjdXJlLXNlZWRAMC4yLjQtaW5zZWN1cmUtc2VlZBEoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldBIuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldBMmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQUM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudBVNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2g');
-    const module3 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAKKARcAATAAAAABMQAAAAEyAAEAATMAAgABNAADAAE1AAIAATYAAgABNwAAAAE4AAAAATkAAAACMTAABAACMTEABQACMTIABgACMTMABwACMTQAAQACMTUAAAACMTYACAACMTcACQACMTgACQACMTkACgACMjAACAACMjEABwAIJGltcG9ydHMBcAEWFgkcAQBBAAsWAAECAwQFBgcICQoLDA0ODxAREhMUFQAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
+    const module2 = base64Compile('AGFzbQEAAAABfBBgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgCX9/f39/fn5/fwF/YAJ/fwF/YAR/f39/AX9gAX8Bf2ADf39/AX9gAX8AYAF/AGAHf39/f39/fwADKikAAAECAwICAAAABAUGBwEACAkKCQkLCQwNCw4OAA8GAAAABgYHDg4ODgQFAXABKSkHzwEqATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQIyMgAWAjIzABcCMjQAGAIyNQAZAjI2ABoCMjcAGwIyOAAcAjI5AB0CMzAAHgIzMQAfAjMyACACMzMAIQIzNAAiAjM1ACMCMzYAJAIzNwAlAjM4ACYCMzkAJwI0MAAoCCRpbXBvcnRzAQAKvQQpCwAgACABQQARAAALCwAgACABQQERAAALDwAgACABIAIgA0ECEQEACw8AIAAgASACIANBAxECAAsRACAAIAEgAiADIARBBBEDAAsPACAAIAEgAiADQQURAgALDwAgACABIAIgA0EGEQIACwsAIAAgAUEHEQAACwsAIAAgAUEIEQAACwsAIAAgAUEJEQAACxMAIAAgASACIAMgBCAFQQoRBAALHQAgACABIAIgAyAEIAUgBiAHIAggCSAKQQsRBQALDQAgACABIAJBDBEGAAsPACAAIAEgAiADQQ0RBwALDwAgACABIAIgA0EOEQEACwsAIAAgAUEPEQAACxkAIAAgASACIAMgBCAFIAYgByAIQRARCAALCwAgACABQRERCQALDwAgACABIAIgA0ESEQoACwsAIAAgAUETEQkACwsAIAAgAUEUEQkACwkAIABBFRELAAsLACAAIAFBFhEJAAsNACAAIAEgAkEXEQwACwkAIABBGBENAAsJACAAQRkRCwALCQAgAEEaEQ4ACwkAIABBGxEOAAsLACAAIAFBHBEAAAsVACAAIAEgAiADIAQgBSAGQR0RDwALDQAgACABIAJBHhEGAAsLACAAIAFBHxEAAAsLACAAIAFBIBEAAAsLACAAIAFBIREAAAsNACAAIAEgAkEiEQYACw0AIAAgASACQSMRBgALDwAgACABIAIgA0EkEQcACwkAIABBJREOAAsJACAAQSYRDgALCQAgAEEnEQ4ACwkAIABBKBEOAAsALwlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzOS4wAPwSBG5hbWUAExJ3aXQtY29tcG9uZW50OnNoaW0B3xIpADtpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1ib2R5LnN0cmVhbQE6aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctYm9keS53cml0ZQI7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVtzdGF0aWNdb3V0Z29pbmctYm9keS5maW5pc2gDQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LW1ldGhvZARCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtc2NoZW1lBUVpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1hdXRob3JpdHkGS2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXBhdGgtd2l0aC1xdWVyeQc8aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5ib2R5CEBpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1yZXNwb25zZS5jb25zdW1lCUNpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1mdXR1cmUtaW5jb21pbmctcmVzcG9uc2UuZ2V0CjRpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1maWVsZHMuYXBwZW5kCyVpbmRpcmVjdC1zaGVsbDp1bml4L2NvbW1hbmRAMC4xLjAtcnVuDEFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZA1NaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2gOMGluZGlyZWN0LXdhc2k6aHR0cC9vdXRnb2luZy1oYW5kbGVyQDAuMi40LWhhbmRsZQ86aW5kaXJlY3Qtd2FzaTppby9lcnJvckAwLjIuNC1bbWV0aG9kXWVycm9yLnRvLWRlYnVnLXN0cmluZxAmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wYXRoX29wZW4RLGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfZmlsZXN0YXRfZ2V0EiRhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3JlYWQTKGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9nZXQULmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9zaXplc19nZXQVJWFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfY2xvc2UWK2FkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfcHJlc3RhdF9nZXQXMGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfcHJlc3RhdF9kaXJfbmFtZRgmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQZMGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtYWRhcHRlcl9jbG9zZV9iYWRmZBo2aW5kaXJlY3Qtd2FzaTpyYW5kb20vaW5zZWN1cmUtc2VlZEAwLjIuNC1pbnNlY3VyZS1zZWVkGzNpbmRpcmVjdC13YXNpOmNsaS9lbnZpcm9ubWVudEAwLjIuNi1nZXQtZW52aXJvbm1lbnQcOmluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1maWxlc3lzdGVtLWVycm9yLWNvZGUdP2luZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iub3Blbi1hdB5HaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5yZWFkLXZpYS1zdHJlYW0fQGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3IuZ2V0LXR5cGUgPGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iuc3RhdCFFaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5tZXRhZGF0YS1oYXNoIkFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZCM4aW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2RdaW5wdXQtc3RyZWFtLnJlYWQkTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNoJTdpbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vcHJlb3BlbnNAMC4yLjYtZ2V0LWRpcmVjdG9yaWVzJjlpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRpbkAwLjIuNi1nZXQtdGVybWluYWwtc3RkaW4nO2luZGlyZWN0LXdhc2k6Y2xpL3Rlcm1pbmFsLXN0ZG91dEAwLjIuNi1nZXQtdGVybWluYWwtc3Rkb3V0KDtpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRlcnJAMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZGVycg');
+    const module3 = base64Compile('AGFzbQEAAAABfBBgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgCX9/f39/fn5/fwF/YAJ/fwF/YAR/f39/AX9gAX8Bf2ADf39/AX9gAX8AYAF/AGAHf39/f39/fwAC/AEqAAEwAAAAATEAAAABMgABAAEzAAIAATQAAwABNQACAAE2AAIAATcAAAABOAAAAAE5AAAAAjEwAAQAAjExAAUAAjEyAAYAAjEzAAcAAjE0AAEAAjE1AAAAAjE2AAgAAjE3AAkAAjE4AAoAAjE5AAkAAjIwAAkAAjIxAAsAAjIyAAkAAjIzAAwAAjI0AA0AAjI1AAsAAjI2AA4AAjI3AA4AAjI4AAAAAjI5AA8AAjMwAAYAAjMxAAAAAjMyAAAAAjMzAAAAAjM0AAYAAjM1AAYAAjM2AAcAAjM3AA4AAjM4AA4AAjM5AA4AAjQwAA4ACCRpbXBvcnRzAXABKSkJLwEAQQALKQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAAcBG5hbWUAFRR3aXQtY29tcG9uZW50OmZpeHVwcw');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'shell:unix/command@0.1.0': {
@@ -3691,9 +5477,16 @@ const $init = (() => {
         '[method]error.to-debug-string': exports0['15'],
         '[resource-drop]error': trampoline13,
       },
+      'wasi:io/poll@0.2.0': {
+        '[resource-drop]pollable': trampoline10,
+      },
       'wasi:io/poll@0.2.4': {
         '[method]pollable.block': trampoline5,
         '[resource-drop]pollable': trampoline10,
+      },
+      'wasi:io/streams@0.2.0': {
+        '[resource-drop]input-stream': trampoline12,
+        '[resource-drop]output-stream': trampoline16,
       },
       'wasi:io/streams@0.2.4': {
         '[method]input-stream.blocking-read': exports0['12'],
@@ -3702,12 +5495,27 @@ const $init = (() => {
         '[resource-drop]output-stream': trampoline16,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['16'],
+        'insecure-seed': exports0['26'],
+      },
+      'wasi:sockets/tcp@0.2.0': {
+        '[resource-drop]tcp-socket': trampoline23,
+      },
+      'wasi:sockets/udp@0.2.0': {
+        '[resource-drop]incoming-datagram-stream': trampoline21,
+        '[resource-drop]outgoing-datagram-stream': trampoline22,
+        '[resource-drop]udp-socket': trampoline20,
       },
       wasi_snapshot_preview1: {
-        environ_get: exports0['17'],
-        environ_sizes_get: exports0['18'],
-        proc_exit: exports0['19'],
+        adapter_close_badfd: exports0['25'],
+        environ_get: exports0['19'],
+        environ_sizes_get: exports0['20'],
+        fd_close: exports0['21'],
+        fd_filestat_get: exports0['17'],
+        fd_prestat_dir_name: exports0['23'],
+        fd_prestat_get: exports0['22'],
+        fd_read: exports0['18'],
+        path_open: exports0['16'],
+        proc_exit: exports0['24'],
       },
     }));
     ({ exports: exports2 } = yield instantiateCore(yield module1, {
@@ -3718,19 +5526,56 @@ const $init = (() => {
         memory: exports1.memory,
       },
       'wasi:cli/environment@0.2.6': {
-        'get-environment': exports0['20'],
+        'get-environment': exports0['27'],
       },
       'wasi:cli/exit@0.2.6': {
-        exit: trampoline20,
+        exit: trampoline28,
       },
       'wasi:cli/stderr@0.2.6': {
         'get-stderr': trampoline4,
+      },
+      'wasi:cli/stdin@0.2.6': {
+        'get-stdin': trampoline3,
+      },
+      'wasi:cli/stdout@0.2.6': {
+        'get-stdout': trampoline2,
+      },
+      'wasi:cli/terminal-input@0.2.6': {
+        '[resource-drop]terminal-input': trampoline26,
+      },
+      'wasi:cli/terminal-output@0.2.6': {
+        '[resource-drop]terminal-output': trampoline27,
+      },
+      'wasi:cli/terminal-stderr@0.2.6': {
+        'get-terminal-stderr': exports0['40'],
+      },
+      'wasi:cli/terminal-stdin@0.2.6': {
+        'get-terminal-stdin': exports0['38'],
+      },
+      'wasi:cli/terminal-stdout@0.2.6': {
+        'get-terminal-stdout': exports0['39'],
+      },
+      'wasi:filesystem/preopens@0.2.6': {
+        'get-directories': exports0['37'],
+      },
+      'wasi:filesystem/types@0.2.6': {
+        '[method]descriptor.get-type': exports0['31'],
+        '[method]descriptor.metadata-hash': exports0['33'],
+        '[method]descriptor.open-at': exports0['29'],
+        '[method]descriptor.read-via-stream': exports0['30'],
+        '[method]descriptor.stat': exports0['32'],
+        '[resource-drop]descriptor': trampoline25,
+        '[resource-drop]directory-entry-stream': trampoline24,
+        'filesystem-error-code': exports0['28'],
       },
       'wasi:io/error@0.2.6': {
         '[resource-drop]error': trampoline13,
       },
       'wasi:io/streams@0.2.6': {
-        '[method]output-stream.blocking-write-and-flush': exports0['21'],
+        '[method]input-stream.blocking-read': exports0['34'],
+        '[method]input-stream.read': exports0['35'],
+        '[method]output-stream.blocking-write-and-flush': exports0['36'],
+        '[resource-drop]input-stream': trampoline12,
         '[resource-drop]output-stream': trampoline16,
       },
     }));
@@ -3740,28 +5585,47 @@ const $init = (() => {
     ({ exports: exports3 } = yield instantiateCore(yield module3, {
       '': {
         $imports: exports0.$imports,
-        '0': trampoline21,
-        '1': trampoline22,
-        '10': trampoline31,
-        '11': trampoline32,
-        '12': trampoline33,
-        '13': trampoline34,
-        '14': trampoline35,
-        '15': trampoline36,
-        '16': trampoline37,
-        '17': exports2.environ_get,
-        '18': exports2.environ_sizes_get,
-        '19': exports2.proc_exit,
-        '2': trampoline23,
-        '20': trampoline38,
-        '21': trampoline34,
-        '3': trampoline24,
-        '4': trampoline25,
-        '5': trampoline26,
-        '6': trampoline27,
-        '7': trampoline28,
-        '8': trampoline29,
-        '9': trampoline30,
+        '0': trampoline29,
+        '1': trampoline30,
+        '10': trampoline39,
+        '11': trampoline40,
+        '12': trampoline41,
+        '13': trampoline42,
+        '14': trampoline43,
+        '15': trampoline44,
+        '16': exports2.path_open,
+        '17': exports2.fd_filestat_get,
+        '18': exports2.fd_read,
+        '19': exports2.environ_get,
+        '2': trampoline31,
+        '20': exports2.environ_sizes_get,
+        '21': exports2.fd_close,
+        '22': exports2.fd_prestat_get,
+        '23': exports2.fd_prestat_dir_name,
+        '24': exports2.proc_exit,
+        '25': exports2.adapter_close_badfd,
+        '26': trampoline45,
+        '27': trampoline46,
+        '28': trampoline47,
+        '29': trampoline48,
+        '3': trampoline32,
+        '30': trampoline49,
+        '31': trampoline50,
+        '32': trampoline51,
+        '33': trampoline52,
+        '34': trampoline53,
+        '35': trampoline54,
+        '36': trampoline42,
+        '37': trampoline55,
+        '38': trampoline56,
+        '39': trampoline57,
+        '4': trampoline33,
+        '40': trampoline58,
+        '5': trampoline34,
+        '6': trampoline35,
+        '7': trampoline36,
+        '8': trampoline37,
+        '9': trampoline38,
       },
     }));
     exports1Run = WebAssembly.promising(exports1.run);
