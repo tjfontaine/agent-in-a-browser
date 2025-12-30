@@ -258,24 +258,57 @@ impl<R: Read, W: Write> App<R, W> {
             }
 
             // Normal input handling
-            // Handle escape sequences specially - parse from buffer, not stdin
-            if byte == 0x1B && i + 2 < bytes.len() && bytes[i + 1] == b'[' {
-                // Parse escape sequence from buffer
-                let cmd = bytes[i + 2];
-                self.handle_escape_sequence(&[b'[', cmd]);
-                i += 3;
-                continue;
-            } else if byte == 0x1B {
-                // Bare escape - handle via process_single_byte
-                let should_break = self.process_single_byte(byte, &bytes[i..]);
-                if should_break {
-                    return true;
+            // ALL escape sequence parsing happens from buffer - never read more from stdin mid-loop
+            if byte == 0x1B {
+                if i + 2 < bytes.len() && bytes[i + 1] == b'[' {
+                    let cmd = bytes[i + 2];
+                    match cmd {
+                        // Arrow keys - 3 byte sequences
+                        b'A' | b'B' | b'C' | b'D' => {
+                            self.handle_escape_sequence(&[b'[', cmd]);
+                            i += 3;
+                            continue;
+                        }
+                        // Resize sequence: ESC [ 8 ; rows ; cols t
+                        b'8' => {
+                            // Find the terminating 't'
+                            let mut end_idx = i + 3;
+                            while end_idx < bytes.len() && bytes[end_idx] != b't' {
+                                end_idx += 1;
+                            }
+                            if end_idx < bytes.len() {
+                                // Parse resize: 8;rows;cols
+                                let params = &bytes[i + 3..end_idx]; // Skip ESC [ 8
+                                if let Ok(param_str) = std::str::from_utf8(params) {
+                                    let parts: Vec<&str> = param_str.split(';').collect();
+                                    if parts.len() == 2 {
+                                        if let (Ok(rows), Ok(cols)) =
+                                            (parts[0].parse::<u16>(), parts[1].parse::<u16>())
+                                        {
+                                            self.handle_resize(cols, rows);
+                                        }
+                                    }
+                                }
+                                i = end_idx + 1; // Skip past 't'
+                                continue;
+                            }
+                            // Incomplete resize sequence - skip rest of buffer
+                            return false;
+                        }
+                        // Other/unknown sequences - skip the 3 bytes we can see
+                        _ => {
+                            i += 3;
+                            continue;
+                        }
+                    }
+                } else {
+                    // Bare/incomplete escape - just skip it
+                    i += 1;
+                    continue;
                 }
-                i += 1;
-                continue;
             }
 
-            // Regular character
+            // Regular character - process normally
             let should_break = self.process_single_byte(byte, &bytes[i..]);
             if should_break {
                 return true;
