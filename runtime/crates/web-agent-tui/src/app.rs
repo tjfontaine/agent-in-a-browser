@@ -55,6 +55,8 @@ pub struct App<R: Read, W: Write> {
     server_status: ServerStatus,
     /// Current task list (from task_write)
     tasks: Vec<Task>,
+    /// Flag to cancel current operation
+    cancelled: bool,
 }
 
 /// A message in the chat history
@@ -112,6 +114,7 @@ impl<R: Read, W: Write> App<R, W> {
                 remote_servers: Vec::new(),
             },
             tasks: Vec::new(),
+            cancelled: false,
         }
     }
 
@@ -192,10 +195,15 @@ impl<R: Read, W: Write> App<R, W> {
     /// Process a single input byte, returns true if we should stop reading
     fn process_input_byte(&mut self, byte: u8) -> bool {
         match byte {
-            // Ctrl+C - quit (always)
+            // Ctrl+C - cancel during processing, quit otherwise
             0x03 => {
-                self.should_quit = true;
-                true
+                if self.state == AppState::Processing {
+                    self.cancelled = true;
+                    false // Continue to allow check in streaming loop
+                } else {
+                    self.should_quit = true;
+                    true
+                }
             }
             // Ctrl+D - exit shell mode or quit
             0x04 => {
@@ -466,6 +474,7 @@ impl<R: Read, W: Write> App<R, W> {
         }
 
         self.state = AppState::Processing;
+        self.cancelled = false; // Reset cancellation flag
 
         // Get tools from MCP (sandbox)
         let mut tools = match self.mcp_client.list_tools() {
@@ -538,6 +547,9 @@ impl<R: Read, W: Write> App<R, W> {
                                     self.ai_client.model_name(),
                                 );
                             });
+                            // Note: Cancellation during streaming is not supported because
+                            // stdin reads are blocking via JSPI. The cancelled flag can be
+                            // set from JS but won't be checked until stream completes.
                         }
                         Ok(Some(StreamEvent::ToolCallStart { id: _, name })) => {
                             self.messages.push(Message {
