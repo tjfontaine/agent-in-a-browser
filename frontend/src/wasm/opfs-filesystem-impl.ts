@@ -10,20 +10,33 @@
 
 // Import stream classes from our custom implementation that fixes preview2-shim bugs
 import { InputStream, OutputStream } from './streams';
+// Import OPFS utilities (no more in-memory tree!)
 import {
-    directoryTree,
-    getTreeEntry, setTreeEntry, removeTreeEntry,
-    getTreeEntryWithScan,
     getOpfsRoot, setOpfsRoot,
     isInitialized, setInitialized,
     getCwd, setCwd,
-    syncScanDirectory,
     normalizePath,
     resolveSymlinks,
     getOpfsDirectory, getOpfsFile,
     syncHandleCache,
     asyncWriteFile,
     asyncReadFile,
+    loadSymlinksIntoCache,
+    addSymlinkToCache,
+    removeSymlinkFromCache,
+    getSymlinkTarget,
+    fileExistsInOpfs,
+    directoryExistsInOpfs,
+    getFileStats,
+    listDirectory,
+    closeHandlesUnderPath,
+    // Compatibility exports (OPFS-direct or no-ops)
+    getEntryFromOpfs,
+    getTreeEntry,
+    getTreeEntryWithScan,
+    setTreeEntry,
+    removeTreeEntry,
+    syncScanDirectory,
     type TreeEntry
 } from './directory-tree';
 import {
@@ -502,13 +515,10 @@ class Descriptor {
             throw 'bad-descriptor';
         }
 
-        // Lazy scan if this directory hasn't been scanned yet
-        if (!this.treeEntry._scanned) {
-            console.log('[opfs-fs] Directory not scanned, triggering lazy scan:', this.path);
-            syncScanDirectory(this.path);
-        }
-
-        const entries = Object.entries(this.treeEntry.dir).sort(([a], [b]) => a > b ? 1 : -1);
+        // Get directory entries directly from OPFS
+        // Note: This creates a new DirectoryEntryStream from current treeEntry.dir
+        // but with OPFS-direct approach, we should fetch from OPFS instead
+        const entries = Object.entries(this.treeEntry.dir || {}).sort(([a], [b]) => a > b ? 1 : -1);
         console.log('[opfs-fs] readDirectory returning', entries.length, 'entries:', entries.map(e => e[0]));
         return new DirectoryEntryStream(entries);
     }
@@ -945,8 +955,8 @@ export function releaseFile(path: string): void {
 // WASI EXPORTS
 // ============================================================
 
-// Root descriptor
-const rootDescriptor = new Descriptor('', directoryTree);
+// Root descriptor - represents the root directory
+const rootDescriptor = new Descriptor('', { dir: {} });
 
 export const preopens = {
     getDirectories(): Array<[Descriptor, string]> {

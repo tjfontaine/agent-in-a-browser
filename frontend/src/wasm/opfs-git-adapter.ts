@@ -11,8 +11,8 @@ import {
     setTreeEntry,
     removeTreeEntry,
     normalizePath,
-    syncScanDirectory,
-    directoryTree,
+    getEntryFromOpfs,
+    listDirectory,
     type TreeEntry,
 } from './directory-tree';
 import { syncReadFileBinary, syncWriteFileBinary } from './opfs-sync-bridge';
@@ -120,23 +120,12 @@ export const opfsFs = {
 
         async readdir(dirpath: string): Promise<string[]> {
             const path = normalizePath(dirpath);
-            const entry = path === '' ? directoryTree : getTreeEntry(path);
-
-            if (!entry) {
-                // Try scanning the directory
-                syncScanDirectory(path);
-                const scannedEntry = path === '' ? directoryTree : getTreeEntry(path);
-                if (!scannedEntry?.dir) {
-                    throw createFsError('ENOENT', `ENOENT: no such file or directory, scandir '${dirpath}'`);
-                }
-                return Object.keys(scannedEntry.dir);
+            try {
+                const entries = await listDirectory(path);
+                return entries.map(e => e.name);
+            } catch {
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, scandir '${dirpath}'`);
             }
-
-            if (!entry.dir) {
-                throw createFsError('ENOTDIR', `ENOTDIR: not a directory, scandir '${dirpath}'`);
-            }
-
-            return Object.keys(entry.dir);
         },
 
         async mkdir(dirpath: string, _options?: { recursive?: boolean }): Promise<void> {
@@ -160,8 +149,8 @@ export const opfsFs = {
 
         async stat(filepath: string): Promise<Stats> {
             const path = normalizePath(filepath);
-            // Handle root/current directory (empty path from normalizing '.' or '/')
-            const entry = path === '' ? directoryTree : getTreeEntry(path);
+            // Get entry from OPFS directly
+            const entry = await getEntryFromOpfs(path);
             if (!entry) {
                 throw createFsError('ENOENT', `ENOENT: no such file or directory, stat '${filepath}'`);
             }

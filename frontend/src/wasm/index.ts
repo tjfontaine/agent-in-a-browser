@@ -38,9 +38,8 @@ export {
     msToDatetime,
 } from './opfs-sync-bridge';
 
-// Directory tree management
+// Directory tree management (now OPFS-direct, no in-memory tree)
 export {
-    directoryTree,
     syncHandleCache,
     getTreeEntry,
     setTreeEntry,
@@ -51,7 +50,8 @@ export {
     closeHandlesUnderPath,
     setCwd,
     getCwd,
-    syncScanDirectory,
+    getEntryFromOpfs,
+    listDirectory,
     type TreeEntry,
 } from './directory-tree';
 

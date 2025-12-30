@@ -1,38 +1,39 @@
 /**
- * Directory Tree Management
+ * OPFS Filesystem Utilities
  * 
- * In-memory directory tree for WASI filesystem.
- * File content is persisted via OPFS, tree is loaded on startup.
+ * Direct OPFS access utilities for WASI filesystem.
+ * No in-memory tree - all operations go directly to OPFS.
+ * Symlinks are stored in IndexedDB (symlink-store.ts).
  */
 
-// Note: With JSPI, we no longer use Atomics.wait for sync operations.
-// Instead, we use async OPFS APIs and JSPI suspends the WASM stack automatically.
+import { loadAllSymlinks } from './symlink-store';
 
 // ============================================================
-// TYPES
+// TYPES (kept for API compatibility with Descriptor class)
 // ============================================================
 
 export interface TreeEntry {
-    dir?: Record<string, TreeEntry>;
-    size?: number;
-    mtime?: number; // Unix timestamp in milliseconds
-    symlink?: string; // If set, this is a symlink pointing to this target path
-    _scanned?: boolean; // Has this directory been scanned from OPFS?
+    dir?: Record<string, TreeEntry>;  // Present if this is a directory
+    size?: number;                     // File size in bytes
+    mtime?: number;                    // Unix timestamp in milliseconds
+    symlink?: string;                  // If set, this is a symlink pointing to this target path
 }
 
 // ============================================================
 // STATE
 // ============================================================
 
-export const directoryTree: TreeEntry = { dir: {}, _scanned: false };
 let opfsRoot: FileSystemDirectoryHandle | null = null;
 let initialized = false;
 
 // Current working directory
 let cwd = '/';
 
-// Cache of open SyncAccessHandles for files
+// Cache of open SyncAccessHandles for files (performance optimization)
 export const syncHandleCache = new Map<string, FileSystemSyncAccessHandle>();
+
+// Cache of symlinks (loaded from IndexedDB at startup)
+let symlinkCache: Map<string, string> = new Map();
 
 // ============================================================
 // CWD MANAGEMENT
@@ -66,78 +67,33 @@ export function setOpfsRoot(root: FileSystemDirectoryHandle): void {
     opfsRoot = root;
 }
 
-// ============================================================
-// ASYNC DIRECTORY SCAN (for JSPI)
-// ============================================================
+/**
+ * Load symlinks from IndexedDB into cache
+ */
+export async function loadSymlinksIntoCache(): Promise<void> {
+    symlinkCache = await loadAllSymlinks();
+    console.log('[opfs-fs] Loaded', symlinkCache.size, 'symlinks from IndexedDB');
+}
 
 /**
- * Scan a directory using async OPFS APIs.
- * With JSPI, returning a Promise will suspend the WASM stack automatically.
- * No Atomics.wait needed!
+ * Update symlink cache when symlink is created
  */
-export async function syncScanDirectory(path: string): Promise<boolean> {
-    if (!opfsRoot) {
-        console.warn('[opfs-fs] OPFS root not set, cannot scan:', path);
-        return false;
-    }
+export function addSymlinkToCache(path: string, target: string): void {
+    symlinkCache.set(normalizePath(path), target);
+}
 
-    try {
-        // Navigate to the target directory
-        let targetDir: FileSystemDirectoryHandle = opfsRoot;
-        const parts = path.split('/').filter(p => p && p !== '.');
+/**
+ * Remove symlink from cache when deleted
+ */
+export function removeSymlinkFromCache(path: string): void {
+    symlinkCache.delete(normalizePath(path));
+}
 
-        for (const part of parts) {
-            try {
-                targetDir = await targetDir.getDirectoryHandle(part);
-            } catch {
-                console.warn('[opfs-fs] Directory not found:', path);
-                return false;
-            }
-        }
-
-        // Scan directory entries
-        const entries: Array<{ name: string; kind: 'file' | 'directory'; size?: number; mtime?: number }> = [];
-
-        for await (const [name, handle] of (targetDir as any).entries()) {
-            if (handle.kind === 'file') {
-                // Get file size if possible
-                try {
-                    const file = await (handle as FileSystemFileHandle).getFile();
-                    entries.push({
-                        name,
-                        kind: 'file',
-                        size: file.size,
-                        mtime: file.lastModified
-                    });
-                } catch {
-                    entries.push({ name, kind: 'file', size: 0, mtime: Date.now() });
-                }
-            } else {
-                entries.push({ name, kind: 'directory' });
-            }
-        }
-
-        // Update tree with scan results
-        const entry = path === '' || path === '/' ? directoryTree : getTreeEntry(path);
-        if (entry && entry.dir !== undefined) {
-            for (const item of entries) {
-                if (item.kind === 'directory') {
-                    if (!entry.dir[item.name]) {
-                        entry.dir[item.name] = { dir: {}, _scanned: false };
-                    }
-                } else {
-                    entry.dir[item.name] = { size: item.size, mtime: item.mtime };
-                }
-            }
-            entry._scanned = true;
-            console.log('[opfs-fs] Scanned', path || '/', 'with', entries.length, 'entries');
-        }
-
-        return true;
-    } catch (e) {
-        console.error('[opfs-fs] Error scanning directory:', path, e);
-        return false;
-    }
+/**
+ * Check if path is a symlink (from cache)
+ */
+export function getSymlinkTarget(path: string): string | undefined {
+    return symlinkCache.get(normalizePath(path));
 }
 
 // ============================================================
@@ -152,7 +108,7 @@ export function normalizePath(path: string): string {
 }
 
 /**
- * Resolve symlinks in a path.
+ * Resolve symlinks in a path using the symlink cache.
  * @param path The path to resolve
  * @param followFinal If true, follow the final component if it's a symlink
  * @returns The resolved path with all symlinks followed
@@ -169,9 +125,9 @@ export function resolveSymlinks(path: string, followFinal = true): string {
     for (let i = 0; i < parts.length; i++) {
         resolved.push(parts[i]);
         const currentPath = resolved.join('/');
-        const entry = getTreeEntry(currentPath);
+        const symlinkTarget = symlinkCache.get(currentPath);
 
-        if (entry?.symlink) {
+        if (symlinkTarget) {
             const isLast = i === parts.length - 1;
             if (isLast && !followFinal) {
                 // Don't follow final symlink
@@ -184,12 +140,12 @@ export function resolveSymlinks(path: string, followFinal = true): string {
 
             // Resolve symlink target (can be relative or absolute)
             let target: string;
-            if (entry.symlink.startsWith('/')) {
-                target = entry.symlink;
+            if (symlinkTarget.startsWith('/')) {
+                target = symlinkTarget;
             } else {
                 // Relative symlink: resolve relative to parent of current
                 const parent = resolved.slice(0, -1).join('/');
-                target = parent ? parent + '/' + entry.symlink : entry.symlink;
+                target = parent ? parent + '/' + symlinkTarget : symlinkTarget;
             }
 
             // Replace resolved path with target and restart resolution
@@ -210,94 +166,6 @@ export function resolveSymlinks(path: string, followFinal = true): string {
 }
 
 // ============================================================
-// TREE NAVIGATION
-// ============================================================
-
-export function getTreeEntry(path: string): TreeEntry | undefined {
-    const parts = normalizePath(path).split('/').filter(p => p);
-    let current = directoryTree;
-
-    for (const part of parts) {
-        if (!current.dir || !current.dir[part]) {
-            return undefined;
-        }
-        current = current.dir[part];
-    }
-    return current;
-}
-
-/**
- * Get tree entry, scanning parent directories along the path if needed.
- * This ensures lazy-loaded directories are scanned before checking for the entry.
- * Returns a Promise that JSPI will suspend on.
- */
-export async function getTreeEntryWithScan(path: string): Promise<TreeEntry | undefined> {
-    const parts = normalizePath(path).split('/').filter(p => p);
-    let current = directoryTree;
-    let currentPath = '';
-
-    for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-
-        // If this directory hasn't been scanned yet, scan it
-        if (current.dir !== undefined && !current._scanned) {
-            await syncScanDirectory(currentPath);
-        }
-
-        if (!current.dir || !current.dir[part]) {
-            // Maybe the entry exists in OPFS but wasn't in the tree - try scanning parent
-            if (current.dir !== undefined && !current._scanned) {
-                await syncScanDirectory(currentPath);
-            }
-            // Check again after scan
-            if (!current.dir || !current.dir[part]) {
-                return undefined;
-            }
-        }
-
-        currentPath = currentPath ? `${currentPath}/${part}` : part;
-        current = current.dir[part];
-    }
-    return current;
-}
-
-export function setTreeEntry(path: string, entry: TreeEntry): void {
-    const parts = normalizePath(path).split('/').filter(p => p);
-    if (parts.length === 0) return;
-
-    const name = parts.pop()!;
-    let current = directoryTree;
-
-    for (const part of parts) {
-        if (!current.dir) current.dir = {};
-        if (!current.dir[part]) current.dir[part] = { dir: {} };
-        current = current.dir[part];
-    }
-
-    if (!current.dir) current.dir = {};
-    current.dir[name] = entry;
-}
-
-export function removeTreeEntry(path: string): void {
-    const parts = normalizePath(path).split('/').filter(p => p);
-    if (parts.length === 0) return;
-
-    const name = parts.pop()!;
-    let current = directoryTree;
-
-    for (const part of parts) {
-        if (!current.dir || !current.dir[part]) {
-            return; // Parent doesn't exist
-        }
-        current = current.dir[part];
-    }
-
-    if (current.dir && current.dir[name]) {
-        delete current.dir[name];
-    }
-}
-
-// ============================================================
 // OPFS HANDLE MANAGEMENT
 // ============================================================
 
@@ -305,15 +173,11 @@ export function removeTreeEntry(path: string): void {
  * Get or create OPFS directory handle for a path
  */
 export async function getOpfsDirectory(pathParts: string[], create: boolean): Promise<FileSystemDirectoryHandle> {
-    if (!opfsRoot) throw 'no-entry';
+    if (!opfsRoot) throw new Error('OPFS root not set');
 
     let current = opfsRoot;
     for (const part of pathParts) {
-        try {
-            current = await current.getDirectoryHandle(part, { create });
-        } catch {
-            throw 'no-entry';
-        }
+        current = await current.getDirectoryHandle(part, { create });
     }
     return current;
 }
@@ -322,32 +186,149 @@ export async function getOpfsDirectory(pathParts: string[], create: boolean): Pr
  * Get OPFS file handle for a path
  */
 export async function getOpfsFile(path: string, create: boolean): Promise<FileSystemFileHandle> {
-    if (!opfsRoot) throw 'no-entry';
+    if (!opfsRoot) throw new Error('OPFS root not set');
 
-    const parts = path.split('/').filter(p => p && p !== '.');
-    if (parts.length === 0) throw 'no-entry';
+    const normalizedPath = normalizePath(path);
+    const parts = normalizedPath.split('/').filter(p => p);
+    if (parts.length === 0) throw new Error('Cannot get file handle for root');
 
     const fileName = parts.pop()!;
-    const dir = parts.length > 0
+    const parentDir = parts.length > 0
         ? await getOpfsDirectory(parts, create)
         : opfsRoot;
 
+    return await parentDir.getFileHandle(fileName, { create });
+}
+
+/**
+ * Check if a file exists in OPFS
+ */
+export async function fileExistsInOpfs(path: string): Promise<boolean> {
     try {
-        return await dir.getFileHandle(fileName, { create });
+        await getOpfsFile(path, false);
+        return true;
     } catch {
-        throw 'no-entry';
+        return false;
     }
+}
+
+/**
+ * Check if a directory exists in OPFS
+ */
+export async function directoryExistsInOpfs(path: string): Promise<boolean> {
+    if (!path || path === '/' || path === '') return true; // Root always exists
+
+    const parts = normalizePath(path).split('/').filter(p => p);
+    if (parts.length === 0) return true;
+
+    try {
+        await getOpfsDirectory(parts, false);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Get file metadata from OPFS
+ */
+export async function getFileStats(path: string): Promise<{ size: number; mtime: number } | null> {
+    try {
+        const fileHandle = await getOpfsFile(path, false);
+        const file = await fileHandle.getFile();
+        return {
+            size: file.size,
+            mtime: file.lastModified
+        };
+    } catch {
+        return null;
+    }
+}
+
+// ============================================================
+// ENTRY LOOKUP FROM OPFS (replaces in-memory tree)
+// ============================================================
+
+/**
+ * Get a TreeEntry by fetching info directly from OPFS.
+ * This replaces the old getTreeEntry which used an in-memory tree.
+ * Returns undefined if the path doesn't exist.
+ */
+export async function getEntryFromOpfs(path: string): Promise<TreeEntry | undefined> {
+    const normalizedPath = normalizePath(path);
+
+    // Check for symlink first (stored in cache from IndexedDB)
+    const symlinkTarget = symlinkCache.get(normalizedPath);
+    if (symlinkTarget !== undefined) {
+        return { symlink: symlinkTarget };
+    }
+
+    // Root is always a directory
+    if (!normalizedPath || normalizedPath === '') {
+        return { dir: {} };
+    }
+
+    const parts = normalizedPath.split('/').filter(p => p);
+
+    // Try as directory first
+    try {
+        await getOpfsDirectory(parts, false);
+        return { dir: {} };
+    } catch {
+        // Not a directory, try as file
+    }
+
+    // Try as file
+    try {
+        const fileHandle = await getOpfsFile(normalizedPath, false);
+        const file = await fileHandle.getFile();
+        return {
+            size: file.size,
+            mtime: file.lastModified
+        };
+    } catch {
+        // File doesn't exist
+        return undefined;
+    }
+}
+
+// Legacy aliases for compatibility
+export const getTreeEntryWithScan = getEntryFromOpfs;
+export const getTreeEntry = (path: string): TreeEntry | undefined => {
+    // Sync version - only works for symlinks (cached)
+    const symlinkTarget = symlinkCache.get(normalizePath(path));
+    if (symlinkTarget !== undefined) {
+        return { symlink: symlinkTarget };
+    }
+    // For files/dirs, caller must use async version
+    console.warn('[opfs-fs] getTreeEntry is deprecated, use getEntryFromOpfs (async)');
+    return undefined;
+};
+
+// No-op functions for removed tree operations
+export function setTreeEntry(_path: string, _entry: TreeEntry): void {
+    // No-op - OPFS is source of truth now
+}
+
+export function removeTreeEntry(_path: string): void {
+    // No-op - OPFS is source of truth now
+}
+
+export async function syncScanDirectory(_path: string): Promise<boolean> {
+    // No-op - no tree to scan into
+    return true;
 }
 
 /**
  * Close all open sync handles (call on shutdown)
  */
 export function closeAllHandles(): void {
-    for (const [path, handle] of syncHandleCache) {
+    for (const [path, handle] of syncHandleCache.entries()) {
         try {
             handle.close();
+            console.log('[opfs-fs] Closed sync handle:', path);
         } catch (e) {
-            console.warn('[opfs-fs] Failed to close handle:', path, e);
+            console.warn('[opfs-fs] Failed to close sync handle:', path, e);
         }
     }
     syncHandleCache.clear();
@@ -359,65 +340,62 @@ export function closeAllHandles(): void {
  */
 export function closeHandlesUnderPath(pathPrefix: string): void {
     const prefix = pathPrefix.endsWith('/') ? pathPrefix : pathPrefix + '/';
-    const toRemove: string[] = [];
+    const toClose: string[] = [];
 
-    for (const [cachedPath, handle] of syncHandleCache) {
-        // Check if this path is under the prefix
-        if (cachedPath.startsWith(prefix) || cachedPath === pathPrefix) {
-            try {
-                handle.close();
-                console.log('[opfs-fs] Closed handle for:', cachedPath);
-            } catch (e) {
-                console.warn('[opfs-fs] Failed to close handle:', cachedPath, e);
-            }
-            toRemove.push(cachedPath);
+    for (const [path] of syncHandleCache.entries()) {
+        if (path === pathPrefix || path.startsWith(prefix)) {
+            toClose.push(path);
         }
     }
 
-    for (const path of toRemove) {
-        syncHandleCache.delete(path);
+    for (const path of toClose) {
+        const handle = syncHandleCache.get(path);
+        if (handle) {
+            try {
+                handle.close();
+                console.log('[opfs-fs] Closed sync handle under path:', path);
+            } catch (e) {
+                console.warn('[opfs-fs] Failed to close sync handle:', path, e);
+            }
+            syncHandleCache.delete(path);
+        }
     }
 }
+
+// ============================================================
+// ASYNC FILE OPERATIONS (for JSPI)
+// ============================================================
 
 /**
  * Write file content asynchronously using OPFS APIs.
  * Returns a Promise that JSPI will suspend on.
- * This avoids Atomics.wait() which doesn't work in all contexts.
  */
 export async function asyncWriteFile(path: string, data: Uint8Array): Promise<void> {
-    if (!opfsRoot) {
-        throw new Error('OPFS not initialized');
-    }
+    const normalizedPath = normalizePath(path);
 
-    const parts = path.split('/').filter(p => p && p !== '.');
-    if (parts.length === 0) {
-        throw new Error('Invalid path');
-    }
-
-    const fileName = parts.pop()!;
-
-    // Create parent directories if needed
-    let dir = opfsRoot;
-    for (const part of parts) {
+    // Close existing sync handle if any (we're about to rewrite)
+    const existingHandle = syncHandleCache.get(normalizedPath);
+    if (existingHandle) {
         try {
-            dir = await dir.getDirectoryHandle(part, { create: true });
+            existingHandle.close();
         } catch (e) {
-            console.error('[opfs-fs] Failed to create directory:', part, e);
-            throw e;
+            console.warn('[opfs-fs] Failed to close existing handle before async write:', e);
         }
+        syncHandleCache.delete(normalizedPath);
     }
 
-    // Write the file
     try {
-        const fileHandle = await dir.getFileHandle(fileName, { create: true });
+        // Get file handle (create if needed)
+        const fileHandle = await getOpfsFile(normalizedPath, true);
+
+        // Use writable stream to write content
         const writable = await fileHandle.createWritable();
-        // Create a copy in a regular ArrayBuffer (not SharedArrayBuffer) for Blob compatibility
-        const copy = new Uint8Array(data.length);
-        copy.set(data);
-        await writable.write(copy);
+        await writable.write(new Uint8Array(data).buffer as ArrayBuffer);
         await writable.close();
+
+        console.log('[opfs-fs] Async write complete:', normalizedPath, data.length, 'bytes');
     } catch (e) {
-        console.error('[opfs-fs] Failed to write file:', path, e);
+        console.error('[opfs-fs] Async write failed:', normalizedPath, e);
         throw e;
     }
 }
@@ -425,39 +403,63 @@ export async function asyncWriteFile(path: string, data: Uint8Array): Promise<vo
 /**
  * Read file content asynchronously using OPFS APIs.
  * Returns a Promise that JSPI will suspend on.
- * This avoids Atomics.wait() which doesn't work in all contexts.
  */
 export async function asyncReadFile(path: string): Promise<Uint8Array> {
-    if (!opfsRoot) {
-        throw new Error('OPFS not initialized');
+    const normalizedPath = normalizePath(path);
+
+    try {
+        // Close existing sync handle to ensure we read latest content
+        const existingHandle = syncHandleCache.get(normalizedPath);
+        if (existingHandle) {
+            try {
+                existingHandle.close();
+            } catch (e) {
+                console.warn('[opfs-fs] Failed to close existing handle before async read:', e);
+            }
+            syncHandleCache.delete(normalizedPath);
+        }
+
+        const fileHandle = await getOpfsFile(normalizedPath, false);
+        const file = await fileHandle.getFile();
+        const buffer = await file.arrayBuffer();
+        return new Uint8Array(buffer);
+    } catch (e) {
+        console.error('[opfs-fs] Failed to read file:', normalizedPath, e);
+        throw e;
     }
+}
 
-    const parts = path.split('/').filter(p => p && p !== '.');
-    if (parts.length === 0) {
-        throw new Error('Invalid path');
-    }
+/**
+ * List directory contents directly from OPFS
+ */
+export async function listDirectory(path: string): Promise<Array<{ name: string; isDirectory: boolean; size?: number; mtime?: number }>> {
+    const normalizedPath = normalizePath(path);
+    const parts = normalizedPath ? normalizedPath.split('/').filter(p => p) : [];
 
-    const fileName = parts.pop()!;
+    const dirHandle = parts.length > 0
+        ? await getOpfsDirectory(parts, false)
+        : opfsRoot;
 
-    // Navigate to parent directory
-    let dir = opfsRoot;
-    for (const part of parts) {
-        try {
-            dir = await dir.getDirectoryHandle(part);
-        } catch (e) {
-            console.error('[opfs-fs] Failed to find directory:', part, e);
-            throw e;
+    if (!dirHandle) throw new Error('Directory not found');
+
+    const entries: Array<{ name: string; isDirectory: boolean; size?: number; mtime?: number }> = [];
+
+    for await (const [name, handle] of (dirHandle as any).entries()) {
+        if (handle.kind === 'file') {
+            const file = await (handle as FileSystemFileHandle).getFile();
+            entries.push({
+                name,
+                isDirectory: false,
+                size: file.size,
+                mtime: file.lastModified
+            });
+        } else {
+            entries.push({
+                name,
+                isDirectory: true
+            });
         }
     }
 
-    // Read the file
-    try {
-        const fileHandle = await dir.getFileHandle(fileName);
-        const file = await fileHandle.getFile();
-        const arrayBuffer = await file.arrayBuffer();
-        return new Uint8Array(arrayBuffer);
-    } catch (e) {
-        console.error('[opfs-fs] Failed to read file:', path, e);
-        throw e;
-    }
+    return entries;
 }
