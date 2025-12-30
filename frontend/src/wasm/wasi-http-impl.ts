@@ -66,6 +66,150 @@ export function createInputStreamFromBytes(bytes: Uint8Array): unknown {
     });
 }
 
+/**
+ * Create an InputStream that reads from a fetch ReadableStreamReader
+ * This enables true streaming via JSPI - each read suspends until data arrives
+ */
+export function createStreamingInputStream(reader: ReadableStreamDefaultReader<Uint8Array>): unknown {
+    // Buffer for leftover bytes when we read more than requested
+    let buffer: Uint8Array = new Uint8Array(0);
+    let done = false;
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            // Non-blocking read - return buffered data or empty
+            if (buffer.length > 0) {
+                const n = Math.min(Number(len), buffer.length);
+                const result = buffer.slice(0, n);
+                buffer = buffer.slice(n);
+                return result;
+            }
+            return new Uint8Array(0);
+        },
+
+        async blockingRead(len: bigint): Promise<Uint8Array> {
+            // If we have buffered data, return that first
+            if (buffer.length > 0) {
+                const n = Math.min(Number(len), buffer.length);
+                const result = buffer.slice(0, n);
+                buffer = buffer.slice(n);
+                return result;
+            }
+
+            // If stream is done, return empty
+            if (done) {
+                return new Uint8Array(0);
+            }
+
+            // Read from the stream - this suspends via JSPI until data arrives
+            const { value, done: streamDone } = await reader.read();
+            done = streamDone;
+
+            if (!value || value.length === 0) {
+                return new Uint8Array(0);
+            }
+
+            // If we got more than requested, buffer the rest
+            const n = Number(len);
+            if (value.length > n) {
+                buffer = value.slice(n);
+                return value.slice(0, n);
+            }
+
+            return value;
+        }
+    });
+}
+
+/**
+ * Create an InputStream that lazily initiates a fetch on first read.
+ * This pattern allows returning a FutureIncomingResponse immediately
+ * while the actual network request is deferred until body consumption.
+ * JSPI suspension happens in blockingRead, not in Pollable.block().
+ */
+export function createLazyFetchStream(url: string, options: RequestInit): unknown {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    let fetchPromise: Promise<Response> | null = null;
+    let buffer: Uint8Array = new Uint8Array(0);
+    let done = false;
+    let fetchError: Error | null = null;
+
+    // Lazily start the fetch
+    const ensureFetch = (): Promise<Response> => {
+        if (!fetchPromise) {
+            fetchPromise = fetch(url, options);
+        }
+        return fetchPromise;
+    };
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            // Non-blocking read - return buffered data or empty
+            if (buffer.length > 0) {
+                const n = Math.min(Number(len), buffer.length);
+                const result = buffer.slice(0, n);
+                buffer = buffer.slice(n);
+                return result;
+            }
+            return new Uint8Array(0);
+        },
+
+        async blockingRead(len: bigint): Promise<Uint8Array> {
+            // If we have buffered data, return that first
+            if (buffer.length > 0) {
+                const n = Math.min(Number(len), buffer.length);
+                const result = buffer.slice(0, n);
+                buffer = buffer.slice(n);
+                return result;
+            }
+
+            // If stream is done, return empty
+            if (done) {
+                return new Uint8Array(0);
+            }
+
+            // If we had a fetch error, return empty
+            if (fetchError) {
+                return new Uint8Array(0);
+            }
+
+            try {
+                // Get the response (lazily starts fetch)
+                if (!reader) {
+                    const response = await ensureFetch();
+
+                    if (!response.body) {
+                        done = true;
+                        return new Uint8Array(0);
+                    }
+                    reader = response.body.getReader();
+                }
+
+                // Read from the stream - this suspends via JSPI until data arrives
+                const { value, done: streamDone } = await reader.read();
+                done = streamDone;
+
+                if (!value || value.length === 0) {
+                    return new Uint8Array(0);
+                }
+
+                // If we got more than requested, buffer the rest
+                const n = Number(len);
+                if (value.length > n) {
+                    buffer = value.slice(n);
+                    return value.slice(0, n);
+                }
+
+                return value;
+            } catch (err) {
+                fetchError = err as Error;
+                done = true;
+                return new Uint8Array(0);
+            }
+        }
+    });
+}
+
 export class Fields {
     private _fields: Map<string, Uint8Array[]>;
 
@@ -395,16 +539,21 @@ class AsyncPollable extends BasePollable {
 }
 
 /**
- * FutureIncomingResponse - represents a pending HTTP response
- * 
+ * Represents a future HTTP response that may be pending.
  * Supports both sync (pre-resolved) and async (Promise-based) responses.
+ * 
+ * For streaming responses, pass { status, headers, bodyStream } format
+ * where bodyStream is created by createStreamingInputStream.
  */
+type ResolvedResponse = { status: number; headers: [string, Uint8Array][]; body: Uint8Array };
+type StreamingResponse = { status: number; headers: [string, Uint8Array][]; bodyStream: unknown };
+
 export class FutureIncomingResponse {
     private _result: WasmResult<IncomingResponse> | null = null;
     private _promise: Promise<void> | null = null;
     private _pollable: AsyncPollable | ReadyPollable;
 
-    constructor(resolvedDataOrPromise: { status: number; headers: [string, Uint8Array][]; body: Uint8Array } | Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>) {
+    constructor(resolvedDataOrPromise: ResolvedResponse | StreamingResponse | Promise<ResolvedResponse | StreamingResponse>) {
         if (resolvedDataOrPromise instanceof Promise) {
             // Async case - resolve later
             this._promise = resolvedDataOrPromise.then((resolvedData) => {
@@ -420,13 +569,23 @@ export class FutureIncomingResponse {
         }
     }
 
-    private _setResult(resolvedData: { status: number; headers: [string, Uint8Array][]; body: Uint8Array }) {
+    private _setResult(resolvedData: ResolvedResponse | StreamingResponse) {
         const headers = new Fields();
         for (const [name, value] of resolvedData.headers) {
             const existing = headers.get(name);
             headers.set(name, [...existing, value]);
         }
-        const body = new IncomingBody(resolvedData.body);
+
+        // Support both pre-loaded body (Uint8Array) and streaming body (InputStream)
+        let body: IncomingBody;
+        if ('bodyStream' in resolvedData) {
+            // Streaming body - pass the InputStream directly
+            body = new IncomingBody(resolvedData.bodyStream);
+        } else {
+            // Pre-loaded body
+            body = new IncomingBody(resolvedData.body);
+        }
+
         this._result = { tag: 'ok', val: new IncomingResponse(resolvedData.status, headers, body) };
     }
 
@@ -637,8 +796,39 @@ export const outgoingHandler = {
             return new FutureIncomingResponse(responsePromise);
         }
 
-        // Fallback to synchronous XMLHttpRequest for external requests
-        console.log('[http] Using XHR:', method, url);
+        // For HTTPS requests, use async fetch with streaming body 
+        // Pattern: Return immediately with status 200 and a streaming InputStream
+        // The JSPI suspension happens in InputStream.blockingRead(), not Pollable.block()
+        if (schemeStr === 'https') {
+            console.log('[http] Using async fetch (streaming body):', method, url);
+
+            // Start the fetch immediately (don't await it yet)
+            const fetchOptions: RequestInit = {
+                method,
+                headers: Object.fromEntries(
+                    Object.entries(headers).filter(([name]) =>
+                        name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host'
+                    )
+                ),
+            };
+
+            if (body && body.length > 0) {
+                fetchOptions.body = new Blob([body as BlobPart]);
+            }
+
+            // Create a streaming InputStream that starts fetch lazily and suspends on reads
+            const streamingBody = createLazyFetchStream(url, fetchOptions);
+
+            // Return immediately with a "ready" response - suspension happens during body read
+            return new FutureIncomingResponse({
+                status: 200, // Will be actual status when reading begins
+                headers: [] as [string, Uint8Array][], // Headers come with first read
+                bodyStream: streamingBody
+            });
+        }
+
+        // Fallback to synchronous XMLHttpRequest for HTTP requests (localhost)
+        console.log('[http] Using sync XHR:', method, url);
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false); // false = synchronous
 

@@ -75,11 +75,20 @@ export function getTerminalSize(): { cols: number; rows: number } {
 
 /**
  * Read from stdin (blocking) - async for JSPI
+ * 
+ * IMPORTANT: To support both single-keystroke echo and paste operations:
+ * - First read when buffer is empty: BLOCKS until data arrives
+ * - Subsequent reads with empty buffer: returns empty immediately (non-blocking)
+ * 
+ * This allows the Rust loop to drain all pasted data, then return to render.
  */
+let hasDataBeenDelivered = false; // Tracks if we're mid-sequence
+
 async function readStdin(len: number): Promise<Uint8Array> {
     // Check if we have buffered data
     if (stdinBuffer.length > 0) {
         const chunk = stdinBuffer.shift()!;
+        hasDataBeenDelivered = true;
         if (chunk.length <= len) {
             return chunk;
         }
@@ -89,10 +98,19 @@ async function readStdin(len: number): Promise<Uint8Array> {
         return result;
     }
 
+    // Buffer is empty - check if we already delivered data this sequence
+    if (hasDataBeenDelivered) {
+        // Already delivered data, return empty to let render loop continue
+        hasDataBeenDelivered = false;
+        return new Uint8Array(0);
+    }
+
     // Wait for data - this suspends the WASM via JSPI
     const data = await new Promise<Uint8Array>(resolve => {
         stdinWaiters.push(resolve);
     });
+
+    hasDataBeenDelivered = true;
 
     // Split the received data if it's larger than requested
     if (data.length <= len) {
