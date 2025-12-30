@@ -952,9 +952,22 @@ impl<R: Read, W: Write> App<R, W> {
                     }
                 }
             }
-            Overlay::ModelSelector { selected, provider } => {
-                let models = crate::ui::server_manager::get_models_for_provider(provider);
-                let max_items = models.len();
+            Overlay::ModelSelector {
+                selected,
+                provider,
+                fetched_models,
+            } => {
+                // Calculate item count: 1 (refresh) + models
+                let model_count = if let Some(models) = fetched_models.as_ref() {
+                    if models.is_empty() {
+                        1
+                    } else {
+                        models.len()
+                    }
+                } else {
+                    crate::ui::server_manager::get_models_for_provider(provider).len()
+                };
+                let max_items = 1 + model_count; // +1 for refresh option
 
                 match byte {
                     0x1B => {
@@ -974,24 +987,59 @@ impl<R: Read, W: Write> App<R, W> {
                         }
                     }
                     0x0D => {
-                        // Enter - select model
-                        if let Some((model_id, _name)) = models.get(*selected) {
-                            // Update AI client model
-                            self.ai_client.set_model(model_id);
-
-                            // Update config and save
-                            if provider == "anthropic" {
-                                self.config.models.anthropic = model_id.to_string();
-                            } else if provider == "openai" {
-                                self.config.models.openai = model_id.to_string();
+                        // Enter - handle selection
+                        if *selected == 0 {
+                            // Refresh from API
+                            match self.ai_client.list_models() {
+                                Ok(models) => {
+                                    let model_list: Vec<(String, String)> =
+                                        models.into_iter().map(|m| (m.id, m.name)).collect();
+                                    *fetched_models = Some(model_list);
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!(
+                                            "Fetched {} models from API",
+                                            fetched_models.as_ref().map(|m| m.len()).unwrap_or(0)
+                                        ),
+                                    });
+                                }
+                                Err(e) => {
+                                    *fetched_models = Some(Vec::new());
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!("Failed to fetch models: {}", e),
+                                    });
+                                }
                             }
-                            let _ = self.config.save();
+                        } else {
+                            // Select a model (index - 1 because of refresh option)
+                            let model_idx = *selected - 1;
+                            let model_id = if let Some(models) = fetched_models.as_ref() {
+                                models.get(model_idx).map(|(id, _)| id.clone())
+                            } else {
+                                let static_models =
+                                    crate::ui::server_manager::get_models_for_provider(provider);
+                                static_models.get(model_idx).map(|(id, _)| id.to_string())
+                            };
 
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Model changed to: {}", model_id),
-                            });
-                            self.overlay = None;
+                            if let Some(id) = model_id {
+                                // Update AI client model
+                                self.ai_client.set_model(&id);
+
+                                // Update config and save
+                                if provider == "anthropic" {
+                                    self.config.models.anthropic = id.clone();
+                                } else if provider == "openai" {
+                                    self.config.models.openai = id.clone();
+                                }
+                                let _ = self.config.save();
+
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!("Model changed to: {}", id),
+                                });
+                                self.overlay = None;
+                            }
                         }
                     }
                     _ => {}
@@ -1751,6 +1799,7 @@ impl<R: Read, W: Write> App<R, W> {
                 self.overlay = Some(Overlay::ModelSelector {
                     selected: 0,
                     provider: self.config.provider.default.clone(),
+                    fetched_models: None,
                 });
             }
             "/provider" => {

@@ -74,6 +74,8 @@ pub enum Overlay {
     ModelSelector {
         selected: usize,
         provider: String,
+        /// Models fetched from API (None = not fetched yet, Some([]) = empty/failed)
+        fetched_models: Option<Vec<(String, String)>>,
     },
     /// Provider selection overlay (simple quick-select)
     ProviderSelector {
@@ -533,8 +535,12 @@ pub fn render_overlay(
                 }
             }
         },
-        Overlay::ModelSelector { selected, provider } => {
-            render_model_selector(frame, area, provider, *selected);
+        Overlay::ModelSelector {
+            selected,
+            provider,
+            fetched_models,
+        } => {
+            render_model_selector(frame, area, provider, *selected, fetched_models.as_ref());
         }
         Overlay::ProviderSelector { selected } => {
             render_provider_selector(frame, area, *selected);
@@ -579,21 +585,50 @@ pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static st
 }
 
 /// Render model selection overlay
-fn render_model_selector(frame: &mut Frame, area: Rect, provider: &str, selected: usize) {
-    let popup = centered_rect(50, 50, area);
+fn render_model_selector(
+    frame: &mut Frame,
+    area: Rect,
+    provider: &str,
+    selected: usize,
+    fetched_models: Option<&Vec<(String, String)>>,
+) {
+    let popup = centered_rect(55, 60, area);
     frame.render_widget(Clear, popup);
 
-    let models = get_models_for_provider(provider);
+    // Build items list: Refresh option + models
+    let mut items: Vec<ListItem> = Vec::new();
 
-    let items: Vec<ListItem> = models
-        .iter()
-        .map(|(id, name)| {
-            ListItem::new(Line::from(vec![
-                Span::styled(*name, Style::default().fg(Color::White)),
+    // First item: Refresh from API
+    items.push(ListItem::new(Line::from(vec![
+        Span::styled("🔄 ", Style::default().fg(Color::Yellow)),
+        Span::styled("Refresh from API", Style::default().fg(Color::Yellow)),
+    ])));
+
+    // Models: use fetched if available, otherwise static
+    if let Some(models) = fetched_models {
+        if models.is_empty() {
+            items.push(ListItem::new(Span::styled(
+                "  (No models fetched - try refresh)",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            for (id, name) in models {
+                items.push(ListItem::new(Line::from(vec![
+                    Span::styled(name.as_str(), Style::default().fg(Color::White)),
+                    Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+                ])));
+            }
+        }
+    } else {
+        // Static fallback models
+        let static_models = get_models_for_provider(provider);
+        for (id, name) in static_models {
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(name, Style::default().fg(Color::White)),
                 Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
-            ]))
-        })
-        .collect();
+            ])));
+        }
+    }
 
     let title = format!("🤖 Select {} Model", provider);
     let list = List::new(items)

@@ -14,6 +14,7 @@ pub enum AiError {
     HttpError(HttpError),
     JsonError(serde_json::Error),
     ApiError(String),
+    ParseError(String),
     NoApiKey,
 }
 
@@ -23,6 +24,7 @@ impl std::fmt::Display for AiError {
             AiError::HttpError(e) => write!(f, "HTTP error: {}", e),
             AiError::JsonError(e) => write!(f, "JSON error: {}", e),
             AiError::ApiError(msg) => write!(f, "API error: {}", msg),
+            AiError::ParseError(msg) => write!(f, "Parse error: {}", msg),
             AiError::NoApiKey => write!(f, "No API key configured"),
         }
     }
@@ -255,7 +257,7 @@ impl ChatStream {
     /// Returns None when stream is exhausted
     pub fn next_event(&mut self) -> Result<Option<StreamEvent>, AiError> {
         match self.provider_type {
-            ProviderType::OpenAI => self.next_event_openai(),
+            ProviderType::OpenAI | ProviderType::Google => self.next_event_openai(),
             ProviderType::Anthropic => self.next_event_anthropic(),
         }
     }
@@ -456,11 +458,19 @@ impl ChatStream {
     }
 }
 
+/// Model information from provider API
+#[derive(Debug, Clone)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+}
+
 /// Provider type for API format differences
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProviderType {
     Anthropic,
     OpenAI,
+    Google,
 }
 
 /// AI Client for LLM API calls
@@ -529,6 +539,133 @@ impl AiClient {
     /// Get the current base URL
     pub fn get_base_url(&self) -> &str {
         &self.base_url
+    }
+
+    /// Get the provider type
+    pub fn provider_type(&self) -> ProviderType {
+        self.provider_type
+    }
+
+    /// Fetch available models from the provider API
+    pub fn list_models(&self) -> Result<Vec<ModelInfo>, AiError> {
+        let api_key = self.api_key.as_ref().ok_or(AiError::NoApiKey)?;
+
+        let (url, headers) = match self.provider_type {
+            ProviderType::OpenAI => {
+                // OpenAI: GET /v1/models with Bearer token
+                let url = format!("{}/models", self.base_url);
+                let headers = vec![
+                    ("Authorization", format!("Bearer {}", api_key)),
+                    ("Content-Type", "application/json".to_string()),
+                ];
+                (url, headers)
+            }
+            ProviderType::Anthropic => {
+                // Anthropic: GET /v1/models with x-api-key header
+                let url = format!("{}/models", self.base_url);
+                let headers = vec![
+                    ("x-api-key", api_key.clone()),
+                    ("anthropic-version", "2023-06-01".to_string()),
+                    ("Content-Type", "application/json".to_string()),
+                ];
+                (url, headers)
+            }
+            ProviderType::Google => {
+                // Google: GET /v1beta/models with API key in query param
+                let url = format!(
+                    "{}?key={}",
+                    self.base_url.replace("/v1beta", "/v1beta/models"),
+                    api_key
+                );
+                let headers = vec![("Content-Type", "application/json".to_string())];
+                (url, headers)
+            }
+        };
+
+        // Convert headers for request
+        let header_refs: Vec<(&str, &str)> =
+            headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+        // Make GET request using HttpClient
+        let response = HttpClient::request("GET", &url, &header_refs, None)?;
+
+        // Convert body to string
+        let body_str = String::from_utf8_lossy(&response.body).to_string();
+
+        // Parse response based on provider
+        self.parse_models_response(&body_str)
+    }
+
+    /// Parse models response based on provider type
+    fn parse_models_response(&self, response: &str) -> Result<Vec<ModelInfo>, AiError> {
+        let json: Value = serde_json::from_str(response)
+            .map_err(|e| AiError::ParseError(format!("JSON parse error: {}", e)))?;
+
+        let mut models = Vec::new();
+
+        match self.provider_type {
+            ProviderType::OpenAI => {
+                // OpenAI format: { "data": [{ "id": "gpt-4", "owned_by": "openai" }, ...] }
+                if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
+                    for model in data {
+                        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+                            let name = model
+                                .get("owned_by")
+                                .and_then(|v| v.as_str())
+                                .map(|owner| format!("{} ({})", id, owner))
+                                .unwrap_or_else(|| id.to_string());
+                            models.push(ModelInfo {
+                                id: id.to_string(),
+                                name,
+                            });
+                        }
+                    }
+                }
+            }
+            ProviderType::Anthropic => {
+                // Anthropic format: { "data": [{ "id": "...", "display_name": "..." }, ...] }
+                if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
+                    for model in data {
+                        if let Some(id) = model.get("id").and_then(|v| v.as_str()) {
+                            let name = model
+                                .get("display_name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(id)
+                                .to_string();
+                            models.push(ModelInfo {
+                                id: id.to_string(),
+                                name,
+                            });
+                        }
+                    }
+                }
+            }
+            ProviderType::Google => {
+                // Google format: { "models": [{ "name": "models/gemini-...", "displayName": "..." }, ...] }
+                if let Some(data) = json.get("models").and_then(|d| d.as_array()) {
+                    for model in data {
+                        if let Some(name_path) = model.get("name").and_then(|v| v.as_str()) {
+                            // Strip "models/" prefix from name
+                            let id = name_path
+                                .strip_prefix("models/")
+                                .unwrap_or(name_path)
+                                .to_string();
+                            let display_name = model
+                                .get("displayName")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(&id)
+                                .to_string();
+                            models.push(ModelInfo {
+                                id,
+                                name: display_name,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(models)
     }
 
     /// Send a chat completion request
@@ -607,7 +744,9 @@ impl AiClient {
 
         let (url, body, owned_headers) = match self.provider_type {
             ProviderType::Anthropic => self.build_anthropic_request(messages, tools, api_key, true),
-            ProviderType::OpenAI => self.build_openai_request(messages, tools, api_key, true),
+            ProviderType::OpenAI | ProviderType::Google => {
+                self.build_openai_request(messages, tools, api_key, true)
+            }
         }?;
 
         // Convert owned headers to borrowed for request_streaming
