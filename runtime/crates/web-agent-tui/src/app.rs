@@ -4,10 +4,13 @@
 
 use ratatui::Terminal;
 
+use serde_json::Value;
+
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
     ai_client::StreamEvent, format_tasks_for_display, get_local_tool_definitions,
-    get_system_message, try_execute_local_tool, AiClient, McpClient, Task,
+    get_system_message, mcp_client::ToolDefinition, try_execute_local_tool, AiClient, McpClient,
+    Task,
 };
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
@@ -532,28 +535,8 @@ impl<R: Read, W: Write> App<R, W> {
         self.state = AppState::Processing;
         self.cancelled = false; // Reset cancellation flag
 
-        // Get tools from MCP (sandbox)
-        let mut tools = match self.mcp_client.list_tools() {
-            Ok(t) => {
-                // Update server status
-                self.server_status.local_connected = true;
-                self.server_status.local_tool_count = t.len();
-                t
-            }
-            Err(e) => {
-                self.server_status.local_connected = false;
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("MCP error: {}", e),
-                });
-                // Continue without MCP tools
-                vec![]
-            }
-        };
-
-        // Add local tools (task_write, etc.)
-        let local_tools = get_local_tool_definitions();
-        tools.extend(local_tools);
+        // Collect all tools with prefixes for multi-server support
+        let tools = self.collect_all_tools();
 
         // Build message history for AI with system prompt first
         let mut ai_messages: Vec<crate::bridge::ai_client::Message> = vec![get_system_message()];
@@ -659,56 +642,36 @@ impl<R: Read, W: Write> App<R, W> {
                         }
                     };
 
-                    // Try local tool first
-                    if let Some(local_result) = try_execute_local_tool(&tool_name, args.clone()) {
-                        // Handle local tool result
-                        if local_result.success {
-                            // Update tasks if returned
-                            if let Some(new_tasks) = local_result.tasks {
-                                self.tasks = new_tasks;
-                                // Update aux panel with tasks
-                                self.aux_content = AuxContent {
-                                    kind: AuxContentKind::TaskList,
-                                    title: "Tasks".to_string(),
-                                    content: format_tasks_for_display(&self.tasks),
-                                };
+                    // Route tool call based on prefix
+                    match self.route_tool_call(&tool_name, args) {
+                        Ok(result) => {
+                            // Check if it was a local tool with tasks
+                            if tool_name == "task_write" {
+                                // task_write results update the task list directly
+                                // (handled in route_tool_call via try_execute_local_tool)
                             }
+
+                            // Update aux panel with tool output
+                            self.aux_content = AuxContent {
+                                kind: AuxContentKind::ToolOutput,
+                                title: tool_name.clone(),
+                                content: result.clone(),
+                            };
+
                             self.messages.push(Message {
                                 role: Role::Tool,
-                                content: local_result.message,
-                            });
-                        } else {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Tool error: {}", local_result.message),
+                                content: if result.len() > 100 {
+                                    format!("{}... [see aux panel →]", &result[..100])
+                                } else {
+                                    result
+                                },
                             });
                         }
-                    } else {
-                        // Delegate to MCP
-                        match self.mcp_client.call_tool(&tool_name, args) {
-                            Ok(result) => {
-                                // Update aux panel with tool output
-                                self.aux_content = AuxContent {
-                                    kind: AuxContentKind::ToolOutput,
-                                    title: tool_name.clone(),
-                                    content: result.clone(),
-                                };
-
-                                self.messages.push(Message {
-                                    role: Role::Tool,
-                                    content: if result.len() > 100 {
-                                        format!("{}... [see aux panel →]", &result[..100])
-                                    } else {
-                                        result
-                                    },
-                                });
-                            }
-                            Err(e) => {
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!("Tool error: {}", e),
-                                });
-                            }
+                        Err(e) => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Tool error: {}", e),
+                            });
                         }
                     }
                 }
@@ -992,6 +955,96 @@ impl<R: Read, W: Write> App<R, W> {
                     server.status = ServerConnectionStatus::Connecting;
                 }
             }
+        }
+    }
+
+    /// Collect all tools with server prefixes for multi-server routing
+    fn collect_all_tools(&mut self) -> Vec<ToolDefinition> {
+        let mut all_tools = Vec::new();
+
+        // 1. Sandbox tools (prefix: "sandbox_")
+        match self.mcp_client.list_tools() {
+            Ok(sandbox_tools) => {
+                self.server_status.local_connected = true;
+                self.server_status.local_tool_count = sandbox_tools.len();
+                for tool in sandbox_tools {
+                    all_tools.push(ToolDefinition {
+                        name: format!("sandbox_{}", tool.name),
+                        description: tool.description,
+                        input_schema: tool.input_schema,
+                        title: tool.title,
+                    });
+                }
+            }
+            Err(e) => {
+                self.server_status.local_connected = false;
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("MCP error: {}", e),
+                });
+            }
+        }
+
+        // 2. Remote server tools (prefix: "<server_id>_")
+        for server in &self.remote_servers {
+            if server.status == ServerConnectionStatus::Connected {
+                for tool in &server.tools {
+                    all_tools.push(ToolDefinition {
+                        name: format!("{}_{}", server.id, tool.name),
+                        description: tool.description.clone(),
+                        input_schema: tool.input_schema.clone(),
+                        title: tool.title.clone(),
+                    });
+                }
+            }
+        }
+
+        // 3. Local tools (NO prefix - checked first in routing)
+        all_tools.extend(get_local_tool_definitions());
+
+        all_tools
+    }
+
+    /// Route a tool call to the correct server based on prefix
+    fn route_tool_call(&mut self, prefixed_name: &str, args: Value) -> Result<String, String> {
+        // 1. Check local tools first (no prefix required)
+        if let Some(result) = try_execute_local_tool(prefixed_name, args.clone()) {
+            // Handle task updates from task_write
+            if let Some(new_tasks) = result.tasks {
+                self.tasks = new_tasks;
+                // Update aux panel with task list
+                self.aux_content = AuxContent {
+                    kind: AuxContentKind::TaskList,
+                    title: "Tasks".to_string(),
+                    content: format_tasks_for_display(&self.tasks),
+                };
+            }
+            return if result.success {
+                Ok(result.message)
+            } else {
+                Err(result.message)
+            };
+        }
+
+        // 2. Parse prefix to determine server
+        if let Some(pos) = prefixed_name.find('_') {
+            let (server_id, tool_name) = prefixed_name.split_at(pos);
+            let tool_name = &tool_name[1..]; // Skip the underscore
+
+            if server_id == "sandbox" {
+                // Route to local sandbox MCP
+                self.mcp_client
+                    .call_tool(tool_name, args)
+                    .map_err(|e| e.to_string())
+            } else {
+                // Route to remote server (TODO: implement remote MCP client)
+                Err(format!(
+                    "Remote server '{}' tool calls not yet implemented",
+                    server_id
+                ))
+            }
+        } else {
+            Err(format!("Unknown tool: {}", prefixed_name))
         }
     }
 
