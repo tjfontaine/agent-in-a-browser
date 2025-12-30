@@ -5,6 +5,7 @@
 mod agent_mode;
 mod overlays;
 pub mod panels;
+pub mod server_manager;
 mod shell_mode;
 mod status_bar;
 
@@ -13,6 +14,9 @@ use ratatui::widgets::*;
 
 pub use crate::app::{AppState, Message};
 pub use panels::{render_aux_panel, AuxContent, AuxContentKind, RemoteServer, ServerStatus};
+pub use server_manager::{
+    render_overlay, Overlay, RemoteServerEntry, ServerConnectionStatus, ServerManagerView,
+};
 
 /// Application mode
 #[derive(Clone, Copy, PartialEq)]
@@ -41,6 +45,8 @@ pub fn render_ui(
     aux_content: &AuxContent,
     server_status: &ServerStatus,
     model_name: &str,
+    overlay: Option<&Overlay>,
+    remote_servers: &[RemoteServerEntry],
 ) {
     let area = frame.area();
 
@@ -72,6 +78,17 @@ pub fn render_ui(
 
     // Status bar
     render_status_bar(frame, v_chunks[1], mode, state, server_status, model_name);
+
+    // Render overlay on top if present
+    if let Some(overlay) = overlay {
+        render_overlay(
+            frame,
+            area,
+            overlay,
+            server_status.local_tool_count,
+            remote_servers,
+        );
+    }
 }
 
 /// Render the main panel (messages + input)

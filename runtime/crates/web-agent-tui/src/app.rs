@@ -9,7 +9,10 @@ use crate::bridge::{
     ai_client::StreamEvent, format_tasks_for_display, get_local_tool_definitions,
     get_system_message, try_execute_local_tool, AiClient, McpClient, Task,
 };
-use crate::ui::{render_ui, AuxContent, AuxContentKind, Mode, ServerStatus};
+use crate::ui::{
+    render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
+    ServerConnectionStatus, ServerManagerView, ServerStatus,
+};
 use std::io::{Read, Write};
 
 /// App state enumeration
@@ -57,6 +60,10 @@ pub struct App<R: Read, W: Write> {
     tasks: Vec<Task>,
     /// Flag to cancel current operation
     cancelled: bool,
+    /// Remote MCP server connections
+    remote_servers: Vec<RemoteServerEntry>,
+    /// Current overlay (modal popup)
+    overlay: Option<Overlay>,
 }
 
 /// A message in the chat history
@@ -115,6 +122,8 @@ impl<R: Read, W: Write> App<R, W> {
             },
             tasks: Vec::new(),
             cancelled: false,
+            remote_servers: Vec::new(),
+            overlay: None,
         }
     }
 
@@ -158,6 +167,8 @@ impl<R: Read, W: Write> App<R, W> {
         let server_status = self.server_status.clone();
 
         let model_name = self.ai_client.model_name().to_string();
+        let overlay = self.overlay.clone();
+        let remote_servers = self.remote_servers.clone();
 
         let _ = self.terminal.draw(|frame| {
             render_ui(
@@ -169,6 +180,8 @@ impl<R: Read, W: Write> App<R, W> {
                 &aux_content,
                 &server_status,
                 &model_name,
+                overlay.as_ref(),
+                &remote_servers,
             );
         });
     }
@@ -177,12 +190,12 @@ impl<R: Read, W: Write> App<R, W> {
         // Read all available bytes (for paste support)
         // Keep reading until we'd block or process a special sequence
         loop {
-            let mut buf = [0u8; 1];
+            let mut buf = [0u8; 32]; // Read in larger chunks to catch escape sequences
             match self.stdin.read(&mut buf) {
                 Ok(0) => break, // No more data
-                Ok(_) => {
-                    let byte = buf[0];
-                    let should_break = self.process_input_byte(byte);
+                Ok(n) => {
+                    let bytes = &buf[..n];
+                    let should_break = self.process_input_bytes(bytes);
                     if should_break {
                         break;
                     }
@@ -192,8 +205,51 @@ impl<R: Read, W: Write> App<R, W> {
         }
     }
 
-    /// Process a single input byte, returns true if we should stop reading
-    fn process_input_byte(&mut self, byte: u8) -> bool {
+    /// Process a slice of input bytes, returns true if we should stop reading
+    fn process_input_bytes(&mut self, bytes: &[u8]) -> bool {
+        let mut i = 0;
+        while i < bytes.len() {
+            let byte = bytes[i];
+
+            // If overlay is active, handle with escape sequence detection
+            if self.overlay.is_some() {
+                let (key, consumed) = if byte == 0x1B && i + 2 < bytes.len() && bytes[i + 1] == b'['
+                {
+                    // Escape sequence - check the command byte
+                    let key = match bytes[i + 2] {
+                        b'A' => 0xF0, // Up arrow
+                        b'B' => 0xF1, // Down arrow
+                        b'C' => 0xF2, // Right arrow
+                        b'D' => 0xF3, // Left arrow
+                        _ => 0x1B,    // Unknown, treat as Esc
+                    };
+                    (key, if key != 0x1B { 3 } else { 1 }) // Consume 3 bytes for arrow, 1 for bare Esc
+                } else {
+                    (byte, 1)
+                };
+                self.handle_overlay_input(key);
+                i += consumed;
+                continue;
+            }
+
+            // Normal input handling
+            let should_break = self.process_single_byte(byte, &bytes[i..]);
+            if should_break {
+                return true;
+            }
+
+            // Check if we consumed an escape sequence
+            if byte == 0x1B && i + 2 < bytes.len() && bytes[i + 1] == b'[' {
+                i += 3; // Skip the escape sequence bytes
+            } else {
+                i += 1;
+            }
+        }
+        false
+    }
+
+    /// Process a single input byte (non-overlay case)
+    fn process_single_byte(&mut self, byte: u8, _remaining: &[u8]) -> bool {
         match byte {
             // Ctrl+C - cancel during processing, quit otherwise
             0x03 => {
@@ -545,6 +601,8 @@ impl<R: Read, W: Write> App<R, W> {
                                     &self.aux_content,
                                     &self.server_status,
                                     self.ai_client.model_name(),
+                                    self.overlay.as_ref(),
+                                    &self.remote_servers,
                                 );
                             });
                             // Note: Cancellation during streaming is not supported because
@@ -666,6 +724,277 @@ impl<R: Read, W: Write> App<R, W> {
         self.state = AppState::Ready;
     }
 
+    /// Handle input when an overlay is active
+    fn handle_overlay_input(&mut self, byte: u8) {
+        let overlay = match &mut self.overlay {
+            Some(overlay) => overlay,
+            None => return,
+        };
+
+        match overlay {
+            Overlay::ServerManager(view) => {
+                match view {
+                    ServerManagerView::ServerList { selected } => {
+                        let max_items = 2 + self.remote_servers.len(); // Local + Add New + remotes
+                        match byte {
+                            0x1B => {
+                                // Esc - close overlay
+                                self.overlay = None;
+                            }
+                            0xF0 | 0x6B => {
+                                // Up arrow (decoded) or 'k'
+                                if *selected > 0 {
+                                    *selected -= 1;
+                                }
+                            }
+                            0xF1 | 0x6A => {
+                                // Down arrow (decoded) or 'j'
+                                if *selected + 1 < max_items {
+                                    *selected += 1;
+                                }
+                            }
+                            0x0D => {
+                                // Enter - select item
+                                if *selected == 0 {
+                                    // Local server - show info then back to list
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::ServerActions {
+                                            server_id: "__local__".to_string(),
+                                            selected: 0,
+                                        },
+                                    ));
+                                } else if *selected == 1 {
+                                    // Add new server
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::AddServer {
+                                            url_input: String::new(),
+                                            error: None,
+                                        },
+                                    ));
+                                } else {
+                                    // Remote server - show actions
+                                    let idx = *selected - 2;
+                                    if let Some(server) = self.remote_servers.get(idx) {
+                                        self.overlay = Some(Overlay::ServerManager(
+                                            ServerManagerView::ServerActions {
+                                                server_id: server.id.clone(),
+                                                selected: 0,
+                                            },
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    ServerManagerView::ServerActions {
+                        server_id,
+                        selected,
+                    } => {
+                        let is_local = server_id == "__local__";
+                        let action_count = if is_local { 1 } else { 4 }; // Back only for local, others have 4 actions
+                        match byte {
+                            0x1B => {
+                                // Esc - back to list
+                                self.overlay =
+                                    Some(Overlay::ServerManager(ServerManagerView::ServerList {
+                                        selected: 0,
+                                    }));
+                            }
+                            0xF0 | 0x6B => {
+                                // Up arrow (decoded) or 'k'
+                                if *selected > 0 {
+                                    *selected -= 1;
+                                }
+                            }
+                            0xF1 | 0x6A => {
+                                // Down arrow (decoded) or 'j'
+                                if *selected + 1 < action_count {
+                                    *selected += 1;
+                                }
+                            }
+                            0x0D => {
+                                // Enter - execute action
+                                if is_local {
+                                    // Just go back
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::ServerList { selected: 0 },
+                                    ));
+                                } else {
+                                    let sid = server_id.clone();
+                                    match *selected {
+                                        0 => {
+                                            // Connect/Disconnect
+                                            self.toggle_server_connection(&sid);
+                                        }
+                                        1 => {
+                                            // Set API Key
+                                            self.overlay = Some(Overlay::ServerManager(
+                                                ServerManagerView::SetToken {
+                                                    server_id: sid,
+                                                    token_input: String::new(),
+                                                    error: None,
+                                                },
+                                            ));
+                                        }
+                                        2 => {
+                                            // Remove
+                                            self.remove_remote_server(&sid);
+                                            self.overlay = Some(Overlay::ServerManager(
+                                                ServerManagerView::ServerList { selected: 0 },
+                                            ));
+                                        }
+                                        3 => {
+                                            // Back
+                                            self.overlay = Some(Overlay::ServerManager(
+                                                ServerManagerView::ServerList { selected: 0 },
+                                            ));
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    ServerManagerView::AddServer {
+                        url_input,
+                        error: _error,
+                    } => {
+                        match byte {
+                            0x1B => {
+                                // Esc - cancel, back to list
+                                self.overlay =
+                                    Some(Overlay::ServerManager(ServerManagerView::ServerList {
+                                        selected: 0,
+                                    }));
+                            }
+                            0x0D => {
+                                // Enter - add server
+                                let url = url_input.clone();
+                                if !url.is_empty() {
+                                    self.add_remote_server(&url);
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::ServerList { selected: 0 },
+                                    ));
+                                }
+                            }
+                            0x7F | 0x08 => {
+                                // Backspace
+                                url_input.pop();
+                            }
+                            0x20..=0x7E => {
+                                // Printable character
+                                url_input.push(byte as char);
+                            }
+                            _ => {}
+                        }
+                    }
+                    ServerManagerView::SetToken {
+                        server_id,
+                        token_input,
+                        error: _error,
+                    } => {
+                        match byte {
+                            0x1B => {
+                                // Esc - cancel
+                                self.overlay = Some(Overlay::ServerManager(
+                                    ServerManagerView::ServerActions {
+                                        server_id: server_id.clone(),
+                                        selected: 0,
+                                    },
+                                ));
+                            }
+                            0x0D => {
+                                // Enter - set token
+                                let sid = server_id.clone();
+                                let token = token_input.clone();
+                                if !token.is_empty() {
+                                    self.set_server_token(&sid, &token);
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::ServerList { selected: 0 },
+                                    ));
+                                }
+                            }
+                            0x7F | 0x08 => {
+                                // Backspace
+                                token_input.pop();
+                            }
+                            0x20..=0x7E => {
+                                // Printable character
+                                token_input.push(byte as char);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // === Server Management Methods ===
+
+    fn add_remote_server(&mut self, url: &str) {
+        let url = url.trim().trim_end_matches('/').to_string();
+
+        // Generate ID from URL
+        let id = url
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace('/', "-")
+            .replace('.', "-");
+
+        // Check if already exists
+        if self.remote_servers.iter().any(|s| s.url == url) {
+            return;
+        }
+
+        let name = url
+            .replace("https://", "")
+            .replace("http://", "")
+            .split('/')
+            .next()
+            .unwrap_or(&url)
+            .to_string();
+
+        let entry = RemoteServerEntry {
+            id,
+            name,
+            url,
+            status: ServerConnectionStatus::Disconnected,
+            tools: Vec::new(),
+            bearer_token: None,
+        };
+
+        self.remote_servers.push(entry);
+    }
+
+    fn remove_remote_server(&mut self, id: &str) {
+        self.remote_servers.retain(|s| s.id != id);
+    }
+
+    fn set_server_token(&mut self, id: &str, token: &str) {
+        if let Some(server) = self.remote_servers.iter_mut().find(|s| s.id == id) {
+            server.bearer_token = Some(token.to_string());
+        }
+    }
+
+    fn toggle_server_connection(&mut self, id: &str) {
+        if let Some(server) = self.remote_servers.iter_mut().find(|s| s.id == id) {
+            match server.status {
+                ServerConnectionStatus::Connected => {
+                    server.status = ServerConnectionStatus::Disconnected;
+                    server.tools.clear();
+                }
+                _ => {
+                    // TODO: Actually connect via MCP client
+                    // For now, just mark as connecting (would need async HTTP)
+                    server.status = ServerConnectionStatus::Connecting;
+                }
+            }
+        }
+    }
+
     fn handle_slash_command(&mut self, cmd: &str) {
         let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
         let command = parts.first().map(|s| *s).unwrap_or("");
@@ -678,7 +1007,7 @@ impl<R: Read, W: Write> App<R, W> {
                         "Commands:",
                         "  /help     - Show this help",
                         "  /tools    - List available tools",
-                        "  /servers  - Show MCP server status",
+                        "  /mcp      - MCP server manager (j/k=nav, Enter=select)",
                         "  /shell    - Enter shell mode (^D to exit)",
                         "  /key      - Set API key",
                         "  /clear    - Clear messages",
@@ -723,36 +1052,11 @@ impl<R: Read, W: Write> App<R, W> {
                     content: tool_list.join("\n"),
                 });
             }
-            "/servers" => {
-                let mut status = vec![format!(
-                    "MCP Servers:\n  Local sandbox: {} ({} tools)",
-                    if self.server_status.local_connected {
-                        "●"
-                    } else {
-                        "○"
-                    },
-                    self.server_status.local_tool_count
-                )];
-
-                if self.server_status.remote_servers.is_empty() {
-                    status.push("  Remote: none connected".to_string());
-                    status.push("  Use /connect <url> to add".to_string());
-                } else {
-                    for server in &self.server_status.remote_servers {
-                        status.push(format!(
-                            "  {} {}: {} ({} tools)",
-                            if server.connected { "●" } else { "○" },
-                            server.name,
-                            server.url,
-                            server.tool_count
-                        ));
-                    }
-                }
-
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: status.join("\n"),
-                });
+            "/servers" | "/mcp" => {
+                // Open server manager wizard overlay
+                self.overlay = Some(Overlay::ServerManager(ServerManagerView::ServerList {
+                    selected: 0,
+                }));
             }
             "/shell" | "/sh" => {
                 // Launch interactive shell mode

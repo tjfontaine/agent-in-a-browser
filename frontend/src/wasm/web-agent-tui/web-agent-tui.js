@@ -872,12 +872,95 @@ function trampoline1() {
   return handle0;
 }
 
+const handleTable3 = [T_FLAG, 0];
+const captureTable3= new Map();
+let captureCnt3 = 0;
+handleTables[3] = handleTable3;
+
+function trampoline2() {
+  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
+  const ret = getStdout();
+  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof OutputStream)) {
+    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable3, rep);
+  }
+  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"][Instruction::Return]', {
+    funcName: 'get-stdout',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
+const handleTable2 = [T_FLAG, 0];
+const captureTable2= new Map();
+let captureCnt2 = 0;
+handleTables[2] = handleTable2;
+
+function trampoline3() {
+  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdin');
+  const ret = getStdin();
+  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof InputStream)) {
+    throw new TypeError('Resource error: Not a valid "InputStream" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable2, rep);
+  }
+  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"][Instruction::Return]', {
+    funcName: 'get-stdin',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
+
+function trampoline4() {
+  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stderr');
+  const ret = getStderr();
+  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret instanceof OutputStream)) {
+    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable3, rep);
+  }
+  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"][Instruction::Return]', {
+    funcName: 'get-stderr',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
 const handleTable0 = [T_FLAG, 0];
 const captureTable0= new Map();
 let captureCnt0 = 0;
 handleTables[0] = handleTable0;
 
-function trampoline2(arg0) {
+function trampoline5(arg0) {
   var handle1 = arg0;
   var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable0.get(rep2);
@@ -909,7 +992,7 @@ const captureTable8= new Map();
 let captureCnt8 = 0;
 handleTables[8] = handleTable8;
 
-function trampoline4(arg0) {
+function trampoline7(arg0) {
   var handle1 = arg0;
   var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable4.get(rep2);
@@ -950,7 +1033,7 @@ const captureTable9= new Map();
 let captureCnt9 = 0;
 handleTables[9] = handleTable9;
 
-function trampoline5(arg0) {
+function trampoline8(arg0) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -983,7 +1066,7 @@ const captureTable10= new Map();
 let captureCnt10 = 0;
 handleTables[10] = handleTable10;
 
-function trampoline6(arg0) {
+function trampoline9(arg0) {
   var handle1 = arg0;
   var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable10.get(rep2);
@@ -1018,89 +1101,6 @@ function trampoline6(arg0) {
     postReturn: false
   });
   return handle3;
-}
-
-const handleTable2 = [T_FLAG, 0];
-const captureTable2= new Map();
-let captureCnt2 = 0;
-handleTables[2] = handleTable2;
-
-function trampoline17() {
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdin');
-  const ret = getStdin();
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  if (!(ret instanceof InputStream)) {
-    throw new TypeError('Resource error: Not a valid "InputStream" resource.');
-  }
-  var handle0 = ret[symbolRscHandle];
-  if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt2;
-    captureTable2.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable2, rep);
-  }
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"][Instruction::Return]', {
-    funcName: 'get-stdin',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  return handle0;
-}
-
-const handleTable3 = [T_FLAG, 0];
-const captureTable3= new Map();
-let captureCnt3 = 0;
-handleTables[3] = handleTable3;
-
-function trampoline18() {
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
-  const ret = getStdout();
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  if (!(ret instanceof OutputStream)) {
-    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
-  }
-  var handle0 = ret[symbolRscHandle];
-  if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable3, rep);
-  }
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"][Instruction::Return]', {
-    funcName: 'get-stdout',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  return handle0;
-}
-
-
-function trampoline19() {
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stderr');
-  const ret = getStderr();
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  if (!(ret instanceof OutputStream)) {
-    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
-  }
-  var handle0 = ret[symbolRscHandle];
-  if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable3, rep);
-  }
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"][Instruction::Return]', {
-    funcName: 'get-stderr',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  return handle0;
 }
 
 let exports1;
@@ -2685,12 +2685,96 @@ function trampoline31(arg0, arg1, arg2, arg3, arg4, arg5) {
   });
 }
 
+
+const trampoline32 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  var ptr0 = arg0;
+  var len0 = arg1;
+  var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
+  var len2 = arg3;
+  var base2 = arg2;
+  var result2 = [];
+  for (let i = 0; i < len2; i++) {
+    const base = base2 + i * 8;
+    var ptr1 = dataView(memory0).getUint32(base + 0, true);
+    var len1 = dataView(memory0).getUint32(base + 4, true);
+    var result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
+    result2.push(result1);
+  }
+  var ptr3 = arg4;
+  var len3 = arg5;
+  var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+  var len6 = arg7;
+  var base6 = arg6;
+  var result6 = [];
+  for (let i = 0; i < len6; i++) {
+    const base = base6 + i * 16;
+    var ptr4 = dataView(memory0).getUint32(base + 0, true);
+    var len4 = dataView(memory0).getUint32(base + 4, true);
+    var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
+    var ptr5 = dataView(memory0).getUint32(base + 8, true);
+    var len5 = dataView(memory0).getUint32(base + 12, true);
+    var result5 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr5, len5));
+    result6.push([result4, result5]);
+  }
+  var handle8 = arg8;
+  var rep9 = handleTable2[(handle8 << 1) + 1] & ~T_FLAG;
+  var rsc7 = captureTable2.get(rep9);
+  if (!rsc7) {
+    rsc7 = Object.create(InputStream.prototype);
+    Object.defineProperty(rsc7, symbolRscHandle, { writable: true, value: handle8});
+    Object.defineProperty(rsc7, symbolRscRep, { writable: true, value: rep9});
+  }
+  else {
+    captureTable2.delete(rep9);
+  }
+  rscTableRemove(handleTable2, handle8);
+  var handle11 = arg9;
+  var rep12 = handleTable3[(handle11 << 1) + 1] & ~T_FLAG;
+  var rsc10 = captureTable3.get(rep12);
+  if (!rsc10) {
+    rsc10 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc10, symbolRscHandle, { writable: true, value: handle11});
+    Object.defineProperty(rsc10, symbolRscRep, { writable: true, value: rep12});
+  }
+  else {
+    captureTable3.delete(rep12);
+  }
+  rscTableRemove(handleTable3, handle11);
+  var handle14 = arg10;
+  var rep15 = handleTable3[(handle14 << 1) + 1] & ~T_FLAG;
+  var rsc13 = captureTable3.get(rep15);
+  if (!rsc13) {
+    rsc13 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc13, symbolRscHandle, { writable: true, value: handle14});
+    Object.defineProperty(rsc13, symbolRscRep, { writable: true, value: rep15});
+  }
+  else {
+    captureTable3.delete(rep15);
+  }
+  rscTableRemove(handleTable3, handle14);
+  _debugLog('[iface="shell:unix/command@0.1.0", function="run"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'run');
+  const ret = await run(result0, result2, {
+    cwd: result3,
+    vars: result6,
+  }, rsc7, rsc10, rsc13);
+  _debugLog('[iface="shell:unix/command@0.1.0", function="run"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::Return]', {
+    funcName: 'run',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return toInt32(ret);
+}
+);
 const handleTable1 = [T_FLAG, 0];
 const captureTable1= new Map();
 let captureCnt1 = 0;
 handleTables[1] = handleTable1;
 
-const trampoline32 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+const trampoline33 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -2771,7 +2855,7 @@ const trampoline32 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 }
 );
 
-function trampoline33(arg0, arg1, arg2, arg3) {
+function trampoline34(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -2848,7 +2932,7 @@ function trampoline33(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline34(arg0, arg1, arg2, arg3) {
+function trampoline35(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -3309,7 +3393,7 @@ function trampoline34(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline35(arg0, arg1) {
+function trampoline36(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable1.get(rep2);
@@ -3340,90 +3424,6 @@ function trampoline35(arg0, arg1) {
   });
 }
 
-
-const trampoline36 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
-  var ptr0 = arg0;
-  var len0 = arg1;
-  var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
-  var len2 = arg3;
-  var base2 = arg2;
-  var result2 = [];
-  for (let i = 0; i < len2; i++) {
-    const base = base2 + i * 8;
-    var ptr1 = dataView(memory0).getUint32(base + 0, true);
-    var len1 = dataView(memory0).getUint32(base + 4, true);
-    var result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
-    result2.push(result1);
-  }
-  var ptr3 = arg4;
-  var len3 = arg5;
-  var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-  var len6 = arg7;
-  var base6 = arg6;
-  var result6 = [];
-  for (let i = 0; i < len6; i++) {
-    const base = base6 + i * 16;
-    var ptr4 = dataView(memory0).getUint32(base + 0, true);
-    var len4 = dataView(memory0).getUint32(base + 4, true);
-    var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
-    var ptr5 = dataView(memory0).getUint32(base + 8, true);
-    var len5 = dataView(memory0).getUint32(base + 12, true);
-    var result5 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr5, len5));
-    result6.push([result4, result5]);
-  }
-  var handle8 = arg8;
-  var rep9 = handleTable2[(handle8 << 1) + 1] & ~T_FLAG;
-  var rsc7 = captureTable2.get(rep9);
-  if (!rsc7) {
-    rsc7 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc7, symbolRscHandle, { writable: true, value: handle8});
-    Object.defineProperty(rsc7, symbolRscRep, { writable: true, value: rep9});
-  }
-  else {
-    captureTable2.delete(rep9);
-  }
-  rscTableRemove(handleTable2, handle8);
-  var handle11 = arg9;
-  var rep12 = handleTable3[(handle11 << 1) + 1] & ~T_FLAG;
-  var rsc10 = captureTable3.get(rep12);
-  if (!rsc10) {
-    rsc10 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc10, symbolRscHandle, { writable: true, value: handle11});
-    Object.defineProperty(rsc10, symbolRscRep, { writable: true, value: rep12});
-  }
-  else {
-    captureTable3.delete(rep12);
-  }
-  rscTableRemove(handleTable3, handle11);
-  var handle14 = arg10;
-  var rep15 = handleTable3[(handle14 << 1) + 1] & ~T_FLAG;
-  var rsc13 = captureTable3.get(rep15);
-  if (!rsc13) {
-    rsc13 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc13, symbolRscHandle, { writable: true, value: handle14});
-    Object.defineProperty(rsc13, symbolRscRep, { writable: true, value: rep15});
-  }
-  else {
-    captureTable3.delete(rep15);
-  }
-  rscTableRemove(handleTable3, handle14);
-  _debugLog('[iface="shell:unix/command@0.1.0", function="run"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'run');
-  const ret = await run(result0, result2, {
-    cwd: result3,
-    vars: result6,
-  }, rsc7, rsc10, rsc13);
-  _debugLog('[iface="shell:unix/command@0.1.0", function="run"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::Return]', {
-    funcName: 'run',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  return toInt32(ret);
-}
-);
 
 function trampoline37(arg0) {
   _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -3475,7 +3475,7 @@ function trampoline38(arg0) {
 }
 
 let exports3;
-function trampoline3(handle) {
+function trampoline6(handle) {
   const handleEntry = rscTableRemove(handleTable5, handle);
   if (handleEntry.own) {
     
@@ -3488,7 +3488,7 @@ function trampoline3(handle) {
     }
   }
 }
-function trampoline7(handle) {
+function trampoline10(handle) {
   const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
     
@@ -3501,7 +3501,7 @@ function trampoline7(handle) {
     }
   }
 }
-function trampoline8(handle) {
+function trampoline11(handle) {
   const handleEntry = rscTableRemove(handleTable4, handle);
   if (handleEntry.own) {
     
@@ -3514,7 +3514,7 @@ function trampoline8(handle) {
     }
   }
 }
-function trampoline9(handle) {
+function trampoline12(handle) {
   const handleEntry = rscTableRemove(handleTable2, handle);
   if (handleEntry.own) {
     
@@ -3527,7 +3527,7 @@ function trampoline9(handle) {
     }
   }
 }
-function trampoline10(handle) {
+function trampoline13(handle) {
   const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
     
@@ -3540,7 +3540,7 @@ function trampoline10(handle) {
     }
   }
 }
-function trampoline11(handle) {
+function trampoline14(handle) {
   const handleEntry = rscTableRemove(handleTable6, handle);
   if (handleEntry.own) {
     
@@ -3553,7 +3553,7 @@ function trampoline11(handle) {
     }
   }
 }
-function trampoline12(handle) {
+function trampoline15(handle) {
   const handleEntry = rscTableRemove(handleTable7, handle);
   if (handleEntry.own) {
     
@@ -3566,7 +3566,7 @@ function trampoline12(handle) {
     }
   }
 }
-function trampoline13(handle) {
+function trampoline16(handle) {
   const handleEntry = rscTableRemove(handleTable3, handle);
   if (handleEntry.own) {
     
@@ -3579,7 +3579,7 @@ function trampoline13(handle) {
     }
   }
 }
-function trampoline14(handle) {
+function trampoline17(handle) {
   const handleEntry = rscTableRemove(handleTable8, handle);
   if (handleEntry.own) {
     
@@ -3592,7 +3592,7 @@ function trampoline14(handle) {
     }
   }
 }
-function trampoline15(handle) {
+function trampoline18(handle) {
   const handleEntry = rscTableRemove(handleTable9, handle);
   if (handleEntry.own) {
     
@@ -3605,7 +3605,7 @@ function trampoline15(handle) {
     }
   }
 }
-function trampoline16(handle) {
+function trampoline19(handle) {
   const handleEntry = rscTableRemove(handleTable10, handle);
   if (handleEntry.own) {
     
@@ -3643,63 +3643,63 @@ const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-agent-tui.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-agent-tui.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgC39/f39/f39/f39/AX9gAX8AYAJ/fwF/YAF/AAMXFgAAAQIDAgIAAAAEBQYBAAcICQkKCAYEBQFwARYWB3AXATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQgkaW1wb3J0cwEACsECFgsAIAAgAUEAEQAACwsAIAAgAUEBEQAACw8AIAAgASACIANBAhEBAAsPACAAIAEgAiADQQMRAgALEQAgACABIAIgAyAEQQQRAwALDwAgACABIAIgA0EFEQIACw8AIAAgASACIANBBhECAAsLACAAIAFBBxEAAAsLACAAIAFBCBEAAAsLACAAIAFBCREAAAsTACAAIAEgAiADIAQgBUEKEQQACw0AIAAgASACQQsRBQALDwAgACABIAIgA0EMEQYACw8AIAAgASACIANBDREBAAsLACAAIAFBDhEAAAsdACAAIAEgAiADIAQgBSAGIAcgCCAJIApBDxEHAAsJACAAQRARCAALCwAgACABQRERCQALCwAgACABQRIRCQALCQAgAEETEQoACwkAIABBFBEIAAsPACAAIAEgAiADQRURBgALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMADQCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAbMKFgA7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctYm9keS5zdHJlYW0BOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUCO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoA0JpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1tZXRob2QEQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXNjaGVtZQVFaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtYXV0aG9yaXR5BktpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1wYXRoLXdpdGgtcXVlcnkHPGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3QuYm9keQhAaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctcmVzcG9uc2UuY29uc3VtZQlDaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZnV0dXJlLWluY29taW5nLXJlc3BvbnNlLmdldAo0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAtBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQMTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNoDTBpbmRpcmVjdC13YXNpOmh0dHAvb3V0Z29pbmctaGFuZGxlckAwLjIuNC1oYW5kbGUOOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcPJWluZGlyZWN0LXNoZWxsOnVuaXgvY29tbWFuZEAwLjEuMC1ydW4QNmluZGlyZWN0LXdhc2k6cmFuZG9tL2luc2VjdXJlLXNlZWRAMC4yLjQtaW5zZWN1cmUtc2VlZBEoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldBIuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldBMmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQUM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudBVNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2g');
-    const module3 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgC39/f39/f39/f39/AX9gAX8AYAJ/fwF/YAF/AAKKARcAATAAAAABMQAAAAEyAAEAATMAAgABNAADAAE1AAIAATYAAgABNwAAAAE4AAAAATkAAAACMTAABAACMTEABQACMTIABgACMTMAAQACMTQAAAACMTUABwACMTYACAACMTcACQACMTgACQACMTkACgACMjAACAACMjEABgAIJGltcG9ydHMBcAEWFgkcAQBBAAsWAAECAwQFBgcICQoLDA0ODxAREhMUFQAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
+    const module2 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAMXFgAAAQIDAgIAAAAEBQYHAQAICQkKCAcEBQFwARYWB3AXATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQgkaW1wb3J0cwEACsECFgsAIAAgAUEAEQAACwsAIAAgAUEBEQAACw8AIAAgASACIANBAhEBAAsPACAAIAEgAiADQQMRAgALEQAgACABIAIgAyAEQQQRAwALDwAgACABIAIgA0EFEQIACw8AIAAgASACIANBBhECAAsLACAAIAFBBxEAAAsLACAAIAFBCBEAAAsLACAAIAFBCREAAAsTACAAIAEgAiADIAQgBUEKEQQACx0AIAAgASACIAMgBCAFIAYgByAIIAkgCkELEQUACw0AIAAgASACQQwRBgALDwAgACABIAIgA0ENEQcACw8AIAAgASACIANBDhEBAAsLACAAIAFBDxEAAAsJACAAQRARCAALCwAgACABQRERCQALCwAgACABQRIRCQALCQAgAEETEQoACwkAIABBFBEIAAsPACAAIAEgAiADQRURBwALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMADQCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAbMKFgA7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctYm9keS5zdHJlYW0BOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUCO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoA0JpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1tZXRob2QEQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXNjaGVtZQVFaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtYXV0aG9yaXR5BktpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1wYXRoLXdpdGgtcXVlcnkHPGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3QuYm9keQhAaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctcmVzcG9uc2UuY29uc3VtZQlDaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZnV0dXJlLWluY29taW5nLXJlc3BvbnNlLmdldAo0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAslaW5kaXJlY3Qtc2hlbGw6dW5peC9jb21tYW5kQDAuMS4wLXJ1bgxBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQNTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNoDjBpbmRpcmVjdC13YXNpOmh0dHAvb3V0Z29pbmctaGFuZGxlckAwLjIuNC1oYW5kbGUPOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcQNmluZGlyZWN0LXdhc2k6cmFuZG9tL2luc2VjdXJlLXNlZWRAMC4yLjQtaW5zZWN1cmUtc2VlZBEoYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX2dldBIuYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1lbnZpcm9uX3NpemVzX2dldBMmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQUM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudBVNaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2g');
+    const module3 = base64Compile('AGFzbQEAAAABUQtgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAKKARcAATAAAAABMQAAAAEyAAEAATMAAgABNAADAAE1AAIAATYAAgABNwAAAAE4AAAAATkAAAACMTAABAACMTEABQACMTIABgACMTMABwACMTQAAQACMTUAAAACMTYACAACMTcACQACMTgACQACMTkACgACMjAACAACMjEABwAIJGltcG9ydHMBcAEWFgkcAQBBAAsWAAECAwQFBgcICQoLDA0ODxAREhMUFQAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'shell:unix/command@0.1.0': {
-        run: exports0['15'],
+        run: exports0['11'],
       },
       'wasi:cli/stderr@0.2.4': {
-        'get-stderr': trampoline19,
+        'get-stderr': trampoline4,
       },
       'wasi:cli/stdin@0.2.4': {
-        'get-stdin': trampoline17,
+        'get-stdin': trampoline3,
       },
       'wasi:cli/stdout@0.2.4': {
-        'get-stdout': trampoline18,
+        'get-stdout': trampoline2,
       },
       'wasi:http/outgoing-handler@0.2.4': {
-        handle: exports0['13'],
+        handle: exports0['14'],
       },
       'wasi:http/types@0.2.4': {
         '[constructor]fields': trampoline0,
-        '[constructor]outgoing-request': trampoline4,
+        '[constructor]outgoing-request': trampoline7,
         '[constructor]request-options': trampoline1,
         '[method]fields.append': exports0['10'],
         '[method]future-incoming-response.get': exports0['9'],
-        '[method]future-incoming-response.subscribe': trampoline6,
+        '[method]future-incoming-response.subscribe': trampoline9,
         '[method]incoming-body.stream': exports0['0'],
         '[method]incoming-response.consume': exports0['8'],
-        '[method]incoming-response.status': trampoline5,
+        '[method]incoming-response.status': trampoline8,
         '[method]outgoing-body.write': exports0['1'],
         '[method]outgoing-request.body': exports0['7'],
         '[method]outgoing-request.set-authority': exports0['5'],
         '[method]outgoing-request.set-method': exports0['3'],
         '[method]outgoing-request.set-path-with-query': exports0['6'],
         '[method]outgoing-request.set-scheme': exports0['4'],
-        '[resource-drop]fields': trampoline8,
-        '[resource-drop]future-incoming-response': trampoline16,
-        '[resource-drop]incoming-body': trampoline11,
-        '[resource-drop]incoming-response': trampoline15,
-        '[resource-drop]outgoing-body': trampoline12,
-        '[resource-drop]outgoing-request': trampoline14,
-        '[resource-drop]request-options': trampoline3,
+        '[resource-drop]fields': trampoline11,
+        '[resource-drop]future-incoming-response': trampoline19,
+        '[resource-drop]incoming-body': trampoline14,
+        '[resource-drop]incoming-response': trampoline18,
+        '[resource-drop]outgoing-body': trampoline15,
+        '[resource-drop]outgoing-request': trampoline17,
+        '[resource-drop]request-options': trampoline6,
         '[static]outgoing-body.finish': exports0['2'],
       },
       'wasi:io/error@0.2.4': {
-        '[method]error.to-debug-string': exports0['14'],
-        '[resource-drop]error': trampoline10,
+        '[method]error.to-debug-string': exports0['15'],
+        '[resource-drop]error': trampoline13,
       },
       'wasi:io/poll@0.2.4': {
-        '[method]pollable.block': trampoline2,
-        '[resource-drop]pollable': trampoline7,
+        '[method]pollable.block': trampoline5,
+        '[resource-drop]pollable': trampoline10,
       },
       'wasi:io/streams@0.2.4': {
-        '[method]input-stream.blocking-read': exports0['11'],
-        '[method]output-stream.blocking-write-and-flush': exports0['12'],
-        '[resource-drop]input-stream': trampoline9,
-        '[resource-drop]output-stream': trampoline13,
+        '[method]input-stream.blocking-read': exports0['12'],
+        '[method]output-stream.blocking-write-and-flush': exports0['13'],
+        '[resource-drop]input-stream': trampoline12,
+        '[resource-drop]output-stream': trampoline16,
       },
       'wasi:random/insecure-seed@0.2.4': {
         'insecure-seed': exports0['16'],
@@ -3724,14 +3724,14 @@ const $init = (() => {
         exit: trampoline20,
       },
       'wasi:cli/stderr@0.2.6': {
-        'get-stderr': trampoline19,
+        'get-stderr': trampoline4,
       },
       'wasi:io/error@0.2.6': {
-        '[resource-drop]error': trampoline10,
+        '[resource-drop]error': trampoline13,
       },
       'wasi:io/streams@0.2.6': {
         '[method]output-stream.blocking-write-and-flush': exports0['21'],
-        '[resource-drop]output-stream': trampoline13,
+        '[resource-drop]output-stream': trampoline16,
       },
     }));
     memory0 = exports1.memory;
@@ -3754,7 +3754,7 @@ const $init = (() => {
         '19': exports2.proc_exit,
         '2': trampoline23,
         '20': trampoline38,
-        '21': trampoline33,
+        '21': trampoline34,
         '3': trampoline24,
         '4': trampoline25,
         '5': trampoline26,
