@@ -15,7 +15,5 @@ import { getTerminalSize as getSize } from './ghostty-cli-shim.js';
  * @returns {{ cols: number, rows: number }} Terminal dimensions
  */
 export function getTerminalSize() {
-    const size = getSize();
-    console.log('[terminal-info] getTerminalSize:', size.cols, 'x', size.rows);
-    return size;
+    return getSize();
 }
