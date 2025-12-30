@@ -1095,6 +1095,7 @@ impl<R: Read, W: Write> App<R, W> {
                                 step: start_step,
                                 selected_provider: *selected,
                                 selected_api_format: api_format,
+                                selected_model: 0,
                                 base_url_input: prefilled_url,
                                 model_input: prefilled_model,
                             });
@@ -1107,10 +1108,13 @@ impl<R: Read, W: Write> App<R, W> {
                 step,
                 selected_provider,
                 selected_api_format,
+                selected_model,
                 base_url_input,
                 model_input,
             } => {
-                use crate::ui::server_manager::{ProviderWizardStep, API_FORMATS, PROVIDERS};
+                use crate::ui::server_manager::{
+                    get_models_for_provider, ProviderWizardStep, API_FORMATS, PROVIDERS,
+                };
 
                 match step {
                     ProviderWizardStep::SelectProvider => {
@@ -1200,21 +1204,52 @@ impl<R: Read, W: Write> App<R, W> {
                         }
                     }
                     ProviderWizardStep::EnterModel => {
+                        // Get API format to determine available models
+                        let (api_format_id, _, _, _) = API_FORMATS
+                            .get(*selected_api_format)
+                            .unwrap_or(&("openai", "OpenAI", "", ""));
+                        let models = get_models_for_provider(api_format_id);
+                        let max_items = models.len() + 1; // +1 for custom input option
+                        let is_custom_selected = *selected_model == models.len();
+
                         match byte {
                             0x1B => self.overlay = None,
+                            0xF0 | 0x6B => {
+                                // Up arrow
+                                if *selected_model > 0 {
+                                    *selected_model -= 1;
+                                }
+                            }
+                            0xF1 | 0x6A => {
+                                // Down arrow
+                                if *selected_model + 1 < max_items {
+                                    *selected_model += 1;
+                                }
+                            }
                             0x0D => {
-                                // Enter - proceed to confirm if model is not empty
-                                if !model_input.is_empty() {
+                                // Enter - select model or proceed with custom
+                                if is_custom_selected {
+                                    // Custom input - only proceed if model_input is not empty
+                                    if !model_input.is_empty() {
+                                        *step = ProviderWizardStep::Confirm;
+                                    }
+                                } else if let Some((model_id, _)) = models.get(*selected_model) {
+                                    // Select from list
+                                    *model_input = model_id.to_string();
                                     *step = ProviderWizardStep::Confirm;
                                 }
                             }
                             0x7F | 0x08 => {
-                                // Backspace
-                                model_input.pop();
+                                // Backspace - only when custom is selected
+                                if is_custom_selected {
+                                    model_input.pop();
+                                }
                             }
                             b if b >= 0x20 && b < 0x7F => {
-                                // Printable ASCII
-                                model_input.push(b as char);
+                                // Printable ASCII - only when custom is selected
+                                if is_custom_selected {
+                                    model_input.push(b as char);
+                                }
                             }
                             _ => {}
                         }

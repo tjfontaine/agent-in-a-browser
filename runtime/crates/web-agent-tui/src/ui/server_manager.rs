@@ -86,6 +86,7 @@ pub enum Overlay {
         step: ProviderWizardStep,
         selected_provider: usize,
         selected_api_format: usize,
+        selected_model: usize,
         base_url_input: String,
         model_input: String,
     },
@@ -549,6 +550,7 @@ pub fn render_overlay(
             step,
             selected_provider,
             selected_api_format,
+            selected_model,
             base_url_input,
             model_input,
         } => {
@@ -558,6 +560,7 @@ pub fn render_overlay(
                 step,
                 *selected_provider,
                 *selected_api_format,
+                *selected_model,
                 base_url_input,
                 model_input,
             );
@@ -741,6 +744,7 @@ pub fn render_provider_wizard(
     step: &ProviderWizardStep,
     selected_provider: usize,
     selected_api_format: usize,
+    selected_model: usize,
     base_url_input: &str,
     model_input: &str,
 ) {
@@ -846,51 +850,76 @@ pub fn render_provider_wizard(
             }
         }
         ProviderWizardStep::EnterModel => {
-            let popup = centered_rect(60, 25, area);
+            let popup = centered_rect(55, 50, area);
             frame.render_widget(Clear, popup);
 
-            let block = Block::default()
-                .title("🤖 Enter Model Name")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded);
+            // Get API format ID to determine which models to show
+            let (api_format_id, _, _, _) = API_FORMATS
+                .get(selected_api_format)
+                .unwrap_or(&("openai", "OpenAI", "", ""));
 
-            let inner = block.inner(popup);
-            frame.render_widget(block, popup);
+            // Get models for this API format
+            let models = get_models_for_provider(api_format_id);
 
-            // Get provider name for hint
-            let provider_name = PROVIDERS
-                .get(selected_provider)
-                .map(|p| p.1)
-                .unwrap_or("Custom");
+            // Build items: models + "Custom..." option at the end
+            let mut items: Vec<ListItem> = models
+                .iter()
+                .map(|(id, name)| {
+                    ListItem::new(Line::from(vec![
+                        Span::styled(*name, Style::default().fg(Color::White)),
+                        Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+                    ]))
+                })
+                .collect();
 
-            // Instructions
-            let instructions = Paragraph::new(vec![
-                Line::from(format!("Enter the model name for {}.", provider_name)),
-                Line::from("Examples: gpt-4o, llama3.1, mixtral-8x7b"),
-                Line::from(""),
-            ])
-            .style(Style::default().fg(Color::DarkGray));
-            frame.render_widget(instructions, Rect::new(inner.x, inner.y, inner.width, 3));
+            // Add custom input option at the end
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("✏️  ", Style::default().fg(Color::Yellow)),
+                Span::styled("Custom Model: ", Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    if model_input.is_empty() {
+                        "(type to enter)"
+                    } else {
+                        model_input
+                    },
+                    Style::default().fg(if model_input.is_empty() {
+                        Color::DarkGray
+                    } else {
+                        Color::Cyan
+                    }),
+                ),
+            ])));
 
-            // Input field
-            let input_area = Rect::new(inner.x, inner.y + 3, inner.width, 3);
-            let input_block = Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Cyan));
-            let input_inner = input_block.inner(input_area);
-            frame.render_widget(input_block, input_area);
+            let list = List::new(items)
+                .block(
+                    Block::default()
+                        .title(format!("🤖 Select {} Model", api_format_id))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                )
+                .highlight_style(
+                    Style::default()
+                        .add_modifier(Modifier::REVERSED)
+                        .fg(Color::Cyan),
+                )
+                .highlight_symbol("▶ ");
 
-            let input_text = Paragraph::new(format!("{}▋", model_input));
-            frame.render_widget(input_text, input_inner);
+            let mut state = ListState::default();
+            state.select(Some(selected_model));
+            frame.render_stateful_widget(list, popup, &mut state);
 
             // Hints
-            let hints = Paragraph::new("Enter to continue │ Esc to cancel")
+            let hints = if selected_model == models.len() {
+                "Type model name │ Enter to continue │ Esc to cancel"
+            } else {
+                "↑↓ Navigate │ Enter to select │ Esc to cancel"
+            };
+            let hints_widget = Paragraph::new(hints)
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Center);
             let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
             if hint_area.y < area.height {
-                frame.render_widget(hints, hint_area);
+                frame.render_widget(hints_widget, hint_area);
             }
         }
         ProviderWizardStep::Confirm => {
