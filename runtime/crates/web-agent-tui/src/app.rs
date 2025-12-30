@@ -6,8 +6,8 @@ use ratatui::Terminal;
 
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
-    format_tasks_for_display, get_local_tool_definitions, get_system_message,
-    try_execute_local_tool, AiClient, McpClient, Task,
+    ai_client::StreamEvent, format_tasks_for_display, get_local_tool_definitions,
+    get_system_message, try_execute_local_tool, AiClient, McpClient, Task,
 };
 use crate::ui::{render_ui, AuxContent, AuxContentKind, Mode, ServerStatus};
 use std::io::{Read, Write};
@@ -83,7 +83,7 @@ impl<R: Read, W: Write> App<R, W> {
 
         // Create AI client (OpenAI by default)
         // TODO: Make this configurable
-        let ai_client = AiClient::openai("gpt-4o");
+        let ai_client = AiClient::default_claude();
 
         // Create MCP client pointing to sandbox
         // The URL will be proxied by the frontend to the actual sandbox worker
@@ -168,59 +168,79 @@ impl<R: Read, W: Write> App<R, W> {
     }
 
     fn handle_input(&mut self) {
-        // Read one byte from stdin
-        let mut buf = [0u8; 1];
-        if self.stdin.read(&mut buf).is_ok() {
-            let byte = buf[0];
-            match byte {
-                // Ctrl+C - quit (always)
-                0x03 => {
+        // Read all available bytes (for paste support)
+        // Keep reading until we'd block or process a special sequence
+        loop {
+            let mut buf = [0u8; 1];
+            match self.stdin.read(&mut buf) {
+                Ok(0) => break, // No more data
+                Ok(_) => {
+                    let byte = buf[0];
+                    let should_break = self.process_input_byte(byte);
+                    if should_break {
+                        break;
+                    }
+                }
+                Err(_) => break, // Error or would block
+            }
+        }
+    }
+
+    /// Process a single input byte, returns true if we should stop reading
+    fn process_input_byte(&mut self, byte: u8) -> bool {
+        match byte {
+            // Ctrl+C - quit (always)
+            0x03 => {
+                self.should_quit = true;
+                true
+            }
+            // Ctrl+D - exit shell mode or quit
+            0x04 => {
+                if self.mode == Mode::Shell {
+                    self.mode = Mode::Agent;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Exiting shell mode.".to_string(),
+                    });
+                } else {
                     self.should_quit = true;
                 }
-                // Ctrl+D - exit shell mode or quit
-                0x04 => {
-                    if self.mode == Mode::Shell {
-                        self.mode = Mode::Agent;
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: "Exiting shell mode.".to_string(),
-                        });
-                    } else {
-                        self.should_quit = true;
-                    }
-                }
-                // Enter - submit
-                0x0D | 0x0A => {
-                    if !self.input.is_empty() {
-                        self.submit_input();
-                    }
-                }
-                // Backspace
-                0x7F | 0x08 => {
-                    self.input.pop();
-                }
-                // Ctrl+U - clear input line
-                0x15 => {
-                    self.input.clear();
-                }
-                // Tab - potential autocomplete (placeholder)
-                0x09 => {
-                    // Future: autocomplete
-                }
-                // Printable ASCII
-                0x20..=0x7E => {
-                    self.input.push(byte as char);
-                }
-                // Escape sequence start
-                0x1B => {
-                    // Read more bytes for escape sequence
-                    let mut seq = [0u8; 2];
-                    if self.stdin.read(&mut seq).is_ok() {
-                        self.handle_escape_sequence(&seq);
-                    }
-                }
-                _ => {}
+                true
             }
+            // Enter - submit
+            0x0D | 0x0A => {
+                if !self.input.is_empty() {
+                    self.submit_input();
+                }
+                true // Stop reading after enter
+            }
+            // Backspace
+            0x7F | 0x08 => {
+                self.input.pop();
+                false // Continue reading
+            }
+            // Ctrl+U - clear input line
+            0x15 => {
+                self.input.clear();
+                false
+            }
+            // Tab - potential autocomplete (placeholder)
+            0x09 => false,
+            // Printable ASCII
+            0x20..=0x7E => {
+                self.input.push(byte as char);
+                false // Continue reading (for paste)
+            }
+            // Escape sequence start
+            0x1B => {
+                // Read more bytes for escape sequence
+                let mut seq = [0u8; 2];
+                if self.stdin.read(&mut seq).is_ok() {
+                    self.handle_escape_sequence(&seq);
+                }
+                true // Stop after escape sequence
+            }
+            _ => false,
         }
     }
 
@@ -483,24 +503,73 @@ impl<R: Read, W: Write> App<R, W> {
             Role::Tool => None, // Tool messages need tool_call_id
         }));
 
-        // Call AI
-        match self.ai_client.chat(&ai_messages, &tools) {
-            Ok(result) => {
-                // Handle text response
-                if let Some(text) = result.text {
-                    self.messages.push(Message {
-                        role: Role::Assistant,
-                        content: text,
-                    });
+        // Call AI with streaming
+        match self.ai_client.chat_streaming(&ai_messages, &tools) {
+            Ok(mut stream) => {
+                // Add placeholder message for streaming content
+                self.messages.push(Message {
+                    role: Role::Assistant,
+                    content: String::new(),
+                });
+                let assistant_idx = self.messages.len() - 1;
+
+                // Collected tool calls from stream
+                let mut tool_calls = Vec::new();
+
+                // Process stream events
+                loop {
+                    match stream.next_event() {
+                        Ok(Some(StreamEvent::ContentDelta(text))) => {
+                            // Append text to assistant message
+                            self.messages[assistant_idx].content.push_str(&text);
+                            // Re-render to show streaming text
+                            let _ = self.terminal.draw(|frame| {
+                                render_ui(
+                                    frame,
+                                    self.mode,
+                                    self.state,
+                                    &self.input,
+                                    &self.messages,
+                                    &self.aux_content,
+                                    &self.server_status,
+                                );
+                            });
+                        }
+                        Ok(Some(StreamEvent::ToolCallStart { id: _, name })) => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("🔧 Calling tool: {}", name),
+                            });
+                        }
+                        Ok(Some(StreamEvent::ToolCallDelta { .. })) => {
+                            // Arguments are accumulated internally, no UI update needed
+                        }
+                        Ok(Some(StreamEvent::Done(result))) => {
+                            // Remove empty assistant message if no content
+                            if self.messages[assistant_idx].content.is_empty() {
+                                self.messages.remove(assistant_idx);
+                            }
+                            // Collect tool calls for processing
+                            tool_calls = result.tool_calls;
+                            break;
+                        }
+                        Ok(None) => {
+                            // Stream exhausted unexpectedly
+                            break;
+                        }
+                        Err(e) => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Stream error: {}", e),
+                            });
+                            break;
+                        }
+                    }
                 }
 
-                // Handle tool calls
-                for tool_call in result.tool_calls {
+                // Handle tool calls after streaming completes
+                for tool_call in tool_calls {
                     let tool_name = tool_call.function.name.clone();
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("🔧 Calling tool: {}", tool_name),
-                    });
 
                     // Parse arguments
                     let args = match serde_json::from_str::<serde_json::Value>(

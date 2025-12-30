@@ -90,9 +90,17 @@ async function readStdin(len: number): Promise<Uint8Array> {
     }
 
     // Wait for data - this suspends the WASM via JSPI
-    return new Promise(resolve => {
+    const data = await new Promise<Uint8Array>(resolve => {
         stdinWaiters.push(resolve);
     });
+
+    // Split the received data if it's larger than requested
+    if (data.length <= len) {
+        return data;
+    }
+    // Put the rest back in the buffer
+    stdinBuffer.unshift(data.slice(len));
+    return data.slice(0, len);
 }
 
 // Create stdin stream using our CustomInputStream

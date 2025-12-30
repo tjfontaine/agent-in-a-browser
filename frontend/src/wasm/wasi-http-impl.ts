@@ -601,7 +601,16 @@ export const outgoingHandler = {
     handle(request: OutgoingRequest, _options: RequestOptions | null): FutureIncomingResponse {
         // Build the URL
         const scheme = request.scheme();
-        const schemeStr = scheme?.tag === 'https' ? 'https' : (scheme?.tag === 'http' ? 'http' : 'http'); // Default to http for localhost
+        // Handle WASI scheme tags - may be 'HTTPS', 'https', or { tag: 'https' }
+        let schemeStr = 'http';
+        if (scheme) {
+            const tag = (typeof scheme === 'string' ? scheme : scheme.tag) || '';
+            if (tag.toLowerCase() === 'https') {
+                schemeStr = 'https';
+            } else if (tag.toLowerCase() === 'http') {
+                schemeStr = 'http';
+            }
+        }
         const authority = request.authority() || '';
         const path = request.pathWithQuery() || '/';
         const url = `${schemeStr}://${authority}${path}`;

@@ -6,16 +6,75 @@
 use crate::bindings::wasi::http::{
     outgoing_handler,
     types::{
-        Fields, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
+        Fields, IncomingBody, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
         RequestOptions, Scheme,
     },
 };
-use crate::bindings::wasi::io::streams::StreamError;
+use crate::bindings::wasi::io::streams::{InputStream, StreamError};
 
 /// HTTP response from a request
 pub struct HttpResponse {
     pub status: u16,
     pub body: Vec<u8>,
+}
+
+/// Streaming HTTP response
+pub struct HttpStreamingResponse {
+    pub status: u16,
+    pub stream: HttpBodyStream,
+}
+
+/// Stream for reading HTTP response body incrementally
+pub struct HttpBodyStream {
+    stream: InputStream,
+    _body: IncomingBody, // Keep body alive while streaming
+}
+
+impl HttpBodyStream {
+    /// Read next chunk (blocking, returns None when stream ends)
+    pub fn read_chunk(&self, max_size: usize) -> Result<Option<Vec<u8>>, HttpError> {
+        match self.stream.blocking_read(max_size as u64) {
+            Ok(chunk) => {
+                if chunk.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(chunk))
+                }
+            }
+            Err(StreamError::Closed) => Ok(None),
+            Err(e) => Err(HttpError::BodyReadFailed(format!("Read error: {:?}", e))),
+        }
+    }
+
+    /// Read until a complete line (ending with \n) is found
+    /// Returns the line including the newline, or None if stream ends
+    pub fn read_line(&self) -> Result<Option<String>, HttpError> {
+        let mut buffer = Vec::new();
+        loop {
+            match self.stream.blocking_read(1) {
+                Ok(chunk) => {
+                    if chunk.is_empty() {
+                        // No more data, return what we have
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        }
+                        return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                    }
+                    buffer.extend_from_slice(&chunk);
+                    if chunk[0] == b'\n' {
+                        return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                    }
+                }
+                Err(StreamError::Closed) => {
+                    if buffer.is_empty() {
+                        return Ok(None);
+                    }
+                    return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                }
+                Err(e) => return Err(HttpError::BodyReadFailed(format!("Read error: {:?}", e))),
+            }
+        }
+    }
 }
 
 /// Errors that can occur during HTTP operations
@@ -71,25 +130,32 @@ impl HttpClient {
 
         // Create request
         let request = OutgoingRequest::new(fields);
-        request.set_method(&string_to_method(method))
+        request
+            .set_method(&string_to_method(method))
             .map_err(|_| HttpError::RequestFailed("Invalid method".into()))?;
-        request.set_scheme(Some(&scheme))
+        request
+            .set_scheme(Some(&scheme))
             .map_err(|_| HttpError::RequestFailed("Invalid scheme".into()))?;
-        request.set_authority(Some(&authority))
+        request
+            .set_authority(Some(&authority))
             .map_err(|_| HttpError::RequestFailed("Invalid authority".into()))?;
-        request.set_path_with_query(Some(&path))
+        request
+            .set_path_with_query(Some(&path))
             .map_err(|_| HttpError::RequestFailed("Invalid path".into()))?;
 
         // Write body if present
         if let Some(body_bytes) = body {
-            let out_body = request.body()
+            let out_body = request
+                .body()
                 .map_err(|_| HttpError::RequestFailed("Failed to get body".into()))?;
-            let stream = out_body.write()
+            let stream = out_body
+                .write()
                 .map_err(|_| HttpError::RequestFailed("Failed to get body stream".into()))?;
-            
-            stream.blocking_write_and_flush(body_bytes)
+
+            stream
+                .blocking_write_and_flush(body_bytes)
                 .map_err(|e| HttpError::RequestFailed(format!("Write failed: {:?}", e)))?;
-            
+
             drop(stream);
             OutgoingBody::finish(out_body, None)
                 .map_err(|e| HttpError::RequestFailed(format!("Finish failed: {:?}", e)))?;
@@ -104,7 +170,8 @@ impl HttpClient {
         let pollable = future_response.subscribe();
         pollable.block();
 
-        let response_result = future_response.get()
+        let response_result = future_response
+            .get()
             .ok_or_else(|| HttpError::ResponseFailed("No response".into()))?
             .map_err(|_| HttpError::ResponseFailed("Response error".into()))?
             .map_err(|e| HttpError::ResponseFailed(format!("HTTP error: {:?}", e)))?;
@@ -113,10 +180,7 @@ impl HttpClient {
         let status = response_result.status();
         let body = read_response_body(response_result)?;
 
-        Ok(HttpResponse {
-            status,
-            body,
-        })
+        Ok(HttpResponse { status, body })
     }
 
     /// Make a POST request with JSON body
@@ -137,6 +201,114 @@ impl HttpClient {
         }
 
         Self::request("POST", url, &headers, Some(json_body.as_bytes()))
+    }
+
+    /// Make a streaming HTTP request - returns response with body stream
+    ///
+    /// Use this for Server-Sent Events (SSE) or chunked responses where
+    /// you want to process the body incrementally.
+    pub fn request_streaming(
+        method: &str,
+        url: &str,
+        headers: &[(&str, &str)],
+        body: Option<&[u8]>,
+    ) -> Result<HttpStreamingResponse, HttpError> {
+        // Parse URL
+        let (scheme, authority, path) = parse_url(url)?;
+
+        // Create headers
+        let fields = Fields::new();
+        for (name, value) in headers {
+            fields
+                .append(&name.to_string(), value.as_bytes())
+                .map_err(|e| HttpError::RequestFailed(format!("Header append failed: {:?}", e)))?;
+        }
+
+        // Create request
+        let request = OutgoingRequest::new(fields);
+        request
+            .set_method(&string_to_method(method))
+            .map_err(|_| HttpError::RequestFailed("Invalid method".into()))?;
+        request
+            .set_scheme(Some(&scheme))
+            .map_err(|_| HttpError::RequestFailed("Invalid scheme".into()))?;
+        request
+            .set_authority(Some(&authority))
+            .map_err(|_| HttpError::RequestFailed("Invalid authority".into()))?;
+        request
+            .set_path_with_query(Some(&path))
+            .map_err(|_| HttpError::RequestFailed("Invalid path".into()))?;
+
+        // Write body if present
+        if let Some(body_bytes) = body {
+            let out_body = request
+                .body()
+                .map_err(|_| HttpError::RequestFailed("Failed to get body".into()))?;
+            let stream = out_body
+                .write()
+                .map_err(|_| HttpError::RequestFailed("Failed to get body stream".into()))?;
+
+            stream
+                .blocking_write_and_flush(body_bytes)
+                .map_err(|e| HttpError::RequestFailed(format!("Write failed: {:?}", e)))?;
+
+            drop(stream);
+            OutgoingBody::finish(out_body, None)
+                .map_err(|e| HttpError::RequestFailed(format!("Finish failed: {:?}", e)))?;
+        }
+
+        // Send request
+        let options = RequestOptions::new();
+        let future_response = outgoing_handler::handle(request, Some(options))
+            .map_err(|e| HttpError::RequestFailed(format!("Handle failed: {:?}", e)))?;
+
+        // Wait for response
+        let pollable = future_response.subscribe();
+        pollable.block();
+
+        let response_result = future_response
+            .get()
+            .ok_or_else(|| HttpError::ResponseFailed("No response".into()))?
+            .map_err(|_| HttpError::ResponseFailed("Response error".into()))?
+            .map_err(|e| HttpError::ResponseFailed(format!("HTTP error: {:?}", e)))?;
+
+        // Get status and body stream (don't read full body)
+        let status = response_result.status();
+        let incoming_body = response_result
+            .consume()
+            .map_err(|_| HttpError::BodyReadFailed("Failed to consume body".into()))?;
+
+        let stream = incoming_body
+            .stream()
+            .map_err(|_| HttpError::BodyReadFailed("Failed to get stream".into()))?;
+
+        Ok(HttpStreamingResponse {
+            status,
+            stream: HttpBodyStream {
+                stream,
+                _body: incoming_body,
+            },
+        })
+    }
+
+    /// Make a streaming POST request with JSON body (for SSE/streaming APIs)
+    pub fn post_json_streaming(
+        url: &str,
+        api_key: Option<&str>,
+        json_body: &str,
+    ) -> Result<HttpStreamingResponse, HttpError> {
+        let mut headers = vec![
+            ("Content-Type", "application/json"),
+            ("Accept", "text/event-stream"), // Request SSE format
+        ];
+
+        let auth_header;
+        if let Some(key) = api_key {
+            auth_header = format!("Bearer {}", key);
+            headers.push(("Authorization", &auth_header));
+        }
+
+        Self::request_streaming("POST", url, &headers, Some(json_body.as_bytes()))
     }
 }
 
@@ -181,10 +353,12 @@ fn string_to_method(method: &str) -> Method {
 
 /// Read the full body from an incoming response
 fn read_response_body(response: IncomingResponse) -> Result<Vec<u8>, HttpError> {
-    let body = response.consume()
+    let body = response
+        .consume()
         .map_err(|_| HttpError::BodyReadFailed("Failed to consume body".into()))?;
-    
-    let stream = body.stream()
+
+    let stream = body
+        .stream()
         .map_err(|_| HttpError::BodyReadFailed("Failed to get stream".into()))?;
 
     let mut result = Vec::new();
