@@ -30,6 +30,10 @@ pub struct ProviderConfig {
     /// API key (stored encrypted in real impl, plaintext for now)
     #[serde(default)]
     pub api_key: Option<String>,
+
+    /// Custom base URL for OpenAI-compatible providers (Ollama, Groq, etc.)
+    #[serde(default)]
+    pub base_url: Option<String>,
 }
 
 impl Default for ProviderConfig {
@@ -37,6 +41,7 @@ impl Default for ProviderConfig {
         Self {
             default: default_provider(),
             api_key: None,
+            base_url: None,
         }
     }
 }

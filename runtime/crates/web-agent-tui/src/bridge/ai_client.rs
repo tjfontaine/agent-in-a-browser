@@ -521,6 +521,16 @@ impl AiClient {
         self.model = model.to_string();
     }
 
+    /// Set the base URL (for custom OpenAI-compatible endpoints)
+    pub fn set_base_url(&mut self, base_url: &str) {
+        self.base_url = base_url.to_string();
+    }
+
+    /// Get the current base URL
+    pub fn get_base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Send a chat completion request
     pub fn chat(
         &self,

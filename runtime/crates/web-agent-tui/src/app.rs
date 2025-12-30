@@ -1530,8 +1530,78 @@ impl<R: Read, W: Write> App<R, W> {
                 });
             }
             "/provider" => {
-                // Open provider selector overlay
-                self.overlay = Some(Overlay::ProviderSelector { selected: 0 });
+                // Handle /provider subcommands or open overlay
+                if let Some(subcmd) = parts.get(1) {
+                    match *subcmd {
+                        "url" => {
+                            // /provider url [<url>] - get or set base URL
+                            if let Some(url) = parts.get(2) {
+                                // Set base URL
+                                self.ai_client.set_base_url(url);
+                                self.config.provider.base_url = Some(url.to_string());
+                                let _ = self.config.save();
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!("Base URL set to: {}", url),
+                                });
+                            } else {
+                                // Show current base URL
+                                let current_url = self.ai_client.get_base_url();
+                                self.messages.push(Message {
+                                    role: Role::System,
+                                    content: format!(
+                                        "Current base URL: {}\nUsage: /provider url <https://api.example.com/v1>", 
+                                        current_url
+                                    ),
+                                });
+                            }
+                        }
+                        "reset" => {
+                            // Reset to default URL for current provider
+                            let default_url = match self.config.provider.default.as_str() {
+                                "anthropic" => "https://api.anthropic.com/v1",
+                                "openai" => "https://api.openai.com/v1",
+                                _ => "https://api.openai.com/v1",
+                            };
+                            self.ai_client.set_base_url(default_url);
+                            self.config.provider.base_url = None;
+                            let _ = self.config.save();
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Base URL reset to default: {}", default_url),
+                            });
+                        }
+                        "status" => {
+                            // Show current provider configuration
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!(
+                                    "Provider: {}\nModel: {}\nBase URL: {}\nAPI Key: {}",
+                                    self.config.provider.default,
+                                    self.ai_client.model_name(),
+                                    self.ai_client.get_base_url(),
+                                    if self.ai_client.has_api_key() {
+                                        "✓ set"
+                                    } else {
+                                        "✗ not set"
+                                    }
+                                ),
+                            });
+                        }
+                        _ => {
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!(
+                                    "Unknown subcommand: {}. Available: url, reset, status\nOr use /provider with no args for the selector.",
+                                    subcmd
+                                ),
+                            });
+                        }
+                    }
+                } else {
+                    // No subcommand - open provider selector overlay
+                    self.overlay = Some(Overlay::ProviderSelector { selected: 0 });
+                }
             }
             "/plan" => {
                 // Enter plan mode
