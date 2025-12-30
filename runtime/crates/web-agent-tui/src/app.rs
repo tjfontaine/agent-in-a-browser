@@ -232,6 +232,20 @@ impl<R: Read, W: Write> App<R, W> {
 
     /// Process a slice of input bytes, returns true if we should stop reading
     fn process_input_bytes(&mut self, bytes: &[u8]) -> bool {
+        // Debug: log incoming bytes
+        if !bytes.is_empty() {
+            let debug_str: String = bytes
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+                .join(" ");
+            eprintln!(
+                "[DEBUG] Input bytes: {} [{}]",
+                debug_str,
+                String::from_utf8_lossy(bytes)
+            );
+        }
+
         let mut i = 0;
         while i < bytes.len() {
             let byte = bytes[i];
@@ -441,15 +455,9 @@ impl<R: Read, W: Write> App<R, W> {
                 self.cursor_pos += 1;
                 false // Continue reading (for paste)
             }
-            // Escape sequence start
-            0x1B => {
-                // Read more bytes for escape sequence
-                let mut seq = [0u8; 2];
-                if self.stdin.read(&mut seq).is_ok() {
-                    self.handle_escape_sequence(&seq);
-                }
-                true // Stop after escape sequence
-            }
+            // Escape sequence start - should be handled by process_input_bytes
+            // but if we get here, just ignore it
+            0x1B => false,
             _ => false,
         }
     }
@@ -472,38 +480,8 @@ impl<R: Read, W: Write> App<R, W> {
 
         let second = first_bytes[1];
 
-        // Check for extended sequences (like resize: ESC [ 8 ; rows ; cols t)
-        if second == b'8' {
-            // This might be a resize sequence - read until 't'
-            let mut params = vec![b'8'];
-            loop {
-                let mut buf = [0u8; 1];
-                if self.stdin.read(&mut buf).is_err() {
-                    break;
-                }
-                if buf[0] == b't' {
-                    // Parse resize: 8;rows;cols
-                    let param_str = String::from_utf8_lossy(&params);
-                    let parts: Vec<&str> = param_str.split(';').collect();
-                    if parts.len() == 3 {
-                        if let (Ok(_), Ok(rows), Ok(cols)) = (
-                            parts[0].parse::<u16>(),
-                            parts[1].parse::<u16>(),
-                            parts[2].parse::<u16>(),
-                        ) {
-                            self.handle_resize(cols, rows);
-                        }
-                    }
-                    return;
-                }
-                params.push(buf[0]);
-                if params.len() > 20 {
-                    // Too long, abort
-                    break;
-                }
-            }
-            return;
-        }
+        // Note: Resize sequences (ESC [ 8 ; rows ; cols t) are now handled
+        // in process_input_bytes before reaching here
 
         match second {
             // Up arrow - history previous

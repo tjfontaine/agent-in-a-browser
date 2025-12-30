@@ -78,7 +78,7 @@ fn run_interactive_shell(
     env: ExecEnv,
     stdin: InputStream,
     stdout: OutputStream,
-    stderr: OutputStream,
+    _stderr: OutputStream,
 ) -> i32 {
     // Create shell environment from exec-env
     let mut shell_env = ShellEnv::new();
@@ -108,102 +108,6 @@ fn run_interactive_shell(
                     return 0;
                 }
 
-                // Check if this is a TUI command that needs direct stdin/stdout
-                // Extract command name (first word)
-                let cmd_name = line.split_whitespace().next().unwrap_or("");
-
-                // List of TUI commands that need real-time I/O
-                const TUI_COMMANDS: &[&str] = &["counter", "ansi-demo", "tui-demo", "ratatui-demo"];
-
-                if TUI_COMMANDS.contains(&cmd_name) {
-                    // TUI command - spawn it directly with our stdin/stdout
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        use crate::bindings::mcp::module_loader::loader;
-
-                        if let Some(module_name) = loader::get_lazy_module(cmd_name) {
-                            // Get arguments after command name
-                            let args: Vec<String> = line
-                                .split_whitespace()
-                                .skip(1)
-                                .map(|s| s.to_string())
-                                .collect();
-
-                            // Build exec environment
-                            let exec_env = loader::ExecEnv {
-                                cwd: shell_env.cwd.to_string_lossy().to_string(),
-                                vars: shell_env
-                                    .env_vars
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), v.clone()))
-                                    .collect(),
-                            };
-
-                            // Use spawn_interactive for TUI apps
-                            let term_size = loader::TerminalSize { cols: 80, rows: 24 };
-                            let process = loader::spawn_interactive(
-                                &module_name,
-                                cmd_name,
-                                &args,
-                                &exec_env,
-                                term_size,
-                            );
-
-                            // Wait for module to load
-                            let ready_pollable = process.get_ready_pollable();
-                            ready_pollable.block();
-
-                            // Stream I/O until process exits
-                            loop {
-                                // Check for input from stdin (non-blocking peek)
-                                // We can't easily do non-blocking reads with WASI streams,
-                                // but the stdin is already in raw mode from the frontend.
-                                // The key is forwarding any data we get.
-
-                                // Read stdin and forward to process
-                                // Use blocking read since we're waiting for user input
-                                let stdin_data = blocking_read(&stdin, 1);
-                                if !stdin_data.is_empty() {
-                                    process.write_stdin(&stdin_data);
-                                }
-
-                                // Read stdout and write to terminal
-                                let stdout_data = process.read_stdout(4096);
-                                if !stdout_data.is_empty() {
-                                    write_bytes(&stdout, &stdout_data);
-                                }
-
-                                // Read stderr and write to terminal
-                                let stderr_data = process.read_stderr(4096);
-                                if !stderr_data.is_empty() {
-                                    write_bytes(&stderr, &stderr_data);
-                                }
-
-                                // Check if process exited
-                                if let Some(_exit_code) = process.try_wait() {
-                                    // Drain remaining output
-                                    loop {
-                                        let chunk = process.read_stdout(4096);
-                                        if chunk.is_empty() {
-                                            break;
-                                        }
-                                        write_bytes(&stdout, &chunk);
-                                    }
-                                    loop {
-                                        let chunk = process.read_stderr(4096);
-                                        if chunk.is_empty() {
-                                            break;
-                                        }
-                                        write_bytes(&stderr, &chunk);
-                                    }
-                                    break;
-                                }
-                            }
-                            continue; // Next prompt
-                        }
-                    }
-                }
-
                 // Execute using the full shell executor!
                 let result = futures_lite::future::block_on(run_pipeline(line, &mut shell_env));
 
@@ -215,9 +119,9 @@ fn run_interactive_shell(
                     }
                 }
                 if !result.stderr.is_empty() {
-                    write_str(&stderr, &result.stderr);
+                    write_str(&stdout, &result.stderr);
                     if !result.stderr.ends_with('\n') {
-                        write_str(&stderr, "\n");
+                        write_str(&stdout, "\n");
                     }
                 }
             }
@@ -234,9 +138,10 @@ fn run_interactive_shell(
     }
 }
 
-/// Read a line from stdin with echo and basic editing
+/// Read a line from stdin with echo and readline-style editing
 fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
     let mut buffer = String::new();
+    let mut cursor_pos: usize = 0;
 
     loop {
         match read_byte(stdin) {
@@ -255,12 +160,87 @@ fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
                     return LineResult::Eof;
                 }
             }
+            Some(0x01) => {
+                // Ctrl+A - move to beginning
+                if cursor_pos > 0 {
+                    let move_left = format!("\x1b[{}D", cursor_pos);
+                    write_bytes(stdout, move_left.as_bytes());
+                    cursor_pos = 0;
+                }
+            }
+            Some(0x05) => {
+                // Ctrl+E - move to end
+                if cursor_pos < buffer.len() {
+                    let move_right = format!("\x1b[{}C", buffer.len() - cursor_pos);
+                    write_bytes(stdout, move_right.as_bytes());
+                    cursor_pos = buffer.len();
+                }
+            }
+            Some(0x0B) => {
+                // Ctrl+K - delete from cursor to end
+                if cursor_pos < buffer.len() {
+                    buffer.truncate(cursor_pos);
+                    write_bytes(stdout, b"\x1b[K");
+                }
+            }
+            Some(0x15) => {
+                // Ctrl+U - clear entire line
+                if !buffer.is_empty() {
+                    if cursor_pos > 0 {
+                        let move_left = format!("\x1b[{}D", cursor_pos);
+                        write_bytes(stdout, move_left.as_bytes());
+                    }
+                    write_bytes(stdout, b"\x1b[K");
+                    buffer.clear();
+                    cursor_pos = 0;
+                }
+            }
+            Some(0x17) => {
+                // Ctrl+W - delete word backwards
+                if cursor_pos > 0 {
+                    let original_pos = cursor_pos;
+                    // Skip trailing spaces
+                    while cursor_pos > 0 && buffer.chars().nth(cursor_pos - 1) == Some(' ') {
+                        cursor_pos -= 1;
+                    }
+                    // Delete until space or start
+                    while cursor_pos > 0 && buffer.chars().nth(cursor_pos - 1) != Some(' ') {
+                        cursor_pos -= 1;
+                    }
+                    let deleted_count = original_pos - cursor_pos;
+                    if deleted_count > 0 {
+                        buffer.drain(cursor_pos..original_pos);
+                        let move_left = format!("\x1b[{}D", deleted_count);
+                        write_bytes(stdout, move_left.as_bytes());
+                        // Write remaining chars after cursor (if any)
+                        let remaining = &buffer[cursor_pos..];
+                        if !remaining.is_empty() {
+                            write_bytes(stdout, remaining.as_bytes());
+                        }
+                        write_bytes(stdout, b"\x1b[K");
+                        let chars_after = buffer.len().saturating_sub(cursor_pos);
+                        if chars_after > 0 {
+                            let move_back = format!("\x1b[{}D", chars_after);
+                            write_bytes(stdout, move_back.as_bytes());
+                        }
+                    }
+                }
+            }
             Some(0x7F) | Some(0x08) => {
                 // Backspace (DEL or BS)
-                if !buffer.is_empty() {
-                    buffer.pop();
-                    // Erase character on screen: backspace, space, backspace
-                    write_bytes(stdout, b"\x08 \x08");
+                if cursor_pos > 0 {
+                    cursor_pos -= 1;
+                    buffer.remove(cursor_pos);
+                    write_bytes(stdout, b"\x08");
+                    write_bytes(stdout, buffer[cursor_pos..].as_bytes());
+                    write_bytes(stdout, b" \x1b[K");
+                    let chars_after = buffer.len() - cursor_pos;
+                    if chars_after > 0 {
+                        let move_back = format!("\x1b[{}D", chars_after + 1);
+                        write_bytes(stdout, move_back.as_bytes());
+                    } else {
+                        write_bytes(stdout, b"\x08");
+                    }
                 }
             }
             Some(0x1B) => {
@@ -269,24 +249,70 @@ fn read_line(stdin: &InputStream, stdout: &OutputStream) -> LineResult {
                     match read_byte(stdin) {
                         Some(b'A') => {} // Up arrow - TODO: history
                         Some(b'B') => {} // Down arrow - TODO: history
-                        Some(b'C') => {} // Right arrow - TODO: cursor
-                        Some(b'D') => {} // Left arrow - TODO: cursor
-                        Some(b'H') => {} // Home - TODO: cursor
-                        Some(b'F') => {} // End - TODO: cursor
+                        Some(b'C') => {
+                            // Right arrow - move cursor right
+                            if cursor_pos < buffer.len() {
+                                write_bytes(stdout, b"\x1b[C");
+                                cursor_pos += 1;
+                            }
+                        }
+                        Some(b'D') => {
+                            // Left arrow - move cursor left
+                            if cursor_pos > 0 {
+                                write_bytes(stdout, b"\x1b[D");
+                                cursor_pos -= 1;
+                            }
+                        }
+                        Some(b'H') => {
+                            // Home - move to beginning
+                            if cursor_pos > 0 {
+                                let move_left = format!("\x1b[{}D", cursor_pos);
+                                write_bytes(stdout, move_left.as_bytes());
+                                cursor_pos = 0;
+                            }
+                        }
+                        Some(b'F') => {
+                            // End - move to end
+                            if cursor_pos < buffer.len() {
+                                let move_right = format!("\x1b[{}C", buffer.len() - cursor_pos);
+                                write_bytes(stdout, move_right.as_bytes());
+                                cursor_pos = buffer.len();
+                            }
+                        }
                         Some(b'3') => {
                             // Delete key - 3~
                             let _ = read_byte(stdin); // consume ~
-                                                      // TODO: handle delete at cursor
+                            if cursor_pos < buffer.len() {
+                                buffer.remove(cursor_pos);
+                                write_bytes(stdout, buffer[cursor_pos..].as_bytes());
+                                write_bytes(stdout, b" \x1b[K");
+                                let chars_after = buffer.len() - cursor_pos;
+                                if chars_after > 0 {
+                                    let move_back = format!("\x1b[{}D", chars_after + 1);
+                                    write_bytes(stdout, move_back.as_bytes());
+                                } else {
+                                    write_bytes(stdout, b"\x08");
+                                }
+                            }
                         }
                         _ => {}
                     }
                 }
             }
             Some(c) if c >= 0x20 && c < 0x7F => {
-                // Printable ASCII
-                buffer.push(c as char);
-                // Echo the character
-                write_bytes(stdout, &[c]);
+                // Printable ASCII - insert at cursor
+                buffer.insert(cursor_pos, c as char);
+                cursor_pos += 1;
+                if cursor_pos < buffer.len() {
+                    write_bytes(stdout, buffer[cursor_pos - 1..].as_bytes());
+                    let chars_after = buffer.len() - cursor_pos;
+                    if chars_after > 0 {
+                        let move_back = format!("\x1b[{}D", chars_after);
+                        write_bytes(stdout, move_back.as_bytes());
+                    }
+                } else {
+                    write_bytes(stdout, &[c]);
+                }
             }
             Some(_) | None => {
                 // Ignore other characters
@@ -300,14 +326,6 @@ fn read_byte(stdin: &InputStream) -> Option<u8> {
     match stdin.blocking_read(1) {
         Ok(bytes) if !bytes.is_empty() => Some(bytes[0]),
         _ => None,
-    }
-}
-
-/// Read up to n bytes from stdin (blocking)
-fn blocking_read(stdin: &InputStream, n: u64) -> Vec<u8> {
-    match stdin.blocking_read(n) {
-        Ok(bytes) => bytes,
-        Err(_) => Vec::new(),
     }
 }
 
