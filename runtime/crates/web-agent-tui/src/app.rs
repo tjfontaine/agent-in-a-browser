@@ -258,17 +258,29 @@ impl<R: Read, W: Write> App<R, W> {
             }
 
             // Normal input handling
+            // Handle escape sequences specially - parse from buffer, not stdin
+            if byte == 0x1B && i + 2 < bytes.len() && bytes[i + 1] == b'[' {
+                // Parse escape sequence from buffer
+                let cmd = bytes[i + 2];
+                self.handle_escape_sequence(&[b'[', cmd]);
+                i += 3;
+                continue;
+            } else if byte == 0x1B {
+                // Bare escape - handle via process_single_byte
+                let should_break = self.process_single_byte(byte, &bytes[i..]);
+                if should_break {
+                    return true;
+                }
+                i += 1;
+                continue;
+            }
+
+            // Regular character
             let should_break = self.process_single_byte(byte, &bytes[i..]);
             if should_break {
                 return true;
             }
-
-            // Check if we consumed an escape sequence
-            if byte == 0x1B && i + 2 < bytes.len() && bytes[i + 1] == b'[' {
-                i += 3; // Skip the escape sequence bytes
-            } else {
-                i += 1;
-            }
+            i += 1;
         }
         false
     }
