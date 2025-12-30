@@ -115,6 +115,10 @@ impl<R: Read, W: Write> App<R, W> {
             ai_client.set_api_key(api_key);
         }
 
+        // Load agent history once
+        let loaded_history = config::load_agent_history();
+        let loaded_history_len = loaded_history.len();
+
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
@@ -124,8 +128,8 @@ impl<R: Read, W: Write> App<R, W> {
                 role: Role::System,
                 content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
             }],
-            history: config::load_agent_history(),
-            history_index: config::load_agent_history().len(),
+            history: loaded_history,
+            history_index: loaded_history_len,
             terminal,
             stdin,
             should_quit: false,

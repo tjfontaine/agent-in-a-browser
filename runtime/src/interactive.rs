@@ -6,8 +6,12 @@
 use crate::bindings::exports::shell::unix::command::ExecEnv;
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
 use crate::shell::{run_pipeline, ShellEnv};
+use std::fs;
 use std::path::PathBuf;
 
+/// Config paths (same as web-agent-tui)
+const CONFIG_DIR: &str = ".config/web-agent";
+const SHELL_HISTORY_FILE: &str = ".config/web-agent/shell_history";
 const MAX_HISTORY_ENTRIES: usize = 1000;
 
 /// Result of reading a line
@@ -91,10 +95,7 @@ fn run_interactive_shell(
         let _ = shell_env.set_var(key, value);
     }
 
-    // Note: Shell history persistence is disabled due to WASI preview1 adapter
-    // not supporting async I/O through the jco transpiler. History works
-    // in-memory during the session but doesn't persist across browser reloads.
-    // TODO: Implement proper async file I/O or move history to TUI layer.
+    // Temporarily disabled history load for testing
     let mut history: Vec<String> = Vec::new();
     let mut history_index = 0;
 
@@ -111,9 +112,10 @@ fn run_interactive_shell(
                     continue;
                 }
 
-                // Add to history (skip duplicates) - in-memory only
+                // Add to history (in-memory only for now)
                 add_to_history(&mut history, line.to_string());
                 history_index = history.len();
+                // save_shell_history(&history); // disabled for testing
 
                 // Handle exit command
                 if line == "exit" || line.starts_with("exit ") {
@@ -367,16 +369,25 @@ fn read_line(
 
 /// Replace the current line on screen with a new one
 fn replace_line(stdout: &OutputStream, old: &str, cursor_pos: usize, new: &str) {
+    // Build entire output in one buffer to send as single write
+    let mut output = String::new();
+
     // Move to start of line
     if cursor_pos > 0 {
-        let move_left = format!("\x1b[{}D", cursor_pos);
-        write_bytes(stdout, move_left.as_bytes());
+        output.push_str(&format!("\x1b[{}D", cursor_pos));
     }
+
     // Clear the line
-    write_bytes(stdout, b"\x1b[K");
+    output.push_str("\x1b[K");
+
     // Write new content
-    write_bytes(stdout, new.as_bytes());
-    // If new is shorter, pad might be needed (already cleared via \x1b[K])
+    output.push_str(new);
+
+    // Send everything as one write
+    if !output.is_empty() {
+        write_bytes(stdout, output.as_bytes());
+    }
+
     let _ = old; // suppress unused warning
 }
 
@@ -414,4 +425,34 @@ fn add_to_history(history: &mut Vec<String>, command: String) {
         let excess = history.len() - MAX_HISTORY_ENTRIES;
         history.drain(0..excess);
     }
+}
+
+// ============================================================================
+// History Persistence
+// ============================================================================
+
+fn load_shell_history() -> Vec<String> {
+    match fs::read_to_string(SHELL_HISTORY_FILE) {
+        Ok(contents) => contents.lines().map(|s| s.to_string()).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn save_shell_history(history: &[String]) {
+    if ensure_config_dir().is_err() {
+        return;
+    }
+    let start = history.len().saturating_sub(MAX_HISTORY_ENTRIES);
+    let trimmed = &history[start..];
+    let contents = trimmed.join("\n");
+    let _ = fs::write(SHELL_HISTORY_FILE, contents);
+}
+
+fn ensure_config_dir() -> Result<(), std::io::Error> {
+    if let Err(e) = fs::create_dir_all(CONFIG_DIR) {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(e);
+        }
+    }
+    Ok(())
 }

@@ -344,4 +344,45 @@ export function closeHandlesUnderPath(pathPrefix: string): void {
     }
 }
 
+/**
+ * Write file content asynchronously using OPFS APIs.
+ * Returns a Promise that JSPI will suspend on.
+ * This avoids Atomics.wait() which doesn't work in all contexts.
+ */
+export async function asyncWriteFile(path: string, data: Uint8Array): Promise<void> {
+    if (!opfsRoot) {
+        throw new Error('OPFS not initialized');
+    }
 
+    const parts = path.split('/').filter(p => p && p !== '.');
+    if (parts.length === 0) {
+        throw new Error('Invalid path');
+    }
+
+    const fileName = parts.pop()!;
+
+    // Create parent directories if needed
+    let dir = opfsRoot;
+    for (const part of parts) {
+        try {
+            dir = await dir.getDirectoryHandle(part, { create: true });
+        } catch (e) {
+            console.error('[opfs-fs] Failed to create directory:', part, e);
+            throw e;
+        }
+    }
+
+    // Write the file
+    try {
+        const fileHandle = await dir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        // Create a copy in a regular ArrayBuffer (not SharedArrayBuffer) for Blob compatibility
+        const copy = new Uint8Array(data.length);
+        copy.set(data);
+        await writable.write(copy);
+        await writable.close();
+    } catch (e) {
+        console.error('[opfs-fs] Failed to write file:', path, e);
+        throw e;
+    }
+}

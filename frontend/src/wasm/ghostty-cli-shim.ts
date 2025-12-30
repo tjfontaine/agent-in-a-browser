@@ -149,8 +149,20 @@ const textDecoder = new TextDecoder();
 // Create stdout stream using our CustomOutputStream
 const stdoutStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
-        if (currentTerminal) {
-            currentTerminal.write(textDecoder.decode(contents));
+        if (currentTerminal && contents.length > 0) {
+            try {
+                const text = textDecoder.decode(contents);
+                // Skip empty writes - ghostty-web crashes on empty strings
+                if (text.length > 0) {
+                    currentTerminal.write(text);
+                }
+            } catch (e) {
+                // Log what we tried to write when it failed
+                const text = textDecoder.decode(contents);
+                console.error('[ghostty-shim] Terminal write error:', e);
+                console.error('[ghostty-shim] Failed write content:', JSON.stringify(text));
+                console.error('[ghostty-shim] Terminal size:', currentTerminal.cols, 'x', currentTerminal.rows);
+            }
         }
         return BigInt(contents.length);
     },
@@ -161,8 +173,16 @@ const stdoutStream = new CustomOutputStream({
 // Create stderr stream (also goes to terminal)
 const stderrStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
-        if (currentTerminal) {
-            currentTerminal.write(textDecoder.decode(contents));
+        if (currentTerminal && contents.length > 0) {
+            try {
+                const text = textDecoder.decode(contents);
+                // Skip empty writes - ghostty-web crashes on empty strings
+                if (text.length > 0) {
+                    currentTerminal.write(text);
+                }
+            } catch (e) {
+                console.error('[ghostty-shim] Terminal stderr write error:', e);
+            }
         }
         return BigInt(contents.length);
     },

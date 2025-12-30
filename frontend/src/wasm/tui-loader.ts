@@ -118,6 +118,13 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     const fitAddon = new (await import('ghostty-web')).FitAddon();
     terminal.loadAddon(fitAddon);
     fitAddon.fit();
+
+    // Explicitly resize to ensure ghostty's internal buffer is allocated
+    terminal.resize(terminal.cols, terminal.rows);
+
+    // Small delay to let ghostty finish internal buffer setup
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     fitAddon.observeResize();
     console.log('[TUI Loader] Terminal fitted:', terminal.cols, 'x', terminal.rows);
 
@@ -177,6 +184,10 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Wire terminal to our CLI shims
     setTerminal(terminal);
 
+    // Set initial size BEFORE starting TUI so ghostty buffer is properly sized
+    console.log('[TUI Loader] Setting initial size before run:', terminal.cols, 'x', terminal.rows);
+    setTerminalSize(terminal.cols, terminal.rows);
+
     // Listen for resize events
     terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
         console.log('[TUI Loader] Terminal resized:', cols, 'x', rows);
@@ -195,13 +206,6 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     }).catch(err => {
         console.error('TUI error:', err);
     });
-
-    // Send initial size AFTER run() starts so the TUI can process it
-    // The TUI starts at 80x24 default and needs a resize event to get actual size
-    setTimeout(() => {
-        console.log('[TUI Loader] Sending initial size:', terminal.cols, 'x', terminal.rows);
-        setTerminalSize(terminal.cols, terminal.rows);
-    }, 100);
 
     return { terminal, stop };
 }

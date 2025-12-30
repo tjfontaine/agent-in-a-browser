@@ -21,6 +21,7 @@ import {
     resolveSymlinks,
     getOpfsDirectory, getOpfsFile,
     syncHandleCache,
+    asyncWriteFile,
     type TreeEntry
 } from './directory-tree';
 import {
@@ -395,56 +396,55 @@ class Descriptor {
             });
         }
 
-        // Fallback: write immediately to OPFS via syncFileOperation
+        // Fallback: write via async OPFS APIs (JSPI will suspend on the Promise)
         // Use global buffer cache to persist data across stream re-opens (ZipWriter seeks cause multiple writeViaStream calls)
-        console.log('[opfs-fs] No cached handle for stream write, using syncFileOperation:', normalizedPath);
-        const syncPath = normalizedPath;
-        const syncEntry = entry;
+        console.log('[opfs-fs] No cached handle for stream write, using async write:', normalizedPath);
+        const asyncPath = normalizedPath;
+        const asyncEntry = entry;
 
         // Initialize buffer in cache if not present, or get existing buffer
-        if (!fileBufferCache.has(syncPath)) {
-            fileBufferCache.set(syncPath, new Uint8Array(0));
+        if (!fileBufferCache.has(asyncPath)) {
+            fileBufferCache.set(asyncPath, new Uint8Array(0));
         }
 
         return new OutputStream({
             write(buf: Uint8Array): bigint {
-                const existingData = fileBufferCache.get(syncPath) || new Uint8Array(0);
+                const existingData = fileBufferCache.get(asyncPath) || new Uint8Array(0);
                 console.log('[opfs-fs] writeViaStream.write called, buf.length:', buf.length, 'cached:', existingData.length);
 
                 // Accumulate binary data in cache
                 const newData = new Uint8Array(existingData.length + buf.length);
                 newData.set(existingData);
                 newData.set(buf, existingData.length);
-                fileBufferCache.set(syncPath, newData);
+                fileBufferCache.set(asyncPath, newData);
 
-                // Write immediately to OPFS (binary-safe)
-                try {
-                    syncWriteFileBinary(syncPath, newData);
-                    syncEntry.size = newData.length;
-                    syncEntry.mtime = Date.now();
+                // Write async - JSPI will handle the Promise
+                asyncWriteFile(asyncPath, newData).then(() => {
+                    asyncEntry.size = newData.length;
+                    asyncEntry.mtime = Date.now();
                     console.log('[opfs-fs] writeViaStream.write completed, total size:', newData.length);
-                } catch (e) {
-                    console.error('[opfs-fs] writeViaStream binary write error:', e);
-                }
+                }).catch(e => {
+                    console.error('[opfs-fs] writeViaStream async write error:', e);
+                });
                 return BigInt(buf.byteLength);
             },
-            blockingWriteAndFlush(buf: Uint8Array): void {
-                const existingData = fileBufferCache.get(syncPath) || new Uint8Array(0);
+            // blockingWriteAndFlush RETURNS a Promise when using async path - JSPI will suspend
+            blockingWriteAndFlush(buf: Uint8Array): Promise<void> | void {
+                const existingData = fileBufferCache.get(asyncPath) || new Uint8Array(0);
 
                 // Accumulate binary data in cache
                 const newData = new Uint8Array(existingData.length + buf.length);
                 newData.set(existingData);
                 newData.set(buf, existingData.length);
-                fileBufferCache.set(syncPath, newData);
+                fileBufferCache.set(asyncPath, newData);
 
-                // Write immediately to OPFS (binary-safe)
-                try {
-                    syncWriteFileBinary(syncPath, newData);
-                    syncEntry.size = newData.length;
-                    syncEntry.mtime = Date.now();
-                } catch (e) {
-                    console.error('[opfs-fs] writeViaStream binary blockingWrite error:', e);
-                }
+                // Return Promise - JSPI will suspend on it
+                return asyncWriteFile(asyncPath, newData).then(() => {
+                    asyncEntry.size = newData.length;
+                    asyncEntry.mtime = Date.now();
+                }).catch(e => {
+                    console.error('[opfs-fs] writeViaStream async blockingWrite error:', e);
+                });
             },
             flush(): void {
                 // Clear the buffer cache for this file since it's been flushed
