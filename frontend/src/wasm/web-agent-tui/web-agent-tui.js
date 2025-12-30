@@ -1,8 +1,9 @@
-import { run } from '../brush-shell/brush-shell.js';
+import { command } from '../brush-shell/brush-shell.js';
 import { environment, exit as exit$1, stderr, stdin, stdout } from '../ghostty-cli-shim.js';
 import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../wasi-http-impl.js';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
+const { run } = command;
 const { getEnvironment } = environment;
 const { exit } = exit$1;
 const { getStderr } = stderr;
