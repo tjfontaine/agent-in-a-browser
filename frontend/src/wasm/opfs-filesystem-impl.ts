@@ -167,11 +167,11 @@ class Descriptor {
             // Create new entry with current timestamp
             entry = openFlags.directory ? { dir: {} } : { size: 0, mtime: Date.now() };
 
-            // Create in OPFS (async, but we'll handle sync access later)
+            // Create in OPFS - await to ensure it exists before any subsequent stat
             if (!openFlags.directory) {
-                this.createOpfsFile(fullPath);
+                await this.createOpfsFile(fullPath);
             } else {
-                this.createOpfsDirectory(fullPath);
+                await this.createOpfsDirectory(fullPath);
             }
         }
 
@@ -204,21 +204,24 @@ class Descriptor {
         return new Descriptor(fullPath, entry);
     }
 
-    private createOpfsFile(path: string): void {
-        // Just create the file in OPFS - the sync handle will be prepared
-        // by the bridge before any WASM write operations
-        getOpfsFile(path, true).catch(e => {
+    private async createOpfsFile(path: string): Promise<void> {
+        // Create the file in OPFS - awaiting ensures it exists before stat
+        try {
+            await getOpfsFile(path, true);
+        } catch (e) {
             console.error('[opfs-fs] Failed to create file in OPFS:', path, e);
-        });
+        }
     }
 
-    private createOpfsDirectory(path: string): void {
+    private async createOpfsDirectory(path: string): Promise<void> {
         const parts = path.split('/').filter(p => p && p !== '.');
         if (parts.length === 0) return;
 
-        getOpfsDirectory(parts, true).catch(e => {
+        try {
+            await getOpfsDirectory(parts, true);
+        } catch (e) {
             console.error('[opfs-fs] Failed to create directory in OPFS:', path, e);
-        });
+        }
     }
 
     async createDirectoryAt(subpath: string): Promise<void> {
@@ -229,8 +232,8 @@ class Descriptor {
             throw 'exist';
         }
 
-        // Just create in OPFS directly - no tree update needed
-        this.createOpfsDirectory(fullPath);
+        // Create in OPFS directly - await to ensure it exists before stat
+        await this.createOpfsDirectory(fullPath);
     }
 
     /**
