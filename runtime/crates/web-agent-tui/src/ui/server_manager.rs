@@ -83,6 +83,7 @@ pub enum Overlay {
     ProviderWizard {
         step: ProviderWizardStep,
         selected_provider: usize,
+        selected_api_format: usize,
         base_url_input: String,
         model_input: String,
     },
@@ -93,6 +94,8 @@ pub enum Overlay {
 pub enum ProviderWizardStep {
     /// Select provider from list
     SelectProvider,
+    /// Select API format type for custom provider
+    SelectApiFormat,
     /// Enter custom base URL (for custom providers)
     EnterBaseUrl,
     /// Enter model name
@@ -100,6 +103,14 @@ pub enum ProviderWizardStep {
     /// Review and confirm
     Confirm,
 }
+
+/// Available API format types for custom providers
+pub const API_FORMATS: &[(&str, &str)] = &[
+    ("openai", "OpenAI (GPT, Groq, Together, local LLMs)"),
+    ("anthropic", "Anthropic (Claude)"),
+    // Future: ("google", "Google (Gemini)"),
+    // Future: ("cohere", "Cohere"),
+];
 
 /// Create a centered rectangle for popups
 pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
@@ -510,6 +521,7 @@ pub fn render_overlay(
         Overlay::ProviderWizard {
             step,
             selected_provider,
+            selected_api_format,
             base_url_input,
             model_input,
         } => {
@@ -518,6 +530,7 @@ pub fn render_overlay(
                 area,
                 step,
                 *selected_provider,
+                *selected_api_format,
                 base_url_input,
                 model_input,
             );
@@ -658,12 +671,54 @@ pub fn render_provider_wizard(
     area: Rect,
     step: &ProviderWizardStep,
     selected_provider: usize,
+    selected_api_format: usize,
     base_url_input: &str,
     model_input: &str,
 ) {
     match step {
         ProviderWizardStep::SelectProvider => {
             render_provider_selector(frame, area, selected_provider);
+        }
+        ProviderWizardStep::SelectApiFormat => {
+            let popup = centered_rect(50, 30, area);
+            frame.render_widget(Clear, popup);
+
+            let items: Vec<ListItem> = API_FORMATS
+                .iter()
+                .map(|(id, name)| {
+                    ListItem::new(Line::from(vec![
+                        Span::styled(*name, Style::default().fg(Color::White)),
+                        Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+                    ]))
+                })
+                .collect();
+
+            let list = List::new(items)
+                .block(
+                    Block::default()
+                        .title("🔌 Select API Format")
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                )
+                .highlight_style(
+                    Style::default()
+                        .add_modifier(Modifier::REVERSED)
+                        .fg(Color::Cyan),
+                )
+                .highlight_symbol("▶ ");
+
+            let mut state = ListState::default();
+            state.select(Some(selected_api_format));
+            frame.render_stateful_widget(list, popup, &mut state);
+
+            // Hints at bottom
+            let hints = Paragraph::new("↑↓ Navigate │ Enter Select │ Esc Close")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+            if hint_area.y < area.height {
+                frame.render_widget(hints, hint_area);
+            }
         }
         ProviderWizardStep::EnterBaseUrl => {
             let popup = centered_rect(60, 25, area);

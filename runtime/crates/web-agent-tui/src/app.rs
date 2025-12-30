@@ -1032,10 +1032,21 @@ impl<R: Read, W: Write> App<R, W> {
                                 String::new()
                             };
 
-                            // All providers start at URL step so users can override defaults
+                            // Determine start step based on provider type
+                            // Custom goes to API format selection first
+                            let start_step = if *provider_id == "custom" {
+                                ProviderWizardStep::SelectApiFormat
+                            } else {
+                                ProviderWizardStep::EnterBaseUrl
+                            };
+
+                            // Pre-select API format based on provider
+                            let api_format = if *provider_id == "anthropic" { 1 } else { 0 };
+
                             self.overlay = Some(Overlay::ProviderWizard {
-                                step: ProviderWizardStep::EnterBaseUrl,
+                                step: start_step,
                                 selected_provider: *selected,
+                                selected_api_format: api_format,
                                 base_url_input: prefilled_url,
                                 model_input: prefilled_model,
                             });
@@ -1047,10 +1058,11 @@ impl<R: Read, W: Write> App<R, W> {
             Overlay::ProviderWizard {
                 step,
                 selected_provider,
+                selected_api_format,
                 base_url_input,
                 model_input,
             } => {
-                use crate::ui::server_manager::{ProviderWizardStep, PROVIDERS};
+                use crate::ui::server_manager::{ProviderWizardStep, API_FORMATS, PROVIDERS};
 
                 match step {
                     ProviderWizardStep::SelectProvider => {
@@ -1080,6 +1092,28 @@ impl<R: Read, W: Write> App<R, W> {
                                         *step = ProviderWizardStep::EnterModel;
                                     }
                                 }
+                            }
+                            _ => {}
+                        }
+                    }
+                    ProviderWizardStep::SelectApiFormat => {
+                        // Handle API format selection for custom providers
+                        let max_items = API_FORMATS.len();
+                        match byte {
+                            0x1B => self.overlay = None,
+                            0xF0 | 0x6B => {
+                                if *selected_api_format > 0 {
+                                    *selected_api_format -= 1;
+                                }
+                            }
+                            0xF1 | 0x6A => {
+                                if *selected_api_format + 1 < max_items {
+                                    *selected_api_format += 1;
+                                }
+                            }
+                            0x0D => {
+                                // Proceed to URL step
+                                *step = ProviderWizardStep::EnterBaseUrl;
                             }
                             _ => {}
                         }
@@ -1139,21 +1173,22 @@ impl<R: Read, W: Write> App<R, W> {
                                 self.config.provider.base_url = Some(base_url_input.clone());
                                 let _ = self.config.save();
 
-                                // Create AI client with correct provider type
-                                if *provider_id == "anthropic" {
-                                    self.ai_client = crate::bridge::AiClient::new(
-                                        base_url_input,
-                                        model_input,
-                                        crate::bridge::ai_client::ProviderType::Anthropic,
-                                    );
+                                // Create AI client with correct provider type based on selected API format
+                                let (api_format_id, _) = API_FORMATS
+                                    .get(*selected_api_format)
+                                    .unwrap_or(&("openai", "OpenAI"));
+
+                                let provider_type = if *api_format_id == "anthropic" {
+                                    crate::bridge::ai_client::ProviderType::Anthropic
                                 } else {
-                                    // OpenAI and custom providers use OpenAI API format
-                                    self.ai_client = crate::bridge::AiClient::new(
-                                        base_url_input,
-                                        model_input,
-                                        crate::bridge::ai_client::ProviderType::OpenAI,
-                                    );
-                                }
+                                    crate::bridge::ai_client::ProviderType::OpenAI
+                                };
+
+                                self.ai_client = crate::bridge::AiClient::new(
+                                    base_url_input,
+                                    model_input,
+                                    provider_type,
+                                );
 
                                 // Re-apply API key if we have one
                                 if let Some(ref api_key) = self.config.provider.api_key {
