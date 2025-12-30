@@ -960,6 +960,65 @@ impl<R: Read, W: Write> App<R, W> {
                     _ => {}
                 }
             }
+            Overlay::ProviderSelector { selected } => {
+                let providers = crate::ui::server_manager::PROVIDERS;
+                let max_items = providers.len();
+
+                match byte {
+                    0x1B => {
+                        // Esc - close overlay
+                        self.overlay = None;
+                    }
+                    0xF0 | 0x6B => {
+                        // Up arrow or 'k'
+                        if *selected > 0 {
+                            *selected -= 1;
+                        }
+                    }
+                    0xF1 | 0x6A => {
+                        // Down arrow or 'j'
+                        if *selected + 1 < max_items {
+                            *selected += 1;
+                        }
+                    }
+                    0x0D => {
+                        // Enter - select provider
+                        if let Some((provider_id, _name)) = providers.get(*selected) {
+                            // Update config
+                            self.config.provider.default = provider_id.to_string();
+                            let _ = self.config.save();
+
+                            // Create new AI client for selected provider
+                            let default_model = if *provider_id == "anthropic" {
+                                &self.config.models.anthropic
+                            } else {
+                                &self.config.models.openai
+                            };
+
+                            if *provider_id == "anthropic" {
+                                self.ai_client = crate::bridge::AiClient::anthropic(default_model);
+                            } else {
+                                self.ai_client = crate::bridge::AiClient::openai(default_model);
+                            }
+
+                            // Re-apply API key if we have one
+                            if let Some(ref api_key) = self.config.provider.api_key {
+                                self.ai_client.set_api_key(api_key);
+                            }
+
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!(
+                                    "Switched to {} with model: {}",
+                                    provider_id, default_model
+                                ),
+                            });
+                            self.overlay = None;
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -1130,6 +1189,7 @@ impl<R: Read, W: Write> App<R, W> {
                         "  /tools    - List available tools",
                         "  /mcp      - MCP server manager (j/k=nav, Enter=select)",
                         "  /model    - Select AI model",
+                        "  /provider - Select AI provider (Anthropic/OpenAI)",
                         "  /shell    - Enter shell mode (^D to exit)",
                         "  /config   - View current configuration",
                         "  /key      - Set API key",
@@ -1187,6 +1247,10 @@ impl<R: Read, W: Write> App<R, W> {
                     selected: 0,
                     provider: self.config.provider.default.clone(),
                 });
+            }
+            "/provider" => {
+                // Open provider selector overlay
+                self.overlay = Some(Overlay::ProviderSelector { selected: 0 });
             }
             "/shell" | "/sh" => {
                 // Launch interactive shell mode

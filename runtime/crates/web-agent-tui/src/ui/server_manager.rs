@@ -75,6 +75,10 @@ pub enum Overlay {
         selected: usize,
         provider: String,
     },
+    /// Provider selection overlay
+    ProviderSelector {
+        selected: usize,
+    },
 }
 
 /// Create a centered rectangle for popups
@@ -480,6 +484,9 @@ pub fn render_overlay(
         Overlay::ModelSelector { selected, provider } => {
             render_model_selector(frame, area, provider, *selected);
         }
+        Overlay::ProviderSelector { selected } => {
+            render_provider_selector(frame, area, *selected);
+        }
     }
 }
 
@@ -524,6 +531,55 @@ fn render_model_selector(frame: &mut Frame, area: Rect, provider: &str, selected
         .block(
             Block::default()
                 .title(title)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
+        .highlight_style(
+            Style::default()
+                .add_modifier(Modifier::REVERSED)
+                .fg(Color::Cyan),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    state.select(Some(selected));
+    frame.render_stateful_widget(list, popup, &mut state);
+
+    // Hints at bottom
+    let hints = Paragraph::new("↑↓ Navigate │ Enter Select │ Esc Close")
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+    if hint_area.y < area.height {
+        frame.render_widget(hints, hint_area);
+    }
+}
+
+/// Available AI providers
+pub const PROVIDERS: &[(&str, &str)] = &[
+    ("anthropic", "Anthropic (Claude)"),
+    ("openai", "OpenAI (GPT)"),
+];
+
+/// Render provider selection overlay
+fn render_provider_selector(frame: &mut Frame, area: Rect, selected: usize) {
+    let popup = centered_rect(40, 30, area);
+    frame.render_widget(Clear, popup);
+
+    let items: Vec<ListItem> = PROVIDERS
+        .iter()
+        .map(|(id, name)| {
+            ListItem::new(Line::from(vec![
+                Span::styled(*name, Style::default().fg(Color::White)),
+                Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title("🔧 Select Provider")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         )

@@ -23,5 +23,8 @@ export class OutputStream {
    * This type does not have a public constructor.
    */
   private constructor();
+  checkWrite(): bigint;
+  write(contents: Uint8Array): void;
   blockingWriteAndFlush(contents: Uint8Array): void;
+  blockingFlush(): void;
 }

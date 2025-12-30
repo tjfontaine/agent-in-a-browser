@@ -3680,7 +3680,502 @@ const captureTable14= new Map();
 let captureCnt14 = 0;
 handleTables[14] = handleTable14;
 
-function trampoline48(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+function trampoline48(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var ptr3 = arg1;
+  var len3 = arg2;
+  var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.create-directory-at');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.createDirectoryAt(result3)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg3 + 1, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"][Instruction::Return]', {
+    funcName: '[method]descriptor.create-directory-at',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline49(arg0, arg1, arg2, arg3, arg4) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var flags3 = {
+    symlinkFollow: Boolean(arg1 & 1),
+  };
+  var ptr4 = arg2;
+  var len4 = arg3;
+  var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat-at');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.statAt(flags3, result4)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant14 = ret;
+  switch (variant14.tag) {
+    case 'ok': {
+      const e = variant14.val;
+      dataView(memory0).setInt8(arg4 + 0, 0, true);
+      var {type: v5_0, linkCount: v5_1, size: v5_2, dataAccessTimestamp: v5_3, dataModificationTimestamp: v5_4, statusChangeTimestamp: v5_5 } = e;
+      var val6 = v5_0;
+      let enum6;
+      switch (val6) {
+        case 'unknown': {
+          enum6 = 0;
+          break;
+        }
+        case 'block-device': {
+          enum6 = 1;
+          break;
+        }
+        case 'character-device': {
+          enum6 = 2;
+          break;
+        }
+        case 'directory': {
+          enum6 = 3;
+          break;
+        }
+        case 'fifo': {
+          enum6 = 4;
+          break;
+        }
+        case 'symbolic-link': {
+          enum6 = 5;
+          break;
+        }
+        case 'regular-file': {
+          enum6 = 6;
+          break;
+        }
+        case 'socket': {
+          enum6 = 7;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val6}" is not one of the cases of descriptor-type`);
+        }
+      }
+      dataView(memory0).setInt8(arg4 + 8, enum6, true);
+      dataView(memory0).setBigInt64(arg4 + 16, toUint64(v5_1), true);
+      dataView(memory0).setBigInt64(arg4 + 24, toUint64(v5_2), true);
+      var variant8 = v5_3;
+      if (variant8 === null || variant8=== undefined) {
+        dataView(memory0).setInt8(arg4 + 32, 0, true);
+      } else {
+        const e = variant8;
+        dataView(memory0).setInt8(arg4 + 32, 1, true);
+        var {seconds: v7_0, nanoseconds: v7_1 } = e;
+        dataView(memory0).setBigInt64(arg4 + 40, toUint64(v7_0), true);
+        dataView(memory0).setInt32(arg4 + 48, toUint32(v7_1), true);
+      }
+      var variant10 = v5_4;
+      if (variant10 === null || variant10=== undefined) {
+        dataView(memory0).setInt8(arg4 + 56, 0, true);
+      } else {
+        const e = variant10;
+        dataView(memory0).setInt8(arg4 + 56, 1, true);
+        var {seconds: v9_0, nanoseconds: v9_1 } = e;
+        dataView(memory0).setBigInt64(arg4 + 64, toUint64(v9_0), true);
+        dataView(memory0).setInt32(arg4 + 72, toUint32(v9_1), true);
+      }
+      var variant12 = v5_5;
+      if (variant12 === null || variant12=== undefined) {
+        dataView(memory0).setInt8(arg4 + 80, 0, true);
+      } else {
+        const e = variant12;
+        dataView(memory0).setInt8(arg4 + 80, 1, true);
+        var {seconds: v11_0, nanoseconds: v11_1 } = e;
+        dataView(memory0).setBigInt64(arg4 + 88, toUint64(v11_0), true);
+        dataView(memory0).setInt32(arg4 + 96, toUint32(v11_1), true);
+      }
+      break;
+    }
+    case 'err': {
+      const e = variant14.val;
+      dataView(memory0).setInt8(arg4 + 0, 1, true);
+      var val13 = e;
+      let enum13;
+      switch (val13) {
+        case 'access': {
+          enum13 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum13 = 1;
+          break;
+        }
+        case 'already': {
+          enum13 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum13 = 3;
+          break;
+        }
+        case 'busy': {
+          enum13 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum13 = 5;
+          break;
+        }
+        case 'quota': {
+          enum13 = 6;
+          break;
+        }
+        case 'exist': {
+          enum13 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum13 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum13 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum13 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum13 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum13 = 12;
+          break;
+        }
+        case 'io': {
+          enum13 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum13 = 14;
+          break;
+        }
+        case 'loop': {
+          enum13 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum13 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum13 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum13 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum13 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum13 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum13 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum13 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum13 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum13 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum13 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum13 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum13 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum13 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum13 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum13 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum13 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum13 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum13 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum13 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum13 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum13 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val13}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg4 + 8, enum13, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"][Instruction::Return]', {
+    funcName: '[method]descriptor.stat-at',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline50(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -3916,7 +4411,7 @@ function trampoline48(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
 }
 
 
-function trampoline49(arg0, arg1, arg2) {
+function trampoline51(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4132,7 +4627,439 @@ function trampoline49(arg0, arg1, arg2) {
 }
 
 
-function trampoline50(arg0, arg1) {
+function trampoline52(arg0, arg1, arg2) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.write-via-stream');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.writeViaStream(BigInt.asUintN(64, arg1))};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg2 + 0, 0, true);
+      if (!(e instanceof OutputStream)) {
+        throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
+      }
+      dataView(memory0).setInt32(arg2 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg2 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg2 + 4, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"][Instruction::Return]', {
+    funcName: '[method]descriptor.write-via-stream',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline53(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.append-via-stream');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.appendViaStream()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e instanceof OutputStream)) {
+        throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var val4 = e;
+      let enum4;
+      switch (val4) {
+        case 'access': {
+          enum4 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum4 = 1;
+          break;
+        }
+        case 'already': {
+          enum4 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum4 = 3;
+          break;
+        }
+        case 'busy': {
+          enum4 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum4 = 5;
+          break;
+        }
+        case 'quota': {
+          enum4 = 6;
+          break;
+        }
+        case 'exist': {
+          enum4 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum4 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum4 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum4 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum4 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum4 = 12;
+          break;
+        }
+        case 'io': {
+          enum4 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum4 = 14;
+          break;
+        }
+        case 'loop': {
+          enum4 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum4 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum4 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum4 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum4 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum4 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum4 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum4 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum4 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum4 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum4 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum4 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum4 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum4 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum4 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum4 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum4 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum4 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum4 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum4 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum4 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum4 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val4}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg1 + 4, enum4, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"][Instruction::Return]', {
+    funcName: '[method]descriptor.append-via-stream',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline54(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4379,7 +5306,7 @@ function trampoline50(arg0, arg1) {
 }
 
 
-function trampoline51(arg0, arg1) {
+function trampoline55(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4659,7 +5586,7 @@ function trampoline51(arg0, arg1) {
 }
 
 
-function trampoline52(arg0, arg1) {
+function trampoline56(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable14.get(rep2);
@@ -4868,7 +5795,222 @@ function trampoline52(arg0, arg1) {
 }
 
 
-const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
+function trampoline57(arg0, arg1, arg2, arg3, arg4) {
+  var handle1 = arg0;
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(Descriptor.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var flags3 = {
+    symlinkFollow: Boolean(arg1 & 1),
+  };
+  var ptr4 = arg2;
+  var len4 = arg3;
+  var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash-at');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.metadataHashAt(flags3, result4)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant7 = ret;
+  switch (variant7.tag) {
+    case 'ok': {
+      const e = variant7.val;
+      dataView(memory0).setInt8(arg4 + 0, 0, true);
+      var {lower: v5_0, upper: v5_1 } = e;
+      dataView(memory0).setBigInt64(arg4 + 8, toUint64(v5_0), true);
+      dataView(memory0).setBigInt64(arg4 + 16, toUint64(v5_1), true);
+      break;
+    }
+    case 'err': {
+      const e = variant7.val;
+      dataView(memory0).setInt8(arg4 + 0, 1, true);
+      var val6 = e;
+      let enum6;
+      switch (val6) {
+        case 'access': {
+          enum6 = 0;
+          break;
+        }
+        case 'would-block': {
+          enum6 = 1;
+          break;
+        }
+        case 'already': {
+          enum6 = 2;
+          break;
+        }
+        case 'bad-descriptor': {
+          enum6 = 3;
+          break;
+        }
+        case 'busy': {
+          enum6 = 4;
+          break;
+        }
+        case 'deadlock': {
+          enum6 = 5;
+          break;
+        }
+        case 'quota': {
+          enum6 = 6;
+          break;
+        }
+        case 'exist': {
+          enum6 = 7;
+          break;
+        }
+        case 'file-too-large': {
+          enum6 = 8;
+          break;
+        }
+        case 'illegal-byte-sequence': {
+          enum6 = 9;
+          break;
+        }
+        case 'in-progress': {
+          enum6 = 10;
+          break;
+        }
+        case 'interrupted': {
+          enum6 = 11;
+          break;
+        }
+        case 'invalid': {
+          enum6 = 12;
+          break;
+        }
+        case 'io': {
+          enum6 = 13;
+          break;
+        }
+        case 'is-directory': {
+          enum6 = 14;
+          break;
+        }
+        case 'loop': {
+          enum6 = 15;
+          break;
+        }
+        case 'too-many-links': {
+          enum6 = 16;
+          break;
+        }
+        case 'message-size': {
+          enum6 = 17;
+          break;
+        }
+        case 'name-too-long': {
+          enum6 = 18;
+          break;
+        }
+        case 'no-device': {
+          enum6 = 19;
+          break;
+        }
+        case 'no-entry': {
+          enum6 = 20;
+          break;
+        }
+        case 'no-lock': {
+          enum6 = 21;
+          break;
+        }
+        case 'insufficient-memory': {
+          enum6 = 22;
+          break;
+        }
+        case 'insufficient-space': {
+          enum6 = 23;
+          break;
+        }
+        case 'not-directory': {
+          enum6 = 24;
+          break;
+        }
+        case 'not-empty': {
+          enum6 = 25;
+          break;
+        }
+        case 'not-recoverable': {
+          enum6 = 26;
+          break;
+        }
+        case 'unsupported': {
+          enum6 = 27;
+          break;
+        }
+        case 'no-tty': {
+          enum6 = 28;
+          break;
+        }
+        case 'no-such-device': {
+          enum6 = 29;
+          break;
+        }
+        case 'overflow': {
+          enum6 = 30;
+          break;
+        }
+        case 'not-permitted': {
+          enum6 = 31;
+          break;
+        }
+        case 'pipe': {
+          enum6 = 32;
+          break;
+        }
+        case 'read-only': {
+          enum6 = 33;
+          break;
+        }
+        case 'invalid-seek': {
+          enum6 = 34;
+          break;
+        }
+        case 'text-file-busy': {
+          enum6 = 35;
+          break;
+        }
+        case 'cross-device': {
+          enum6 = 36;
+          break;
+        }
+        default: {
+          
+          throw new TypeError(`"${val6}" is not one of the cases of error-code`);
+        }
+      }
+      dataView(memory0).setInt8(arg4 + 8, enum6, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"][Instruction::Return]', {
+    funcName: '[method]descriptor.metadata-hash-at',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+const trampoline58 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -4949,7 +6091,7 @@ const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 }
 );
 
-function trampoline54(arg0, arg1, arg2) {
+function trampoline59(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -5030,7 +6172,233 @@ function trampoline54(arg0, arg1, arg2) {
 }
 
 
-function trampoline55(arg0) {
+function trampoline60(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.check-write');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.checkWrite()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      dataView(memory0).setBigInt64(arg1 + 8, toUint64(e), true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var variant4 = e;
+      switch (variant4.tag) {
+        case 'last-operation-failed': {
+          const e = variant4.val;
+          dataView(memory0).setInt8(arg1 + 8, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle3 = e[symbolRscHandle];
+          if (!handle3) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg1 + 12, handle3, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg1 + 8, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant4.tag)}\` (received \`${variant4}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"][Instruction::Return]', {
+    funcName: '[method]output-stream.check-write',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline61(arg0, arg1, arg2, arg3) {
+  var handle1 = arg0;
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  var ptr3 = arg1;
+  var len3 = arg2;
+  var result3 = new Uint8Array(memory0.buffer.slice(ptr3, ptr3 + len3 * 1));
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.write');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.write(result3)};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant6 = ret;
+  switch (variant6.tag) {
+    case 'ok': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg3 + 0, 0, true);
+      break;
+    }
+    case 'err': {
+      const e = variant6.val;
+      dataView(memory0).setInt8(arg3 + 0, 1, true);
+      var variant5 = e;
+      switch (variant5.tag) {
+        case 'last-operation-failed': {
+          const e = variant5.val;
+          dataView(memory0).setInt8(arg3 + 4, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle4 = e[symbolRscHandle];
+          if (!handle4) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg3 + 8, handle4, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg3 + 4, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant5.tag)}\` (received \`${variant5}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"][Instruction::Return]', {
+    funcName: '[method]output-stream.write',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline62(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutputStream.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-flush');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.blockingFlush()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant5 = ret;
+  switch (variant5.tag) {
+    case 'ok': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      break;
+    }
+    case 'err': {
+      const e = variant5.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      var variant4 = e;
+      switch (variant4.tag) {
+        case 'last-operation-failed': {
+          const e = variant4.val;
+          dataView(memory0).setInt8(arg1 + 4, 0, true);
+          if (!(e instanceof Error$1)) {
+            throw new TypeError('Resource error: Not a valid "Error" resource.');
+          }
+          var handle3 = e[symbolRscHandle];
+          if (!handle3) {
+            const rep = e[symbolRscRep] || ++captureCnt1;
+            captureTable1.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable1, rep);
+          }
+          dataView(memory0).setInt32(arg1 + 8, handle3, true);
+          break;
+        }
+        case 'closed': {
+          dataView(memory0).setInt8(arg1 + 4, 1, true);
+          break;
+        }
+        default: {
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant4.tag)}\` (received \`${variant4}\`) specified for \`StreamError\``);
+        }
+      }
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"][Instruction::Return]', {
+    funcName: '[method]output-stream.blocking-flush',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline63(arg0) {
   _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-directories');
   const ret = getDirectories();
@@ -5072,7 +6440,7 @@ const captureTable11= new Map();
 let captureCnt11 = 0;
 handleTables[11] = handleTable11;
 
-function trampoline56(arg0) {
+function trampoline64(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdin');
   const ret = getTerminalStdin();
@@ -5108,7 +6476,7 @@ const captureTable12= new Map();
 let captureCnt12 = 0;
 handleTables[12] = handleTable12;
 
-function trampoline57(arg0) {
+function trampoline65(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdout');
   const ret = getTerminalStdout();
@@ -5140,7 +6508,7 @@ function trampoline57(arg0) {
 }
 
 
-function trampoline58(arg0) {
+function trampoline66(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stderr');
   const ret = getTerminalStderr();
@@ -5429,8 +6797,8 @@ const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-agent-tui.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-agent-tui.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABfBBgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgCX9/f39/fn5/fwF/YAJ/fwF/YAR/f39/AX9gAX8Bf2ADf39/AX9gAX8AYAF/AGAHf39/f39/fwADKikAAAECAwICAAAABAUGBwEACAkKCQkLCQwNCw4OAA8GAAAABgYHDg4ODgQFAXABKSkHzwEqATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQIyMgAWAjIzABcCMjQAGAIyNQAZAjI2ABoCMjcAGwIyOAAcAjI5AB0CMzAAHgIzMQAfAjMyACACMzMAIQIzNAAiAjM1ACMCMzYAJAIzNwAlAjM4ACYCMzkAJwI0MAAoCCRpbXBvcnRzAQAKvQQpCwAgACABQQARAAALCwAgACABQQERAAALDwAgACABIAIgA0ECEQEACw8AIAAgASACIANBAxECAAsRACAAIAEgAiADIARBBBEDAAsPACAAIAEgAiADQQURAgALDwAgACABIAIgA0EGEQIACwsAIAAgAUEHEQAACwsAIAAgAUEIEQAACwsAIAAgAUEJEQAACxMAIAAgASACIAMgBCAFQQoRBAALHQAgACABIAIgAyAEIAUgBiAHIAggCSAKQQsRBQALDQAgACABIAJBDBEGAAsPACAAIAEgAiADQQ0RBwALDwAgACABIAIgA0EOEQEACwsAIAAgAUEPEQAACxkAIAAgASACIAMgBCAFIAYgByAIQRARCAALCwAgACABQRERCQALDwAgACABIAIgA0ESEQoACwsAIAAgAUETEQkACwsAIAAgAUEUEQkACwkAIABBFRELAAsLACAAIAFBFhEJAAsNACAAIAEgAkEXEQwACwkAIABBGBENAAsJACAAQRkRCwALCQAgAEEaEQ4ACwkAIABBGxEOAAsLACAAIAFBHBEAAAsVACAAIAEgAiADIAQgBSAGQR0RDwALDQAgACABIAJBHhEGAAsLACAAIAFBHxEAAAsLACAAIAFBIBEAAAsLACAAIAFBIREAAAsNACAAIAEgAkEiEQYACw0AIAAgASACQSMRBgALDwAgACABIAIgA0EkEQcACwkAIABBJREOAAsJACAAQSYRDgALCQAgAEEnEQ4ACwkAIABBKBEOAAsALwlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzOS4wAPwSBG5hbWUAExJ3aXQtY29tcG9uZW50OnNoaW0B3xIpADtpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1ib2R5LnN0cmVhbQE6aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctYm9keS53cml0ZQI7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVtzdGF0aWNdb3V0Z29pbmctYm9keS5maW5pc2gDQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LW1ldGhvZARCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtc2NoZW1lBUVpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1hdXRob3JpdHkGS2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXBhdGgtd2l0aC1xdWVyeQc8aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5ib2R5CEBpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1pbmNvbWluZy1yZXNwb25zZS5jb25zdW1lCUNpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1mdXR1cmUtaW5jb21pbmctcmVzcG9uc2UuZ2V0CjRpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1maWVsZHMuYXBwZW5kCyVpbmRpcmVjdC1zaGVsbDp1bml4L2NvbW1hbmRAMC4xLjAtcnVuDEFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZA1NaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi40LVttZXRob2Rdb3V0cHV0LXN0cmVhbS5ibG9ja2luZy13cml0ZS1hbmQtZmx1c2gOMGluZGlyZWN0LXdhc2k6aHR0cC9vdXRnb2luZy1oYW5kbGVyQDAuMi40LWhhbmRsZQ86aW5kaXJlY3Qtd2FzaTppby9lcnJvckAwLjIuNC1bbWV0aG9kXWVycm9yLnRvLWRlYnVnLXN0cmluZxAmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wYXRoX29wZW4RLGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfZmlsZXN0YXRfZ2V0EiRhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3JlYWQTKGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9nZXQULmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9zaXplc19nZXQVJWFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfY2xvc2UWK2FkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfcHJlc3RhdF9nZXQXMGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZmRfcHJlc3RhdF9kaXJfbmFtZRgmYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1wcm9jX2V4aXQZMGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtYWRhcHRlcl9jbG9zZV9iYWRmZBo2aW5kaXJlY3Qtd2FzaTpyYW5kb20vaW5zZWN1cmUtc2VlZEAwLjIuNC1pbnNlY3VyZS1zZWVkGzNpbmRpcmVjdC13YXNpOmNsaS9lbnZpcm9ubWVudEAwLjIuNi1nZXQtZW52aXJvbm1lbnQcOmluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1maWxlc3lzdGVtLWVycm9yLWNvZGUdP2luZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iub3Blbi1hdB5HaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5yZWFkLXZpYS1zdHJlYW0fQGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3IuZ2V0LXR5cGUgPGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iuc3RhdCFFaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5tZXRhZGF0YS1oYXNoIkFpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1pbnB1dC1zdHJlYW0uYmxvY2tpbmctcmVhZCM4aW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2RdaW5wdXQtc3RyZWFtLnJlYWQkTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNoJTdpbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vcHJlb3BlbnNAMC4yLjYtZ2V0LWRpcmVjdG9yaWVzJjlpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRpbkAwLjIuNi1nZXQtdGVybWluYWwtc3RkaW4nO2luZGlyZWN0LXdhc2k6Y2xpL3Rlcm1pbmFsLXN0ZG91dEAwLjIuNi1nZXQtdGVybWluYWwtc3Rkb3V0KDtpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRlcnJAMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZGVycg');
-    const module3 = base64Compile('AGFzbQEAAAABfBBgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGALf39/f39/f39/f38Bf2ADf35/AGAEf39/fwBgCX9/f39/fn5/fwF/YAJ/fwF/YAR/f39/AX9gAX8Bf2ADf39/AX9gAX8AYAF/AGAHf39/f39/fwAC/AEqAAEwAAAAATEAAAABMgABAAEzAAIAATQAAwABNQACAAE2AAIAATcAAAABOAAAAAE5AAAAAjEwAAQAAjExAAUAAjEyAAYAAjEzAAcAAjE0AAEAAjE1AAAAAjE2AAgAAjE3AAkAAjE4AAoAAjE5AAkAAjIwAAkAAjIxAAsAAjIyAAkAAjIzAAwAAjI0AA0AAjI1AAsAAjI2AA4AAjI3AA4AAjI4AAAAAjI5AA8AAjMwAAYAAjMxAAAAAjMyAAAAAjMzAAAAAjM0AAYAAjM1AAYAAjM2AAcAAjM3AA4AAjM4AA4AAjM5AA4AAjQwAA4ACCRpbXBvcnRzAXABKSkJLwEAQQALKQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAAcBG5hbWUAFRR3aXQtY29tcG9uZW50OmZpeHVwcw');
+    const module2 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwADNTQAAAECAwICAAAABAUGBwgJCgYHBwsHCAwLDQ4BAA8PAA4QEQ0NAAAAABANDQAOAA4PDw8PBAUBcAE0NAeGAjUBMAAAATEAAQEyAAIBMwADATQABAE1AAUBNgAGATcABwE4AAgBOQAJAjEwAAoCMTEACwIxMgAMAjEzAA0CMTQADgIxNQAPAjE2ABACMTcAEQIxOAASAjE5ABMCMjAAFAIyMQAVAjIyABYCMjMAFwIyNAAYAjI1ABkCMjYAGgIyNwAbAjI4ABwCMjkAHQIzMAAeAjMxAB8CMzIAIAIzMwAhAjM0ACICMzUAIwIzNgAkAjM3ACUCMzgAJgIzOQAnAjQwACgCNDEAKQI0MgAqAjQzACsCNDQALAI0NQAtAjQ2AC4CNDcALwI0OAAwAjQ5ADECNTAAMgI1MQAzCCRpbXBvcnRzAQAK4wU0CwAgACABQQARAAALCwAgACABQQERAAALDwAgACABIAIgA0ECEQEACw8AIAAgASACIANBAxECAAsRACAAIAEgAiADIARBBBEDAAsPACAAIAEgAiADQQURAgALDwAgACABIAIgA0EGEQIACwsAIAAgAUEHEQAACwsAIAAgAUEIEQAACwsAIAAgAUEJEQAACxMAIAAgASACIAMgBCAFQQoRBAALHQAgACABIAIgAyAEIAUgBiAHIAggCSAKQQsRBQALDwAgACABIAIgA0EMEQYACwsAIAAgAUENEQcACw0AIAAgASACQQ4RCAALEQAgACABIAIgAyAEQQ8RCQALGQAgACABIAIgAyAEIAUgBiAHIAhBEBEKAAsPACAAIAEgAiADQRERBgALCwAgACABQRIRBwALCwAgACABQRMRBwALCQAgAEEUEQsACwsAIAAgAUEVEQcACw0AIAAgASACQRYRCAALCQAgAEEXEQwACwkAIABBGBELAAsNACAAIAEgAkEZEQ0ACw8AIAAgASACIANBGhEOAAsPACAAIAEgAiADQRsRAQALCwAgACABQRwRAAALCQAgAEEdEQ8ACwkAIABBHhEPAAsLACAAIAFBHxEAAAsPACAAIAEgAiADQSARDgALEQAgACABIAIgAyAEQSEREAALFQAgACABIAIgAyAEIAUgBkEiEREACw0AIAAgASACQSMRDQALDQAgACABIAJBJBENAAsLACAAIAFBJREAAAsLACAAIAFBJhEAAAsLACAAIAFBJxEAAAsLACAAIAFBKBEAAAsRACAAIAEgAiADIARBKREQAAsNACAAIAEgAkEqEQ0ACw0AIAAgASACQSsRDQALCwAgACABQSwRAAALDwAgACABIAIgA0EtEQ4ACwsAIAAgAUEuEQAACw8AIAAgASACIANBLxEOAAsJACAAQTARDwALCQAgAEExEQ8ACwkAIABBMhEPAAsJACAAQTMRDwALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMAC3GARuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAZoYNAA7aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctYm9keS5zdHJlYW0BOmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLWJvZHkud3JpdGUCO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bc3RhdGljXW91dGdvaW5nLWJvZHkuZmluaXNoA0JpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1tZXRob2QEQmluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LXNjaGVtZQVFaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtYXV0aG9yaXR5BktpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1wYXRoLXdpdGgtcXVlcnkHPGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3QuYm9keQhAaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdaW5jb21pbmctcmVzcG9uc2UuY29uc3VtZQlDaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZnV0dXJlLWluY29taW5nLXJlc3BvbnNlLmdldAo0aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmFwcGVuZAslaW5kaXJlY3Qtc2hlbGw6dW5peC9jb21tYW5kQDAuMS4wLXJ1bgwlYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF93cml0ZQ0sYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9maWxlc3RhdF9nZXQOMmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcGF0aF9jcmVhdGVfZGlyZWN0b3J5Dy5hZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXBhdGhfZmlsZXN0YXRfZ2V0ECZhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLXBhdGhfb3BlbhEkYWRhcHQtd2FzaV9zbmFwc2hvdF9wcmV2aWV3MS1mZF9yZWFkEihhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWVudmlyb25fZ2V0Ey5hZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWVudmlyb25fc2l6ZXNfZ2V0FCVhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX2Nsb3NlFSthZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3ByZXN0YXRfZ2V0FjBhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWZkX3ByZXN0YXRfZGlyX25hbWUXJmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcHJvY19leGl0GDBhZGFwdC13YXNpX3NuYXBzaG90X3ByZXZpZXcxLWFkYXB0ZXJfY2xvc2VfYmFkZmQZQWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXWlucHV0LXN0cmVhbS5ibG9ja2luZy1yZWFkGk1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaBswaW5kaXJlY3Qtd2FzaTpodHRwL291dGdvaW5nLWhhbmRsZXJAMC4yLjQtaGFuZGxlHDppbmRpcmVjdC13YXNpOmlvL2Vycm9yQDAuMi40LVttZXRob2RdZXJyb3IudG8tZGVidWctc3RyaW5nHTZpbmRpcmVjdC13YXNpOnJhbmRvbS9pbnNlY3VyZS1zZWVkQDAuMi40LWluc2VjdXJlLXNlZWQeM2luZGlyZWN0LXdhc2k6Y2xpL2Vudmlyb25tZW50QDAuMi42LWdldC1lbnZpcm9ubWVudB86aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LWZpbGVzeXN0ZW0tZXJyb3ItY29kZSBLaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5jcmVhdGUtZGlyZWN0b3J5LWF0IT9pbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLnN0YXQtYXQiP2luZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iub3Blbi1hdCNHaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5yZWFkLXZpYS1zdHJlYW0kSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3Iud3JpdGUtdmlhLXN0cmVhbSVJaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5hcHBlbmQtdmlhLXN0cmVhbSZAaW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5nZXQtdHlwZSc8aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3R5cGVzQDAuMi42LVttZXRob2RdZGVzY3JpcHRvci5zdGF0KEVpbmRpcmVjdC13YXNpOmZpbGVzeXN0ZW0vdHlwZXNAMC4yLjYtW21ldGhvZF1kZXNjcmlwdG9yLm1ldGFkYXRhLWhhc2gpSGluZGlyZWN0LXdhc2k6ZmlsZXN5c3RlbS90eXBlc0AwLjIuNi1bbWV0aG9kXWRlc2NyaXB0b3IubWV0YWRhdGEtaGFzaC1hdCpBaW5kaXJlY3Qtd2FzaTppby9zdHJlYW1zQDAuMi42LVttZXRob2RdaW5wdXQtc3RyZWFtLmJsb2NraW5nLXJlYWQrOGluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXWlucHV0LXN0cmVhbS5yZWFkLEBpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmNoZWNrLXdyaXRlLTppbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLndyaXRlLkNpbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLWZsdXNoL01pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjYtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaDA3aW5kaXJlY3Qtd2FzaTpmaWxlc3lzdGVtL3ByZW9wZW5zQDAuMi42LWdldC1kaXJlY3RvcmllczE5aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkaW5AMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZGluMjtpbmRpcmVjdC13YXNpOmNsaS90ZXJtaW5hbC1zdGRvdXRAMC4yLjYtZ2V0LXRlcm1pbmFsLXN0ZG91dDM7aW5kaXJlY3Qtd2FzaTpjbGkvdGVybWluYWwtc3RkZXJyQDAuMi42LWdldC10ZXJtaW5hbC1zdGRlcnI');
+    const module3 = base64Compile('AGFzbQEAAAABjQESYAJ/fwBgBH9/f38AYAR/f39/AX9gBX9/f39/AX9gBn9/f39/fwBgC39/f39/f39/f39/AX9gBH9/f38Bf2ACf38Bf2ADf39/AX9gBX9/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAN/fn8AYAR/f39/AGABfwBgBX9/f39/AGAHf39/f39/fwACvgI1AAEwAAAAATEAAAABMgABAAEzAAIAATQAAwABNQACAAE2AAIAATcAAAABOAAAAAE5AAAAAjEwAAQAAjExAAUAAjEyAAYAAjEzAAcAAjE0AAgAAjE1AAkAAjE2AAoAAjE3AAYAAjE4AAcAAjE5AAcAAjIwAAsAAjIxAAcAAjIyAAgAAjIzAAwAAjI0AAsAAjI1AA0AAjI2AA4AAjI3AAEAAjI4AAAAAjI5AA8AAjMwAA8AAjMxAAAAAjMyAA4AAjMzABAAAjM0ABEAAjM1AA0AAjM2AA0AAjM3AAAAAjM4AAAAAjM5AAAAAjQwAAAAAjQxABAAAjQyAA0AAjQzAA0AAjQ0AAAAAjQ1AA4AAjQ2AAAAAjQ3AA4AAjQ4AA8AAjQ5AA8AAjUwAA8AAjUxAA8ACCRpbXBvcnRzAXABNDQJOgEAQQALNAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjMALwlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzOS4wABwEbmFtZQAVFHdpdC1jb21wb25lbnQ6Zml4dXBz');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'shell:unix/command@0.1.0': {
@@ -5446,7 +6814,7 @@ const $init = (() => {
         'get-stdout': trampoline2,
       },
       'wasi:http/outgoing-handler@0.2.4': {
-        handle: exports0['14'],
+        handle: exports0['27'],
       },
       'wasi:http/types@0.2.4': {
         '[constructor]fields': trampoline0,
@@ -5474,7 +6842,7 @@ const $init = (() => {
         '[static]outgoing-body.finish': exports0['2'],
       },
       'wasi:io/error@0.2.4': {
-        '[method]error.to-debug-string': exports0['15'],
+        '[method]error.to-debug-string': exports0['28'],
         '[resource-drop]error': trampoline13,
       },
       'wasi:io/poll@0.2.0': {
@@ -5489,13 +6857,13 @@ const $init = (() => {
         '[resource-drop]output-stream': trampoline16,
       },
       'wasi:io/streams@0.2.4': {
-        '[method]input-stream.blocking-read': exports0['12'],
-        '[method]output-stream.blocking-write-and-flush': exports0['13'],
+        '[method]input-stream.blocking-read': exports0['25'],
+        '[method]output-stream.blocking-write-and-flush': exports0['26'],
         '[resource-drop]input-stream': trampoline12,
         '[resource-drop]output-stream': trampoline16,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['26'],
+        'insecure-seed': exports0['29'],
       },
       'wasi:sockets/tcp@0.2.0': {
         '[resource-drop]tcp-socket': trampoline23,
@@ -5506,16 +6874,19 @@ const $init = (() => {
         '[resource-drop]udp-socket': trampoline20,
       },
       wasi_snapshot_preview1: {
-        adapter_close_badfd: exports0['25'],
-        environ_get: exports0['19'],
-        environ_sizes_get: exports0['20'],
-        fd_close: exports0['21'],
-        fd_filestat_get: exports0['17'],
-        fd_prestat_dir_name: exports0['23'],
-        fd_prestat_get: exports0['22'],
-        fd_read: exports0['18'],
+        adapter_close_badfd: exports0['24'],
+        environ_get: exports0['18'],
+        environ_sizes_get: exports0['19'],
+        fd_close: exports0['20'],
+        fd_filestat_get: exports0['13'],
+        fd_prestat_dir_name: exports0['22'],
+        fd_prestat_get: exports0['21'],
+        fd_read: exports0['17'],
+        fd_write: exports0['12'],
+        path_create_directory: exports0['14'],
+        path_filestat_get: exports0['15'],
         path_open: exports0['16'],
-        proc_exit: exports0['24'],
+        proc_exit: exports0['23'],
       },
     }));
     ({ exports: exports2 } = yield instantiateCore(yield module1, {
@@ -5526,7 +6897,7 @@ const $init = (() => {
         memory: exports1.memory,
       },
       'wasi:cli/environment@0.2.6': {
-        'get-environment': exports0['27'],
+        'get-environment': exports0['30'],
       },
       'wasi:cli/exit@0.2.6': {
         exit: trampoline28,
@@ -5547,34 +6918,42 @@ const $init = (() => {
         '[resource-drop]terminal-output': trampoline27,
       },
       'wasi:cli/terminal-stderr@0.2.6': {
-        'get-terminal-stderr': exports0['40'],
+        'get-terminal-stderr': exports0['51'],
       },
       'wasi:cli/terminal-stdin@0.2.6': {
-        'get-terminal-stdin': exports0['38'],
+        'get-terminal-stdin': exports0['49'],
       },
       'wasi:cli/terminal-stdout@0.2.6': {
-        'get-terminal-stdout': exports0['39'],
+        'get-terminal-stdout': exports0['50'],
       },
       'wasi:filesystem/preopens@0.2.6': {
-        'get-directories': exports0['37'],
+        'get-directories': exports0['48'],
       },
       'wasi:filesystem/types@0.2.6': {
-        '[method]descriptor.get-type': exports0['31'],
-        '[method]descriptor.metadata-hash': exports0['33'],
-        '[method]descriptor.open-at': exports0['29'],
-        '[method]descriptor.read-via-stream': exports0['30'],
-        '[method]descriptor.stat': exports0['32'],
+        '[method]descriptor.append-via-stream': exports0['37'],
+        '[method]descriptor.create-directory-at': exports0['32'],
+        '[method]descriptor.get-type': exports0['38'],
+        '[method]descriptor.metadata-hash': exports0['40'],
+        '[method]descriptor.metadata-hash-at': exports0['41'],
+        '[method]descriptor.open-at': exports0['34'],
+        '[method]descriptor.read-via-stream': exports0['35'],
+        '[method]descriptor.stat': exports0['39'],
+        '[method]descriptor.stat-at': exports0['33'],
+        '[method]descriptor.write-via-stream': exports0['36'],
         '[resource-drop]descriptor': trampoline25,
         '[resource-drop]directory-entry-stream': trampoline24,
-        'filesystem-error-code': exports0['28'],
+        'filesystem-error-code': exports0['31'],
       },
       'wasi:io/error@0.2.6': {
         '[resource-drop]error': trampoline13,
       },
       'wasi:io/streams@0.2.6': {
-        '[method]input-stream.blocking-read': exports0['34'],
-        '[method]input-stream.read': exports0['35'],
-        '[method]output-stream.blocking-write-and-flush': exports0['36'],
+        '[method]input-stream.blocking-read': exports0['42'],
+        '[method]input-stream.read': exports0['43'],
+        '[method]output-stream.blocking-flush': exports0['46'],
+        '[method]output-stream.blocking-write-and-flush': exports0['47'],
+        '[method]output-stream.check-write': exports0['44'],
+        '[method]output-stream.write': exports0['45'],
         '[resource-drop]input-stream': trampoline12,
         '[resource-drop]output-stream': trampoline16,
       },
@@ -5589,39 +6968,50 @@ const $init = (() => {
         '1': trampoline30,
         '10': trampoline39,
         '11': trampoline40,
-        '12': trampoline41,
-        '13': trampoline42,
-        '14': trampoline43,
-        '15': trampoline44,
+        '12': exports2.fd_write,
+        '13': exports2.fd_filestat_get,
+        '14': exports2.path_create_directory,
+        '15': exports2.path_filestat_get,
         '16': exports2.path_open,
-        '17': exports2.fd_filestat_get,
-        '18': exports2.fd_read,
-        '19': exports2.environ_get,
+        '17': exports2.fd_read,
+        '18': exports2.environ_get,
+        '19': exports2.environ_sizes_get,
         '2': trampoline31,
-        '20': exports2.environ_sizes_get,
-        '21': exports2.fd_close,
-        '22': exports2.fd_prestat_get,
-        '23': exports2.fd_prestat_dir_name,
-        '24': exports2.proc_exit,
-        '25': exports2.adapter_close_badfd,
-        '26': trampoline45,
-        '27': trampoline46,
-        '28': trampoline47,
-        '29': trampoline48,
+        '20': exports2.fd_close,
+        '21': exports2.fd_prestat_get,
+        '22': exports2.fd_prestat_dir_name,
+        '23': exports2.proc_exit,
+        '24': exports2.adapter_close_badfd,
+        '25': trampoline41,
+        '26': trampoline42,
+        '27': trampoline43,
+        '28': trampoline44,
+        '29': trampoline45,
         '3': trampoline32,
-        '30': trampoline49,
-        '31': trampoline50,
-        '32': trampoline51,
-        '33': trampoline52,
-        '34': trampoline53,
-        '35': trampoline54,
-        '36': trampoline42,
-        '37': trampoline55,
-        '38': trampoline56,
-        '39': trampoline57,
+        '30': trampoline46,
+        '31': trampoline47,
+        '32': trampoline48,
+        '33': trampoline49,
+        '34': trampoline50,
+        '35': trampoline51,
+        '36': trampoline52,
+        '37': trampoline53,
+        '38': trampoline54,
+        '39': trampoline55,
         '4': trampoline33,
-        '40': trampoline58,
+        '40': trampoline56,
+        '41': trampoline57,
+        '42': trampoline58,
+        '43': trampoline59,
+        '44': trampoline60,
+        '45': trampoline61,
+        '46': trampoline62,
+        '47': trampoline42,
+        '48': trampoline63,
+        '49': trampoline64,
         '5': trampoline34,
+        '50': trampoline65,
+        '51': trampoline66,
         '6': trampoline35,
         '7': trampoline36,
         '8': trampoline37,
