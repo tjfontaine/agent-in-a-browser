@@ -158,9 +158,6 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Wire terminal to our CLI shims
     setTerminal(terminal);
 
-    // Set initial size
-    setTerminalSize(terminal.cols, terminal.rows);
-
     // Listen for resize events
     terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
         console.log('[TUI Loader] Terminal resized:', cols, 'x', rows);
@@ -179,6 +176,13 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     }).catch(err => {
         console.error('TUI error:', err);
     });
+
+    // Send initial size AFTER run() starts so the TUI can process it
+    // The TUI starts at 80x24 default and needs a resize event to get actual size
+    setTimeout(() => {
+        console.log('[TUI Loader] Sending initial size:', terminal.cols, 'x', terminal.rows);
+        setTerminalSize(terminal.cols, terminal.rows);
+    }, 100);
 
     return { terminal, stop };
 }
