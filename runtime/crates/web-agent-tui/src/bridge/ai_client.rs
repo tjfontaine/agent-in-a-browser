@@ -566,6 +566,10 @@ impl AiClient {
                 let headers = vec![
                     ("x-api-key", api_key.clone()),
                     ("anthropic-version", "2023-06-01".to_string()),
+                    (
+                        "anthropic-dangerous-direct-browser-access",
+                        "true".to_string(),
+                    ),
                     ("Content-Type", "application/json".to_string()),
                 ];
                 (url, headers)
