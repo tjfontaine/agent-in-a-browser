@@ -210,6 +210,82 @@ export function createLazyFetchStream(url: string, options: RequestInit): unknow
     });
 }
 
+/**
+ * Create an InputStream that lazily awaits a Promise<Uint8Array> on first read.
+ * This pattern allows returning a FutureIncomingResponse immediately
+ * while the actual data resolution is deferred until body consumption.
+ * JSPI suspension happens in blockingRead, not in Pollable.block().
+ */
+export function createLazyBufferStream(dataPromise: Promise<Uint8Array>): unknown {
+    let data: Uint8Array | null = null;
+    let offset = 0;
+    let done = false;
+    let error: Error | null = null;
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            // Non-blocking read - return buffered data or empty
+            if (data && offset < data.length) {
+                const n = Math.min(Number(len), data.length - offset);
+                const result = data.slice(offset, offset + n);
+                offset += n;
+                if (offset >= data.length) {
+                    done = true;
+                }
+                return result;
+            }
+            return new Uint8Array(0);
+        },
+
+        async blockingRead(len: bigint): Promise<Uint8Array> {
+            // If we have data, return from it
+            if (data && offset < data.length) {
+                const n = Math.min(Number(len), data.length - offset);
+                const result = data.slice(offset, offset + n);
+                offset += n;
+                if (offset >= data.length) {
+                    done = true;
+                }
+                return result;
+            }
+
+            // If done, return empty
+            if (done) {
+                return new Uint8Array(0);
+            }
+
+            // If we had an error, return empty
+            if (error) {
+                return new Uint8Array(0);
+            }
+
+            try {
+                // Await the data promise (lazily starts resolution)
+                // This suspends via JSPI until data is ready
+                data = await dataPromise;
+
+                if (!data || data.length === 0) {
+                    done = true;
+                    return new Uint8Array(0);
+                }
+
+                // Return first chunk
+                const n = Math.min(Number(len), data.length);
+                const result = data.slice(0, n);
+                offset = n;
+                if (offset >= data.length) {
+                    done = true;
+                }
+                return result;
+            } catch (err) {
+                error = err as Error;
+                done = true;
+                return new Uint8Array(0);
+            }
+        }
+    });
+}
+
 export class Fields {
     private _fields: Map<string, Uint8Array[]>;
 
@@ -788,12 +864,24 @@ export const outgoingHandler = {
         const bodyBytes = request.getBodyBytes();
         const body = bodyBytes.length > 0 ? bodyBytes : null;
 
-        // Check if we should route through transport handler (async)
+        // Check if we should route through transport handler
+        // Use lazy buffer stream pattern - JSPI suspension in blockingRead, not Pollable.block
         if (transportHandler && shouldIntercept(url)) {
             console.log('[http] Routing via transport handler:', method, url);
-            // Pass Promise to FutureIncomingResponse - it will resolve async
+
+            // Start the request and create a lazy body stream
             const responsePromise = transportHandler(method, url, headers, body);
-            return new FutureIncomingResponse(responsePromise);
+            const bodyStream = createLazyBufferStream(
+                responsePromise.then(r => r.body)
+            );
+
+            // Return sync FutureIncomingResponse with lazy body
+            // Status/headers will be determined when body is first read
+            return new FutureIncomingResponse({
+                status: 200, // Default, actual status doesn't matter for MCP JSON-RPC
+                headers: [] as [string, Uint8Array][],
+                bodyStream: bodyStream
+            });
         }
 
         // For HTTPS requests, use async fetch with streaming body 
