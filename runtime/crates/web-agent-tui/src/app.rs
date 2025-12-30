@@ -1004,11 +1004,20 @@ impl<R: Read, W: Write> App<R, W> {
                                     });
                                 }
                                 Err(e) => {
-                                    *fetched_models = Some(Vec::new());
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!("Failed to fetch models: {}", e),
-                                    });
+                                    // Check if the error is due to missing API key
+                                    let error_msg = format!("{}", e);
+                                    if error_msg.contains("No API key") {
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: "No API key configured. Use /key to enter your API key first.".to_string(),
+                                        });
+                                    } else {
+                                        *fetched_models = Some(Vec::new());
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!("Failed to fetch models: {}", e),
+                                        });
+                                    }
                                 }
                             }
                         } else {
