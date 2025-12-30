@@ -596,8 +596,9 @@ impl<R: Read, W: Write> App<R, W> {
         // Collect all tools with prefixes for multi-server support
         let tools = self.collect_all_tools();
 
-        // Build message history for AI with system prompt first
-        let mut ai_messages: Vec<crate::bridge::ai_client::Message> = vec![get_system_message()];
+        // Build message history for AI with system prompt first (includes dynamic tool list)
+        let mut ai_messages: Vec<crate::bridge::ai_client::Message> =
+            vec![get_system_message(&tools)];
 
         // Add conversation history (skip UI system messages like "Welcome...")
         ai_messages.extend(self.messages.iter().filter_map(|m| match m.role {
@@ -1124,14 +1125,15 @@ impl<R: Read, W: Write> App<R, W> {
     fn collect_all_tools(&mut self) -> Vec<ToolDefinition> {
         let mut all_tools = Vec::new();
 
-        // 1. Sandbox tools (prefix: "sandbox_")
+        // 1. Sandbox tools (prefix: "__sandbox__")
+        // The double-underscore prefix is reserved for built-in tool namespaces
         match self.mcp_client.list_tools() {
             Ok(sandbox_tools) => {
                 self.server_status.local_connected = true;
                 self.server_status.local_tool_count = sandbox_tools.len();
                 for tool in sandbox_tools {
                     all_tools.push(ToolDefinition {
-                        name: format!("sandbox_{}", tool.name),
+                        name: format!("__sandbox__{}", tool.name),
                         description: tool.description,
                         input_schema: tool.input_schema,
                         title: tool.title,
@@ -1161,50 +1163,76 @@ impl<R: Read, W: Write> App<R, W> {
             }
         }
 
-        // 3. Local tools (NO prefix - checked first in routing)
-        all_tools.extend(get_local_tool_definitions());
+        // 3. Local tools (prefix: "__local__")
+        // The double-underscore prefix is reserved for built-in tool namespaces
+        for tool in get_local_tool_definitions() {
+            all_tools.push(ToolDefinition {
+                name: format!("__local__{}", tool.name),
+                description: tool.description,
+                input_schema: tool.input_schema,
+                title: tool.title,
+            });
+        }
 
         all_tools
     }
 
     /// Route a tool call to the correct server based on prefix
+    ///
+    /// Reserved prefixes (double underscore):
+    /// - __sandbox__ : Built-in sandbox MCP tools (read_file, write_file, etc.)
+    /// - __local__   : Client-local tools (task_write, etc.)
+    ///
+    /// User-defined MCP servers use their server_id as prefix (cannot start with __)
     fn route_tool_call(&mut self, prefixed_name: &str, args: Value) -> Result<String, String> {
-        // 1. Check local tools first (no prefix required)
-        if let Some(result) = try_execute_local_tool(prefixed_name, args.clone()) {
-            // Handle task updates from task_write
-            if let Some(new_tasks) = result.tasks {
-                self.tasks = new_tasks;
-                // Update aux panel with task list
-                self.aux_content = AuxContent {
-                    kind: AuxContentKind::TaskList,
-                    title: "Tasks".to_string(),
-                    content: format_tasks_for_display(&self.tasks),
+        // 1. Check for __local__ prefix (client-side tools)
+        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
+            if let Some(result) = try_execute_local_tool(tool_name, args) {
+                // Handle task updates from task_write
+                if let Some(new_tasks) = result.tasks {
+                    self.tasks = new_tasks;
+                    // Update aux panel with task list
+                    self.aux_content = AuxContent {
+                        kind: AuxContentKind::TaskList,
+                        title: "Tasks".to_string(),
+                        content: format_tasks_for_display(&self.tasks),
+                    };
+                }
+                return if result.success {
+                    Ok(result.message)
+                } else {
+                    Err(result.message)
                 };
             }
-            return if result.success {
-                Ok(result.message)
-            } else {
-                Err(result.message)
-            };
+            return Err(format!("Unknown local tool: {}", tool_name));
         }
 
-        // 2. Parse prefix to determine server
+        // 2. Check for __sandbox__ prefix (built-in MCP tools)
+        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
+            return self
+                .mcp_client
+                .call_tool(tool_name, args)
+                .map_err(|e| e.to_string());
+        }
+
+        // 3. Parse user-defined server prefix (server_id_toolname)
         if let Some(pos) = prefixed_name.find('_') {
             let (server_id, tool_name) = prefixed_name.split_at(pos);
             let tool_name = &tool_name[1..]; // Skip the underscore
 
-            if server_id == "sandbox" {
-                // Route to local sandbox MCP
-                self.mcp_client
-                    .call_tool(tool_name, args)
-                    .map_err(|e| e.to_string())
-            } else {
-                // Route to remote server (TODO: implement remote MCP client)
-                Err(format!(
-                    "Remote server '{}' tool calls not yet implemented",
+            // Block double-underscore prefixes for user servers
+            if server_id.starts_with("_") {
+                return Err(format!(
+                    "Server ID cannot start with underscore (reserved): {}",
                     server_id
-                ))
+                ));
             }
+
+            // Route to remote server (TODO: implement remote MCP client)
+            Err(format!(
+                "Remote server '{}' tool calls not yet implemented",
+                server_id
+            ))
         } else {
             Err(format!("Unknown tool: {}", prefixed_name))
         }
