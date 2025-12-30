@@ -121,12 +121,16 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     fitAddon.observeResize();
     console.log('[TUI Loader] Terminal fitted:', terminal.cols, 'x', terminal.rows);
 
-    // Add keyboard handler for copy/paste
+    // Add keyboard handler for copy/paste and browser shortcuts
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
         const isMac = navigator.platform.includes('Mac');
         const modKey = isMac ? event.metaKey : event.ctrlKey;
 
-        // Handle copy: Ctrl/Cmd+C with selection
+        // On Mac, Cmd+key triggers browser actions; Ctrl+key goes to terminal
+        // On non-Mac, Ctrl+key with Shift triggers browser actions; plain Ctrl+key goes to terminal
+        const isBrowserShortcut = isMac ? event.metaKey : (event.ctrlKey && event.shiftKey);
+
+        // Handle copy: Mod+C with selection
         if (modKey && event.key === 'c' && terminal.hasSelection()) {
             const selection = terminal.getSelection();
             if (selection) {
@@ -137,10 +141,10 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
                 });
                 terminal.clearSelection();
             }
-            return true; // Prevent default (don't send Ctrl+C to terminal)
+            return true; // Prevent default (don't send Ctrl+C to terminal when copying)
         }
 
-        // Handle paste: Ctrl/Cmd+V
+        // Handle paste: Mod+V
         if (modKey && event.key === 'v') {
             navigator.clipboard.readText().then(text => {
                 if (text) {
@@ -153,13 +157,21 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
             return true; // Prevent default
         }
 
-        // Handle select all: Ctrl/Cmd+A
-        if (modKey && event.key === 'a') {
+        // Handle select all: Cmd+A (Mac) or Ctrl+Shift+A (non-Mac)
+        // Plain Ctrl+A on non-Mac goes to terminal as readline beginning-of-line
+        if (isBrowserShortcut && event.key === 'a') {
             terminal.selectAll();
             return true; // Prevent default
         }
 
-        return false; // Let other keys pass through
+        // Let browser handle refresh (Cmd+R / Ctrl+R) and dev tools (Cmd+Opt+I / Ctrl+Shift+I)
+        if (modKey && (event.key === 'r' || event.key === 'i' || event.key === 't')) {
+            return false; // Let browser handle these
+        }
+
+        // Let readline shortcuts (Ctrl+A/E/W/K/U) pass through to terminal
+        // They'll be sent as control characters via onData
+        return false;
     });
 
     // Wire terminal to our CLI shims
