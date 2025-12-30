@@ -114,6 +114,47 @@ export async function launchTui(options: TuiLoaderOptions): Promise<{
     // Mount terminal
     terminal.open(options.container);
 
+    // Add keyboard handler for copy/paste
+    terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        const isMac = navigator.platform.includes('Mac');
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
+
+        // Handle copy: Ctrl/Cmd+C with selection
+        if (modKey && event.key === 'c' && terminal.hasSelection()) {
+            const selection = terminal.getSelection();
+            if (selection) {
+                navigator.clipboard.writeText(selection).then(() => {
+                    console.log('[TUI] Copied to clipboard:', selection.length, 'chars');
+                }).catch(err => {
+                    console.error('[TUI] Failed to copy:', err);
+                });
+                terminal.clearSelection();
+            }
+            return true; // Prevent default (don't send Ctrl+C to terminal)
+        }
+
+        // Handle paste: Ctrl/Cmd+V
+        if (modKey && event.key === 'v') {
+            navigator.clipboard.readText().then(text => {
+                if (text) {
+                    terminal.paste(text);
+                    console.log('[TUI] Pasted from clipboard:', text.length, 'chars');
+                }
+            }).catch(err => {
+                console.error('[TUI] Failed to paste:', err);
+            });
+            return true; // Prevent default
+        }
+
+        // Handle select all: Ctrl/Cmd+A
+        if (modKey && event.key === 'a') {
+            terminal.selectAll();
+            return true; // Prevent default
+        }
+
+        return false; // Let other keys pass through
+    });
+
     // Wire terminal to our CLI shims
     setTerminal(terminal);
 
