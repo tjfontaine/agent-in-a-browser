@@ -126,16 +126,17 @@ class Descriptor {
             throw 'no-entry';
         }
 
-        let type = 'unknown';
+        let type: string;
         let size = BigInt(0);
 
         if (entry.dir !== undefined) {
             type = 'directory';
         } else if (entry.symlink !== undefined) {
             type = 'symbolic-link';
-        } else if (entry.size !== undefined) {
+        } else {
+            // File (size may be 0 or undefined for newly created files)
             type = 'regular-file';
-            size = BigInt(entry.size);
+            size = BigInt(entry.size || 0);
         }
 
         const mtime = msToDatetime(entry.mtime);
