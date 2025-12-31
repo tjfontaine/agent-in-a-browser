@@ -180,7 +180,6 @@ class Descriptor {
         // Handle truncate: clear any buffered data for this file
         if (openFlags.truncate && entry && !entry.dir) {
             fileBufferCache.delete(normalizedPath);
-            console.log('[opfs-fs] openAt truncate: cleared buffer cache for', normalizedPath);
         }
 
         if (!entry) {
@@ -246,7 +245,6 @@ class Descriptor {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
-        console.log('[opfs-fs] Descriptor.read called, length:', length, 'offset:', offset, 'path:', normalizedPath);
 
         // Get cached sync handle
         const handle = syncHandleCache.get(normalizedPath);
@@ -260,7 +258,6 @@ class Descriptor {
         }
 
         // Fallback: use sync helper to read file via Atomics (binary-safe)
-        console.log('[opfs-fs] No cached handle, using syncReadFileBinary for:', normalizedPath);
         try {
             const fullData = syncReadFileBinary(normalizedPath);
             const sliceStart = Math.min(offset, fullData.length);
@@ -283,7 +280,6 @@ class Descriptor {
         const path = this.path;
         const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
-        console.log('[opfs-fs] readViaStream called, path:', normalizedPath, 'offset:', offset);
 
         const handle = syncHandleCache.get(normalizedPath);
         if (handle) {
@@ -316,7 +312,6 @@ class Descriptor {
 
         // Fallback: use async read via OPFS APIs (JSPI will suspend on the Promise)
         // We need to read the file lazily on first blockingRead call
-        console.log('[opfs-fs] No cached handle for stream, using asyncReadFile:', normalizedPath);
 
         let fileData: Uint8Array | null = null;
         let fileSize = 0;
@@ -371,7 +366,6 @@ class Descriptor {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
-        console.log('[opfs-fs] Descriptor.write called, buffer.length:', buffer.length, 'offset:', offset, 'path:', normalizedPath);
 
         const handle = syncHandleCache.get(normalizedPath);
         if (handle) {
@@ -388,7 +382,6 @@ class Descriptor {
         }
 
         // Fallback: use sync helper to write file via Atomics (binary-safe)
-        console.log('[opfs-fs] No cached handle, using syncWriteFileBinary for:', normalizedPath);
         try {
             syncWriteFileBinary(normalizedPath, buffer);
 
@@ -446,7 +439,6 @@ class Descriptor {
 
         // Fallback: write via async OPFS APIs (JSPI will suspend on the Promise)
         // Use global buffer cache to persist data across stream re-opens (ZipWriter seeks cause multiple writeViaStream calls)
-        console.log('[opfs-fs] No cached handle for stream write, using async write:', normalizedPath);
         const asyncPath = normalizedPath;
         const asyncEntry = entry;
 
@@ -458,7 +450,6 @@ class Descriptor {
         return new OutputStream({
             write(buf: Uint8Array): bigint {
                 const existingData = fileBufferCache.get(asyncPath) || new Uint8Array(0);
-                console.log('[opfs-fs] writeViaStream.write called, buf.length:', buf.length, 'cached:', existingData.length);
 
                 // Accumulate binary data in cache
                 const newData = new Uint8Array(existingData.length + buf.length);
@@ -470,7 +461,6 @@ class Descriptor {
                 asyncWriteFile(asyncPath, newData).then(() => {
                     asyncEntry.size = newData.length;
                     asyncEntry.mtime = Date.now();
-                    console.log('[opfs-fs] writeViaStream.write completed, total size:', newData.length);
                 }).catch(e => {
                     console.error('[opfs-fs] writeViaStream async write error:', e);
                 });
@@ -510,7 +500,6 @@ class Descriptor {
 
 
     async readDirectory(): Promise<DirectoryEntryStream> {
-        console.log('[opfs-fs] readDirectory called, path:', this.path);
         if (!this.treeEntry.dir) {
             throw 'bad-descriptor';
         }
@@ -526,7 +515,6 @@ class Descriptor {
                 : { size: e.size || 0, mtime: e.mtime || Date.now() }
         ]);
 
-        console.log('[opfs-fs] readDirectory returning', entries.length, 'entries:', entries.map(e => e[0]));
         return new DirectoryEntryStream(entries);
     }
 
@@ -620,7 +608,6 @@ class Descriptor {
     setSize(size: bigint): void {
         const path = this.path;
         const normalizedPath = normalizePath(path);
-        console.log('[opfs-fs] setSize:', normalizedPath, 'to', size);
 
         const handle = syncHandleCache.get(normalizedPath);
         if (!handle) {
@@ -642,7 +629,6 @@ class Descriptor {
     ): void {
         // OPFS doesn't support setting timestamps directly
         // Just acknowledge the call
-        console.log('[opfs-fs] setTimes: not supported by OPFS, ignoring');
     }
 
     /**
@@ -655,7 +641,6 @@ class Descriptor {
         _dataModificationTimestamp?: { seconds: bigint; nanoseconds: number }
     ): void {
         // OPFS doesn't support setting timestamps
-        console.log('[opfs-fs] setTimesAt: not supported by OPFS, ignoring');
     }
 
     /**
@@ -722,7 +707,6 @@ class Descriptor {
         const newFullPath = newDescriptor.resolvePath(newPath);
         const newNormalized = normalizePath(newFullPath);
 
-        console.log('[opfs-fs] renameAt:', oldNormalized, '->', newNormalized);
 
         // Get old entry from OPFS
         const oldEntry = await getEntryFromOpfs(oldNormalized);
@@ -803,7 +787,6 @@ class Descriptor {
                 // Delete old file
                 await oldParent.removeEntry(oldName);
 
-                console.log('[opfs-fs] Moved in OPFS:', oldPath, '->', newPath);
             } catch (e) {
                 console.error('[opfs-fs] Failed to move in OPFS:', oldPath, '->', newPath, e);
             }
@@ -894,7 +877,6 @@ class Descriptor {
                 } else {
                     await parentDir.removeEntry(name);
                 }
-                console.log('[opfs-fs] Removed from OPFS:', path);
             } catch (e) {
                 console.error('[opfs-fs] Failed to remove from OPFS:', path, e);
             }
