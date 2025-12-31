@@ -264,7 +264,8 @@ export const opfsFs = {
                 const filename = parts.pop()!;
                 const parentDir = parts.length > 0
                     ? await getOpfsDirectory(parts, false)
-                    : await getOpfsRoot();
+                    : getOpfsRoot();
+                if (!parentDir) throw new Error('OPFS not initialized');
                 await parentDir.removeEntry(filename);
             } catch (e) {
                 console.error('[opfs-git] rename failed:', oldPath, '->', newPath, e);

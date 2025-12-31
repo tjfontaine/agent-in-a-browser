@@ -123,8 +123,8 @@ async function loadTsxEngine(): Promise<CommandModule> {
     const module: TsxEngineModule = await import('./tsx-engine/tsx-engine.js');
 
     // With --tla-compat, we must await $init before accessing exports
-    if (module.$init) {
-        await module.$init;
+    if ('$init' in module) {
+        await (module as { $init: Promise<void> }).$init;
     }
 
     const loadTime = performance.now() - startTime;
@@ -145,8 +145,8 @@ async function loadSqliteModule(): Promise<CommandModule> {
     const module: SqliteModule = await import('./sqlite-module/sqlite-module.js');
 
     // With --tla-compat, we must await $init before accessing exports
-    if (module.$init) {
-        await module.$init;
+    if ('$init' in module) {
+        await (module as { $init: Promise<void> }).$init;
     }
 
     const loadTime = performance.now() - startTime;
