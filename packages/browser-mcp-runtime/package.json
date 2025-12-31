@@ -1,0 +1,35 @@
+{
+    "name": "@tjfontaine/browser-mcp-runtime",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Complete browser MCP runtime - batteries included",
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@tjfontaine/opfs-wasi-fs": "^0.1.0",
+        "@tjfontaine/wasi-http-handler": "^0.1.0",
+        "@tjfontaine/wasi-shims": "^0.1.0",
+        "@tjfontaine/mcp-wasm-server": "^0.1.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0",
+        "vitest": "^4.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tjfontaine/web-agent.git",
+        "directory": "packages/browser-mcp-runtime"
+    },
+    "license": "MIT"
+}

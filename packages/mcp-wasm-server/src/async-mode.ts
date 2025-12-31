@@ -26,7 +26,7 @@ interface IncomingHandler {
 }
 
 // Import types from generated modules (for $init Promise)
-type McpServerModule = typeof import('./mcp-server-sync/ts-runtime-mcp.js');
+type McpServerModule = typeof import('../mcp-server-sync/ts-runtime-mcp.js');
 
 // Cached module references
 let cachedIncomingHandler: IncomingHandler | null = null;
@@ -48,11 +48,11 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
     loadingPromise = (async () => {
         if (hasJSPI) {
             console.log('[AsyncMode] Loading JSPI-mode MCP server...');
-            const module = await import('./mcp-server-jspi/ts-runtime-mcp.js');
+            const module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
             console.log('[AsyncMode] Loading Sync-mode MCP server...');
-            const module: McpServerModule = await import('./mcp-server-sync/ts-runtime-mcp.js');
+            const module: McpServerModule = await import('../mcp-server-sync/ts-runtime-mcp.js');
             // With --tla-compat, we must await $init before accessing exports
             if (module.$init) {
                 await module.$init;

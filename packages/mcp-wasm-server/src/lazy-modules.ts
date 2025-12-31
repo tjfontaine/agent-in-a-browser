@@ -12,18 +12,18 @@
 import { hasJSPI } from './async-mode.js';
 
 // Static import for git-module (pure TS, not WASM - must be static for worker context)
-import * as gitModule from './git-module.js';
+import * as gitModule from '../git/git-module.js';
 
 // Import types from generated modules
-type TsxEngineModule = typeof import('./tsx-engine/tsx-engine.js');
-type SqliteModule = typeof import('./sqlite-module/sqlite-module.js');
-type _RatatuiDemoModule = typeof import('./ratatui-demo/ratatui-demo.js');
+type TsxEngineModule = typeof import('../tsx-engine/tsx-engine.js');
+type SqliteModule = typeof import('../sqlite-module/sqlite-module.js');
+type _RatatuiDemoModule = typeof import('../ratatui-demo/ratatui-demo.js');
 
 // Re-export stream types from the generated WASM module for consumers
 // These are the actual WASI interfaces that the WASM modules use
-export type InputStream = import('./tsx-engine/interfaces/wasi-io-streams.js').InputStream;
-export type OutputStream = import('./tsx-engine/interfaces/wasi-io-streams.js').OutputStream;
-export type ExecEnv = import('./tsx-engine/interfaces/shell-unix-command.js').ExecEnv;
+export type InputStream = import('../tsx-engine/interfaces/wasi-io-streams.js').InputStream;
+export type OutputStream = import('../tsx-engine/interfaces/wasi-io-streams.js').OutputStream;
+export type ExecEnv = import('../tsx-engine/interfaces/shell-unix-command.js').ExecEnv;
 
 // Handle for a spawned command - supports poll and resolve patterns
 export interface CommandHandle {
@@ -120,7 +120,7 @@ async function loadTsxEngine(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // Dynamic import of the transpiled module (typed)
-    const module: TsxEngineModule = await import('./tsx-engine/tsx-engine.js');
+    const module: TsxEngineModule = await import('../tsx-engine/tsx-engine.js');
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -142,7 +142,7 @@ async function loadSqliteModule(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // Dynamic import of the transpiled module (typed)
-    const module: SqliteModule = await import('./sqlite-module/sqlite-module.js');
+    const module: SqliteModule = await import('../sqlite-module/sqlite-module.js');
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -240,7 +240,7 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
 
     // Dynamic import of the JSPI-transpiled module
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('./ratatui-demo/ratatui-demo.js') as any;
+    const module = await import('../ratatui-demo/ratatui-demo.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {
@@ -276,7 +276,7 @@ async function loadBrushShell(): Promise<CommandModule> {
 
     // Import the JSPI-transpiled MCP server which now exports command
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('./mcp-server-jspi/ts-runtime-mcp.js') as any;
+    const module = await import('../mcp-server-jspi/ts-runtime-mcp.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {

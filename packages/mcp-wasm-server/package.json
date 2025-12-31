@@ -1,0 +1,38 @@
+{
+    "name": "@tjfontaine/mcp-wasm-server",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "MCP (Model Context Protocol) server with prebuilt WASM runtime",
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist",
+        "wasm",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@tjfontaine/opfs-wasi-fs": "^0.1.0",
+        "@tjfontaine/wasi-http-handler": "^0.1.0",
+        "@tjfontaine/wasi-shims": "^0.1.0"
+    },
+    "peerDependencies": {
+        "@bytecodealliance/preview2-shim": "^0.17.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0",
+        "vitest": "^4.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tjfontaine/web-agent.git",
+        "directory": "packages/mcp-wasm-server"
+    },
+    "license": "MIT"
+}

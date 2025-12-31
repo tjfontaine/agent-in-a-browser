@@ -5,7 +5,7 @@
  * The React code is kept for reference but not used.
  */
 
-import { launchTui } from './wasm/tui-loader.js';
+import { launchTui } from './wasm/tui/tui-loader.js';
 import './index.css';
 
 // Create full-screen terminal container

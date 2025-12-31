@@ -9,7 +9,7 @@
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { opfsFs } from './opfs-git-adapter';
-import type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv } from './lazy-modules';
+import type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv } from '../lazy-loading/lazy-modules';
 
 // Default CORS proxy for GitHub and other services that don't support CORS
 const CORS_PROXY = 'https://cors.isomorphic-git.org';

@@ -9,19 +9,19 @@
 import { init as initGhostty, Terminal } from 'ghostty-web';
 
 // Import the TUI WASM module (transpiled with jco)
-import { run } from './web-agent-tui/web-agent-tui.js';
+import { run } from '../web-agent-tui/web-agent-tui.js';
 
 // Import the CLI shim to set up the terminal
 import { setTerminal, setTerminalSize } from './ghostty-cli-shim.js';
 
 // Import transport handler for routing MCP requests  
-import { setTransportHandler } from './wasi-http-impl.js';
+import { setTransportHandler } from '../host-shims/wasi-http-impl.js';
 
 // Import sandbox for MCP routing
-import { fetchFromSandbox, initializeSandbox } from '../agent/sandbox.js';
+import { fetchFromSandbox, initializeSandbox } from '../../agent/sandbox.js';
 
 // Import OPFS filesystem init for shell access
-import { initFilesystem } from './opfs-filesystem-impl.js';
+import { initFilesystem } from '../host-shims/opfs-filesystem-impl.js';
 
 export interface TuiLoaderOptions {
     container: HTMLElement;

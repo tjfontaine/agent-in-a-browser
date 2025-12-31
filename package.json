@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "build:packages": "npm run build --workspaces",
     "build": "npm run build:wasm && npm run build:frontend",
     "build:wasm": "cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml",
     "build:frontend": "cd frontend && npm run build",

@@ -6,8 +6,8 @@ console.log('[SandboxWorker] Module loading...');
 export { }; // Make this a module
 
 import { callWasmMcpServerFetch } from '../mcp/WasmBridge';
-import { loadMcpServer } from '../wasm/async-mode';
-import { initializeForSyncMode } from '../wasm/lazy-modules';
+import { loadMcpServer } from '../wasm/lazy-loading/async-mode';
+import { initializeForSyncMode } from '../wasm/lazy-loading/lazy-modules';
 // Lazy modules load ON-DEMAND in JSPI mode, or eagerly in Sync mode
 
 console.log('[SandboxWorker] Imports complete');
@@ -85,7 +85,7 @@ async function initialize(): Promise<void> {
     // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
     try {
         console.log('[SandboxWorker] Loading filesystem shim...');
-        const { initFilesystem } = await import('../wasm/opfs-filesystem-impl');
+        const { initFilesystem } = await import('../wasm/host-shims/opfs-filesystem-impl');
         console.log('[SandboxWorker] Calling initFilesystem()...');
         await initFilesystem();
         console.log('[SandboxWorker] OPFS filesystem shim initialized');

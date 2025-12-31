@@ -8,7 +8,7 @@
 import type { Terminal } from 'ghostty-web';
 
 // Use our existing custom stream classes that properly integrate with jco
-import { CustomInputStream, CustomOutputStream } from './streams.js';
+import { CustomInputStream, CustomOutputStream } from '../host-shims/streams.js';
 
 // Buffer for stdin data from terminal
 const stdinBuffer: Uint8Array[] = [];

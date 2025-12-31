@@ -14,7 +14,7 @@ import {
     type CommandModule,
     type ExecEnv as LazyExecEnv,
 } from './lazy-modules.js';
-import { CustomInputStream, CustomOutputStream } from './streams.js';
+import { CustomInputStream, CustomOutputStream } from '../host-shims/streams.js';
 import { poll } from '@bytecodealliance/preview2-shim/io';
 
 // Get the Pollable base class from preview2-shim

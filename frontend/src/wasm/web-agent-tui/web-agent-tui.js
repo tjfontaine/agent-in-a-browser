@@ -1,10 +1,12 @@
-import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '../ghostty-cli-shim.js';
+import { getTerminalSize } from '../host-shims/terminal-info-impl.js';
+import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../host-shims/wasi-http-impl.js';
 import { command } from '../mcp-server-jspi/ts-runtime-mcp.js';
-import { getTerminalSize } from '../terminal-info-impl.js';
-import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '../wasi-http-impl.js';
+import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '../tui/ghostty-cli-shim.js';
 import { preopens, types } from '@bytecodealliance/preview2-shim/filesystem';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
+const { handle } = outgoingHandler;
+const { run } = command;
 const { getEnvironment } = environment;
 const { exit } = exit$1;
 const { getStderr } = stderr;
@@ -15,8 +17,6 @@ const { TerminalOutput } = terminalOutput;
 const { getTerminalStderr } = terminalStderr;
 const { getTerminalStdin } = terminalStdin;
 const { getTerminalStdout } = terminalStdout;
-const { run } = command;
-const { handle } = outgoingHandler;
 const { getDirectories } = preopens;
 const { Descriptor,
   filesystemErrorCode } = types;

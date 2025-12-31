@@ -18,7 +18,7 @@ import {
     fileExistsInOpfs,
     directoryExistsInOpfs,
     getOpfsRoot,
-} from './directory-tree';
+} from '../host-shims/directory-tree';
 
 // isomorphic-git expects a Node.js-like fs API
 // We implement the subset that isomorphic-git actually uses
