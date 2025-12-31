@@ -11,41 +11,39 @@
 
 import { hasJSPI } from './async-mode.js';
 
+// Import and re-export from wasm-loader for unified API
+import {
+    registerModule,
+    isRegisteredCommand,
+    isInteractiveCommand as isInteractiveCommandRegistry,
+    getModuleForCommand as getModuleForCommandRegistry,
+    getAllCommands,
+    setTerminalContext,
+    isTerminalContext,
+    type CommandModule,
+    type InputStream,
+    type OutputStream,
+    type ExecEnv,
+    type CommandHandle,
+} from '@tjfontaine/wasm-loader';
+
+// Import metadata from wasm-* packages (no dynamic imports, safe for Rollup)
+// Loaders are attached locally when registering to avoid build-time resolution
+import { metadata as tsxMetadata } from '@tjfontaine/wasm-tsx';
+import { metadata as sqliteMetadata } from '@tjfontaine/wasm-sqlite';
+import { metadata as ratatuiMetadata } from '@tjfontaine/wasm-ratatui';
+import { metadata as vimMetadata } from '@tjfontaine/wasm-vim';
+
 // Static import for git-module (pure TS, not WASM - must be static for worker context)
 import * as gitModule from '../git/git-module.js';
 
-// Import types from generated modules
-type TsxEngineModule = typeof import('../tsx-engine/tsx-engine.js');
-type SqliteModule = typeof import('../sqlite-module/sqlite-module.js');
-type _RatatuiDemoModule = typeof import('../ratatui-demo/ratatui-demo.js');
+// Import types for internal use (these modules are still loaded by our loaders for now)
+type TsxEngineModule = typeof import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
+type SqliteModule = typeof import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
+type _RatatuiDemoModule = typeof import('../../../../packages/wasm-ratatui/wasm/ratatui-demo.js');
 
-// Re-export stream types from the generated WASM module for consumers
-// These are the actual WASI interfaces that the WASM modules use
-export type InputStream = import('../tsx-engine/interfaces/wasi-io-streams.js').InputStream;
-export type OutputStream = import('../tsx-engine/interfaces/wasi-io-streams.js').OutputStream;
-export type ExecEnv = import('../tsx-engine/interfaces/shell-unix-command.js').ExecEnv;
-
-// Handle for a spawned command - supports poll and resolve patterns
-export interface CommandHandle {
-    // Poll for completion, returns exit code when done, undefined if still running
-    poll(): number | undefined;
-    // Wait for completion, returns exit code
-    resolve(): Promise<number>;
-}
-
-// Interface that lazy-loaded command modules export
-export interface CommandModule {
-    // Spawn a command, returns handle for polling/resolving
-    spawn: (
-        name: string,
-        args: string[],
-        env: ExecEnv,
-        stdin: InputStream,
-        stdout: OutputStream,
-        stderr: OutputStream,
-    ) => CommandHandle;
-    listCommands: () => string[];
-}
+// Re-export types from wasm-loader for consumers
+export type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv };
 
 // Cache for loaded modules
 const loadedModules: Map<string, CommandModule> = new Map();
@@ -53,25 +51,35 @@ const loadedModules: Map<string, CommandModule> = new Map();
 // Loading promises to prevent double-loading
 const loadingPromises: Map<string, Promise<CommandModule>> = new Map();
 
-// Terminal context for isatty detection
-// When true, getTerminalStdin/Stdout return terminal instances (TTY mode)
-// When false, they return undefined (piped mode)
-let _terminalContext = false;
+// Re-export terminal context functions and utilities from wasm-loader
+export { setTerminalContext, isTerminalContext, getAllCommands };
+
+// ============================================================================
+// Module Registration - Initialize at startup
+// ============================================================================
+
+let _modulesRegistered = false;
 
 /**
- * Set the terminal context for the current command execution.
- * Called before spawning commands to indicate TTY vs piped mode.
+ * Register all WASM modules.
+ * Call this at startup before using any lazy-loaded commands.
+ * 
+ * Packages export only metadata (name, commands) - no loader functions.
+ * Loaders are attached here to avoid Rollup resolving dynamic imports at build time.
  */
-export function setTerminalContext(isTty: boolean): void {
-    _terminalContext = isTty;
-}
+export function registerAllModules(): void {
+    if (_modulesRegistered) return;
 
-/**
- * Check if the current execution context is a terminal (TTY).
- * Used by terminal shims to implement isatty() behavior.
- */
-export function isTerminalContext(): boolean {
-    return _terminalContext;
+    console.log('[LazyLoader] Registering WASM modules...');
+
+    // Combine package metadata with local loader functions
+    registerModule({ ...tsxMetadata, loader: loadTsxEngine });
+    registerModule({ ...sqliteMetadata, loader: loadSqliteModule });
+    registerModule({ ...ratatuiMetadata, loader: loadRatatuiDemo });
+    registerModule({ ...vimMetadata, loader: loadEdtuiModule });
+
+    _modulesRegistered = true;
+    console.log('[LazyLoader] All modules registered');
 }
 
 /**
@@ -100,31 +108,43 @@ export const LAZY_COMMANDS: Record<string, string> = {
 /**
  * Commands that are interactive TUI apps (need direct terminal access).
  * These commands use spawn_interactive and bypass shell output buffering.
+ * NOTE: Most of these are now derived from the registry. This set contains
+ * any extra commands not yet in packages.
  */
-export const INTERACTIVE_COMMANDS = new Set([
-    'vim', 'vi', 'edit',           // Vim-style editor
-    'ratatui-demo', 'tui-demo',    // TUI demos
-    'counter', 'ansi-demo',        // Interactive demos
+export const INTERACTIVE_COMMANDS = new Set<string>([
+    // Any non-packaged interactive commands go here
 ]);
 
 /**
- * Check if a command is an interactive TUI (needs spawn_interactive)
+ * Check if a command is an interactive TUI (needs spawn_interactive).
+ * Uses the registry if the command is registered, otherwise falls back to local check.
  */
 export function isInteractiveCommand(commandName: string): boolean {
+    // First check the registry (for packaged modules)
+    if (isRegisteredCommand(commandName)) {
+        return isInteractiveCommandRegistry(commandName);
+    }
+    // Fall back to legacy check
     return INTERACTIVE_COMMANDS.has(commandName);
 }
 
 /**
- * Check if a command should be lazy-loaded
+ * Check if a command should be lazy-loaded.
+ * Uses the registry if registered, otherwise checks LAZY_COMMANDS.
  */
 export function isLazyCommand(commandName: string): boolean {
-    return commandName in LAZY_COMMANDS;
+    return isRegisteredCommand(commandName) || commandName in LAZY_COMMANDS;
 }
 
 /**
- * Get the module name for a lazy command
+ * Get the module name for a lazy command.
+ * Uses the registry if registered, otherwise checks LAZY_COMMANDS.
  */
 export function getModuleForCommand(commandName: string): string | undefined {
+    const registryModule = getModuleForCommandRegistry(commandName);
+    if (registryModule) {
+        return registryModule;
+    }
     return LAZY_COMMANDS[commandName];
 }
 
@@ -162,7 +182,7 @@ async function loadTsxEngine(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // Dynamic import of the transpiled module (typed)
-    const module: TsxEngineModule = await import('../tsx-engine/tsx-engine.js');
+    const module: TsxEngineModule = await import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -184,7 +204,7 @@ async function loadSqliteModule(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // Dynamic import of the transpiled module (typed)
-    const module: SqliteModule = await import('../sqlite-module/sqlite-module.js');
+    const module: SqliteModule = await import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -282,7 +302,7 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
 
     // Dynamic import of the JSPI-transpiled module
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('../ratatui-demo/ratatui-demo.js') as any;
+    const module = await import('../../../../packages/wasm-ratatui/wasm/ratatui-demo.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {
@@ -317,7 +337,7 @@ async function loadEdtuiModule(): Promise<CommandModule> {
     const startTime = performance.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('../edtui-module/edtui-module.js') as any;
+    const module = await import('../../../../packages/wasm-vim/wasm/edtui-module.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {

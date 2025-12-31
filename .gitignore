@@ -37,3 +37,17 @@ frontend/src/wasm/gix-module/
 frontend/src/wasm/ts-runtime-component/
 frontend/src/wasm/component/
 frontend/src/wasm/browser_ts_runtime.wasm
+
+# Old WASM module locations (now in packages/)
+frontend/src/wasm/edtui-module/
+frontend/src/wasm/ratatui-demo/
+
+# Generated WASM files in packages (from jco transpile)
+packages/wasm-tsx/wasm/
+packages/wasm-sqlite/wasm/
+packages/wasm-ratatui/wasm/
+packages/wasm-vim/wasm/
+
+# Test results and reports
+frontend/test-results/
+frontend/playwright-report/
