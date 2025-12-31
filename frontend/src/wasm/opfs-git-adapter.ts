@@ -4,18 +4,21 @@
  * This module provides a `fs` interface compatible with isomorphic-git
  * that uses our OPFS-backed filesystem. This allows git operations
  * to use the same storage as the rest of the shell.
+ * 
+ * All operations go directly to OPFS, not in-memory tree.
  */
 
 import {
-    getTreeEntry,
-    setTreeEntry,
-    removeTreeEntry,
     normalizePath,
-    getEntryFromOpfs,
+    getOpfsDirectory,
+    getOpfsFile,
+    asyncReadFile,
+    asyncWriteFile,
     listDirectory,
-    type TreeEntry,
+    fileExistsInOpfs,
+    directoryExistsInOpfs,
+    getOpfsRoot,
 } from './directory-tree';
-import { syncReadFileBinary, syncWriteFileBinary } from './opfs-sync-bridge';
 
 // isomorphic-git expects a Node.js-like fs API
 // We implement the subset that isomorphic-git actually uses
@@ -35,15 +38,9 @@ export interface Stats {
     isSymbolicLink(): boolean;
 }
 
-function createStats(entry: TreeEntry, path: string): Stats {
-    const isDir = entry.dir !== undefined;
-    const isSymlink = entry.symlink !== undefined;
-    const type = isDir ? 'dir' : isSymlink ? 'symlink' : 'file';
-    const size = entry.size ?? 0;
-    const mtime = entry.mtime ?? Date.now();
-
+function createStats(isDir: boolean, size: number, mtime: number, path: string): Stats {
     return {
-        type,
+        type: isDir ? 'dir' : 'file',
         mode: isDir ? 0o40755 : 0o100644,
         size,
         ino: hashPath(path),
@@ -52,9 +49,9 @@ function createStats(entry: TreeEntry, path: string): Stats {
         uid: 1000,
         gid: 1000,
         dev: 1,
-        isFile: () => !isDir && !isSymlink,
+        isFile: () => !isDir,
         isDirectory: () => isDir,
-        isSymbolicLink: () => isSymlink,
+        isSymbolicLink: () => false,
     };
 }
 
@@ -78,6 +75,7 @@ function createFsError(code: string, message: string): Error {
 
 /**
  * OPFS-backed filesystem for isomorphic-git
+ * All operations go directly to OPFS, no in-memory caching.
  */
 export const opfsFs = {
     promises: {
@@ -86,16 +84,22 @@ export const opfsFs = {
             options?: { encoding?: string } | string
         ): Promise<Uint8Array | string> {
             const path = normalizePath(filepath);
-            const data = syncReadFileBinary(path);
-            if (!data) {
+
+            // Handle empty path - isomorphic-git uses this for fs type detection
+            if (!path || path === '' || path === '/') {
                 throw createFsError('ENOENT', `ENOENT: no such file or directory, open '${filepath}'`);
             }
 
-            const encoding = typeof options === 'string' ? options : options?.encoding;
-            if (encoding === 'utf8' || encoding === 'utf-8') {
-                return new TextDecoder().decode(data);
+            try {
+                const data = await asyncReadFile(path);
+                const encoding = typeof options === 'string' ? options : options?.encoding;
+                if (encoding === 'utf8' || encoding === 'utf-8') {
+                    return new TextDecoder().decode(data);
+                }
+                return data;
+            } catch {
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, open '${filepath}'`);
             }
-            return data;
         },
 
         async writeFile(
@@ -104,18 +108,47 @@ export const opfsFs = {
             _options?: { encoding?: string; mode?: number }
         ): Promise<void> {
             const path = normalizePath(filepath);
+            if (!path) {
+                throw createFsError('EINVAL', 'Cannot write to root');
+            }
+
             const bytes = typeof data === 'string'
                 ? new TextEncoder().encode(data)
                 : data;
 
-            syncWriteFileBinary(path, bytes);
-            setTreeEntry(path, { size: bytes.length, mtime: Date.now() });
+            // Ensure parent directories exist
+            const parts = path.split('/');
+            if (parts.length > 1) {
+                const parentParts = parts.slice(0, -1);
+                try {
+                    await getOpfsDirectory(parentParts, true);
+                } catch (e) {
+                    console.error('[opfs-git] Failed to create parent dirs:', parentParts, e);
+                }
+            }
+
+            await asyncWriteFile(path, bytes);
         },
 
         async unlink(filepath: string): Promise<void> {
             const path = normalizePath(filepath);
-            removeTreeEntry(path);
-            // TODO: Also remove from OPFS
+            if (!path) {
+                throw createFsError('EINVAL', 'Cannot unlink root');
+            }
+
+            const parts = path.split('/');
+            const filename = parts.pop()!;
+
+            try {
+                const parentDir = parts.length > 0
+                    ? await getOpfsDirectory(parts, false)
+                    : getOpfsRoot();
+                if (!parentDir) throw new Error('OPFS not initialized');
+                await parentDir.removeEntry(filename);
+            } catch (e) {
+                console.error('[opfs-git] unlink failed:', path, e);
+                throw createFsError('ENOENT', `ENOENT: no such file or directory, unlink '${filepath}'`);
+            }
         },
 
         async readdir(dirpath: string): Promise<string[]> {
@@ -130,50 +163,81 @@ export const opfsFs = {
 
         async mkdir(dirpath: string, _options?: { recursive?: boolean }): Promise<void> {
             const path = normalizePath(dirpath);
+            if (!path) return; // Don't create root
+
             const parts = path.split('/').filter(p => p);
 
-            let current = '';
-            for (const part of parts) {
-                current = current ? `${current}/${part}` : part;
-                const existing = getTreeEntry(current);
-                if (!existing) {
-                    setTreeEntry(current, { dir: {}, mtime: Date.now() });
-                }
+            try {
+                await getOpfsDirectory(parts, true); // create=true
+            } catch (e) {
+                console.error('[opfs-git] mkdir failed:', path, e);
+                throw createFsError('ENOENT', `Failed to create directory '${dirpath}'`);
             }
         },
 
         async rmdir(dirpath: string): Promise<void> {
             const path = normalizePath(dirpath);
-            removeTreeEntry(path);
+            if (!path) {
+                throw createFsError('EINVAL', 'Cannot rmdir root');
+            }
+
+            const parts = path.split('/');
+            const dirname = parts.pop()!;
+
+            try {
+                const parentDir = parts.length > 0
+                    ? await getOpfsDirectory(parts, false)
+                    : getOpfsRoot();
+                if (!parentDir) throw new Error('OPFS not initialized');
+                await parentDir.removeEntry(dirname, { recursive: true });
+            } catch (e) {
+                console.error('[opfs-git] rmdir failed:', path, e);
+                throw createFsError('ENOENT', `ENOENT: no such directory, rmdir '${dirpath}'`);
+            }
         },
 
         async stat(filepath: string): Promise<Stats> {
             const path = normalizePath(filepath);
-            // Get entry from OPFS directly
-            const entry = await getEntryFromOpfs(path);
-            if (!entry) {
-                throw createFsError('ENOENT', `ENOENT: no such file or directory, stat '${filepath}'`);
+
+            // Handle root
+            if (!path || path === '/') {
+                return createStats(true, 0, Date.now(), '/');
             }
-            return createStats(entry, path || '/');
+
+            // Check if it's a file
+            const isFile = await fileExistsInOpfs(path);
+            if (isFile) {
+                try {
+                    const fileHandle = await getOpfsFile(path, false);
+                    const file = await fileHandle.getFile();
+                    return createStats(false, file.size, file.lastModified, path);
+                } catch {
+                    throw createFsError('ENOENT', `ENOENT: no such file or directory, stat '${filepath}'`);
+                }
+            }
+
+            // Check if it's a directory
+            const isDir = await directoryExistsInOpfs(path);
+            if (isDir) {
+                return createStats(true, 0, Date.now(), path);
+            }
+
+            throw createFsError('ENOENT', `ENOENT: no such file or directory, stat '${filepath}'`);
         },
 
         async lstat(filepath: string): Promise<Stats> {
-            // Same as stat for now (symlinks not fully implemented)
+            // Same as stat for now (symlinks not supported in OPFS)
             return this.stat(filepath);
         },
 
-        async readlink(filepath: string): Promise<string> {
-            const path = normalizePath(filepath);
-            const entry = getTreeEntry(path);
-            if (!entry?.symlink) {
-                throw createFsError('EINVAL', `EINVAL: invalid argument, readlink '${filepath}'`);
-            }
-            return entry.symlink;
+        async readlink(_filepath: string): Promise<string> {
+            // OPFS doesn't support symlinks
+            throw createFsError('EINVAL', 'Symlinks not supported in OPFS');
         },
 
-        async symlink(target: string, filepath: string): Promise<void> {
-            const path = normalizePath(filepath);
-            setTreeEntry(path, { symlink: target, mtime: Date.now() });
+        async symlink(_target: string, _filepath: string): Promise<void> {
+            // OPFS doesn't support symlinks - silently ignore for git compatibility
+            console.warn('[opfs-git] symlink not supported, ignoring');
         },
 
         async chmod(_filepath: string, _mode: number): Promise<void> {
@@ -183,12 +247,29 @@ export const opfsFs = {
         async rename(oldPath: string, newPath: string): Promise<void> {
             const oldNorm = normalizePath(oldPath);
             const newNorm = normalizePath(newPath);
-            const entry = getTreeEntry(oldNorm);
-            if (!entry) {
+
+            if (!oldNorm || !newNorm) {
+                throw createFsError('EINVAL', 'Invalid path for rename');
+            }
+
+            try {
+                // Read old file
+                const data = await asyncReadFile(oldNorm);
+
+                // Write to new location
+                await asyncWriteFile(newNorm, data);
+
+                // Delete old file
+                const parts = oldNorm.split('/');
+                const filename = parts.pop()!;
+                const parentDir = parts.length > 0
+                    ? await getOpfsDirectory(parts, false)
+                    : await getOpfsRoot();
+                await parentDir.removeEntry(filename);
+            } catch (e) {
+                console.error('[opfs-git] rename failed:', oldPath, '->', newPath, e);
                 throw createFsError('ENOENT', `ENOENT: no such file or directory, rename '${oldPath}'`);
             }
-            setTreeEntry(newNorm, entry);
-            removeTreeEntry(oldNorm);
         },
     },
 };

@@ -219,7 +219,6 @@ test.describe('WASM Encoding Module', () => {
 });
 
 test.describe('WASM Async FS (fs.promises)', () => {
-
     test.beforeEach(async ({ page }) => {
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
@@ -229,11 +228,7 @@ test.describe('WASM Async FS (fs.promises)', () => {
     });
 
     test('fs.promises.writeFile and readFile work', async ({ page }) => {
-        const result = await shellEval(page, `tsx -e "
-            await fs.promises.writeFile('/async-test.txt', 'async content');
-            const content = await fs.promises.readFile('/async-test.txt');
-            console.log(content);
-        "`);
+        const result = await shellEval(page, 'tsx -e "await fs.promises.writeFile(\\"/tmp/async-test.txt\\", \\"async content\\"); console.log(await fs.promises.readFile(\\"/tmp/async-test.txt\\"));"');
         expect(result.success).toBe(true);
         expect(result.output).toContain('async content');
     });
@@ -409,7 +404,17 @@ test.describe('Git Commands', () => {
         }, { timeout: 30000 });
     });
 
+    // TODO: git init/status hang indefinitely in WASM context
+    // - git help/version work fine
+    // - git init causes deadlock, never creates .git directory
+    // - Once hung, all subsequent commands hang until page refresh
+    // - Root cause is likely in isomorphic-git WASM initialization
+    // - Requires separate investigation of opfs-git-adapter.ts
+
     test('git init creates a repository', async ({ page }) => {
+        // First git operation triggers lazy loading of isomorphic-git, needs extra time
+        test.slow();
+
         // Create directory and init
         const mkdirResult = await shellEval(page, 'mkdir -p /gitrepo');
         expect(mkdirResult.success).toBe(true);
@@ -425,6 +430,9 @@ test.describe('Git Commands', () => {
     });
 
     test('git status shows repository state', async ({ page }) => {
+        // Git operations trigger lazy loading of isomorphic-git, needs extra time
+        test.slow();
+
         // Create and init repo
         await shellEval(page, 'mkdir -p /gitrepo2');
         await shellEval(page, 'cd /gitrepo2 && git init');

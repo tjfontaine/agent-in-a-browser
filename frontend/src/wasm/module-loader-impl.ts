@@ -310,9 +310,14 @@ export class LazyProcess {
     }
 
     async tryWait(): Promise<number | undefined> {
-        // For interactive mode, DON'T block waiting for execution to complete.
-        // The polling loop needs to keep running to forward I/O.
-        // Return the exitCode if the process has finished, undefined otherwise.
+        // For batch mode (non-interactive), we need to wait for execution to complete.
+        // This allows the JavaScript event loop to process pending Promises (like OPFS operations)
+        // while JSPI suspends the WASM stack.
+        if (this.executionPromise && this.exitCode === undefined) {
+            // Wait for execution to complete - this is critical for JSPI to work properly!
+            // The await here allows pending Promises (OPFS operations) to resolve.
+            await this.executionPromise;
+        }
         return this.exitCode;
     }
 
