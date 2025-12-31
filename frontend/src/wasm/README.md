@@ -83,11 +83,18 @@ The transpile scripts map WASI interfaces to host-shims:
 
 ## Related Packages
 
-The code in this directory is structured for future extraction into:
+This code has been extracted into standalone npm packages under `packages/`:
 
-| Package | Sources |
+| Package | Purpose |
 |---------|---------|
-| `@tjfontaine/opfs-wasi-fs` | `host-shims/opfs-*.ts`, `directory-tree.ts` |
-| `@tjfontaine/wasi-http-handler` | `host-shims/wasi-http-impl.ts` |
-| `@tjfontaine/wasi-shims` | `host-shims/clocks-impl.js`, `streams.ts` |
-| `@tjfontaine/mcp-wasm-server` | `lazy-loading/*.ts` |
+| `@tjfontaine/wasm-loader` | Core module registration system |
+| `@tjfontaine/wasm-modules` | Aggregator for all module metadata |
+| `@tjfontaine/wasm-tsx` | TSX engine metadata |
+| `@tjfontaine/wasm-sqlite` | SQLite module metadata |
+| `@tjfontaine/wasm-ratatui` | Ratatui demo metadata |
+| `@tjfontaine/wasm-vim` | Vim editor metadata |
+| `@tjfontaine/wasi-shims` | Shared WASI shims (clocks, streams, terminal) |
+| `@tjfontaine/opfs-wasi-fs` | OPFS filesystem implementation |
+| `@tjfontaine/wasi-http-handler` | HTTP handler implementation |
+| `@tjfontaine/mcp-wasm-server` | MCP runtime with lazy loading |
+| `@tjfontaine/browser-mcp-runtime` | Meta-package for one-line setup |

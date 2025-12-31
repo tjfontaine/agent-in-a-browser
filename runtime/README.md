@@ -99,10 +99,26 @@ runtime/
 │   │   │   └── js_modules/ # Node.js polyfills (Buffer, URL, etc.)
 │   │   └── wit/            # Component world definition
 │   │
-│   └── sqlite-module/      # SQLite database support
+│   ├── sqlite-module/      # SQLite database support
+│   │   ├── Cargo.toml
+│   │   ├── src/lib.rs      # turso_core SQLite wrapper
+│   │   └── wit/            # Component world definition
+│   │
+│   ├── edtui-module/       # Vim-style editor
+│   │   ├── Cargo.toml
+│   │   ├── src/lib.rs      # edtui-based editor
+│   │   └── wit/            # Component world definition
+│   │
+│   ├── ratatui-demo/       # TUI demo commands
+│   │   ├── Cargo.toml
+│   │   └── src/lib.rs      # counter, tui-demo, ansi-demo
+│   │
+│   ├── mcp-server-core/    # Shared MCP server types
+│   │   └── src/lib.rs      # Common server infrastructure
+│   │
+│   └── web-agent-tui/      # Main Ratatui TUI application
 │       ├── Cargo.toml
-│       ├── src/lib.rs      # turso_core SQLite wrapper
-│       └── wit/            # Component world definition
+│       └── src/            # Agent UI, chat, shell modes
 │
 ├── wit/
 │   ├── world.wit           # Component world definition
@@ -123,6 +139,9 @@ Heavy commands are split into separate WASM components for lazy loading:
 | `ts-runtime-mcp` | Core shell, filesystem, HTTP | Most commands |
 | `tsx-engine` | TypeScript/JavaScript execution | `tsx`, `tsc` |
 | `sqlite-module` | SQLite database operations | `sqlite3` |
+| `edtui-module` | Vim-style text editor | `vim`, `vi`, `edit` |
+| `ratatui-demo` | TUI demo commands | `counter`, `tui-demo`, `ansi-demo` |
+| `web-agent-tui` | Main agent TUI | Agent interface |
 
 These modules are transpiled separately and loaded on-demand in the browser.
 

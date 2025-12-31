@@ -208,6 +208,8 @@ Heavy modules are lazy-loaded on first use to reduce initial load time:
 | `mcp-server-sync/` | Most shell commands (Safari/Firefox) | Startup |
 | `tsx-engine/` | `tsx`, `tsc` | First TypeScript execution* |
 | `sqlite-module/` | `sqlite3` | First database operation* |
+| `edtui-module/` | `vim`, `vi`, `edit` | First editor invocation* |
+| `ratatui-demo/` | `counter`, `tui-demo`, `ansi-demo` | First demo invocation* |
 | `web-agent-tui/` | TUI application | Startup |
 
 *In Sync mode, these are pre-loaded at startup for browsers without JSPI support.
@@ -232,6 +234,8 @@ web-agent/
 │   └── crates/              # ← Modular WASM components
 │       ├── tsx-engine/      # TypeScript/TSX execution (lazy-loaded)
 │       ├── sqlite-module/   # SQLite database (lazy-loaded)
+│       ├── edtui-module/    # Vim-style editor (lazy-loaded)
+│       ├── ratatui-demo/    # TUI demo commands (lazy-loaded)
 │       └── web-agent-tui/   # Ratatui TUI application
 │
 ├── frontend/                # ← Browser UI + agent
@@ -260,9 +264,42 @@ web-agent/
 │   │       └── wasi-http-impl.ts
 │   └── vite.config.ts
 │
+├── packages/                # ← Standalone npm packages
+│   ├── wasm-loader/         # Core module registration system
+│   ├── wasm-modules/        # Aggregator for all module metadata
+│   ├── wasm-tsx/            # TSX engine metadata
+│   ├── wasm-sqlite/         # SQLite module metadata
+│   ├── wasm-ratatui/        # Ratatui demo metadata
+│   ├── wasm-vim/            # Vim editor metadata
+│   ├── wasi-shims/          # Shared WASI shims
+│   ├── opfs-wasi-fs/        # OPFS filesystem implementation
+│   ├── wasi-http-handler/   # HTTP handler implementation
+│   ├── mcp-wasm-server/     # MCP runtime with lazy loading
+│   └── browser-mcp-runtime/ # Meta-package for easy setup
+│
 └── worker/                  # Cloudflare worker (static serving)
     └── index.js
 ```
+
+### Standalone Packages
+
+The `packages/` directory contains npm packages designed for independent consumption:
+
+| Package | Purpose |
+|---------|---------|
+| `@tjfontaine/wasm-loader` | Core module registration system for lazy-loaded WASM commands |
+| `@tjfontaine/wasm-modules` | Aggregator that re-exports all module metadata |
+| `@tjfontaine/wasm-tsx` | TSX/TypeScript engine metadata (`tsx`, `tsc`) |
+| `@tjfontaine/wasm-sqlite` | SQLite module metadata (`sqlite3`) |
+| `@tjfontaine/wasm-ratatui` | Ratatui TUI demo metadata (`counter`, `tui-demo`) |
+| `@tjfontaine/wasm-vim` | Vim editor metadata (`vim`, `vi`, `edit`) |
+| `@tjfontaine/wasi-shims` | Shared WASI shims (clocks, streams, terminal) |
+| `@tjfontaine/opfs-wasi-fs` | OPFS-backed WASI filesystem |
+| `@tjfontaine/wasi-http-handler` | Fetch-based WASI HTTP handler |
+| `@tjfontaine/mcp-wasm-server` | MCP runtime with JSPI detection |
+| `@tjfontaine/browser-mcp-runtime` | Meta-package for one-line setup |
+
+> **Design Pattern**: The `wasm-*` packages export only metadata (command names + modes). The consuming application provides the loader function to avoid Rollup bundling issues with dynamic WASM imports.
 
 ## MCP Tools
 
