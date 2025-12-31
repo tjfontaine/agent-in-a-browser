@@ -30,6 +30,8 @@ jobs:
             runtime
             runtime/crates/tsx-engine
             runtime/crates/sqlite-module
+            runtime/crates/ratatui-demo
+            runtime/crates/web-agent-tui
           cache-on-failure: true
 
       - name: Cache Cargo Install
@@ -66,6 +68,14 @@ jobs:
         working-directory: runtime/crates/sqlite-module
         run: cargo component build --release --target wasm32-wasip2
 
+      - name: Build ratatui-demo WASM module
+        working-directory: runtime/crates/ratatui-demo
+        run: cargo component build --release --target wasm32-wasip2
+
+      - name: Build web-agent-tui WASM module
+        working-directory: runtime/crates/web-agent-tui
+        run: cargo component build --release --target wasm32-wasip2
+
       - name: Verify main component
         run: wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 
@@ -77,6 +87,8 @@ jobs:
             target/wasm32-wasip2/release/ts-runtime-mcp.wasm
             target/wasm32-wasip2/release/tsx_engine.wasm
             target/wasm32-wasip2/release/sqlite_module.wasm
+            target/wasm32-wasip2/release/ratatui_demo.wasm
+            target/wasm32-wasip2/release/web_agent_tui.wasm
           retention-days: 7
 
   frontend:
