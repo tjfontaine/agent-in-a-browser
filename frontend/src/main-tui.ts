@@ -32,6 +32,9 @@ const terminalEl = document.getElementById('terminal')!;
         // Focus the terminal
         terminal.focus();
 
+        // Expose terminal for E2E tests
+        (window as unknown as { tuiTerminal: typeof terminal }).tuiTerminal = terminal;
+
         console.log('[Main] TUI running');
 
     } catch (err) {

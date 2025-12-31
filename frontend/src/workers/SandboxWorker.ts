@@ -126,6 +126,12 @@ self.onmessage = async (event: MessageEvent) => {
 
     try {
         switch (type) {
+            case 'ping':
+                // Re-send ready signal on ping (used as fallback if original was missed)
+                console.log('[SandboxWorker] Responding to ping with ready');
+                self.postMessage({ type: 'ready' });
+                break;
+
             case 'init':
                 console.log('[SandboxWorker] Handling init message');
                 await initialize();

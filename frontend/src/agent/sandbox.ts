@@ -19,20 +19,39 @@ export const fetchFromSandbox = createWorkerFetch(sandbox);
 
 // ============ Initialization ============
 
+// Flag to track if worker is ready - set up IMMEDIATELY so we don't miss the ready signal
+let workerReadyResolve: () => void;
+let isWorkerReady = false;
+new Promise<void>((resolve) => {
+    workerReadyResolve = resolve;
+});
+
+// Listen for ready signal immediately (before initializeSandbox is called)
+sandbox.addEventListener('message', function onReady(event: MessageEvent) {
+    if (event.data?.type === 'ready') {
+        console.log('[Sandbox] Worker ready signal received');
+        isWorkerReady = true;
+        workerReadyResolve();
+        sandbox.removeEventListener('message', onReady);
+    }
+});
+
 /**
  * Initialize the sandbox worker.
- * Waits for worker to signal ready, then sends init message.
+ * Waits for worker to have signaled ready, then sends init message.
  */
 export function initializeSandbox(): Promise<void> {
     console.log('[Sandbox] initializeSandbox() called');
     return new Promise((resolve, reject) => {
         const handler = (event: MessageEvent) => {
             console.log('[Sandbox] Received message from worker:', event.data);
-            const { type, id: _id } = event.data;
+            const { type } = event.data;
 
+            // Also handle ready here as fallback
             if (type === 'ready') {
-                // Worker is loaded and ready, now send init
-                console.log('[Sandbox] Worker ready, sending init message');
+                console.log('[Sandbox] Worker ready (fallback handler), sending init message');
+                isWorkerReady = true;
+                workerReadyResolve();
                 sandbox.postMessage({ type: 'init', id: 'init-' + Date.now() });
             } else if (type === 'init_complete') {
                 console.log('[Sandbox] Worker init complete!');
@@ -46,8 +65,15 @@ export function initializeSandbox(): Promise<void> {
         };
         sandbox.addEventListener('message', handler);
 
-        // Worker will self-signal when ready (no need to send init right away)
-        console.log('[Sandbox] Waiting for worker ready signal...');
+        // If worker is already ready, send init immediately
+        if (isWorkerReady) {
+            console.log('[Sandbox] Worker already ready, sending init message');
+            sandbox.postMessage({ type: 'init', id: 'init-' + Date.now() });
+        } else {
+            // Request a ping in case we missed the ready signal
+            console.log('[Sandbox] Waiting for worker ready signal...');
+            sandbox.postMessage({ type: 'ping' });
+        }
     });
 }
 
