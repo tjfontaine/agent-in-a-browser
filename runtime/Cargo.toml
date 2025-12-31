@@ -39,6 +39,9 @@ archive = ["dep:tar", "dep:flate2", "dep:bzip2", "dep:zip_next"]
 # MCP Tool Macros
 runtime-macros = { path = "runtime-macros" }
 
+# MCP Server Core - JSON-RPC and protocol types
+mcp-server-core = { path = "crates/mcp-server-core" }
+
 # The Transpiler: Individual SWC crates (for tsx command)
 # Versions pinned from Cargo.lock for reproducibility
 swc_common = { version = "18.0", optional = true }
