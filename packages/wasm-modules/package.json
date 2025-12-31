@@ -1,0 +1,17 @@
+{
+    "name": "@tjfontaine/wasm-modules",
+    "version": "0.1.0",
+    "description": "Aggregator package that re-exports all WASM module metadata",
+    "type": "module",
+    "main": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "dependencies": {
+        "@tjfontaine/wasm-loader": "*",
+        "@tjfontaine/wasm-tsx": "*",
+        "@tjfontaine/wasm-sqlite": "*",
+        "@tjfontaine/wasm-ratatui": "*",
+        "@tjfontaine/wasm-vim": "*"
+    }
+}
