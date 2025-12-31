@@ -14,7 +14,7 @@ ropey = "1.6"
 unicode-width = "0.2"
 
 # Syntax highlighting - use fancy-regex (pure Rust) instead of onig (C dep)
-syntect = { version = "5.2", default-features = false, features = [
+syntect = { version = "5.3", default-features = false, features = [
     "default-fancy",
 ] }
 
