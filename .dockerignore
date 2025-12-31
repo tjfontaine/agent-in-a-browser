@@ -1,21 +1,12 @@
-# Build system
-Makefile
-*.sh
+# Docker ignore file
+# Excludes unnecessary files from Docker build context
 
-# Dependencies
+# Dependencies (will be installed fresh)
 node_modules/
-package-lock.json
-target/
 .cargo/
 
-# Build outputs
-dist/
-*.wasm
-
-# Generated files
-runtime/src/bindings.rs
-frontend/src/wasm/mcp-server/
-frontend/src/wasm/component/
+# Rust build outputs (mounted separately for E2E)
+target/
 
 # IDE
 .vscode/
@@ -41,14 +32,14 @@ npm-debug.log*
 .git/
 .gitignore
 
-# Documentation
+# Documentation (except README)
 *.md
 !README.md
-
-# Test files
-**/*.test.ts
-**/*.spec.ts
 
 # Cache
 .cache/
 .vite/
+
+# Test results (mounted as volumes in E2E)
+frontend/test-results/
+frontend/playwright-report/

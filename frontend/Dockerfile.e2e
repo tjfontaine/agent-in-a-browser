@@ -1,18 +1,32 @@
 # Use Playwright v1.57.0 with Ubuntu 24.04 (Noble) - uses Chrome for Testing
 FROM mcr.microsoft.com/playwright:v1.57.0-noble
 
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy root package files (workspace config)
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci
+# Copy packages (workspace dependencies)
+COPY packages/ ./packages/
+
+# Remove any node_modules that might have been copied
+RUN rm -rf packages/*/node_modules
+
+# Copy frontend package.json
+COPY frontend/package.json ./frontend/
+
+# Install all dependencies fresh for this platform
+# Don't use package-lock.json since it has darwin-specific deps
+RUN npm install
+
 # Install Chromium (Playwright 1.57+ uses Chrome for Testing on x64)
-RUN npx playwright install chromium
+RUN cd frontend && npx playwright install chromium
 
-# Copy source files
-COPY . .
+# Copy frontend source files (excluding node_modules via .dockerignore)
+COPY frontend/ ./frontend/
+
+# Working directory for tests
+WORKDIR /app/frontend
 
 # Default command runs E2E tests
 CMD ["npx", "playwright", "test", "--reporter=list"]

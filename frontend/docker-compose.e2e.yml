@@ -1,10 +1,12 @@
 services:
   e2e-test:
     build:
-      context: .
-      dockerfile: Dockerfile.e2e
+      context: ..
+      dockerfile: frontend/Dockerfile.e2e
     environment:
       - CI=true
     volumes:
       - ./test-results:/app/frontend/test-results
       - ./playwright-report:/app/frontend/playwright-report
+      # Mount transpiled WASM from local build
+      - ../target/wasm32-wasip2/release:/app/target/wasm32-wasip2/release:ro
