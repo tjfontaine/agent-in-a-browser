@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # TUI framework - no default features to avoid crossterm
-ratatui = { version = "0.29", default-features = false }
+ratatui = { version = "0.30", default-features = false }
 
 # AI Agent framework (wasm feature for browser compatibility)
 rig-core = { version = "0.27", default-features = false, features = ["wasm"] }

@@ -8,11 +8,11 @@ use serde_json::Value;
 
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
-    ai_client::StreamEvent, format_tasks_for_display, get_local_tool_definitions,
-    get_system_message, mcp_client::ToolDefinition, try_execute_local_tool, AiClient, McpClient,
-    Task,
+    ai_client::StreamEvent, get_local_tool_definitions, get_system_message,
+    mcp_client::ToolDefinition, AiClient, McpClient, Task,
 };
 use crate::config::{self, Config};
+use crate::servers::{ServerManager, ToolCollector, ToolRouter};
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
     ServerConnectionStatus, ServerManagerView, ServerStatus,
@@ -1389,208 +1389,65 @@ impl<R: Read, W: Write> App<R, W> {
     // === Server Management Methods ===
 
     fn add_remote_server(&mut self, url: &str) {
-        let url = url.trim().trim_end_matches('/').to_string();
-
-        // Generate ID from URL
-        let id = url
-            .replace("https://", "")
-            .replace("http://", "")
-            .replace('/', "-")
-            .replace('.', "-");
-
-        // Check if already exists
-        if self.remote_servers.iter().any(|s| s.url == url) {
-            return;
-        }
-
-        let name = url
-            .replace("https://", "")
-            .replace("http://", "")
-            .split('/')
-            .next()
-            .unwrap_or(&url)
-            .to_string();
-
-        let entry = RemoteServerEntry {
-            id,
-            name,
-            url,
-            status: ServerConnectionStatus::Disconnected,
-            tools: Vec::new(),
-            bearer_token: None,
-        };
-
-        self.remote_servers.push(entry);
+        ServerManager::add_server(&mut self.remote_servers, url);
     }
 
     fn remove_remote_server(&mut self, id: &str) {
-        self.remote_servers.retain(|s| s.id != id);
+        ServerManager::remove_server(&mut self.remote_servers, id);
     }
 
     fn set_server_token(&mut self, id: &str, token: &str) {
-        if let Some(server) = self.remote_servers.iter_mut().find(|s| s.id == id) {
-            server.bearer_token = Some(token.to_string());
-        }
+        ServerManager::set_token(&mut self.remote_servers, id, token);
     }
 
     fn toggle_server_connection(&mut self, id: &str) {
-        if let Some(server) = self.remote_servers.iter_mut().find(|s| s.id == id) {
-            match server.status {
-                ServerConnectionStatus::Connected => {
-                    server.status = ServerConnectionStatus::Disconnected;
-                    server.tools.clear();
-                }
-                _ => {
-                    // TODO: Actually connect via MCP client
-                    // For now, just mark as connecting (would need async HTTP)
-                    server.status = ServerConnectionStatus::Connecting;
-                }
-            }
-        }
+        ServerManager::toggle_connection(&mut self.remote_servers, id);
     }
 
     /// Collect all tools with server prefixes for multi-server routing
     fn collect_all_tools(&mut self) -> Vec<ToolDefinition> {
-        let mut all_tools = Vec::new();
+        // Use closure to access mcp_client
+        let (tools, local_connected, local_tool_count) =
+            ToolCollector::collect_all_tools(&self.remote_servers, || {
+                self.mcp_client.list_tools().map_err(|e| e.to_string())
+            });
 
-        // 1. Sandbox tools (prefix: "__sandbox__")
-        // The double-underscore prefix is reserved for built-in tool namespaces
-        match self.mcp_client.list_tools() {
-            Ok(sandbox_tools) => {
-                self.server_status.local_connected = true;
-                self.server_status.local_tool_count = sandbox_tools.len();
-                for tool in sandbox_tools {
-                    all_tools.push(ToolDefinition {
-                        name: format!("__sandbox__{}", tool.name),
-                        description: tool.description,
-                        input_schema: tool.input_schema,
-                        title: tool.title,
-                    });
-                }
-            }
-            Err(e) => {
-                self.server_status.local_connected = false;
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("MCP error: {}", e),
-                });
-            }
-        }
+        self.server_status.local_connected = local_connected;
+        self.server_status.local_tool_count = local_tool_count;
 
-        // 2. Remote server tools (prefix: "<server_id>_")
-        for server in &self.remote_servers {
-            if server.status == ServerConnectionStatus::Connected {
-                for tool in &server.tools {
-                    all_tools.push(ToolDefinition {
-                        name: format!("{}_{}", server.id, tool.name),
-                        description: tool.description.clone(),
-                        input_schema: tool.input_schema.clone(),
-                        title: tool.title.clone(),
-                    });
-                }
-            }
-        }
-
-        // 3. Local tools (prefix: "__local__")
-        // The double-underscore prefix is reserved for built-in tool namespaces
-        for tool in get_local_tool_definitions() {
-            all_tools.push(ToolDefinition {
-                name: format!("__local__{}", tool.name),
-                description: tool.description,
-                input_schema: tool.input_schema,
-                title: tool.title,
+        if !local_connected {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "MCP connection error".to_string(),
             });
         }
 
-        all_tools
+        tools
     }
 
     /// Route a tool call to the correct server based on prefix
-    ///
-    /// Reserved prefixes (double underscore):
-    /// - __sandbox__ : Built-in sandbox MCP tools (read_file, write_file, etc.)
-    /// - __local__   : Client-local tools (task_write, etc.)
-    ///
-    /// User-defined MCP servers use their server_id as prefix (cannot start with __)
     fn route_tool_call(&mut self, prefixed_name: &str, args: Value) -> Result<String, String> {
-        // 1. Check for __local__ prefix (client-side tools)
-        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
-            if let Some(result) = try_execute_local_tool(tool_name, args) {
-                // Handle task updates from task_write
-                if let Some(new_tasks) = result.tasks {
-                    self.tasks = new_tasks;
-                    // Update aux panel with task list
-                    self.aux_content = AuxContent {
-                        kind: AuxContentKind::TaskList,
-                        title: "Tasks".to_string(),
-                        content: format_tasks_for_display(&self.tasks),
-                    };
-                }
-                return if result.success {
-                    Ok(result.message)
-                } else {
-                    Err(result.message)
-                };
-            }
-            return Err(format!("Unknown local tool: {}", tool_name));
-        }
-
-        // 2. Check for __sandbox__ prefix (built-in MCP tools)
-        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
-            return self
-                .mcp_client
+        // Use ToolRouter with closure for sandbox tool calls
+        let result = ToolRouter::route_tool_call(prefixed_name, args, |tool_name, args| {
+            self.mcp_client
                 .call_tool(tool_name, args)
-                .map_err(|e| e.to_string());
+                .map_err(|e| e.to_string())
+        });
+
+        // Handle task updates from local tools
+        if let Some(new_tasks) = result.tasks {
+            self.tasks = new_tasks;
+        }
+        if let Some(aux_update) = result.aux_update {
+            self.aux_content = aux_update;
         }
 
-        // 3. Parse user-defined server prefix (server_id_toolname)
-        if let Some(pos) = prefixed_name.find('_') {
-            let (server_id, tool_name) = prefixed_name.split_at(pos);
-            let tool_name = &tool_name[1..]; // Skip the underscore
-
-            // Block double-underscore prefixes for user servers
-            if server_id.starts_with("_") {
-                return Err(format!(
-                    "Server ID cannot start with underscore (reserved): {}",
-                    server_id
-                ));
-            }
-
-            // Route to remote server (TODO: implement remote MCP client)
-            Err(format!(
-                "Remote server '{}' tool calls not yet implemented",
-                server_id
-            ))
-        } else {
-            Err(format!("Unknown tool: {}", prefixed_name))
-        }
+        result.output
     }
 
     /// Format a prefixed tool name for user-friendly display
-    ///
-    /// - Built-in tools (__sandbox__, __local__): Show just the tool name
-    /// - Remote servers: Show "server → tool" format
     fn format_tool_for_display(prefixed_name: &str) -> String {
-        // Hide prefix for built-in tools
-        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
-            return tool_name.to_string();
-        }
-        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
-            return tool_name.to_string();
-        }
-
-        // For remote servers, show "server → tool" format
-        if let Some(pos) = prefixed_name.find('_') {
-            let (server_id, tool_name) = prefixed_name.split_at(pos);
-            let tool_name = &tool_name[1..]; // Skip the underscore
-                                             // Don't format if server_id looks like a reserved prefix
-            if !server_id.starts_with("_") {
-                return format!("{} → {}", server_id, tool_name);
-            }
-        }
-
-        // Fallback: return as-is
-        prefixed_name.to_string()
+        ToolRouter::format_tool_for_display(prefixed_name)
     }
 
     /// Slash commands for tab completion

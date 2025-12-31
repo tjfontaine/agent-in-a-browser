@@ -1,0 +1,264 @@
+//! Server Management
+//!
+//! Handles MCP server connections, tool collection, and routing.
+
+use crate::bridge::local_tools::{format_tasks_for_display, try_execute_local_tool, Task};
+use crate::bridge::mcp_client::ToolDefinition;
+use crate::ui::{AuxContent, AuxContentKind, RemoteServerEntry, ServerConnectionStatus};
+use serde_json::Value;
+
+/// Results from tool execution including optional task updates
+pub struct ToolExecutionResult {
+    pub output: Result<String, String>,
+    pub tasks: Option<Vec<Task>>,
+    pub aux_update: Option<AuxContent>,
+}
+
+/// Tool routing logic for multi-server MCP architecture
+pub struct ToolRouter;
+
+impl ToolRouter {
+    /// Route a tool call to the correct server based on prefix
+    ///
+    /// Reserved prefixes (double underscore):
+    /// - `__sandbox__` : Built-in sandbox MCP tools (read_file, write_file, etc.)
+    /// - `__local__`   : Client-local tools (task_write, etc.)
+    ///
+    /// User-defined MCP servers use their server_id as prefix (cannot start with __)
+    pub fn route_tool_call<F>(
+        prefixed_name: &str,
+        args: Value,
+        call_sandbox_tool: F,
+    ) -> ToolExecutionResult
+    where
+        F: FnOnce(&str, Value) -> Result<String, String>,
+    {
+        // 1. Check for __local__ prefix (client-side tools)
+        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
+            if let Some(result) = try_execute_local_tool(tool_name, args) {
+                let aux_update = result.tasks.as_ref().map(|tasks| AuxContent {
+                    kind: AuxContentKind::TaskList,
+                    title: "Tasks".to_string(),
+                    content: format_tasks_for_display(tasks),
+                });
+
+                return ToolExecutionResult {
+                    output: if result.success {
+                        Ok(result.message)
+                    } else {
+                        Err(result.message)
+                    },
+                    tasks: result.tasks,
+                    aux_update,
+                };
+            }
+            return ToolExecutionResult {
+                output: Err(format!("Unknown local tool: {}", tool_name)),
+                tasks: None,
+                aux_update: None,
+            };
+        }
+
+        // 2. Check for __sandbox__ prefix (built-in MCP tools)
+        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
+            return ToolExecutionResult {
+                output: call_sandbox_tool(tool_name, args),
+                tasks: None,
+                aux_update: None,
+            };
+        }
+
+        // 3. Parse user-defined server prefix (server_id_toolname)
+        if let Some(pos) = prefixed_name.find('_') {
+            let (server_id, _tool_name) = prefixed_name.split_at(pos);
+
+            // Block double-underscore prefixes for user servers
+            if server_id.starts_with('_') {
+                return ToolExecutionResult {
+                    output: Err(format!(
+                        "Server ID cannot start with underscore (reserved): {}",
+                        server_id
+                    )),
+                    tasks: None,
+                    aux_update: None,
+                };
+            }
+
+            // Route to remote server (TODO: implement remote MCP client)
+            return ToolExecutionResult {
+                output: Err(format!(
+                    "Remote server '{}' tool calls not yet implemented",
+                    server_id
+                )),
+                tasks: None,
+                aux_update: None,
+            };
+        }
+
+        ToolExecutionResult {
+            output: Err(format!("Unknown tool: {}", prefixed_name)),
+            tasks: None,
+            aux_update: None,
+        }
+    }
+
+    /// Format a prefixed tool name for user-friendly display
+    ///
+    /// - Built-in tools (__sandbox__, __local__): Show just the tool name
+    /// - Remote servers: Show "server → tool" format
+    pub fn format_tool_for_display(prefixed_name: &str) -> String {
+        // Hide prefix for built-in tools
+        if let Some(tool_name) = prefixed_name.strip_prefix("__sandbox__") {
+            return tool_name.to_string();
+        }
+        if let Some(tool_name) = prefixed_name.strip_prefix("__local__") {
+            return tool_name.to_string();
+        }
+
+        // For remote servers, show "server → tool" format
+        if let Some(pos) = prefixed_name.find('_') {
+            let (server_id, tool_name) = prefixed_name.split_at(pos);
+            let tool_name = &tool_name[1..]; // Skip the underscore
+                                             // Don't format if server_id looks like a reserved prefix
+            if !server_id.starts_with('_') {
+                return format!("{} → {}", server_id, tool_name);
+            }
+        }
+
+        // Fallback: return as-is
+        prefixed_name.to_string()
+    }
+}
+
+/// Server entry management functions
+pub struct ServerManager;
+
+impl ServerManager {
+    /// Add a new remote server entry. Returns true if added, false if already exists.
+    pub fn add_server(servers: &mut Vec<RemoteServerEntry>, url: &str) -> bool {
+        let url = url.trim().trim_end_matches('/').to_string();
+
+        // Generate ID from URL
+        let id = url
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace('/', "-")
+            .replace('.', "-");
+
+        // Check if already exists
+        if servers.iter().any(|s| s.url == url) {
+            return false;
+        }
+
+        let name = url
+            .replace("https://", "")
+            .replace("http://", "")
+            .split('/')
+            .next()
+            .unwrap_or(&url)
+            .to_string();
+
+        let entry = RemoteServerEntry {
+            id,
+            name,
+            url,
+            status: ServerConnectionStatus::Disconnected,
+            tools: Vec::new(),
+            bearer_token: None,
+        };
+
+        servers.push(entry);
+        true
+    }
+
+    /// Remove a remote server by ID
+    pub fn remove_server(servers: &mut Vec<RemoteServerEntry>, id: &str) {
+        servers.retain(|s| s.id != id);
+    }
+
+    /// Set bearer token for a server
+    pub fn set_token(servers: &mut [RemoteServerEntry], id: &str, token: &str) {
+        if let Some(server) = servers.iter_mut().find(|s| s.id == id) {
+            server.bearer_token = Some(token.to_string());
+        }
+    }
+
+    /// Toggle server connection state
+    pub fn toggle_connection(servers: &mut [RemoteServerEntry], id: &str) {
+        if let Some(server) = servers.iter_mut().find(|s| s.id == id) {
+            match server.status {
+                ServerConnectionStatus::Connected => {
+                    server.status = ServerConnectionStatus::Disconnected;
+                    server.tools.clear();
+                }
+                _ => {
+                    // TODO: Actually connect via MCP client
+                    server.status = ServerConnectionStatus::Connecting;
+                }
+            }
+        }
+    }
+}
+
+/// Tool collection logic
+pub struct ToolCollector;
+
+impl ToolCollector {
+    /// Collect all tools with server prefixes for multi-server routing
+    pub fn collect_all_tools<F>(
+        remote_servers: &[RemoteServerEntry],
+        list_sandbox_tools: F,
+    ) -> (Vec<ToolDefinition>, bool, usize)
+    where
+        F: FnOnce() -> Result<Vec<ToolDefinition>, String>,
+    {
+        let mut all_tools = Vec::new();
+        let mut local_connected = false;
+        let mut local_tool_count = 0;
+
+        // 1. Sandbox tools (prefix: "__sandbox__")
+        match list_sandbox_tools() {
+            Ok(sandbox_tools) => {
+                local_connected = true;
+                local_tool_count = sandbox_tools.len();
+                for tool in sandbox_tools {
+                    all_tools.push(ToolDefinition {
+                        name: format!("__sandbox__{}", tool.name),
+                        description: tool.description,
+                        input_schema: tool.input_schema,
+                        title: tool.title,
+                    });
+                }
+            }
+            Err(_) => {
+                local_connected = false;
+            }
+        }
+
+        // 2. Remote server tools (prefix: "<server_id>_")
+        for server in remote_servers {
+            if server.status == ServerConnectionStatus::Connected {
+                for tool in &server.tools {
+                    all_tools.push(ToolDefinition {
+                        name: format!("{}_{}", server.id, tool.name),
+                        description: tool.description.clone(),
+                        input_schema: tool.input_schema.clone(),
+                        title: tool.title.clone(),
+                    });
+                }
+            }
+        }
+
+        // 3. Local tools (prefix: "__local__")
+        for tool in crate::bridge::local_tools::get_local_tool_definitions() {
+            all_tools.push(ToolDefinition {
+                name: format!("__local__{}", tool.name),
+                description: tool.description,
+                input_schema: tool.input_schema,
+                title: tool.title,
+            });
+        }
+
+        (all_tools, local_connected, local_tool_count)
+    }
+}

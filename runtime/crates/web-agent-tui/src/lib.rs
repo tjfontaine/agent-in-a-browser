@@ -5,10 +5,11 @@
 
 pub mod app;
 pub mod backend;
-pub mod ui;
-pub mod config;
 pub mod bridge;
 pub mod commands;
+pub mod config;
+pub mod servers;
+pub mod ui;
 
 #[allow(warnings)]
 mod bindings;
@@ -32,7 +33,10 @@ impl std::io::Read for WasiStdin {
                 buf[..len].copy_from_slice(&bytes[..len]);
                 Ok(len)
             }
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, "read failed")),
+            Err(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "read failed",
+            )),
         }
     }
 }
@@ -46,10 +50,13 @@ impl std::io::Write for WasiStdout {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match self.stream.blocking_write_and_flush(buf) {
             Ok(()) => Ok(buf.len()),
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, "write failed")),
+            Err(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "write failed",
+            )),
         }
     }
-    
+
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
@@ -62,15 +69,15 @@ impl Guest for TuiComponent {
         // Get WASI stdin/stdout
         let stdin = bindings::wasi::cli::stdin::get_stdin();
         let stdout = bindings::wasi::cli::stdout::get_stdout();
-        
+
         // Wrap in std::io traits
         let stdin = WasiStdin { stream: stdin };
         let stdout = WasiStdout { stream: stdout };
-        
+
         // Default terminal size (will be updated by resize events)
         let width = 80u16;
         let height = 24u16;
-        
+
         // Create and run app
         let mut app = App::new(stdin, stdout, width, height);
         app.run()

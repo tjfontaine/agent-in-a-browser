@@ -40,14 +40,15 @@ archive = ["dep:tar", "dep:flate2", "dep:bzip2", "dep:zip_next"]
 runtime-macros = { path = "runtime-macros" }
 
 # The Transpiler: Individual SWC crates (for tsx command)
-swc_common = { version = "*", optional = true }
-swc_ecma_ast = { version = "*", optional = true }
-swc_ecma_parser = { version = "*", default-features = false, features = [
+# Versions pinned from Cargo.lock for reproducibility
+swc_common = { version = "18.0", optional = true }
+swc_ecma_ast = { version = "19.0", optional = true }
+swc_ecma_parser = { version = "30.0", default-features = false, features = [
     "typescript",
 ], optional = true }
-swc_ecma_codegen = { version = "*", optional = true }
-swc_ecma_transforms_typescript = { version = "*", optional = true }
-swc_ecma_visit = { version = "*", optional = true }
+swc_ecma_codegen = { version = "21.0", optional = true }
+swc_ecma_transforms_typescript = { version = "36.0", optional = true }
+swc_ecma_visit = { version = "19.0", optional = true }
 
 # Browser Interop
 wasm-bindgen = "0.2"

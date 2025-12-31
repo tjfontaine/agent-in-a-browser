@@ -2,11 +2,11 @@
 //!
 //! Implements ratatui::backend::Backend for WASIP2 stdout streams.
 
-use ratatui::backend::{Backend, WindowSize};
+use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::style::{Color, Modifier, Style};
-use std::io::{Result as IOResult, Write};
+use std::io::{Error as IOError, Result as IOResult, Write};
 
 /// A backend that writes ANSI escape codes to any Write implementor
 pub struct WasiBackend<W: Write> {
@@ -72,6 +72,8 @@ impl<W: Write> WasiBackend<W> {
 }
 
 impl<W: Write> Backend for WasiBackend<W> {
+    type Error = IOError;
+
     fn draw<'a, I>(&mut self, content: I) -> IOResult<()>
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
@@ -146,6 +148,16 @@ impl<W: Write> Backend for WasiBackend<W> {
             columns_rows: Size::new(self.width, self.height),
             pixels: Size::new(0, 0),
         })
+    }
+
+    fn clear_region(&mut self, clear_type: ClearType) -> IOResult<()> {
+        match clear_type {
+            ClearType::All => self.write_ansi("\x1b[2J"),
+            ClearType::AfterCursor => self.write_ansi("\x1b[0J"),
+            ClearType::BeforeCursor => self.write_ansi("\x1b[1J"),
+            ClearType::CurrentLine => self.write_ansi("\x1b[2K"),
+            ClearType::UntilNewLine => self.write_ansi("\x1b[0K"),
+        }
     }
 }
 
