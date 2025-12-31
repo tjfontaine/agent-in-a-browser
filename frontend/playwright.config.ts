@@ -10,7 +10,8 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : undefined,
-    reporter: 'html',
+    reporter: process.env.CI ? 'list' : 'html',
+    timeout: 60 * 1000, // 60 second timeout per test
 
     use: {
         baseURL: 'http://localhost:3000',
@@ -45,6 +46,8 @@ export default defineConfig({
         url: 'http://localhost:3000',
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,
+        stdout: 'pipe',
+        stderr: 'pipe',
     },
 
 });
