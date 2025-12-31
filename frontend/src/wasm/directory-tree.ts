@@ -72,7 +72,6 @@ export function setOpfsRoot(root: FileSystemDirectoryHandle): void {
  */
 export async function loadSymlinksIntoCache(): Promise<void> {
     symlinkCache = await loadAllSymlinks();
-    console.log('[opfs-fs] Loaded', symlinkCache.size, 'symlinks from IndexedDB');
 }
 
 /**
@@ -326,7 +325,6 @@ export function closeAllHandles(): void {
     for (const [path, handle] of syncHandleCache.entries()) {
         try {
             handle.close();
-            console.log('[opfs-fs] Closed sync handle:', path);
         } catch (e) {
             console.warn('[opfs-fs] Failed to close sync handle:', path, e);
         }
@@ -353,7 +351,6 @@ export function closeHandlesUnderPath(pathPrefix: string): void {
         if (handle) {
             try {
                 handle.close();
-                console.log('[opfs-fs] Closed sync handle under path:', path);
             } catch (e) {
                 console.warn('[opfs-fs] Failed to close sync handle:', path, e);
             }
@@ -393,7 +390,6 @@ export async function asyncWriteFile(path: string, data: Uint8Array): Promise<vo
         await writable.write(new Uint8Array(data).buffer as ArrayBuffer);
         await writable.close();
 
-        console.log('[opfs-fs] Async write complete:', normalizedPath, data.length, 'bytes');
     } catch (e) {
         console.error('[opfs-fs] Async write failed:', normalizedPath, e);
         throw e;

@@ -537,45 +537,27 @@ fn add_to_history(history: &mut Vec<String>, command: String) {
 // ============================================================================
 
 fn load_shell_history() -> Vec<String> {
-    eprintln!("[shell] Loading history from: {}", SHELL_HISTORY_FILE);
     match fs::read_to_string(SHELL_HISTORY_FILE) {
         Ok(contents) => {
             // Filter out empty lines
-            let lines: Vec<String> = contents
+            contents
                 .lines()
                 .filter(|s| !s.trim().is_empty())
                 .map(|s| s.to_string())
-                .collect();
-            eprintln!("[shell] Loaded {} history entries", lines.len());
-            lines
+                .collect()
         }
-        Err(e) => {
-            eprintln!("[shell] Failed to load history: {:?}", e);
-            Vec::new()
-        }
+        Err(_) => Vec::new(),
     }
 }
 
 fn save_shell_history(history: &[String]) {
-    eprintln!(
-        "[shell] Saving {} history entries to: {}",
-        history.len(),
-        SHELL_HISTORY_FILE
-    );
     if ensure_config_dir().is_err() {
-        eprintln!("[shell] Failed to ensure config dir");
         return;
     }
     let start = history.len().saturating_sub(MAX_HISTORY_ENTRIES);
     let trimmed = &history[start..];
     let contents = trimmed.join("\n");
-    match fs::write(SHELL_HISTORY_FILE, &contents) {
-        Ok(_) => eprintln!(
-            "[shell] History saved successfully ({} bytes)",
-            contents.len()
-        ),
-        Err(e) => eprintln!("[shell] Failed to save history: {:?}", e),
-    }
+    let _ = fs::write(SHELL_HISTORY_FILE, &contents);
 }
 
 fn ensure_config_dir() -> Result<(), std::io::Error> {
