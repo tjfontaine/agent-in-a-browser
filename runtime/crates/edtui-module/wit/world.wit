@@ -1,0 +1,35 @@
+// EdTUI module WIT interface
+// Vim-inspired text editor as lazy-loaded command module
+
+package shell:unix@0.1.0;
+
+interface command {
+    use wasi:io/streams@0.2.4.{input-stream, output-stream};
+    
+    record exec-env {
+        cwd: string,
+        vars: list<tuple<string, string>>,
+    }
+
+    run: func(
+        name: string,
+        args: list<string>,
+        env: exec-env,
+        stdin: input-stream,
+        stdout: output-stream,
+        stderr: output-stream,
+    ) -> s32;
+    
+    list-commands: func() -> list<string>;
+}
+
+world edtui-module {
+    import wasi:io/streams@0.2.4;
+    import wasi:io/poll@0.2.4;
+    import wasi:io/error@0.2.4;
+    import wasi:filesystem/types@0.2.4;
+    import wasi:filesystem/preopens@0.2.4;
+    import wasi:clocks/monotonic-clock@0.2.4;
+    
+    export command;
+}

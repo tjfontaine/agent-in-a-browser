@@ -1,0 +1,36 @@
+[package]
+name = "edtui-module"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Text buffer - rope data structure for efficient large file editing
+ropey = "1.6"
+
+# Unicode character width for proper cursor positioning
+unicode-width = "0.2"
+
+# Syntax highlighting - use fancy-regex (pure Rust) instead of onig (C dep)
+syntect = { version = "5.2", default-features = false, features = [
+    "default-fancy",
+] }
+
+# WASI bindings for component model
+wasm-bindgen = "0.2"
+wit-bindgen-rt = { version = "0.37.0", features = ["bitflags"] }
+
+
+[package.metadata.component]
+package = "shell:unix"
+
+[package.metadata.component.target]
+path = "wit"
+world = "edtui-module"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = { path = "wit/deps/io" }
+"wasi:filesystem" = { path = "wit/deps/filesystem" }
+"wasi:clocks" = { path = "wit/deps/clocks" }

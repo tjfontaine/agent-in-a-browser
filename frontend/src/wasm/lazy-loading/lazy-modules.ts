@@ -66,6 +66,10 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'tui-demo': 'ratatui-demo',
     'counter': 'ratatui-demo',
     'ansi-demo': 'ratatui-demo',
+    // Vim-style editor
+    'vim': 'edtui-module',
+    'vi': 'edtui-module',
+    'edit': 'edtui-module',
     // Interactive shell (uses main runtime's shell:unix/command export)
     'sh': 'brush-shell',
     'shell': 'brush-shell',
@@ -257,6 +261,38 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
 }
 
 /**
+ * Load the edtui-module (vim-style editor)
+ * 
+ * Requires JSPI for interactive stdin (blocking reads from terminal).
+ * Provides vim, vi, and edit commands with file persistence.
+ */
+async function loadEdtuiModule(): Promise<CommandModule> {
+    // Vim editor requires JSPI for stdin to work
+    if (!hasJSPI) {
+        throw new Error(
+            'Vim editor requires JSPI (JavaScript Promise Integration). ' +
+            'Please use Chrome with JSPI enabled.'
+        );
+    }
+
+    console.log('[LazyLoader] Loading edtui-module (vim editor)...');
+    const startTime = performance.now();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const module = await import('../edtui-module/edtui-module.js') as any;
+
+    // Await $init for the JSPI module initialization
+    if (module.$init) {
+        await module.$init;
+    }
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] edtui-module loaded in ${loadTime.toFixed(0)}ms`);
+
+    return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+}
+
+/**
  * Load the brush-shell from the main MCP server (interactive shell)
  * 
  * The main runtime now exports shell:unix/command alongside wasi:http/incoming-handler.
@@ -324,6 +360,9 @@ export async function loadLazyModule(moduleName: string): Promise<CommandModule>
             break;
         case 'ratatui-demo':
             loadPromise = loadRatatuiDemo();
+            break;
+        case 'edtui-module':
+            loadPromise = loadEdtuiModule();
             break;
         case 'brush-shell':
             loadPromise = loadBrushShell();
