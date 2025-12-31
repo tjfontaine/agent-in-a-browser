@@ -127,6 +127,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Build workspace packages
+        run: npm run build:packages
+
       - name: Transpile WASM components
         working-directory: frontend
         run: npm run transpile:all
@@ -181,6 +184,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Build workspace packages
+        run: npm run build:packages
+
       - name: Transpile WASM components
         working-directory: frontend
         run: npm run transpile:all
@@ -226,6 +232,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Build workspace packages
+        run: npm run build:packages
 
       - name: Transpile WASM components
         working-directory: frontend
