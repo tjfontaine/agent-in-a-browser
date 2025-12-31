@@ -13,7 +13,7 @@ import { helpCommand } from './cmd-help';
 import { clearCommand } from './cmd-clear';
 import { filesCommand } from './cmd-files';
 import { mcpCommand } from './cmd-mcp';
-import { panelCommand } from './cmd-panel';
+
 import { modelCommand } from './cmd-model';
 import { providerCommand } from './cmd-provider';
 import { planCommand } from './cmd-plan';
@@ -137,7 +137,7 @@ registerCommand(helpCommand);
 registerCommand(clearCommand);
 registerCommand(filesCommand);
 registerCommand(mcpCommand);
-registerCommand(panelCommand);
+
 registerCommand(modelCommand);
 registerCommand(providerCommand);
 registerCommand(planCommand);

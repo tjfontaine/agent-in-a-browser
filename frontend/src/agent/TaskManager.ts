@@ -33,12 +33,6 @@ class TaskManager {
             status: t.status || 'pending',
         }));
         this.emit();
-        // Auto-show aux panel when tasks are added
-        if (tasks.length > 0) {
-            import('../components/SplitLayout').then(({ setAuxPanelVisible }) => {
-                setAuxPanelVisible(true);
-            });
-        }
     }
 
     /**

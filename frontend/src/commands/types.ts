@@ -5,7 +5,7 @@
  * completions, and handlers in separate files.
  */
 
-// Output function type - matches useAgent's addOutput
+// Output function type
 export type OutputFn = (
     type: 'text' | 'tool-start' | 'tool-result' | 'error' | 'system',
     content: string,

@@ -2,10 +2,10 @@
  * Provider Store - Zustand State Management
  * 
  * Central store for provider, model, and secrets state.
- * Replaces manual pub/sub patterns with reactive state.
+ * Uses zustand's vanilla store (not React hooks) since we're using Ratatui TUI.
  */
 
-import { create } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ModelInfo, ProviderInfo, ChangeListener } from './types';
 import {
@@ -81,7 +81,7 @@ interface ProviderState {
 // STORE IMPLEMENTATION
 // ============================================================
 
-export const useProviderStore = create<ProviderState>()(
+export const useProviderStore = createStore<ProviderState>()(
     subscribeWithSelector((set, get) => ({
         // Initial state
         currentProviderId: DEFAULT_PROVIDER_ID,

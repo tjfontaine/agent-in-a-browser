@@ -25,5 +25,3 @@ export {
 // WASM Bridge
 export { callWasmMcpServerFetch, initWasmBridge } from './WasmBridge';
 
-// Server List UI Component
-export { McpServerList } from './ServerList';

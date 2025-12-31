@@ -4,9 +4,10 @@
  * Barrel export for command-related functionality.
  */
 
-// Legacy xterm router (for backward compat)
-export { handleSlashCommand } from './router';
-export { handleMcpCommand, showMcpStatus, setMcpState, isMcpInitialized, getMcpStatusData } from './mcp';
+// MCP state management
+export { setMcpState, isMcpInitialized, getMcpStatusData } from './mcp';
+
+// Command parser
 export { parseSlashCommand, COMMANDS, getCommandUsage } from './Parser';
 
 // New modular command system  
@@ -20,3 +21,4 @@ export {
     type OutputFn,
     colors,
 } from './registry';
+
