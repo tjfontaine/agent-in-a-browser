@@ -8,16 +8,18 @@ This directory contains the browser-side infrastructure that connects the WASM M
                        ┌──────────────────────────────────────────────┐
                        │             Web Worker Context               │
                        │                                              │
-   sandbox-worker.ts   │   ┌──────────────────────────────────────┐  │
+   SandboxWorker.ts    │   ┌──────────────────────────────────────┐  │
           │            │   │   WASM MCP Server (jco-transpiled)   │  │
           │            │   │                                       │  │
           ▼            │   │  Imports these WIT interfaces:       │  │
-   mcp-client.ts ──────┼──►│  - wasi:filesystem/*                 │  │
+   WasmBridge.ts ──────┼──►│  - wasi:filesystem/*                 │  │
           │            │   │  - wasi:http/outgoing-handler        │  │
           │            │   │  - wasi:clocks/*                     │  │
+          │            │   │  - mcp:module-loader/loader          │  │
           │            │   │                                       │  │
           │            │   │  Exports:                            │  │
           │            │   │  - wasi:http/incoming-handler        │  │
+          │            │   │  - shell:unix/command                │  │
           │            │   └─────────┬───────────────┬────────────┘  │
           │            │             │               │                │
           │            │             ▼               ▼                │
@@ -25,8 +27,8 @@ This directory contains the browser-side infrastructure that connects the WASM M
           │            │   │opfs-filesystem  │  │wasi-http        │  │
           │            │   │-impl.ts         │  │-impl.ts         │  │
           │            │   │                 │  │                 │  │
-          │            │   │ SyncAccessHandle│  │ Sync XHR for    │  │
-          │            │   │ + in-memory tree│  │ HTTP requests   │  │
+          │            │   │ SyncAccessHandle│  │ Transport to    │  │
+          │            │   │ + OPFS tree     │  │ sandbox worker  │  │
           │            │   └─────────────────┘  └─────────────────┘  │
           │            │                                              │
           │            │   ┌────────────────────────────────────┐    │
@@ -42,17 +44,27 @@ This directory contains the browser-side infrastructure that connects the WASM M
 
 | Directory | Description |
 |-----------|-------------|
-| `mcp-server/` | jco-transpiled main WASM component (ES modules) |
+| `mcp-server-jspi/` | jco-transpiled MCP server for Chrome (JSPI mode) |
+| `mcp-server-sync/` | jco-transpiled MCP server for Safari/Firefox (sync mode) |
 | `tsx-engine/` | jco-transpiled TypeScript execution module |
 | `sqlite-module/` | jco-transpiled SQLite database module |
+| `ratatui-demo/` | jco-transpiled Ratatui demo TUI |
+| `web-agent-tui/` | jco-transpiled main Ratatui TUI application |
 
 ### Lazy Loading Infrastructure
 
 | File | Purpose |
 |------|---------|
-| `lazy-modules.ts` | On-demand loading of heavy modules (tsx, sqlite) |
-| `module-loader-impl.ts` | Module instantiation with WASI imports |
-| `module-loader-worker.ts` | Dedicated worker for module loading |
+| `lazy-modules.ts` | On-demand loading of heavy modules (tsx, sqlite, git) |
+| `module-loader-impl.ts` | Module instantiation with WASI imports, LazyProcess spawning |
+| `async-mode.ts` | JSPI detection and dynamic MCP server loading |
+
+### TUI Integration
+
+| File | Purpose |
+|------|---------|
+| `tui-loader.ts` | Connects ghostty-web terminal to Ratatui WASM TUI |
+| `ghostty-cli-shim.ts` | Bridges terminal stdin/stdout to WASI I/O |
 
 ### Host Bridge Implementations
 
@@ -61,21 +73,47 @@ This directory contains the browser-side infrastructure that connects the WASM M
 | `opfs-filesystem-impl.ts` | `wasi:filesystem/*` | Sync filesystem via SyncAccessHandle + lazy-loaded directory tree |
 | `opfs-async-helper.ts` | N/A | Helper worker for async OPFS operations (SharedArrayBuffer bridge) |
 | `opfs-sync-bridge.ts` | N/A | Synchronous file I/O via Atomics + binary data handling |
-| `directory-tree.ts` | N/A | In-memory directory structure and file metadata |
-| `wasi-http-impl.ts` | `wasi:http/outgoing-handler` | Sync HTTP via XMLHttpRequest |
+| `directory-tree.ts` | N/A | OPFS directory structure and file metadata |
+| `wasi-http-impl.ts` | `wasi:http/outgoing-handler` | HTTP via transport handler (routes to sandbox worker) |
 | `clocks-impl.js` | `wasi:clocks/*` | Custom Pollable extensions for sync blocking |
+
+### Git Integration
+
+| File | Purpose |
+|------|---------|
+| `git-module.ts` | isomorphic-git integration for git commands |
+| `opfs-git-adapter.ts` | Adapts OPFS to isomorphic-git's fs interface |
+| `symlink-store.ts` | Symlink persistence via IndexedDB |
+
+### Stream Classes
+
+| File | Purpose |
+|------|---------|
+| `streams.ts` | Custom WASI stream classes (InputStream, OutputStream, ReadyPollable) |
 
 ## How It Works
 
-### 1. MCP Request Flow
+### 1. TUI Application Flow
 
 ```text
-Agent → MCP Client → postMessage → Worker → WASM Component → Tool Result
+main-tui.ts → tui-loader.ts → ghostty-web terminal
+                    ↓
+            web-agent-tui.wasm (Ratatui TUI)
+                    ↓
+            shell:unix/command → ts-runtime-mcp.wasm
 ```
 
-The AI agent (Vercel AI SDK) sends MCP JSON-RPC requests. The `mcp-client.ts` in the main thread forwards these via `postMessage` to the Web Worker. The worker invokes the WASM component's HTTP handler, which processes the request and returns results.
+The Ratatui TUI runs as a WASM component, rendering via ANSI escape sequences to the ghostty terminal. User input flows from ghostty through the CLI shim to the TUI's stdin.
 
-### 2. File System Bridge (Lazy Loading)
+### 2. MCP Tool Request Flow
+
+```text
+Ratatui TUI → HTTP POST → WasmBridge → WASM MCP Server → Tool Result
+```
+
+When the TUI needs to execute a tool, it makes an HTTP request that's routed through the WasmBridge to the MCP server WASM component.
+
+### 3. File System Bridge (Lazy Loading)
 
 The WASM component uses standard `wasi:filesystem` via `std::fs` in Rust. Our `opfs-filesystem-impl.ts` bridges this to the browser:
 
@@ -93,13 +131,13 @@ The WASM component uses standard `wasi:filesystem` via `std::fs` in Rust. Our `o
 └─────────────────────┘         └────────────────────────┘
 ```
 
-### 3. HTTP Bridge
+### 4. HTTP Bridge
 
-HTTP requests use standard `wasi:http/outgoing-handler` implemented in `wasi-http-impl.ts`:
+HTTP requests use `wasi:http/outgoing-handler` implemented in `wasi-http-impl.ts`:
 
-- Uses **synchronous XMLHttpRequest** to block the WASM module (deprecated but necessary)
+- Uses a **transport handler** that routes requests to the sandbox worker
 - Constructs proper WASI HTTP types (`OutgoingRequest`, `IncomingResponse`, etc.)
-- Returns immediately-resolved `FutureIncomingResponse` for sync semantics
+- Returns streaming responses via ReadableStream
 
 ## Build Process
 
@@ -112,16 +150,17 @@ HTTP requests use standard `wasi:http/outgoing-handler` implemented in `wasi-htt
 2. **jco transpilation** (in `frontend/`):
 
    ```bash
-   npm run transpile:component
+   npm run transpile:all
    ```
 
-   This generates `mcp-server/` with interface mappings:
+   This generates the WASM module directories with interface mappings:
 
    ```text
    --map 'wasi:filesystem/*=../opfs-filesystem-impl.js#*'
    --map 'wasi:http/types=../wasi-http-impl.js'
    --map 'wasi:http/outgoing-handler=../wasi-http-impl.js#outgoingHandler'
    --map 'wasi:clocks/*=../clocks-impl.js#*'
+   --map 'mcp:module-loader/loader=../module-loader-impl.js'
    ...
    ```
 

@@ -11,22 +11,23 @@ A WebAssembly-based MCP (Model Context Protocol) server that provides TypeScript
 │  ┌──────────────┐     ┌─────────────────────────────────────────────┐   │
 │  │ Main Thread  │     │              Web Worker                     │   │
 │  │              │     │                                             │   │
-│  │  AI Agent    │     │  ┌────────────────────────────────────────┐ │   │
-│  │  (Vercel AI) ├────►│  │     WASM MCP Server (this crate)       │ │   │
+│  │  Ratatui TUI │     │  ┌────────────────────────────────────────┐ │   │
+│  │  (WASM)      ├────►│  │     WASM MCP Server (this crate)       │ │   │
 │  │              │     │  │                                        │ │   │
-│  │  MCP Client  │     │  │  ┌─────────────┐  ┌─────────────────┐  │ │   │
+│  │  ghostty-web │     │  │  ┌─────────────┐  ┌─────────────────┐  │ │   │
 │  └──────────────┘     │  │  │ QuickJS-NG  │  │ SWC Transpiler  │  │ │   │
 │                       │  │  │ (execution) │  │ (TS → JS)       │  │ │   │
 │                       │  │  └─────────────┘  └─────────────────┘  │ │   │
 │                       │  │                                        │ │   │
 │                       │  │   Implements wasi:http/incoming-handler│ │   │
+│                       │  │   Exports shell:unix/command           │ │   │
 │                       │  └──────────────────────┬─────────────────┘ │   │
 │                       │                         │                   │   │
 │                       │  ┌──────────────────────▼─────────────────┐ │   │
 │                       │  │         Host Bridges (TypeScript)      │ │   │
 │                       │  │                                        │ │   │
-│                       │  │  browser-fs-impl.ts → OPFS             │ │   │
-│                       │  │  browser-http-impl.ts → sync XHR       │ │   │
+│                       │  │  opfs-filesystem-impl.ts → OPFS        │ │   │
+│                       │  │  wasi-http-impl.ts → transport handler │ │   │
 │                       │  └────────────────────────────────────────┘ │   │
 │                       └─────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘

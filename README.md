@@ -2,7 +2,7 @@
 
 *✨ Lovingly vibed with [Antigravity](https://antigravity.google) ✨*
 
-**🚀 Try it now: [agent.atxconsulting.com](https://agent.atxconsulting.com)** — hosted on Cloudflare Pages (static assets only, no backend processing)
+**🚀 Try it now: [agent.atxconsulting.com](https://agent.atxconsulting.com)** — hosted on Cloudflare Workers (static assets only, no backend processing)
 
 A fully browser-native AI coding assistant. No server required for execution—just your API key and a browser.
 
@@ -35,29 +35,27 @@ Web Agent takes a different approach:
 
 - Ask the AI to write code, and it can actually **run** it in the sandbox
 - Persist files across sessions using the browser's [Origin Private File System (OPFS)](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
-- Use 30+ Unix-like shell commands: `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `diff`, `sort`, `wc`, and more
+- Use 50+ Unix-like shell commands: `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `diff`, `sort`, `wc`, and more
 - Execute TypeScript/JavaScript with ESM imports (auto-resolved from [esm.sh](https://esm.sh) CDN)
 - Make HTTP requests from within scripts (`fetch()` available)
-- Switch between AI providers and models on the fly (`/provider`, `/model`)
-- Connect to remote MCP servers with OAuth 2.1 PKCE authentication (`/mcp add`, `/mcp auth`)
+- Use git commands: `git init`, `git add`, `git commit`, `git status`, `git log`, `git diff`
+- Run SQLite databases with `sqlite3`
 - Queue messages while the agent is working, with real-time "steering" support
 
 ### Terminal Interface Features
 
 | Feature | Description |
 |---------|-------------|
-| **Split-panel TUI** | Main terminal + auxiliary panel for tasks, files, and output |
+| **Ratatui TUI** | 100% Rust-driven terminal UI via ghostty-web |
 | **Multi-provider support** | Anthropic, OpenAI, and any OpenAI-compatible endpoint |
 | **Bring your own API key** | Keys stored in browser memory only (never persisted) |
-| **Persistent history** | Last 1000 commands saved across sessions (localStorage) |
-| **Reverse-i-search** | Press `Ctrl+R` to search command history |
+| **Persistent history** | Command history saved across sessions |
 | **Real-time steering** | Send messages while the agent is working to adjust its approach |
-| **Remote MCP servers** | Connect to external MCP servers with full OAuth 2.1 support |
 
 ### Key Design Principles
 
 1. **Browser-First**: All execution happens in a WASM sandbox running in a Web Worker. No server-side code execution.
-2. **OSS-Only Stack**: Rust + WASI P2 for the sandbox, QuickJS for JS execution, SWC for TypeScript transpilation.
+2. **OSS-Only Stack**: Rust + WASI P2 for the sandbox, Ratatui for TUI, QuickJS for JS execution, SWC for TypeScript transpilation.
 3. **MCP Native**: Tools are exposed via [Model Context Protocol](https://spec.modelcontextprotocol.io/), making the architecture extensible and standardized.
 4. **Security by Isolation**: The sandbox cannot access your real file system or make unauthorized network requests.
 5. **Multi-Provider**: Designed for "bring your own key"—works with Anthropic, OpenAI, or any OpenAI-compatible API.
@@ -84,7 +82,7 @@ We chose [WASI Preview 2](https://github.com/WebAssembly/WASI/blob/main/preview2
 The tradeoff is complexity: WASI P2 requires custom JavaScript shims for browser APIs (OPFS, sync XHR) since there's no native browser WASI runtime yet. We implemented these in `frontend/src/wasm/`, including:
 
 - **Lazy OPFS loading**: Directory contents are scanned on-demand using a helper worker and `SharedArrayBuffer` + `Atomics.wait()` for true synchronous blocking. Only the root directory is scanned at startup.
-- **Sync HTTP**: Uses synchronous XMLHttpRequest to block the WASM module during HTTP requests.
+- **Transport routing**: HTTP requests from the TUI are routed through the sandbox worker to the MCP server.
 - **Custom Pollables**: Clock and I/O pollables with busy-wait implementations for the browser environment.
 
 ### Browser Compatibility & Async Modes
@@ -104,37 +102,6 @@ We use a dual-build approach to provide cross-browser support for async module l
 
 The runtime detects JSPI support via `typeof WebAssembly?.Suspending !== 'undefined'` and loads the appropriate MCP server variant (`mcp-server-jspi/` or `mcp-server-sync/`).
 
-> **Note**: Chrome requires JSPI flags (`--enable-experimental-web-platform-features` or `--js-flags=--experimental-wasm-stack-switching`). These are enabled automatically in Playwright tests.
-
----
-
-## Slash Commands
-
-These commands are available in the terminal:
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show available commands |
-| `/clear` | Clear conversation history |
-| `/files [path]` | List files in sandbox |
-| `/provider` | Configure AI provider, API keys, add custom providers |
-| `/model` | View/switch AI model, refresh from API |
-| `/panel [show\|hide]` | Toggle auxiliary panel |
-
-### Remote MCP Servers
-
-Connect to external MCP-compatible servers:
-
-| Command | Description |
-|---------|-------------|
-| `/mcp` | Show MCP status |
-| `/mcp list` | List registered servers with IDs |
-| `/mcp add <url>` | Add a remote MCP server |
-| `/mcp remove <id>` | Remove a registered server |
-| `/mcp auth <id>` | Authenticate with OAuth 2.1 PKCE |
-| `/mcp connect <id>` | Connect to a server |
-| `/mcp disconnect <id>` | Disconnect from a server |
-
 ---
 
 ## Architecture
@@ -142,23 +109,26 @@ Connect to external MCP-compatible servers:
 ```mermaid
 graph TB
     subgraph Browser["Browser Environment"]
-        Terminal["Terminal UI<br/>(xterm.js)"]
-        Agent["AI Agent<br/>(Vercel AI SDK)"]
+        Terminal["ghostty-web\n(WebGL Terminal)"]
+        
+        subgraph MainThread["Main Thread"]
+            TuiLoader["tui-loader.ts"]
+            RatatuiWasm["web-agent-tui.wasm\n(Ratatui TUI)"]
+        end
         
         subgraph Worker["Web Worker"]
-            WASM["WASM MCP Server<br/>(Rust)"]
-            Bridges["Host Bridges<br/>(TS → OPFS/XHR)"]
+            WASM["ts-runtime-mcp.wasm\n(MCP Server)"]
+            Bridges["Host Bridges\n(TS → OPFS)"]
         end
     end
     
-    Backend["Backend Server<br/>(Node.js proxy)"]
-    Anthropic["Anthropic API"]
+    LLM["LLM API\n(Anthropic/OpenAI)"]
     
-    Terminal --> Agent
-    Agent -->|"postMessage"| WASM
+    Terminal --> TuiLoader
+    TuiLoader --> RatatuiWasm
+    RatatuiWasm -->|"shell:unix/command"| WASM
     WASM --> Bridges
-    Agent -->|"HTTP"| Backend
-    Backend --> Anthropic
+    RatatuiWasm -->|"HTTP"| LLM
 ```
 
 **Components:**
@@ -166,9 +136,8 @@ graph TB
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | [runtime/](runtime/README.md) | Rust + WASI P2 | WASM MCP server with TypeScript execution |
-| [frontend/](frontend/src/README.md) | TypeScript + Vite | Terminal UI with AI agent orchestration |
+| [frontend/](frontend/src/README.md) | TypeScript + Vite | Terminal host + WASM bridge layer |
 | [frontend/src/wasm/](frontend/src/wasm/README.md) | TypeScript | Host bridges connecting WASM to browser APIs |
-| backend/ | Node.js | API proxy for Anthropic |
 
 ## Quick Start
 
@@ -181,7 +150,7 @@ graph TB
 ```bash
 # Install Rust tooling
 rustup target add wasm32-wasip2
-cargo install cargo-component wit-deps cargo-watch
+cargo install cargo-component wit-deps-cli cargo-watch
 
 # Install dependencies
 npm install
@@ -196,7 +165,7 @@ npm run dev
 This starts:
 
 - WASM component rebuild on Rust changes (via `cargo watch`)
-- Frontend dev server on <http://localhost:5173>
+- Frontend dev server on <http://localhost:3000>
 
 ## Build Commands
 
@@ -220,9 +189,10 @@ cd frontend
 npm run transpile:all
 
 # Transpile individual components (if needed)
-npm run transpile:component      # Main MCP server
+npm run transpile:component      # Main MCP server (both JSPI and sync)
 npm run transpile:tsx-engine     # TypeScript execution module
 npm run transpile:sqlite-module  # SQLite database module
+npm run transpile:web-agent-tui  # Ratatui TUI
 
 # Clean generated WASM bindings
 npm run clean:wasm
@@ -238,6 +208,7 @@ Heavy modules are lazy-loaded on first use to reduce initial load time:
 | `mcp-server-sync/` | Most shell commands (Safari/Firefox) | Startup |
 | `tsx-engine/` | `tsx`, `tsc` | First TypeScript execution* |
 | `sqlite-module/` | `sqlite3` | First database operation* |
+| `web-agent-tui/` | TUI application | Startup |
 
 *In Sync mode, these are pre-loaded at startup for browsers without JSPI support.
 
@@ -260,27 +231,37 @@ web-agent/
 │   │   └── deps/            # WASI dependencies
 │   └── crates/              # ← Modular WASM components
 │       ├── tsx-engine/      # TypeScript/TSX execution (lazy-loaded)
-│       └── sqlite-module/   # SQLite database (lazy-loaded)
+│       ├── sqlite-module/   # SQLite database (lazy-loaded)
+│       └── web-agent-tui/   # Ratatui TUI application
 │
 ├── frontend/                # ← Browser UI + agent
 │   ├── package.json
 │   ├── src/
-│   │   ├── main.tsx         # React entry point
+│   │   ├── main-tui.ts      # Entry point
 │   │   ├── README.md        # Frontend architecture docs
+│   │   ├── agent/
+│   │   │   └── sandbox.ts   # Sandbox worker management
+│   │   ├── mcp/
+│   │   │   ├── Client.ts    # MCP type definitions
+│   │   │   └── WasmBridge.ts # WASM MCP bridge
+│   │   ├── workers/
+│   │   │   └── SandboxWorker.ts
 │   │   └── wasm/            # ← Host bridges + generated code
 │   │       ├── README.md    # Bridge layer docs
+│   │       ├── tui-loader.ts  # ghostty + Ratatui integration
 │   │       ├── async-mode.ts  # JSPI detection & dynamic loading
 │   │       ├── mcp-server-jspi/ # JSPI mode (Chrome)
 │   │       ├── mcp-server-sync/ # Sync mode (Safari/Firefox)
 │   │       ├── tsx-engine/  # jco-transpiled TSX module (generated)
 │   │       ├── sqlite-module/ # jco-transpiled SQLite (generated)
+│   │       ├── web-agent-tui/ # jco-transpiled TUI (generated)
 │   │       ├── lazy-modules.ts # On-demand module loading
 │   │       ├── opfs-filesystem-impl.ts
 │   │       └── wasi-http-impl.ts
 │   └── vite.config.ts
 │
-└── backend/                 # API proxy server
-    └── src/index.ts
+└── worker/                  # Cloudflare worker (static serving)
+    └── index.js
 ```
 
 ## MCP Tools
@@ -295,8 +276,9 @@ The WASM runtime provides these tools to the AI agent:
 | `list` | List directory contents |
 | `grep` | Search for patterns in files |
 | `edit_file` | Find and replace text in files |
+| `task_write` | Write task list for user visibility |
 
-Shell commands include a full busybox-style suite: `tsx`, `tsc`, `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `xargs`, `diff`, and more.
+Shell commands include a full busybox-style suite: `tsx`, `tsc`, `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `xargs`, `diff`, `git`, `sqlite3`, and more.
 
 ## Docker
 
@@ -322,23 +304,7 @@ docker build -t web-agent .
 docker run -p 8080:8080 web-agent
 ```
 
-Multi-stage build: rust-builder → frontend-builder → backend-builder → production
-
-## Environment Variables
-
-### backend/.env
-
-```bash
-PORT=3000
-ANTHROPIC_API_KEY=your_key_here
-NODE_ENV=development
-```
-
-### frontend/.env
-
-```bash
-VITE_API_URL=http://localhost:3000
-```
+Multi-stage build: rust-builder → frontend-builder → production
 
 ## Testing
 
@@ -348,6 +314,12 @@ cargo test --workspace
 
 # Specific package
 cargo test -p ts-runtime-mcp
+
+# Frontend unit tests
+cd frontend && npm test
+
+# Frontend E2E tests (Playwright)
+cd frontend && npm run test:e2e
 
 # Validate WASM component
 wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
@@ -360,7 +332,7 @@ wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
 ```bash
 rustup update
 rustup target add wasm32-wasip2
-cargo install cargo-component wit-deps --locked
+cargo install cargo-component wit-deps-cli --locked
 ```
 
 ### jco transpile fails
