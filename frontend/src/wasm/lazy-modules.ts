@@ -11,6 +11,9 @@
 
 import { hasJSPI } from './async-mode.js';
 
+// Static import for git-module (pure TS, not WASM - must be static for worker context)
+import * as gitModule from './git-module.js';
+
 // Import types from generated modules
 type TsxEngineModule = typeof import('./tsx-engine/tsx-engine.js');
 type SqliteModule = typeof import('./sqlite-module/sqlite-module.js');
@@ -155,17 +158,15 @@ async function loadSqliteModule(): Promise<CommandModule> {
 
 /**
  * Load the git-module (pure TypeScript, not WASM)
+ * 
+ * NOTE: git-module is statically imported because dynamic imports in worker
+ * contexts fail in Playwright/Vite dev server. Since it's pure TypeScript
+ * (not heavy WASM), the bundle size impact is minimal.
  */
 async function loadGitModule(): Promise<CommandModule> {
-    console.log('[LazyLoader] Loading git-module...');
-    const startTime = performance.now();
-
-    const module = await import('./git-module.js');
-
-    const loadTime = performance.now() - startTime;
-    console.log(`[LazyLoader] git-module loaded in ${loadTime.toFixed(0)}ms`);
-
-    return module.command as unknown as CommandModule;
+    console.log('[LazyLoader] Loading git-module (static import)...');
+    // Use the statically imported module
+    return gitModule.command as unknown as CommandModule;
 }
 
 /**
