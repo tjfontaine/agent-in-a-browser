@@ -8,6 +8,7 @@ pub mod backend;
 pub mod bridge;
 pub mod commands;
 pub mod config;
+pub mod input;
 pub mod servers;
 pub mod ui;
 

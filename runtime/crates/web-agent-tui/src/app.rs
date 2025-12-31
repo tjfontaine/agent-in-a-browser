@@ -12,6 +12,7 @@ use crate::bridge::{
     mcp_client::ToolDefinition, AiClient, McpClient, Task,
 };
 use crate::config::{self, Config};
+use crate::input::InputBuffer;
 use crate::servers::{ServerManager, ToolCollector, ToolRouter};
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
@@ -36,10 +37,8 @@ pub struct App<R: Read, W: Write> {
     mode: Mode,
     /// Current state
     state: AppState,
-    /// Input buffer for current prompt
-    input: String,
-    /// Cursor position within input (0 = start, input.len() = end)
-    cursor_pos: usize,
+    /// Input buffer with readline-like editing
+    input: InputBuffer,
     /// Chat/output history  
     messages: Vec<Message>,
     /// Command history for up/down navigation
@@ -122,8 +121,7 @@ impl<R: Read, W: Write> App<R, W> {
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
-            input: String::new(),
-            cursor_pos: 0,
+            input: InputBuffer::new(),
             messages: vec![Message {
                 role: Role::System,
                 content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
@@ -189,7 +187,6 @@ impl<R: Read, W: Write> App<R, W> {
         let mode = self.mode;
         let state = self.state;
         let input = self.input.clone();
-        let cursor_pos = self.cursor_pos;
         let messages = self.messages.clone();
         let aux_content = self.aux_content.clone();
         let server_status = self.server_status.clone();
@@ -203,8 +200,8 @@ impl<R: Read, W: Write> App<R, W> {
                 frame,
                 mode,
                 state,
-                &input,
-                cursor_pos,
+                input.text(),
+                input.cursor_pos(),
                 &messages,
                 &aux_content,
                 &server_status,
@@ -324,6 +321,11 @@ impl<R: Read, W: Write> App<R, W> {
 
     /// Process a single input byte (non-overlay case)
     fn process_single_byte(&mut self, byte: u8, _remaining: &[u8]) -> bool {
+        // Handle control characters via InputBuffer
+        if self.input.handle_control(byte) {
+            return false;
+        }
+
         match byte {
             // Ctrl+C - cancel during processing, quit otherwise
             0x03 => {
@@ -381,68 +383,16 @@ impl<R: Read, W: Write> App<R, W> {
                 if !self.input.is_empty() {
                     self.submit_input();
                 }
-                self.cursor_pos = 0;
                 true // Stop reading after enter
-            }
-            // Backspace - delete char before cursor
-            0x7F | 0x08 => {
-                if self.cursor_pos > 0 {
-                    self.cursor_pos -= 1;
-                    self.input.remove(self.cursor_pos);
-                }
-                false // Continue reading
-            }
-            // Ctrl+A - move cursor to beginning
-            0x01 => {
-                self.cursor_pos = 0;
-                false
-            }
-            // Ctrl+E - move cursor to end
-            0x05 => {
-                self.cursor_pos = self.input.len();
-                false
-            }
-            // Ctrl+W - delete word backwards
-            0x17 => {
-                if self.cursor_pos > 0 {
-                    // Skip trailing spaces
-                    while self.cursor_pos > 0
-                        && self.input.chars().nth(self.cursor_pos - 1) == Some(' ')
-                    {
-                        self.cursor_pos -= 1;
-                        self.input.remove(self.cursor_pos);
-                    }
-                    // Delete until space or start
-                    while self.cursor_pos > 0
-                        && self.input.chars().nth(self.cursor_pos - 1) != Some(' ')
-                    {
-                        self.cursor_pos -= 1;
-                        self.input.remove(self.cursor_pos);
-                    }
-                }
-                false
-            }
-            // Ctrl+K - delete from cursor to end
-            0x0B => {
-                self.input.truncate(self.cursor_pos);
-                false
-            }
-            // Ctrl+U - clear entire line
-            0x15 => {
-                self.input.clear();
-                self.cursor_pos = 0;
-                false
             }
             // Tab - autocomplete slash commands
             0x09 => {
                 self.try_tab_complete();
-                self.cursor_pos = self.input.len();
                 false
             }
             // Printable ASCII - insert at cursor
             0x20..=0x7E => {
-                self.input.insert(self.cursor_pos, byte as char);
-                self.cursor_pos += 1;
+                self.input.insert_char(byte as char);
                 false // Continue reading (for paste)
             }
             // Escape sequence start - should be handled by process_input_bytes
@@ -479,8 +429,7 @@ impl<R: Read, W: Write> App<R, W> {
                 if self.history_index > 0 {
                     self.history_index -= 1;
                     if let Some(cmd) = self.history.get(self.history_index) {
-                        self.input = cmd.clone();
-                        self.cursor_pos = self.input.len();
+                        self.input.set_text(cmd.clone());
                     }
                 }
             }
@@ -490,24 +439,18 @@ impl<R: Read, W: Write> App<R, W> {
                     self.history_index += 1;
                     if self.history_index >= self.history.len() {
                         self.input.clear();
-                        self.cursor_pos = 0;
                     } else if let Some(cmd) = self.history.get(self.history_index) {
-                        self.input = cmd.clone();
-                        self.cursor_pos = self.input.len();
+                        self.input.set_text(cmd.clone());
                     }
                 }
             }
             // Right arrow - move cursor right
             b'C' => {
-                if self.cursor_pos < self.input.len() {
-                    self.cursor_pos += 1;
-                }
+                self.input.move_right();
             }
             // Left arrow - move cursor left
             b'D' => {
-                if self.cursor_pos > 0 {
-                    self.cursor_pos -= 1;
-                }
+                self.input.move_left();
             }
             _ => {}
         }
@@ -521,7 +464,7 @@ impl<R: Read, W: Write> App<R, W> {
     }
 
     fn submit_input(&mut self) {
-        let input = std::mem::take(&mut self.input);
+        let input = self.input.take();
 
         match self.state {
             AppState::NeedsApiKey => {
@@ -708,8 +651,8 @@ impl<R: Read, W: Write> App<R, W> {
                                     frame,
                                     self.mode,
                                     self.state,
-                                    &self.input,
-                                    self.cursor_pos,
+                                    self.input.text(),
+                                    self.input.cursor_pos(),
                                     &self.messages,
                                     &self.aux_content,
                                     &self.server_status,
@@ -1470,11 +1413,11 @@ impl<R: Read, W: Write> App<R, W> {
     /// Try to complete the current input with Tab
     fn try_tab_complete(&mut self) {
         // Only complete slash commands for now
-        if !self.input.starts_with('/') {
+        if !self.input.text().starts_with('/') {
             return;
         }
 
-        let prefix = self.input.as_str();
+        let prefix = self.input.text();
 
         // Find matching commands
         let matches: Vec<&str> = Self::SLASH_COMMANDS
@@ -1489,7 +1432,7 @@ impl<R: Read, W: Write> App<R, W> {
             }
             1 => {
                 // Single match - complete it
-                self.input = matches[0].to_string();
+                self.input.set_text(matches[0].to_string());
             }
             _ => {
                 // Multiple matches - show them
