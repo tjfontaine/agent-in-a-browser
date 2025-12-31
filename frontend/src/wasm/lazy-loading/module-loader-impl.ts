@@ -11,11 +11,20 @@
 import {
     LAZY_COMMANDS,
     loadLazyModule,
+    isInteractiveCommand as isInteractiveCommandImpl,
+    setTerminalContext,
     type CommandModule,
     type ExecEnv as LazyExecEnv,
 } from './lazy-modules.js';
 import { CustomInputStream, CustomOutputStream } from '../host-shims/streams.js';
 import { poll } from '@bytecodealliance/preview2-shim/io';
+
+// Import ghostty terminal streams for interactive TUI applications
+import {
+    stdin as ghosttyStdin,
+    stdout as ghosttyStdout,
+    stderr as ghosttyStderr
+} from '../tui/ghostty-cli-shim.js';
 
 // Get the Pollable base class from preview2-shim
 // @ts-expect-error - Pollable is exported at runtime
@@ -65,6 +74,9 @@ export async function spawnLazyCommand(
 ): Promise<LazyProcess> {
     console.log(`[ModuleLoader] spawnLazyCommand: ${command} (module: ${moduleName})`);
 
+    // Set terminal context to false (piped/buffered mode)
+    setTerminalContext(false);
+
     // Ensure module is loaded (await the async load)
     const module = await loadLazyModule(moduleName);
     console.log(`[ModuleLoader] Module '${moduleName}' loaded for command '${command}'`);
@@ -85,12 +97,24 @@ export async function spawnInteractive(
 ): Promise<LazyProcess> {
     console.log(`[ModuleLoader] spawnInteractive: ${command} (module: ${moduleName}, size: ${size.cols}x${size.rows})`);
 
+    // Set terminal context to true (TTY mode)
+    setTerminalContext(true);
+
     const module = await loadLazyModule(moduleName);
     console.log(`[ModuleLoader] Module '${moduleName}' loaded for interactive command '${command}'`);
 
     const process = new LazyProcess(moduleName, command, args, env, module, size);
     process.setRawMode(true); // Interactive mode starts in raw mode
+    process.execute(); // Start execution immediately for interactive apps
     return process;
+}
+
+/**
+ * Check if a command is an interactive TUI (needs spawn_interactive).
+ * This queries the module registry to determine dispatch mode.
+ */
+export function isInteractiveCommand(command: string): boolean {
+    return isInteractiveCommandImpl(command);
 }
 
 /**
@@ -204,63 +228,21 @@ export class LazyProcess {
     }
 
     /**
-     * Execute in interactive mode - stdin reads from live buffer.
+     * Execute in interactive mode - stdin reads from ghostty terminal.
+     * 
+     * TUI apps (like vim, ratatui-demo) need to read from the actual terminal
+     * and write output directly to the terminal. We use ghostty-cli-shim streams
+     * instead of internal buffers.
      */
     private async executeInteractive(): Promise<void> {
         console.log(`[LazyProcess] === INTERACTIVE EXECUTE START === command: ${this.command}`);
+        console.log(`[LazyProcess] Using ghostty terminal streams for stdin/stdout`);
 
-        // Create stdin stream that reads from live buffer
-        // With JSPI, blockingRead can return a Promise that waits for data
-        const stdinStream = new CustomInputStream({
-            blockingRead: (len: bigint): Promise<Uint8Array> => {
-                // If buffer has data, return it immediately
-                const immediate = this.readFromBuffer(this.stdinBuffer, Number(len));
-                if (immediate.length > 0) {
-                    return Promise.resolve(immediate);
-                }
-
-                // No data available - return a Promise that polls for data
-                // This allows JSPI to suspend the WASM stack while we wait
-                return new Promise<Uint8Array>((resolve) => {
-                    const checkInterval = setInterval(() => {
-                        const data = this.readFromBuffer(this.stdinBuffer, Number(len));
-                        if (data.length > 0) {
-                            clearInterval(checkInterval);
-                            resolve(data);
-                        }
-                    }, 16); // Check every 16ms (~60fps)
-                });
-            },
-        });
-
-        // Stdout/stderr write directly to buffers (same as batch mode)
-        const stdoutStream = new CustomOutputStream({
-            write: (buf: Uint8Array): bigint => {
-                const text = new TextDecoder().decode(buf);
-                console.log(`[LazyProcess] stdout.write(${buf.length} bytes):`, JSON.stringify(text));
-                this.stdoutBuffer.push(new Uint8Array(buf));
-                return BigInt(buf.length);
-            },
-            blockingWriteAndFlush: (buf: Uint8Array): void => {
-                const text = new TextDecoder().decode(buf);
-                console.log(`[LazyProcess] stdout.blockingWriteAndFlush(${buf.length} bytes):`, JSON.stringify(text));
-                this.stdoutBuffer.push(new Uint8Array(buf));
-            },
-            checkWrite: (): bigint => BigInt(65536),
-            blockingFlush: (): void => { },
-        });
-
-        const stderrStream = new CustomOutputStream({
-            write: (buf: Uint8Array): bigint => {
-                this.stderrBuffer.push(new Uint8Array(buf));
-                return BigInt(buf.length);
-            },
-            blockingWriteAndFlush: (buf: Uint8Array): void => {
-                this.stderrBuffer.push(new Uint8Array(buf));
-            },
-            checkWrite: (): bigint => BigInt(65536),
-            blockingFlush: (): void => { },
-        });
+        // Use ghostty terminal streams for TUI apps
+        // These streams are connected to the actual ghostty-web terminal
+        const stdinStream = ghosttyStdin.getStdin();
+        const stdoutStream = ghosttyStdout.getStdout();
+        const stderrStream = ghosttyStderr.getStderr();
 
         try {
             const execEnv: LazyExecEnv = {

@@ -778,6 +778,29 @@ pub mod mcp {
                     unsafe { LazyProcess::from_handle(ret as u32) }
                 }
             }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Check if a command is an interactive TUI (needs direct terminal access)
+            /// This queries the module registry to determine if a command should use
+            /// spawn-interactive vs spawn-lazy-command
+            pub fn is_interactive_command(command: &str) -> bool {
+                unsafe {
+                    let vec0 = command;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "mcp:module-loader/loader@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "is-interactive-command"]
+                        fn wit_import1(_: *mut u8, _: usize) -> i32;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8, _: usize) -> i32 {
+                        unreachable!()
+                    }
+                    let ret = unsafe { wit_import1(ptr0.cast_mut(), len0) };
+                    _rt::bool_lift(ret as u8)
+                }
+            }
         }
     }
 }
@@ -12789,8 +12812,8 @@ pub(crate) use __export_ts_runtime_mcp_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 11191] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb2V\x01A\x02\x01A(\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 11232] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xdbV\x01A\x02\x01A(\x01\
 B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[meth\
 od]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.b\
 lock\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\0\
@@ -12981,7 +13004,7 @@ ror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01@
 \x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\0\x20wasi:h\
 ttp/outgoing-handler@0.2.4\x05\x14\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10\
 get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi\
-:random/random@0.2.4\x05\x15\x01B,\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\
+:random/random@0.2.4\x05\x15\x01B.\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\
 \x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\x01\
 r\x02\x04colsy\x04rowsy\x04\0\x0dterminal-size\x03\0\x06\x04\0\x0clazy-process\x03\
 \x01\x01h\x08\x01i\x01\x01@\x01\x04self\x09\0\x0a\x04\0'[method]lazy-process.get\
@@ -12999,19 +13022,20 @@ ocess.set-raw-mode\x01\x15\x04\0\x20[method]lazy-process.is-raw-mode\x01\x0c\x01
 \x16\x01ks\x01@\x01\x07commands\0\x17\x04\0\x0fget-lazy-module\x01\x18\x01ps\x01\
 i\x08\x01@\x04\x06modules\x07commands\x04args\x19\x03env\x05\0\x1a\x04\0\x12spaw\
 n-lazy-command\x01\x1b\x01@\x05\x06modules\x07commands\x04args\x19\x03env\x05\x04\
-size\x07\0\x1a\x04\0\x11spawn-interactive\x01\x1c\x03\0\x1emcp:module-loader/loa\
-der@0.1.0\x05\x16\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-ou\
-tparam\x01B\x08\x02\x03\x02\x01\x17\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\
-\x01\x18\x04\0\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07requ\
-est\x04\x0cresponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/inc\
-oming-handler@0.2.4\x05\x19\x01B\x0f\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\
-\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01\
-r\x02\x03cwds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01\
-@\x06\x04names\x04args\x08\x03env\x07\x05stdin\x09\x06stdout\x0a\x06stderr\x0a\0\
-z\x04\0\x03run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shel\
-l:unix/command@0.1.0\x05\x1a\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\
-\x14\x01\0\x0ets-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0d\
-wit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
+size\x07\0\x1a\x04\0\x11spawn-interactive\x01\x1c\x01@\x01\x07commands\0\x7f\x04\
+\0\x16is-interactive-command\x01\x1d\x03\0\x1emcp:module-loader/loader@0.1.0\x05\
+\x16\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-outparam\x01B\x08\
+\x02\x03\x02\x01\x17\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\x01\x18\x04\0\
+\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07request\x04\x0cres\
+ponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/incoming-handler@\
+0.2.4\x05\x19\x01B\x0f\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\
+\x02\x01\x08\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01r\x02\x03cw\
+ds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01@\x06\x04n\
+ames\x04args\x08\x03env\x07\x05stdin\x09\x06stdout\x0a\x06stderr\x0a\0z\x04\0\x03\
+run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shell:unix/comm\
+and@0.1.0\x05\x1a\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0e\
+ts-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x07\
+0.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

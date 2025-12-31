@@ -1,5 +1,5 @@
 import { preopens, types } from '../host-shims/opfs-filesystem-impl.js';
-import { environment, exit as exit$1, stderr } from '@bytecodealliance/preview2-shim/cli';
+import { environment, exit as exit$1, stderr } from '../tui/ghostty-cli-shim.js';
 import { error, streams } from '@bytecodealliance/preview2-shim/io';
 const { getDirectories } = preopens;
 const { Descriptor } = types;

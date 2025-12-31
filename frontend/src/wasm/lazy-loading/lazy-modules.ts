@@ -53,6 +53,27 @@ const loadedModules: Map<string, CommandModule> = new Map();
 // Loading promises to prevent double-loading
 const loadingPromises: Map<string, Promise<CommandModule>> = new Map();
 
+// Terminal context for isatty detection
+// When true, getTerminalStdin/Stdout return terminal instances (TTY mode)
+// When false, they return undefined (piped mode)
+let _terminalContext = false;
+
+/**
+ * Set the terminal context for the current command execution.
+ * Called before spawning commands to indicate TTY vs piped mode.
+ */
+export function setTerminalContext(isTty: boolean): void {
+    _terminalContext = isTty;
+}
+
+/**
+ * Check if the current execution context is a terminal (TTY).
+ * Used by terminal shims to implement isatty() behavior.
+ */
+export function isTerminalContext(): boolean {
+    return _terminalContext;
+}
+
 /**
  * Commands that are handled by lazy-loaded modules
  */
@@ -75,6 +96,23 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'shell': 'brush-shell',
     'bash': 'brush-shell',
 };
+
+/**
+ * Commands that are interactive TUI apps (need direct terminal access).
+ * These commands use spawn_interactive and bypass shell output buffering.
+ */
+export const INTERACTIVE_COMMANDS = new Set([
+    'vim', 'vi', 'edit',           // Vim-style editor
+    'ratatui-demo', 'tui-demo',    // TUI demos
+    'counter', 'ansi-demo',        // Interactive demos
+]);
+
+/**
+ * Check if a command is an interactive TUI (needs spawn_interactive)
+ */
+export function isInteractiveCommand(commandName: string): boolean {
+    return INTERACTIVE_COMMANDS.has(commandName);
+}
 
 /**
  * Check if a command should be lazy-loaded

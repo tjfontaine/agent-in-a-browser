@@ -80,4 +80,9 @@ interface loader {
     env: exec-env,
     size: terminal-size,
   ) -> lazy-process;
+
+  /// Check if a command is an interactive TUI (needs direct terminal access)
+  /// This queries the module registry to determine if a command should use
+  /// spawn-interactive vs spawn-lazy-command
+  is-interactive-command: func(command: string) -> bool;
 }

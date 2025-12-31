@@ -10,6 +10,9 @@ import type { Terminal } from 'ghostty-web';
 // Use our existing custom stream classes that properly integrate with jco
 import { CustomInputStream, CustomOutputStream } from '../host-shims/streams.js';
 
+// Import terminal context for isatty detection
+import { isTerminalContext } from '../lazy-loading/lazy-modules.js';
+
 // Buffer for stdin data from terminal
 const stdinBuffer: Uint8Array[] = [];
 const stdinWaiters: Array<(data: Uint8Array) => void> = [];
@@ -247,15 +250,15 @@ export const terminalOutput = {
 
 export const terminalStdin = {
     TerminalInput,
-    getTerminalStdin: () => terminalStdinInstance,
+    getTerminalStdin: () => isTerminalContext() ? terminalStdinInstance : undefined,
 };
 
 export const terminalStdout = {
     TerminalOutput,
-    getTerminalStdout: () => terminalStdoutInstance,
+    getTerminalStdout: () => isTerminalContext() ? terminalStdoutInstance : undefined,
 };
 
 export const terminalStderr = {
     TerminalOutput,
-    getTerminalStderr: () => terminalStderrInstance,
+    getTerminalStderr: () => isTerminalContext() ? terminalStderrInstance : undefined,
 };

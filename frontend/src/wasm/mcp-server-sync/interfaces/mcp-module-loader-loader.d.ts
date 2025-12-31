@@ -1,9 +1,15 @@
 /** @module Interface mcp:module-loader/loader@0.1.0 **/
 export function getLazyModule(command: string): string | undefined;
 export function spawnLazyCommand(module: string, command: string, args: Array<string>, env: ExecEnv): LazyProcess;
+export function spawnInteractive(module: string, command: string, args: Array<string>, env: ExecEnv, size: TerminalSize): LazyProcess;
+export function isInteractiveCommand(command: string): boolean;
 export interface ExecEnv {
   cwd: string,
   vars: Array<[string, string]>,
+}
+export interface TerminalSize {
+  cols: number,
+  rows: number,
 }
 export type Pollable = import('./wasi-io-poll.js').Pollable;
 
@@ -19,4 +25,5 @@ export class LazyProcess {
   readStdout(maxBytes: bigint): Uint8Array;
   readStderr(maxBytes: bigint): Uint8Array;
   tryWait(): number | undefined;
+  setRawMode(enabled: boolean): void;
 }

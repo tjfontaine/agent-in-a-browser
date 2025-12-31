@@ -26,13 +26,10 @@ export default defineConfig({
                 // Use system Chrome for JSPI support - only for local testing (not CI/Docker)
                 ...(process.env.CI ? {} : { channel: 'chrome' }),
                 launchOptions: {
-                    // Enable JSPI (JavaScript Promise Integration) for WebAssembly async
-                    // Multiple flags for different Chrome versions:
-                    // - --enable-experimental-web-platform-features: general experimental features
-                    // - --js-flags=--experimental-wasm-stack-switching: V8-level JSPI flag
+                    // Enable experimental web platform features for JSPI
+                    // Note: JSPI (--experimental-wasm-stack-switching) is now enabled by default in Chrome 137+
                     args: [
                         '--enable-experimental-web-platform-features',
-                        '--js-flags=--experimental-wasm-stack-switching',
                     ],
                 },
             },
