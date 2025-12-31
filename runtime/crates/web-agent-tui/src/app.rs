@@ -34,13 +34,13 @@ pub enum AppState {
 /// Main application state
 pub struct App<R: Read, W: Write> {
     /// Current mode
-    mode: Mode,
+    pub(crate) mode: Mode,
     /// Current state
-    state: AppState,
+    pub(crate) state: AppState,
     /// Input buffer with readline-like editing
-    input: InputBuffer,
+    pub(crate) input: InputBuffer,
     /// Chat/output history  
-    messages: Vec<Message>,
+    pub(crate) messages: Vec<Message>,
     /// Command history for up/down navigation
     history: Vec<String>,
     /// Current position in history
@@ -52,23 +52,23 @@ pub struct App<R: Read, W: Write> {
     /// Should quit
     should_quit: bool,
     /// AI client
-    ai_client: AiClient,
+    pub(crate) ai_client: AiClient,
     /// MCP client (local sandbox)
     mcp_client: McpClient,
     /// Pending message to send after API key is set
     pending_message: Option<String>,
     /// Auxiliary panel content
-    aux_content: AuxContent,
+    pub(crate) aux_content: AuxContent,
     /// Server connection status
-    server_status: ServerStatus,
+    pub(crate) server_status: ServerStatus,
     /// Current task list (from task_write)
     tasks: Vec<Task>,
     /// Flag to cancel current operation
     cancelled: bool,
     /// Remote MCP server connections
-    remote_servers: Vec<RemoteServerEntry>,
+    pub(crate) remote_servers: Vec<RemoteServerEntry>,
     /// Current overlay (modal popup)
-    overlay: Option<Overlay>,
+    pub(crate) overlay: Option<Overlay>,
     /// Loaded configuration
     config: Config,
 }
