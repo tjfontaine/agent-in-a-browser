@@ -9,8 +9,15 @@ target/
 *.pdb
 Cargo.lock
 
-# WIT dependencies (downloaded by cargo-component)
-runtime/wit/deps/
+# WIT dependencies (downloaded by wit-deps)
+# Ignore downloaded WASI packages but keep custom WIT packages
+runtime/wit/deps/cli/
+runtime/wit/deps/clocks/
+runtime/wit/deps/filesystem/
+runtime/wit/deps/http/
+runtime/wit/deps/io/
+runtime/wit/deps/random/
+runtime/wit/deps/sockets/
 runtime/wit/deps.lock
 
 # WASM build artifacts
