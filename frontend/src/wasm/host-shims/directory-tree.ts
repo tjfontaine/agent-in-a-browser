@@ -440,6 +440,7 @@ export async function listDirectory(path: string): Promise<Array<{ name: string;
 
     const entries: Array<{ name: string; isDirectory: boolean; size?: number; mtime?: number }> = [];
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for await (const [name, handle] of (dirHandle as any).entries()) {
         if (handle.kind === 'file') {
             const file = await (handle as FileSystemFileHandle).getFile();

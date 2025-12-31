@@ -1,6 +1,5 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import reactCompiler from 'eslint-plugin-react-compiler';
 
 export default tseslint.config(
     eslint.configs.recommended,
@@ -16,6 +15,7 @@ export default tseslint.config(
             'src/wasm/sqlite-module/**',
             'src/wasm/ratatui-demo/**',
             'src/wasm/brush-shell/**',
+            'src/wasm/web-agent-tui/**',
         ],
     },
     {
@@ -26,17 +26,12 @@ export default tseslint.config(
                 tsconfigRootDir: import.meta.dirname,
             },
         },
-        plugins: {
-            'react-compiler': reactCompiler,
-        },
         rules: {
             // Allow unused vars prefixed with underscore
             '@typescript-eslint/no-unused-vars': [
                 'error',
                 { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
             ],
-            // React Compiler rules
-            'react-compiler/react-compiler': 'error',
         },
     }
 );
