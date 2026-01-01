@@ -239,9 +239,9 @@ class Descriptor {
 
     /**
      * Read file content - uses SyncAccessHandle for OPFS persistence
-     * Falls back to syncFileOperation when no handle is cached
+     * Falls back to async read when no handle is cached (JSPI will suspend on the Promise)
      */
-    read(length: number, _offset: bigint): [Uint8Array, boolean] {
+    async read(length: number, _offset: bigint): Promise<[Uint8Array, boolean]> {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
@@ -257,16 +257,16 @@ class Descriptor {
             return [buffer, eof];
         }
 
-        // Fallback: use sync helper to read file via Atomics (binary-safe)
+        // Fallback: use async read via OPFS APIs (JSPI will suspend on the Promise)
         try {
-            const fullData = syncReadFileBinary(normalizedPath);
+            const fullData = await asyncReadFile(normalizedPath);
             const sliceStart = Math.min(offset, fullData.length);
             const sliceEnd = Math.min(offset + length, fullData.length);
             const slicedData = fullData.slice(sliceStart, sliceEnd);
             const eof = sliceEnd >= fullData.length;
             return [slicedData, eof];
         } catch (e) {
-            console.error('[opfs-fs] syncReadFileBinary error:', e);
+            console.error('[opfs-fs] asyncReadFile error:', e);
             return [new Uint8Array(0), true];
         }
     }
@@ -360,9 +360,9 @@ class Descriptor {
 
     /**
      * Write file content - uses SyncAccessHandle for OPFS persistence
-     * Falls back to syncFileOperation when no handle is cached
+     * Falls back to async write when no handle is cached (JSPI will suspend on the Promise)
      */
-    write(buffer: Uint8Array, _offset: bigint): number {
+    async write(buffer: Uint8Array, _offset: bigint): Promise<number> {
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
@@ -381,16 +381,16 @@ class Descriptor {
             return buffer.byteLength;
         }
 
-        // Fallback: use sync helper to write file via Atomics (binary-safe)
+        // Fallback: use async write via OPFS APIs (JSPI will suspend on the Promise)
         try {
-            syncWriteFileBinary(normalizedPath, buffer);
+            await asyncWriteFile(normalizedPath, buffer);
 
             // Update tree entry
             this.treeEntry.size = (this.treeEntry.size || 0) + buffer.byteLength;
             this.treeEntry.mtime = Date.now();
             return buffer.byteLength;
         } catch (e) {
-            console.error('[opfs-fs] syncWriteFileBinary error:', e);
+            console.error('[opfs-fs] asyncWriteFile error:', e);
             return 0;
         }
     }
