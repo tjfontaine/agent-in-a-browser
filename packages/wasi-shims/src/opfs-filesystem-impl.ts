@@ -241,7 +241,8 @@ class Descriptor {
      * Read file content - uses SyncAccessHandle for OPFS persistence
      * Falls back to async read when no handle is cached (JSPI will suspend on the Promise)
      */
-    async read(length: number, _offset: bigint): Promise<[Uint8Array, boolean]> {
+    async read(_length: bigint | number, _offset: bigint): Promise<[Uint8Array, boolean]> {
+        const length = Number(_length);
         const offset = Number(_offset);
         const path = this.path;
         const normalizedPath = normalizePath(path);
