@@ -55,7 +55,7 @@ impl<'a, R: Read, W: Write> Widget for AppWidget<'a, R, W> {
             self.app.mode,
             self.app.state,
             &self.app.server_status,
-            self.app.ai_client.model_name(),
+            self.app.model_name(),
         )
         .render(v_chunks[1], buf);
 

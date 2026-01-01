@@ -4,16 +4,18 @@
 
 use ratatui::Terminal;
 
-use serde_json::Value;
-
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
-    ai_client::StreamEvent, get_local_tool_definitions, get_system_message,
-    mcp_client::ToolDefinition, AiClient, McpClient, Task,
+    get_local_tool_definitions, get_system_message,
+    mcp_client::ToolDefinition,
+    rig_agent::{RigAgent, StreamingBuffer},
+    McpClient,
 };
+
 use crate::config::{self, Config};
 use crate::input::InputBuffer;
-use crate::servers::{ServerManager, ToolCollector, ToolRouter};
+use crate::servers::{ServerManager, ToolCollector};
+
 use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
     ServerConnectionStatus, ServerManagerView, ServerStatus,
@@ -29,6 +31,8 @@ pub enum AppState {
     NeedsApiKey,
     /// Processing a request (AI or MCP)
     Processing,
+    /// Streaming a response (async streaming in progress)
+    Streaming,
 }
 
 /// Main application state
@@ -51,8 +55,8 @@ pub struct App<R: Read, W: Write> {
     stdin: R,
     /// Should quit
     should_quit: bool,
-    /// AI client
-    pub(crate) ai_client: AiClient,
+    /// Rig-core Agent for multi-turn tool calling
+    rig_agent: Option<RigAgent>,
     /// MCP client (local sandbox)
     mcp_client: McpClient,
     /// Pending message to send after API key is set
@@ -61,8 +65,6 @@ pub struct App<R: Read, W: Write> {
     pub(crate) aux_content: AuxContent,
     /// Server connection status
     pub(crate) server_status: ServerStatus,
-    /// Current task list (from task_write)
-    tasks: Vec<Task>,
     /// Flag to cancel current operation
     cancelled: bool,
     /// Remote MCP server connections
@@ -71,6 +73,8 @@ pub struct App<R: Read, W: Write> {
     pub(crate) overlay: Option<Overlay>,
     /// Loaded configuration
     config: Config,
+    /// Active streaming buffer for async response streaming
+    streaming_buffer: Option<StreamingBuffer>,
 }
 
 /// A message in the chat history
@@ -97,22 +101,12 @@ impl<R: Read, W: Write> App<R, W> {
         let backend = WasiBackend::new(stdout, width, height);
         let terminal = Terminal::new(backend).expect("failed to create terminal");
 
-        // Create AI client (OpenAI by default)
-        // TODO: Make this configurable
-        let ai_client = AiClient::default_claude();
-
         // Create MCP client pointing to sandbox
         // The URL will be proxied by the frontend to the actual sandbox worker
         let mcp_client = McpClient::new("http://localhost:3000/mcp");
 
         // Load config from OPFS (or use defaults)
         let config = Config::load();
-
-        // Apply saved API key if available
-        let mut ai_client = ai_client;
-        if let Some(ref api_key) = config.provider.api_key {
-            ai_client.set_api_key(api_key);
-        }
 
         // Load agent history once
         let loaded_history = config::load_agent_history();
@@ -131,7 +125,7 @@ impl<R: Read, W: Write> App<R, W> {
             terminal,
             stdin,
             should_quit: false,
-            ai_client,
+            rig_agent: None, // Lazily initialized when first used
             mcp_client,
             pending_message: None,
             aux_content: AuxContent::default(),
@@ -140,11 +134,11 @@ impl<R: Read, W: Write> App<R, W> {
                 local_tool_count: 0,
                 remote_servers: Vec::new(),
             },
-            tasks: Vec::new(),
             cancelled: false,
             remote_servers: Vec::new(),
             overlay: None,
             config,
+            streaming_buffer: None,
         }
     }
 
@@ -161,6 +155,9 @@ impl<R: Read, W: Write> App<R, W> {
         while !self.should_quit {
             // Handle input (including resize events from stdin)
             self.handle_input();
+
+            // Poll streaming buffer if active
+            self.poll_streaming_buffer();
 
             // Render
             self.render();
@@ -183,6 +180,67 @@ impl<R: Read, W: Write> App<R, W> {
         let _ = leave_alternate_screen(self.terminal.backend_mut().writer_mut());
     }
 
+    /// Get the current model name for display
+    pub fn model_name(&self) -> &str {
+        &self.config.current_provider_settings().model
+    }
+
+    /// Get the current provider name
+    pub fn provider_name(&self) -> &str {
+        self.config.current_provider()
+    }
+
+    /// Check if API key is set for the current provider
+    pub fn has_api_key(&self) -> bool {
+        self.config
+            .current_provider_settings()
+            .api_key
+            .as_ref()
+            .map_or(false, |k| !k.is_empty())
+    }
+
+    /// Get the API key for the current provider
+    pub fn get_api_key(&self) -> Option<&str> {
+        self.config.current_provider_settings().api_key.as_deref()
+    }
+
+    /// Set the API key for the current provider
+    pub fn set_api_key(&mut self, key: &str) {
+        self.config.current_provider_settings_mut().api_key = Some(key.to_string());
+        let _ = self.config.save();
+        // Invalidate the agent so it's recreated with the new key
+        self.rig_agent = None;
+    }
+
+    /// Set the provider (anthropic or openai)
+    pub fn set_provider(&mut self, provider: &str) {
+        self.config.providers.default = provider.to_string();
+        let _ = self.config.save();
+        // Invalidate the agent so it's recreated with the new provider
+        self.rig_agent = None;
+    }
+
+    /// Set the model for the current provider
+    pub fn set_model(&mut self, model: &str) {
+        self.config.current_provider_settings_mut().model = model.to_string();
+        let _ = self.config.save();
+        // Invalidate the agent so it's recreated with the new model
+        self.rig_agent = None;
+    }
+
+    /// Get the base URL for the current provider
+    pub fn get_base_url(&self) -> Option<&str> {
+        self.config.current_provider_settings().base_url.as_deref()
+    }
+
+    /// Set the base URL for the current provider
+    pub fn set_base_url(&mut self, url: &str) {
+        self.config.current_provider_settings_mut().base_url = Some(url.to_string());
+        let _ = self.config.save();
+        // Invalidate the agent so it's recreated with the new base URL
+        self.rig_agent = None;
+    }
+
     fn render(&mut self) {
         let mode = self.mode;
         let state = self.state;
@@ -191,7 +249,7 @@ impl<R: Read, W: Write> App<R, W> {
         let aux_content = self.aux_content.clone();
         let server_status = self.server_status.clone();
 
-        let model_name = self.ai_client.model_name().to_string();
+        let model_name = self.model_name().to_string();
         let overlay = self.overlay.clone();
         let remote_servers = self.remote_servers.clone();
 
@@ -469,16 +527,8 @@ impl<R: Read, W: Write> App<R, W> {
         match self.state {
             AppState::NeedsApiKey => {
                 // This input is the API key - don't add to history
-                self.ai_client.set_api_key(&input);
-
-                // Save API key to config for persistence
-                self.config.provider.api_key = Some(input.clone());
-                if let Err(e) = self.config.save() {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Warning: Could not save config: {}", e),
-                    });
-                }
+                // set_api_key saves to config and invalidates agent
+                self.set_api_key(&input);
 
                 self.messages.push(Message {
                     role: Role::System,
@@ -490,6 +540,10 @@ impl<R: Read, W: Write> App<R, W> {
                 if let Some(pending) = self.pending_message.take() {
                     self.send_to_ai(&pending);
                 }
+            }
+            AppState::Streaming => {
+                // Input is ignored during streaming
+                // User can only cancel with Ctrl+C
             }
             AppState::Ready | AppState::Processing => {
                 // Add to command history and save
@@ -592,173 +646,140 @@ impl<R: Read, W: Write> App<R, W> {
 
     fn send_to_ai(&mut self, message: &str) {
         // Check if API key is set
-        if !self.ai_client.has_api_key() {
-            // Store the message and prompt for API key
-            self.pending_message = Some(message.to_string());
-            self.state = AppState::NeedsApiKey;
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Please enter your API key:".to_string(),
-            });
-            return;
-        }
+        let api_key = match self.get_api_key() {
+            Some(key) if !key.is_empty() => key.to_string(),
+            _ => {
+                // Store the message and prompt for API key
+                self.pending_message = Some(message.to_string());
+                self.state = AppState::NeedsApiKey;
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "Please enter your API key:".to_string(),
+                });
+                return;
+            }
+        };
 
         self.state = AppState::Processing;
         self.cancelled = false; // Reset cancellation flag
 
-        // Collect all tools with prefixes for multi-server support
-        let tools = self.collect_all_tools();
+        // Ensure RigAgent is initialized
+        if self.rig_agent.is_none() {
+            let preamble = get_system_message(&self.collect_all_tools()).content;
+            let model = self.model_name().to_string();
+            let provider = self.provider_name().to_string();
+            let api_format = self.config.current_api_format().to_string();
+            let base_url = self.get_base_url().map(|s| s.to_string());
 
-        // Build message history for AI with system prompt first (includes dynamic tool list)
-        let mut ai_messages: Vec<crate::bridge::ai_client::Message> =
-            vec![get_system_message(&tools)];
+            let agent_result = RigAgent::from_config(
+                &api_key,
+                &model,
+                &api_format,
+                base_url.as_deref(),
+                &preamble,
+                self.mcp_client.clone(),
+            );
 
-        // Add conversation history (skip UI system messages like "Welcome...")
-        ai_messages.extend(self.messages.iter().filter_map(|m| match m.role {
-            Role::User => Some(crate::bridge::ai_client::Message::user(&m.content)),
-            Role::Assistant => Some(crate::bridge::ai_client::Message::assistant(&m.content)),
-            // Skip system messages from UI (like "Welcome to...")
-            Role::System if m.content.starts_with("Welcome") => None,
-            Role::System if m.content.starts_with("Please enter") => None,
-            Role::System if m.content.starts_with("API key") => None,
-            Role::System if m.content.contains("Calling tool") => None,
-            Role::System => Some(crate::bridge::ai_client::Message::system(&m.content)),
-            Role::Tool => None, // Tool messages need tool_call_id
-        }));
-
-        // Call AI with streaming
-        match self.ai_client.chat_streaming(&ai_messages, &tools) {
-            Ok(mut stream) => {
-                // Add placeholder message for streaming content
-                self.messages.push(Message {
-                    role: Role::Assistant,
-                    content: String::new(),
-                });
-                let assistant_idx = self.messages.len() - 1;
-
-                // Collected tool calls from stream
-                let mut tool_calls = Vec::new();
-
-                // Process stream events
-                loop {
-                    match stream.next_event() {
-                        Ok(Some(StreamEvent::ContentDelta(text))) => {
-                            // Append text to assistant message
-                            self.messages[assistant_idx].content.push_str(&text);
-                            // Re-render to show streaming text
-                            let _ = self.terminal.draw(|frame| {
-                                render_ui(
-                                    frame,
-                                    self.mode,
-                                    self.state,
-                                    self.input.text(),
-                                    self.input.cursor_pos(),
-                                    &self.messages,
-                                    &self.aux_content,
-                                    &self.server_status,
-                                    self.ai_client.model_name(),
-                                    self.overlay.as_ref(),
-                                    &self.remote_servers,
-                                );
-                            });
-                            // Note: Cancellation during streaming is not supported because
-                            // stdin reads are blocking via JSPI. The cancelled flag can be
-                            // set from JS but won't be checked until stream completes.
-                        }
-                        Ok(Some(StreamEvent::ToolCallStart { id: _, name })) => {
-                            let display_name = Self::format_tool_for_display(&name);
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("🔧 Calling tool: {}", display_name),
-                            });
-                        }
-                        Ok(Some(StreamEvent::ToolCallDelta { .. })) => {
-                            // Arguments are accumulated internally, no UI update needed
-                        }
-                        Ok(Some(StreamEvent::Done(result))) => {
-                            // Remove empty assistant message if no content
-                            if self.messages[assistant_idx].content.is_empty() {
-                                self.messages.remove(assistant_idx);
-                            }
-                            // Collect tool calls for processing
-                            tool_calls = result.tool_calls;
-                            break;
-                        }
-                        Ok(None) => {
-                            // Stream exhausted unexpectedly
-                            break;
-                        }
-                        Err(e) => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Stream error: {}", e),
-                            });
-                            break;
-                        }
-                    }
-                }
-
-                // Handle tool calls after streaming completes
-                for tool_call in tool_calls {
-                    let tool_name = tool_call.function.name.clone();
-
-                    // Parse arguments
-                    let args = match serde_json::from_str::<serde_json::Value>(
-                        &tool_call.function.arguments,
-                    ) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Invalid tool arguments: {}", e),
-                            });
-                            continue;
-                        }
+            match agent_result {
+                Ok(agent) => {
+                    self.rig_agent = Some(agent);
+                    let provider_info = if let Some(url) = &base_url {
+                        format!("{} @ {}", provider, url)
+                    } else {
+                        provider.clone()
                     };
-
-                    // Route tool call based on prefix
-                    match self.route_tool_call(&tool_name, args) {
-                        Ok(result) => {
-                            // Check if it was a local tool with tasks
-                            if tool_name == "task_write" {
-                                // task_write results update the task list directly
-                                // (handled in route_tool_call via try_execute_local_tool)
-                            }
-
-                            // Update aux panel with tool output
-                            self.aux_content = AuxContent {
-                                kind: AuxContentKind::ToolOutput,
-                                title: tool_name.clone(),
-                                content: result.clone(),
-                            };
-
-                            self.messages.push(Message {
-                                role: Role::Tool,
-                                content: if result.len() > 100 {
-                                    format!("{}... [see aux panel →]", &result[..100])
-                                } else {
-                                    result
-                                },
-                            });
-                        }
-                        Err(e) => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Tool error: {}", e),
-                            });
-                        }
-                    }
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("🤖 Agent initialized ({} / {})", provider_info, model),
+                    });
                 }
-            }
-            Err(e) => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("AI error: {}", e),
-                });
+                Err(e) => {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Failed to initialize agent: {}", e),
+                    });
+                    self.state = AppState::Ready;
+                    return;
+                }
             }
         }
 
-        self.state = AppState::Ready;
+        // Get reference to agent
+        let agent = self.rig_agent.as_ref().unwrap();
+
+        // Create a streaming buffer and an empty assistant message
+        let buffer = StreamingBuffer::new();
+        self.streaming_buffer = Some(buffer.clone());
+
+        // Add empty assistant message to be filled incrementally
+        self.messages.push(Message {
+            role: Role::Assistant,
+            content: String::new(),
+        });
+
+        // Start async streaming (non-blocking)
+        agent.stream_prompt_with_buffer(message, buffer);
+
+        // Transition to streaming state - the main loop will poll the buffer
+        self.state = AppState::Streaming;
+    }
+
+    /// Poll the streaming buffer and update the assistant message
+    fn poll_streaming_buffer(&mut self) {
+        // Only poll if we're in streaming state
+        if self.state != AppState::Streaming {
+            return;
+        }
+
+        let buffer = match &self.streaming_buffer {
+            Some(buf) => buf.clone(),
+            None => {
+                // No buffer, transition back to ready
+                self.state = AppState::Ready;
+                return;
+            }
+        };
+
+        // Get latest content from buffer
+        let content = buffer.get_content();
+        let tool_activity = buffer.get_tool_activity();
+
+        // Update the last assistant message (it should be the most recent)
+        if let Some(last_msg) = self.messages.last_mut() {
+            if last_msg.role == Role::Assistant {
+                // Show content plus any current tool activity
+                if let Some(activity) = tool_activity {
+                    last_msg.content = format!("{}\n\n{}", content, activity);
+                } else {
+                    last_msg.content = content;
+                }
+            }
+        }
+
+        // Check if streaming is complete
+        if buffer.is_complete() {
+            // Check for errors
+            if let Some(error) = buffer.get_error() {
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("Streaming error: {}", error),
+                });
+            }
+
+            // Clean up and return to ready state
+            self.streaming_buffer = None;
+            self.state = AppState::Ready;
+        }
+
+        // Check if cancelled
+        if buffer.is_cancelled() {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Streaming cancelled.".to_string(),
+            });
+            self.streaming_buffer = None;
+            self.state = AppState::Ready;
+        }
     }
 
     /// Handle input when an overlay is active
@@ -1003,63 +1024,24 @@ impl<R: Read, W: Write> App<R, W> {
                     0x0D => {
                         // Enter - handle selection
                         if *selected == 0 {
-                            // Refresh from API
-                            match self.ai_client.list_models() {
-                                Ok(models) => {
-                                    let model_list: Vec<(String, String)> =
-                                        models.into_iter().map(|m| (m.id, m.name)).collect();
-                                    *fetched_models = Some(model_list);
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!(
-                                            "Fetched {} models from API",
-                                            fetched_models.as_ref().map(|m| m.len()).unwrap_or(0)
-                                        ),
-                                    });
-                                }
-                                Err(e) => {
-                                    // Check if the error is due to missing API key
-                                    let error_msg = format!("{}", e);
-                                    if error_msg.contains("No API key") {
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: "No API key configured. Use /key to enter your API key first.".to_string(),
-                                        });
-                                    } else {
-                                        *fetched_models = Some(Vec::new());
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!("Failed to fetch models: {}", e),
-                                        });
-                                    }
-                                }
-                            }
+                            // Refresh from API - show message about static list
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: "Using static model list. Select a model below."
+                                    .to_string(),
+                            });
                         } else {
                             // Select a model (index - 1 because of refresh option)
                             let model_idx = *selected - 1;
-                            let model_id = if let Some(models) = fetched_models.as_ref() {
-                                models.get(model_idx).map(|(id, _)| id.clone())
-                            } else {
-                                let static_models =
-                                    crate::ui::server_manager::get_models_for_provider(provider);
-                                static_models.get(model_idx).map(|(id, _)| id.to_string())
-                            };
+                            let static_models =
+                                crate::ui::server_manager::get_models_for_provider(provider);
 
-                            if let Some(id) = model_id {
-                                // Update AI client model
-                                self.ai_client.set_model(&id);
-
-                                // Update config and save
-                                if provider == "anthropic" {
-                                    self.config.models.anthropic = id.clone();
-                                } else if provider == "openai" {
-                                    self.config.models.openai = id.clone();
-                                }
-                                let _ = self.config.save();
-
+                            if let Some((id, name)) = static_models.get(model_idx) {
+                                // Update the model
+                                self.set_model(id);
                                 self.messages.push(Message {
                                     role: Role::System,
-                                    content: format!("Model changed to: {}", id),
+                                    content: format!("Model changed to: {} ({})", name, id),
                                 });
                                 self.overlay = None;
                             }
@@ -1068,6 +1050,7 @@ impl<R: Read, W: Write> App<R, W> {
                     _ => {}
                 }
             }
+
             Overlay::ProviderSelector { selected } => {
                 use crate::ui::server_manager::{ProviderWizardStep, PROVIDERS};
                 let max_items = PROVIDERS.len();
@@ -1095,13 +1078,8 @@ impl<R: Read, W: Write> App<R, W> {
                             // All providers go to wizard for configuration
                             // Pre-fill base URL for preconfigured providers (can be overridden)
                             let prefilled_url = base_url.unwrap_or("").to_string();
-                            let prefilled_model = if *provider_id == "anthropic" {
-                                self.config.models.anthropic.clone()
-                            } else if *provider_id == "openai" {
-                                self.config.models.openai.clone()
-                            } else {
-                                String::new()
-                            };
+                            let prefilled_model =
+                                self.config.providers.get(provider_id).model.clone();
 
                             // Determine start step based on provider type
                             // Custom goes to API format selection first
@@ -1282,45 +1260,40 @@ impl<R: Read, W: Write> App<R, W> {
                             0x1B => self.overlay = None,
                             0x0D => {
                                 // Enter - apply configuration
+                                // Clone values to avoid borrow issues
                                 let (provider_id, _, _) = PROVIDERS
                                     .get(*selected_provider)
                                     .unwrap_or(&("custom", "Custom", None));
+                                let provider_id = provider_id.to_string();
+                                let model = model_input.clone();
+                                let base_url = base_url_input.clone();
 
-                                self.config.provider.default = provider_id.to_string();
-                                self.config.provider.base_url = Some(base_url_input.clone());
-                                let _ = self.config.save();
+                                // Close overlay first
+                                self.overlay = None;
 
-                                // Create AI client with correct provider type based on selected API format
-                                let (api_format_id, _, _, _) = API_FORMATS
-                                    .get(*selected_api_format)
-                                    .unwrap_or(&("openai", "OpenAI", "", ""));
+                                // Update provider and model in config
+                                self.set_provider(&provider_id);
 
-                                let provider_type = if *api_format_id == "anthropic" {
-                                    crate::bridge::ai_client::ProviderType::Anthropic
-                                } else {
-                                    crate::bridge::ai_client::ProviderType::OpenAI
-                                };
+                                // Set the model if provided
+                                if !model.is_empty() {
+                                    self.set_model(&model);
+                                }
 
-                                self.ai_client = crate::bridge::AiClient::new(
-                                    base_url_input,
-                                    model_input,
-                                    provider_type,
-                                );
-
-                                // Re-apply API key if we have one
-                                if let Some(ref api_key) = self.config.provider.api_key {
-                                    self.ai_client.set_api_key(api_key);
+                                // Store base URL if provided
+                                if !base_url.is_empty() {
+                                    self.set_base_url(&base_url);
                                 }
 
                                 self.messages.push(Message {
                                     role: Role::System,
                                     content: format!(
-                                        "Configured {} provider:\nURL: {}\nModel: {}",
-                                        provider_id, base_url_input, model_input
+                                        "Provider switched to {} with model {}",
+                                        provider_id,
+                                        self.model_name()
                                     ),
                                 });
-                                self.overlay = None;
                             }
+
                             _ => {}
                         }
                     }
@@ -1366,31 +1339,6 @@ impl<R: Read, W: Write> App<R, W> {
         }
 
         tools
-    }
-
-    /// Route a tool call to the correct server based on prefix
-    fn route_tool_call(&mut self, prefixed_name: &str, args: Value) -> Result<String, String> {
-        // Use ToolRouter with closure for sandbox tool calls
-        let result = ToolRouter::route_tool_call(prefixed_name, args, |tool_name, args| {
-            self.mcp_client
-                .call_tool(tool_name, args)
-                .map_err(|e| e.to_string())
-        });
-
-        // Handle task updates from local tools
-        if let Some(new_tasks) = result.tasks {
-            self.tasks = new_tasks;
-        }
-        if let Some(aux_update) = result.aux_update {
-            self.aux_content = aux_update;
-        }
-
-        result.output
-    }
-
-    /// Format a prefixed tool name for user-friendly display
-    fn format_tool_for_display(prefixed_name: &str) -> String {
-        ToolRouter::format_tool_for_display(prefixed_name)
     }
 
     /// Slash commands for tab completion
@@ -1713,62 +1661,26 @@ impl<R: Read, W: Write> App<R, W> {
                 // Open model selector overlay
                 self.overlay = Some(Overlay::ModelSelector {
                     selected: 0,
-                    provider: self.config.provider.default.clone(),
+                    provider: self.config.current_provider().to_string(),
                     fetched_models: None,
                 });
             }
             "/provider" => {
-                // Handle /provider subcommands or open overlay
+                // Handle provider subcommands
                 if let Some(subcmd) = parts.get(1) {
                     match *subcmd {
-                        "url" => {
-                            // /provider url [<url>] - get or set base URL
-                            if let Some(url) = parts.get(2) {
-                                // Set base URL
-                                self.ai_client.set_base_url(url);
-                                self.config.provider.base_url = Some(url.to_string());
-                                let _ = self.config.save();
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!("Base URL set to: {}", url),
-                                });
-                            } else {
-                                // Show current base URL
-                                let current_url = self.ai_client.get_base_url();
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!(
-                                        "Current base URL: {}\nUsage: /provider url <https://api.example.com/v1>", 
-                                        current_url
-                                    ),
-                                });
-                            }
-                        }
-                        "reset" => {
-                            // Reset to default URL for current provider
-                            let default_url = match self.config.provider.default.as_str() {
-                                "anthropic" => "https://api.anthropic.com/v1",
-                                "openai" => "https://api.openai.com/v1",
-                                _ => "https://api.openai.com/v1",
-                            };
-                            self.ai_client.set_base_url(default_url);
-                            self.config.provider.base_url = None;
-                            let _ = self.config.save();
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Base URL reset to default: {}", default_url),
-                            });
-                        }
                         "status" => {
                             // Show current provider configuration
+                            let base_url = self.get_base_url().unwrap_or("(default)");
+
                             self.messages.push(Message {
                                 role: Role::System,
                                 content: format!(
                                     "Provider: {}\nModel: {}\nBase URL: {}\nAPI Key: {}",
-                                    self.config.provider.default,
-                                    self.ai_client.model_name(),
-                                    self.ai_client.get_base_url(),
-                                    if self.ai_client.has_api_key() {
+                                    self.provider_name(),
+                                    self.model_name(),
+                                    base_url,
+                                    if self.has_api_key() {
                                         "✓ set"
                                     } else {
                                         "✗ not set"
@@ -1776,11 +1688,27 @@ impl<R: Read, W: Write> App<R, W> {
                                 ),
                             });
                         }
+                        "anthropic" => {
+                            // Quick switch to Anthropic
+                            self.set_provider("anthropic");
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Switched to Anthropic ({})", self.model_name()),
+                            });
+                        }
+                        "openai" => {
+                            // Quick switch to OpenAI
+                            self.set_provider("openai");
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Switched to OpenAI ({})", self.model_name()),
+                            });
+                        }
                         _ => {
                             self.messages.push(Message {
                                 role: Role::System,
                                 content: format!(
-                                    "Unknown subcommand: {}. Available: url, reset, status\nOr use /provider with no args for the selector.",
+                                    "Unknown subcommand: {}. Available: status, anthropic, openai\nOr use /provider with no args for the wizard.",
                                     subcmd
                                 ),
                             });
@@ -1791,6 +1719,7 @@ impl<R: Read, W: Write> App<R, W> {
                     self.overlay = Some(Overlay::ProviderSelector { selected: 0 });
                 }
             }
+
             "/plan" => {
                 // Enter plan mode
                 if self.mode == Mode::Plan {
@@ -1913,7 +1842,7 @@ impl<R: Read, W: Write> App<R, W> {
             }
             "/config" => {
                 // Display current configuration
-                let api_key_status = if self.ai_client.has_api_key() {
+                let api_key_status = if self.has_api_key() {
                     "configured ✓"
                 } else {
                     "not set"
@@ -1923,14 +1852,15 @@ impl<R: Read, W: Write> App<R, W> {
                     role: Role::System,
                     content: format!(
                         "Configuration:\n  Provider: {}\n  Model: {}\n  API Key: {}\n  Theme: {}\n  Aux Panel: {}",
-                        self.config.provider.default,
-                        self.ai_client.model_name(),
+                        self.provider_name(),
+                        self.model_name(),
                         api_key_status,
                         self.config.ui.theme,
                         if self.config.ui.aux_panel { "enabled" } else { "disabled" }
                     ),
                 });
             }
+
             "/theme" => {
                 // Change theme - usage: /theme dark|light|gruvbox|catppuccin
                 if let Some(theme_name) = parts.get(1) {

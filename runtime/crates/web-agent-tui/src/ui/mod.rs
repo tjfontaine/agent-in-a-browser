@@ -154,7 +154,7 @@ pub fn render_app<R: std::io::Read, W: std::io::Write>(
         &app.messages,
         &app.aux_content,
         &app.server_status,
-        app.ai_client.model_name(),
+        app.model_name(),
         app.overlay.as_ref(),
         &app.remote_servers,
     );

@@ -99,26 +99,28 @@ fn format_tool_list(tools: &[ToolDefinition]) -> String {
 }
 
 /// Get the system prompt message with dynamic tool list
-pub fn get_system_message(tools: &[ToolDefinition]) -> super::ai_client::Message {
+pub fn get_system_message(tools: &[ToolDefinition]) -> SystemMessage {
     let tool_list = format_tool_list(tools);
     let prompt = format!("{}\n{}", SYSTEM_PROMPT, tool_list);
-    super::ai_client::Message::system(&prompt)
+    SystemMessage { content: prompt }
 }
 
 /// Get system message with plan mode addition if in plan mode
-pub fn get_system_message_for_mode(
-    is_plan_mode: bool,
-    tools: &[ToolDefinition],
-) -> super::ai_client::Message {
+pub fn get_system_message_for_mode(is_plan_mode: bool, tools: &[ToolDefinition]) -> SystemMessage {
     let tool_list = format_tool_list(tools);
     if is_plan_mode {
         let prompt = format!(
             "{}\n{}\n{}",
             SYSTEM_PROMPT, tool_list, PLAN_MODE_SYSTEM_PROMPT
         );
-        super::ai_client::Message::system(&prompt)
+        SystemMessage { content: prompt }
     } else {
         let prompt = format!("{}\n{}", SYSTEM_PROMPT, tool_list);
-        super::ai_client::Message::system(&prompt)
+        SystemMessage { content: prompt }
     }
+}
+
+/// Simple system message struct
+pub struct SystemMessage {
+    pub content: String,
 }

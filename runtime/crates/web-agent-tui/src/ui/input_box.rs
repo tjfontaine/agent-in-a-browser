@@ -34,6 +34,7 @@ impl<'a> StatefulWidget for InputBoxWidget<'a> {
                 ("🔑 ", " API Key ", masked)
             }
             AppState::Processing => ("⏳ ", " Processing ", self.input.to_string()),
+            AppState::Streaming => ("📡 ", " Streaming ", self.input.to_string()),
             AppState::Ready => {
                 let prompt = match self.mode {
                     Mode::Agent => "› ",
@@ -52,6 +53,7 @@ impl<'a> StatefulWidget for InputBoxWidget<'a> {
         let (border_style, border_type) = match self.state {
             AppState::NeedsApiKey => (Style::default().fg(Color::Yellow), BorderType::Double),
             AppState::Processing => (Style::default().fg(Color::Blue), BorderType::Rounded),
+            AppState::Streaming => (Style::default().fg(Color::Cyan), BorderType::Rounded),
             AppState::Ready => (Style::default().fg(Color::White), BorderType::Rounded),
         };
 

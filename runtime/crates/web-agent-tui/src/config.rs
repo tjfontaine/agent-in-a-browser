@@ -3,6 +3,7 @@
 //! Reads/writes config from OPFS at .config/web-agent/
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 
 /// Config file paths (relative to OPFS root)
@@ -16,42 +17,118 @@ const MAX_HISTORY_ENTRIES: usize = 1000;
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    /// Provider configurations - each provider has its own stanza
     #[serde(default)]
-    pub provider: ProviderConfig,
+    pub providers: ProvidersConfig,
 
     #[serde(default)]
     pub ui: UiConfig,
 
-    #[serde(default)]
-    pub models: ModelsConfig,
+    // Legacy fields for backwards compatibility - will be migrated
+    #[serde(default, skip_serializing)]
+    pub provider: Option<LegacyProviderConfig>,
+
+    #[serde(default, skip_serializing)]
+    pub models: Option<LegacyModelsConfig>,
 }
 
+/// Provider configurations with default selection
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderConfig {
+pub struct ProvidersConfig {
+    /// Which provider to use by default
     #[serde(default = "default_provider")]
     pub default: String,
 
-    /// API key (stored encrypted in real impl, plaintext for now)
+    /// Dynamic provider settings, keyed by provider ID
+    #[serde(flatten)]
+    pub providers: HashMap<String, ProviderSettings>,
+}
+
+impl Default for ProvidersConfig {
+    fn default() -> Self {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "anthropic".to_string(),
+            ProviderSettings::default_anthropic(),
+        );
+        providers.insert("openai".to_string(), ProviderSettings::default_openai());
+
+        Self {
+            default: default_provider(),
+            providers,
+        }
+    }
+}
+
+/// Settings for a single provider
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderSettings {
+    /// Model to use for this provider
+    #[serde(default)]
+    pub model: String,
+
+    /// API key for this provider
     #[serde(default)]
     pub api_key: Option<String>,
 
-    /// Custom base URL for OpenAI-compatible providers (Ollama, Groq, etc.)
+    /// Custom base URL (optional, uses default if not set)
     #[serde(default)]
     pub base_url: Option<String>,
+
+    /// API format - "anthropic" or "openai" (for custom providers)
+    #[serde(default)]
+    pub api_format: Option<String>,
 }
 
-impl Default for ProviderConfig {
-    fn default() -> Self {
+impl ProviderSettings {
+    pub fn default_anthropic() -> Self {
         Self {
-            default: default_provider(),
+            model: "claude-sonnet-4-20250514".to_string(),
             api_key: None,
             base_url: None,
+            api_format: Some("anthropic".to_string()),
         }
+    }
+
+    pub fn default_openai() -> Self {
+        Self {
+            model: "gpt-4o".to_string(),
+            api_key: None,
+            base_url: None,
+            api_format: Some("openai".to_string()),
+        }
+    }
+
+    /// Get the API format, defaulting based on provider name
+    pub fn get_api_format(&self, provider_id: &str) -> &str {
+        self.api_format.as_deref().unwrap_or(match provider_id {
+            "anthropic" => "anthropic",
+            _ => "openai", // Default to OpenAI format for unknown providers
+        })
     }
 }
 
 fn default_provider() -> String {
     "anthropic".to_string()
+}
+
+// Legacy config structs for migration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LegacyProviderConfig {
+    #[serde(default)]
+    pub default: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub base_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LegacyModelsConfig {
+    #[serde(default)]
+    pub anthropic: String,
+    #[serde(default)]
+    pub openai: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,47 +157,62 @@ fn default_aux_panel() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelsConfig {
-    #[serde(default = "default_anthropic_model")]
-    pub anthropic: String,
-
-    #[serde(default = "default_openai_model")]
-    pub openai: String,
-}
-
-impl Default for ModelsConfig {
-    fn default() -> Self {
-        Self {
-            anthropic: default_anthropic_model(),
-            openai: default_openai_model(),
-        }
-    }
-}
-
-fn default_anthropic_model() -> String {
-    "claude-sonnet-4-20250514".to_string()
-}
-
-fn default_openai_model() -> String {
-    "gpt-4o".to_string()
-}
-
 impl Config {
     /// Load config from OPFS, returns default if file doesn't exist
     pub fn load() -> Self {
         // Try new path first
         if let Ok(contents) = fs::read_to_string(CONFIG_FILE) {
-            return Self::from_toml(&contents);
+            let mut config = Self::from_toml(&contents);
+            // Migrate legacy config if present
+            config.migrate_legacy();
+            return config;
         }
         // Migrate from old path if it exists
         if let Ok(contents) = fs::read_to_string(".config/agent-in-a-browser/config.toml") {
-            let config = Self::from_toml(&contents);
+            let mut config = Self::from_toml(&contents);
+            config.migrate_legacy();
             // Save to new location
             let _ = config.save();
             return config;
         }
         Self::default()
+    }
+
+    /// Migrate legacy config format to new per-provider format
+    fn migrate_legacy(&mut self) {
+        let mut migrated = false;
+
+        // Migrate legacy provider config
+        if let Some(legacy) = self.provider.take() {
+            if !legacy.default.is_empty() {
+                self.providers.default = legacy.default.clone();
+            }
+            // Put API key on the default provider
+            if let Some(api_key) = legacy.api_key {
+                self.providers.get_or_create(&legacy.default).api_key = Some(api_key);
+            }
+            // Put base URL on the default provider
+            if let Some(base_url) = legacy.base_url {
+                self.providers.get_or_create(&legacy.default).base_url = Some(base_url);
+            }
+            migrated = true;
+        }
+
+        // Migrate legacy models config
+        if let Some(legacy) = self.models.take() {
+            if !legacy.anthropic.is_empty() {
+                self.providers.get_or_create("anthropic").model = legacy.anthropic;
+            }
+            if !legacy.openai.is_empty() {
+                self.providers.get_or_create("openai").model = legacy.openai;
+            }
+            migrated = true;
+        }
+
+        // Save migrated config
+        if migrated {
+            let _ = self.save();
+        }
     }
 
     /// Save config to OPFS
@@ -140,6 +232,78 @@ impl Config {
     /// Serialize to TOML string
     pub fn to_toml(&self) -> Option<String> {
         toml::to_string_pretty(self).ok()
+    }
+
+    // === Convenience accessors ===
+
+    /// Get the current provider name
+    pub fn current_provider(&self) -> &str {
+        &self.providers.default
+    }
+
+    /// Get settings for the current provider
+    pub fn current_provider_settings(&self) -> &ProviderSettings {
+        self.providers.get(&self.providers.default)
+    }
+
+    /// Get mutable settings for the current provider
+    pub fn current_provider_settings_mut(&mut self) -> &mut ProviderSettings {
+        let provider = self.providers.default.clone();
+        self.providers.get_or_create(&provider)
+    }
+
+    /// Get settings for a specific provider
+    pub fn provider_settings(&self, provider: &str) -> &ProviderSettings {
+        self.providers.get(provider)
+    }
+
+    /// Get mutable settings for a specific provider
+    pub fn provider_settings_mut(&mut self, provider: &str) -> &mut ProviderSettings {
+        self.providers.get_or_create(provider)
+    }
+
+    /// Get the API format for the current provider
+    pub fn current_api_format(&self) -> &str {
+        let provider = &self.providers.default;
+        self.providers.get(provider).get_api_format(provider)
+    }
+}
+
+impl ProvidersConfig {
+    /// Get provider settings, returning a default if not found
+    pub fn get(&self, provider: &str) -> &ProviderSettings {
+        static DEFAULT_ANTHROPIC: std::sync::LazyLock<ProviderSettings> =
+            std::sync::LazyLock::new(ProviderSettings::default_anthropic);
+        static DEFAULT_OPENAI: std::sync::LazyLock<ProviderSettings> =
+            std::sync::LazyLock::new(ProviderSettings::default_openai);
+        static DEFAULT_EMPTY: std::sync::LazyLock<ProviderSettings> =
+            std::sync::LazyLock::new(ProviderSettings::default);
+
+        self.providers
+            .get(provider)
+            .unwrap_or_else(|| match provider {
+                "anthropic" => &DEFAULT_ANTHROPIC,
+                "openai" => &DEFAULT_OPENAI,
+                _ => &DEFAULT_EMPTY,
+            })
+    }
+
+    /// Get or create provider settings
+    pub fn get_or_create(&mut self, provider: &str) -> &mut ProviderSettings {
+        if !self.providers.contains_key(provider) {
+            let default = match provider {
+                "anthropic" => ProviderSettings::default_anthropic(),
+                "openai" => ProviderSettings::default_openai(),
+                _ => ProviderSettings::default(),
+            };
+            self.providers.insert(provider.to_string(), default);
+        }
+        self.providers.get_mut(provider).unwrap()
+    }
+
+    /// List all configured provider IDs
+    pub fn list_providers(&self) -> Vec<&str> {
+        self.providers.keys().map(|s| s.as_str()).collect()
     }
 }
 

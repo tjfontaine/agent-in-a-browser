@@ -63,6 +63,13 @@ impl<'a> Widget for StatusBarWidget<'a> {
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
+            AppState::Streaming => (
+                " 📡 STREAMING ",
+                Style::default()
+                    .bg(Color::Cyan)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ),
         };
 
         // Server status

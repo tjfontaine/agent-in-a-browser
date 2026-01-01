@@ -22,6 +22,15 @@ toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# HTTP client abstractions for rig-core compatibility
+bytes = "1.5"
+http = "1.0"
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+
+# WASM async support for streaming
+wasm-bindgen-futures = "0.4"
+
+
 [package.metadata.component]
 package = "agent:tui"
 
