@@ -110,6 +110,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          # Cache bust v1: fix rollup optional deps
           cache-dependency-path: |
             package-lock.json
             frontend/package-lock.json
@@ -121,7 +122,12 @@ jobs:
           path: target/wasm32-wasip2/release/
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # Workaround for npm optional dependencies bug with rollup
+      # https://github.com/npm/cli/issues/4828
+      - name: Install rollup platform binary
+        run: npm install --no-save @rollup/rollup-linux-x64-gnu
 
       - name: Build workspace packages
         run: npm run build:packages
@@ -174,7 +180,11 @@ jobs:
           path: target/wasm32-wasip2/release/
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # Workaround for npm optional dependencies bug with rollup
+      - name: Install rollup platform binary
+        run: npm install --no-save @rollup/rollup-linux-x64-gnu
 
       - name: Build workspace packages
         run: npm run build:packages
@@ -219,7 +229,11 @@ jobs:
           path: target/wasm32-wasip2/release/
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # Workaround for npm optional dependencies bug with rollup
+      - name: Install rollup platform binary
+        run: npm install --no-save @rollup/rollup-linux-x64-gnu
 
       - name: Build workspace packages
         run: npm run build:packages
