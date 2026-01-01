@@ -11,6 +11,7 @@
 mod bindings;
 
 use bindings::exports::shell::unix::command::{ExecEnv, Guest};
+use bindings::terminal::info::size::get_terminal_size;
 use bindings::wasi::filesystem::preopens::get_directories;
 use bindings::wasi::filesystem::types::{Descriptor, DescriptorFlags, OpenFlags, PathFlags};
 use bindings::wasi::io::streams::{InputStream, OutputStream};
@@ -759,7 +760,8 @@ fn run_editor(
     write_to_stream(&stdout, HOME.as_bytes());
 
     while running {
-        draw_editor(&stdout, &editor, 80, 24);
+        let dims = get_terminal_size();
+        draw_editor(&stdout, &editor, dims.cols as usize, dims.rows as usize);
 
         if let Some(byte) = read_single_byte(&stdin) {
             editor.status_message.clear();

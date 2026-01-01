@@ -262,3 +262,8 @@ export const terminalStderr = {
     TerminalOutput,
     getTerminalStderr: () => isTerminalContext() ? terminalStderrInstance : undefined,
 };
+
+// Export terminal size interface for terminal:info/size
+export const size = {
+    getTerminalSize: () => ({ cols: terminalCols, rows: terminalRows }),
+};
