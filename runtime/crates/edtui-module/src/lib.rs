@@ -1082,42 +1082,6 @@ fn style_to_ansi(style: &Style) -> String {
     format!("\x1B[38;2;{};{};{}m", fg.r, fg.g, fg.b)
 }
 
-/// Get the syntax definition name based on file extension
-fn get_syntax_name(file_path: Option<&str>) -> &'static str {
-    match file_path {
-        Some(path) => {
-            if let Some(ext) = path.rsplit('.').next() {
-                match ext.to_lowercase().as_str() {
-                    "rs" => "Rust",
-                    "js" | "mjs" | "cjs" => "JavaScript",
-                    "ts" | "mts" | "cts" => "TypeScript",
-                    "tsx" => "TypeScript",
-                    "jsx" => "JavaScript",
-                    "py" => "Python",
-                    "rb" => "Ruby",
-                    "go" => "Go",
-                    "c" | "h" => "C",
-                    "cpp" | "cc" | "cxx" | "hpp" => "C++",
-                    "java" => "Java",
-                    "json" => "JSON",
-                    "yaml" | "yml" => "YAML",
-                    "toml" => "TOML",
-                    "md" | "markdown" => "Markdown",
-                    "html" | "htm" => "HTML",
-                    "css" => "CSS",
-                    "sh" | "bash" | "zsh" => "Bash",
-                    "sql" => "SQL",
-                    "xml" => "XML",
-                    _ => "Plain Text",
-                }
-            } else {
-                "Plain Text"
-            }
-        }
-        None => "Plain Text",
-    }
-}
-
 fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usize) {
     let mut buffer = String::new();
     buffer.push_str(HOME);
@@ -1151,9 +1115,13 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
     let ps = SyntaxSet::load_defaults_newlines();
     let ts = ThemeSet::load_defaults();
     let theme = &ts.themes["base16-ocean.dark"];
-    let syntax_name = get_syntax_name(editor.file_path.as_deref());
-    let syntax = ps
-        .find_syntax_by_name(syntax_name)
+
+    // Get syntax by file extension (more reliable than by name)
+    let syntax = editor
+        .file_path
+        .as_deref()
+        .and_then(|path| path.rsplit('.').next())
+        .and_then(|ext| ps.find_syntax_by_extension(ext))
         .unwrap_or_else(|| ps.find_syntax_plain_text());
 
     // Create highlighter
