@@ -18,7 +18,7 @@ import {
     fileExistsInOpfs,
     directoryExistsInOpfs,
     getOpfsRoot,
-} from '../host-shims/directory-tree';
+} from '@tjfontaine/wasi-shims/directory-tree.js';
 
 // isomorphic-git expects a Node.js-like fs API
 // We implement the subset that isomorphic-git actually uses

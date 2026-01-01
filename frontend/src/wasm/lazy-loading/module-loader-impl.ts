@@ -16,7 +16,7 @@ import {
     type CommandModule,
     type ExecEnv as LazyExecEnv,
 } from './lazy-modules.js';
-import { CustomInputStream, CustomOutputStream } from '../host-shims/streams.js';
+import { CustomInputStream, CustomOutputStream } from '@tjfontaine/wasi-shims/streams.js';
 import { poll } from '@bytecodealliance/preview2-shim/io';
 
 // Import ghostty terminal streams for interactive TUI applications

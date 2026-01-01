@@ -7,7 +7,12 @@
         ".": "./dist/index.js",
         "./clocks": "./dist/clocks.js",
         "./streams": "./dist/streams.js",
-        "./ghostty-cli-shim.js": "./src/ghostty-cli-shim.ts"
+        "./streams.js": "./src/streams.ts",
+        "./ghostty-cli-shim.js": "./src/ghostty-cli-shim.ts",
+        "./opfs-filesystem-impl.js": "./src/opfs-filesystem-impl.ts",
+        "./clocks-impl.js": "./src/clocks-impl.js",
+        "./wasi-http-impl.js": "./src/wasi-http-impl.ts",
+        "./directory-tree.js": "./src/directory-tree.ts"
     },
     "types": "./dist/index.d.ts",
     "files": [

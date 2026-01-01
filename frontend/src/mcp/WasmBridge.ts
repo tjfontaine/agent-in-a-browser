@@ -18,8 +18,8 @@ import {
     Fields,
     ResponseOutparam,
     IncomingRequest,
-} from '../wasm/host-shims/wasi-http-impl.js';
-import { prepareFileForSync } from '../wasm/host-shims/opfs-filesystem-impl.js';
+} from '@tjfontaine/wasi-shims/wasi-http-impl.js';
+import { prepareFileForSync } from '@tjfontaine/wasi-shims/opfs-filesystem-impl.js';
 
 // Type for WASM response objects
 interface WasmResponse {

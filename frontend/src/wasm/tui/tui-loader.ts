@@ -15,13 +15,13 @@ import { run } from '../web-agent-tui/web-agent-tui.js';
 import { setTerminal, setTerminalSize } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
 // Import transport handler for routing MCP requests  
-import { setTransportHandler } from '../host-shims/wasi-http-impl.js';
+import { setTransportHandler } from '@tjfontaine/wasi-shims/wasi-http-impl.js';
 
 // Import sandbox for MCP routing
 import { fetchFromSandbox, initializeSandbox } from '../../agent/sandbox.js';
 
 // Import OPFS filesystem init for shell access
-import { initFilesystem } from '../host-shims/opfs-filesystem-impl.js';
+import { initFilesystem } from '@tjfontaine/wasi-shims/opfs-filesystem-impl.js';
 
 export interface TuiLoaderOptions {
     container: HTMLElement;

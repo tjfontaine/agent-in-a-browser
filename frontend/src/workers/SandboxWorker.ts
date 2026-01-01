@@ -85,7 +85,7 @@ async function initialize(): Promise<void> {
     // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
     try {
         console.log('[SandboxWorker] Loading filesystem shim...');
-        const { initFilesystem } = await import('../wasm/host-shims/opfs-filesystem-impl');
+        const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-impl.js');
         console.log('[SandboxWorker] Calling initFilesystem()...');
         await initFilesystem();
         console.log('[SandboxWorker] OPFS filesystem shim initialized');
