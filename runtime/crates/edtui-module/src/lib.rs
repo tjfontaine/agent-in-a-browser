@@ -17,6 +17,9 @@ use bindings::wasi::filesystem::types::{Descriptor, DescriptorFlags, OpenFlags, 
 use bindings::wasi::io::streams::{InputStream, OutputStream};
 
 use ropey::Rope;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style, ThemeSet};
+use syntect::parsing::SyntaxSet;
 
 struct EdtuiModule;
 
@@ -53,6 +56,9 @@ const REVERSE_VIDEO: &str = "\x1B[7m";
 const RESET: &str = "\x1B[0m";
 const YELLOW_BG: &str = "\x1B[43m";
 const BLACK_FG: &str = "\x1B[30m";
+// Cursor shape sequences (DECSCUSR)
+const CURSOR_BLOCK: &str = "\x1B[2 q"; // Steady block
+const CURSOR_BAR: &str = "\x1B[6 q"; // Steady bar (vertical line)
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
@@ -1070,6 +1076,48 @@ fn execute_command(cmd: &str, editor: &mut Editor, cwd: &str) -> CommandResult {
     }
 }
 
+/// Convert a syntect Style to an ANSI escape sequence for foreground color
+fn style_to_ansi(style: &Style) -> String {
+    let fg = style.foreground;
+    format!("\x1B[38;2;{};{};{}m", fg.r, fg.g, fg.b)
+}
+
+/// Get the syntax definition name based on file extension
+fn get_syntax_name(file_path: Option<&str>) -> &'static str {
+    match file_path {
+        Some(path) => {
+            if let Some(ext) = path.rsplit('.').next() {
+                match ext.to_lowercase().as_str() {
+                    "rs" => "Rust",
+                    "js" | "mjs" | "cjs" => "JavaScript",
+                    "ts" | "mts" | "cts" => "TypeScript",
+                    "tsx" => "TypeScript",
+                    "jsx" => "JavaScript",
+                    "py" => "Python",
+                    "rb" => "Ruby",
+                    "go" => "Go",
+                    "c" | "h" => "C",
+                    "cpp" | "cc" | "cxx" | "hpp" => "C++",
+                    "java" => "Java",
+                    "json" => "JSON",
+                    "yaml" | "yml" => "YAML",
+                    "toml" => "TOML",
+                    "md" | "markdown" => "Markdown",
+                    "html" | "htm" => "HTML",
+                    "css" => "CSS",
+                    "sh" | "bash" | "zsh" => "Bash",
+                    "sql" => "SQL",
+                    "xml" => "XML",
+                    _ => "Plain Text",
+                }
+            } else {
+                "Plain Text"
+            }
+        }
+        None => "Plain Text",
+    }
+}
+
 fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usize) {
     let mut buffer = String::new();
     buffer.push_str(HOME);
@@ -1099,41 +1147,127 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
     // Get selection for highlighting
     let selection = editor.get_selection();
 
+    // Initialize syntax highlighting
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    let theme = &ts.themes["base16-ocean.dark"];
+    let syntax_name = get_syntax_name(editor.file_path.as_deref());
+    let syntax = ps
+        .find_syntax_by_name(syntax_name)
+        .unwrap_or_else(|| ps.find_syntax_plain_text());
+
+    // Create highlighter
+    let mut highlighter = HighlightLines::new(syntax, theme);
+
     // Editor content
     for i in 0..content_height {
         let line_idx = editor.scroll_offset + i;
         if line_idx < editor.line_count() {
             let line = editor.get_line(line_idx);
+            let line_with_newline = format!("{}\n", line);
             let mut display = String::new();
 
-            for (col, c) in line.chars().enumerate() {
-                let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
-                    if editor.mode == Mode::VisualLine {
-                        line_idx >= sr && line_idx <= er
-                    } else {
-                        (line_idx > sr && line_idx < er)
-                            || (line_idx == sr && line_idx == er && col >= sc && col <= ec)
-                            || (line_idx == sr && line_idx < er && col >= sc)
-                            || (line_idx > sr && line_idx == er && col <= ec)
-                    }
-                } else {
-                    false
-                };
+            // Get highlighted ranges for this line
+            let highlighted = highlighter.highlight_line(&line_with_newline, &ps);
 
-                if in_selection {
-                    display.push_str(YELLOW_BG);
-                    display.push_str(BLACK_FG);
-                    display.push(c);
-                    display.push_str(RESET);
-                } else {
-                    display.push(c);
+            // Build display string with syntax highlighting and selection
+            let mut char_idx = 0;
+            if let Ok(ranges) = highlighted {
+                for (style, text) in ranges {
+                    for c in text.chars() {
+                        if c == '\n' {
+                            continue; // Skip the newline we added
+                        }
+
+                        // Check if this is the cursor position (for block cursor in Normal mode)
+                        let is_cursor_pos = line_idx == editor.cursor_row
+                            && char_idx == editor.cursor_col
+                            && editor.mode != Mode::Insert;
+
+                        let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
+                            if editor.mode == Mode::VisualLine {
+                                line_idx >= sr && line_idx <= er
+                            } else {
+                                (line_idx > sr && line_idx < er)
+                                    || (line_idx == sr
+                                        && line_idx == er
+                                        && char_idx >= sc
+                                        && char_idx <= ec)
+                                    || (line_idx == sr && line_idx < er && char_idx >= sc)
+                                    || (line_idx > sr && line_idx == er && char_idx <= ec)
+                            }
+                        } else {
+                            false
+                        };
+
+                        if is_cursor_pos {
+                            // Block cursor: render with reverse video
+                            display.push_str(REVERSE_VIDEO);
+                            display.push(c);
+                            display.push_str(RESET);
+                        } else if in_selection {
+                            // Selection overrides syntax highlighting
+                            display.push_str(YELLOW_BG);
+                            display.push_str(BLACK_FG);
+                            display.push(c);
+                            display.push_str(RESET);
+                        } else {
+                            // Apply syntax highlighting color
+                            display.push_str(&style_to_ansi(&style));
+                            display.push(c);
+                            display.push_str(RESET);
+                        }
+                        char_idx += 1;
+                    }
+                }
+            } else {
+                // Fallback: no syntax highlighting (display plain)
+                for (col, c) in line.chars().enumerate() {
+                    // Check if this is the cursor position
+                    let is_cursor_pos = line_idx == editor.cursor_row
+                        && col == editor.cursor_col
+                        && editor.mode != Mode::Insert;
+
+                    let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
+                        if editor.mode == Mode::VisualLine {
+                            line_idx >= sr && line_idx <= er
+                        } else {
+                            (line_idx > sr && line_idx < er)
+                                || (line_idx == sr && line_idx == er && col >= sc && col <= ec)
+                                || (line_idx == sr && line_idx < er && col >= sc)
+                                || (line_idx > sr && line_idx == er && col <= ec)
+                        }
+                    } else {
+                        false
+                    };
+
+                    if is_cursor_pos {
+                        display.push_str(REVERSE_VIDEO);
+                        display.push(c);
+                        display.push_str(RESET);
+                    } else if in_selection {
+                        display.push_str(YELLOW_BG);
+                        display.push_str(BLACK_FG);
+                        display.push(c);
+                        display.push_str(RESET);
+                    } else {
+                        display.push(c);
+                    }
                 }
             }
 
-            // Truncate if needed
-            if display.len() > width {
-                display.truncate(width);
+            // Handle cursor at end of line or on empty line (Normal mode block cursor)
+            let line_len = line.chars().count();
+            if line_idx == editor.cursor_row
+                && editor.cursor_col >= line_len
+                && editor.mode != Mode::Insert
+            {
+                display.push_str(REVERSE_VIDEO);
+                display.push(' ');
+                display.push_str(RESET);
             }
+
+            // Truncate if needed (note: this is imprecise with ANSI codes)
             buffer.push_str(&format!("{}{}\r\n", display, CLEAR_LINE));
         } else {
             buffer.push_str(&format!("~{}\r\n", CLEAR_LINE));
@@ -1170,12 +1304,8 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
     let screen_col = editor.cursor_col + 1;
     buffer.push_str(&format!("\x1B[{};{}H", screen_row, screen_col));
 
-    // Show/hide cursor based on mode
-    if editor.mode == Mode::Insert || editor.mode == Mode::Command {
-        buffer.push_str(SHOW_CURSOR);
-    } else {
-        buffer.push_str(HIDE_CURSOR);
-    }
+    // Always show cursor (DECSCUSR shape sequences may not be supported)
+    buffer.push_str(SHOW_CURSOR);
 
     write_to_stream(stdout, buffer.as_bytes());
 }

@@ -34,3 +34,4 @@ world = "edtui-module"
 "wasi:io" = { path = "wit/deps/io" }
 "wasi:filesystem" = { path = "wit/deps/filesystem" }
 "wasi:clocks" = { path = "wit/deps/clocks" }
+"terminal:info" = { path = "wit/deps/terminal-info" }
