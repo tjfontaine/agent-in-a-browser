@@ -28,6 +28,13 @@ export default defineConfig(({ mode }) => ({
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),
             'vite-plugin-node-polyfills/shims/process': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/process'),
         },
+        // Dedupe preview2-shim to prevent multiple bundle copies (fixes instanceof checks)
+        dedupe: [
+            '@bytecodealliance/preview2-shim',
+            '@bytecodealliance/preview2-shim/io',
+            '@bytecodealliance/preview2-shim/cli',
+            '@bytecodealliance/preview2-shim/random',
+        ],
     },
     server: {
         port: 3000,
