@@ -1,18 +1,13 @@
 import { monotonicClock, wallClock } from '../../../../packages/wasi-shims/src/clocks-impl.js';
+import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '../../../../packages/wasi-shims/src/ghostty-cli-shim.js';
 import { preopens, types } from '../../../../packages/wasi-shims/src/opfs-filesystem-impl.js';
 import { Fields, FutureIncomingResponse, FutureTrailers, IncomingBody, IncomingRequest, IncomingResponse, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, outgoingHandler } from '../../../../packages/wasi-shims/src/wasi-http-impl.js';
 import { LazyProcess, getLazyModule, isInteractiveCommand, spawnInteractive, spawnLazyCommand } from '../lazy-loading/module-loader-impl.js';
-import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '@bytecodealliance/preview2-shim/cli';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';
 import { insecureSeed as insecureSeed$1, random } from '@bytecodealliance/preview2-shim/random';
 const { now,
   subscribeDuration } = monotonicClock;
 const { now: now$1 } = wallClock;
-const { getDirectories } = preopens;
-const { Descriptor,
-  DirectoryEntryStream,
-  filesystemErrorCode } = types;
-const { handle } = outgoingHandler;
 const { getEnvironment } = environment;
 const { exit } = exit$1;
 const { getStderr } = stderr;
@@ -23,6 +18,11 @@ const { TerminalOutput } = terminalOutput;
 const { getTerminalStderr } = terminalStderr;
 const { getTerminalStdin } = terminalStdin;
 const { getTerminalStdout } = terminalStdout;
+const { getDirectories } = preopens;
+const { Descriptor,
+  DirectoryEntryStream,
+  filesystemErrorCode } = types;
+const { handle } = outgoingHandler;
 const { Error: Error$1 } = error;
 const { Pollable } = poll;
 const { InputStream,
