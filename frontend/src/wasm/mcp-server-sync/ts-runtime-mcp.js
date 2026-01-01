@@ -1,6 +1,6 @@
-import { monotonicClock, wallClock } from '../host-shims/clocks-impl.js';
-import { preopens, types } from '../host-shims/opfs-filesystem-impl.js';
-import { Fields, FutureIncomingResponse, FutureTrailers, IncomingBody, IncomingRequest, IncomingResponse, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, outgoingHandler } from '../host-shims/wasi-http-impl.js';
+import { monotonicClock, wallClock } from '../../../../packages/wasi-shims/src/clocks-impl.js';
+import { preopens, types } from '../../../../packages/wasi-shims/src/opfs-filesystem-impl.js';
+import { Fields, FutureIncomingResponse, FutureTrailers, IncomingBody, IncomingRequest, IncomingResponse, OutgoingBody, OutgoingRequest, OutgoingResponse, RequestOptions, ResponseOutparam, outgoingHandler } from '../../../../packages/wasi-shims/src/wasi-http-impl.js';
 import { LazyProcess, getLazyModule, isInteractiveCommand, spawnInteractive, spawnLazyCommand } from '../lazy-loading/module-loader-impl.js';
 import { environment, exit as exit$1, stderr, stdin, stdout, terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout } from '@bytecodealliance/preview2-shim/cli';
 import { error, poll, streams } from '@bytecodealliance/preview2-shim/io';

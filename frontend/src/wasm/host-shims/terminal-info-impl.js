@@ -4,7 +4,7 @@
  * Provides terminal size information to the WASM TUI.
  */
 
-import { getTerminalSize as getSize } from '../tui/ghostty-cli-shim.js';
+import { getTerminalSize as getSize } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
 /**
  * Get current terminal dimensions

@@ -24,7 +24,7 @@ import {
     stdin as ghosttyStdin,
     stdout as ghosttyStdout,
     stderr as ghosttyStderr
-} from '../tui/ghostty-cli-shim.js';
+} from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
 // Get the Pollable base class from preview2-shim
 // @ts-expect-error - Pollable is exported at runtime

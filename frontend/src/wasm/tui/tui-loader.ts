@@ -12,7 +12,7 @@ import { init as initGhostty, Terminal } from 'ghostty-web';
 import { run } from '../web-agent-tui/web-agent-tui.js';
 
 // Import the CLI shim to set up the terminal
-import { setTerminal, setTerminalSize } from './ghostty-cli-shim.js';
+import { setTerminal, setTerminalSize } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
 // Import transport handler for routing MCP requests  
 import { setTransportHandler } from '../host-shims/wasi-http-impl.js';

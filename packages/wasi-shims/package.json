@@ -6,7 +6,8 @@
     "exports": {
         ".": "./dist/index.js",
         "./clocks": "./dist/clocks.js",
-        "./streams": "./dist/streams.js"
+        "./streams": "./dist/streams.js",
+        "./ghostty-cli-shim.js": "./src/ghostty-cli-shim.ts"
     },
     "types": "./dist/index.d.ts",
     "files": [
