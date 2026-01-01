@@ -234,6 +234,50 @@ test.describe('Vim Editor in Shell Mode', () => {
         await pressKey(page, 'Enter');
     });
 
+    test('TypeScript files get syntax highlighting via JS fallback', async ({ page }) => {
+        // Create a TypeScript file
+        await typeInTerminal(page, 'echo "const x: number = 42;" > test.ts');
+        await pressKey(page, 'Enter');
+        await page.waitForTimeout(300);
+
+        await typeInTerminal(page, 'vim test.ts');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        // Check for syntax highlighting
+        const hasHighlighting = await page.evaluate(() => {
+            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
+            const terminal = window.tuiTerminal;
+            if (!terminal || !terminal.buffer?.active) {
+                return { found: false, debug: 'no terminal' };
+            }
+
+            const buffer = terminal.buffer.active;
+            const line = buffer.getLine(1);
+            if (!line) return { found: false, debug: 'no line 1' };
+
+            const cell = line.getCell(0);
+            if (!cell) return { found: false, debug: 'no cell 0' };
+
+            const char = cell.getChars();
+            const fgColor = cell.getFgColor?.() ?? -1;
+
+            return {
+                found: fgColor > 0,
+                debug: `char='${char}' fgColor=${fgColor}`,
+            };
+        });
+
+        console.log('TypeScript highlighting check:', hasHighlighting);
+        expect(hasHighlighting.found).toBe(true);
+
+        await forceExitVim(page);
+
+        // Cleanup
+        await typeInTerminal(page, 'rm test.ts');
+        await pressKey(page, 'Enter');
+    });
+
     test('vi alias launches editor', async ({ page }) => {
         await typeInTerminal(page, 'vi');
         await pressKey(page, 'Enter');

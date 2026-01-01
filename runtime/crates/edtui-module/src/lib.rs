@@ -1117,11 +1117,22 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
     let theme = &ts.themes["base16-ocean.dark"];
 
     // Get syntax by file extension (more reliable than by name)
-    let syntax = editor
+    // Fall back to JavaScript for TypeScript (syntect defaults may not include TS)
+    let ext = editor
         .file_path
         .as_deref()
-        .and_then(|path| path.rsplit('.').next())
-        .and_then(|ext| ps.find_syntax_by_extension(ext))
+        .and_then(|path| path.rsplit('.').next());
+
+    let syntax = ext
+        .and_then(|e| {
+            ps.find_syntax_by_extension(e).or_else(|| {
+                // TypeScript fallback to JavaScript
+                match e {
+                    "ts" | "tsx" | "mts" | "cts" => ps.find_syntax_by_extension("js"),
+                    _ => None,
+                }
+            })
+        })
         .unwrap_or_else(|| ps.find_syntax_plain_text());
 
     // Create highlighter
