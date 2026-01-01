@@ -27,6 +27,11 @@ export default defineConfig(({ mode }) => ({
             'vite-plugin-node-polyfills/shims/buffer': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/buffer'),
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),
             'vite-plugin-node-polyfills/shims/process': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/process'),
+            // Force all preview2-shim imports to use frontend's node_modules (single instance)
+            '@bytecodealliance/preview2-shim/io': path.resolve(__dirname, 'node_modules/@bytecodealliance/preview2-shim/lib/browser/io.js'),
+            '@bytecodealliance/preview2-shim/cli': path.resolve(__dirname, 'node_modules/@bytecodealliance/preview2-shim/lib/browser/cli.js'),
+            '@bytecodealliance/preview2-shim/random': path.resolve(__dirname, 'node_modules/@bytecodealliance/preview2-shim/lib/browser/random.js'),
+            '@bytecodealliance/preview2-shim/filesystem': path.resolve(__dirname, 'node_modules/@bytecodealliance/preview2-shim/lib/browser/filesystem.js'),
         },
     },
     server: {
@@ -61,6 +66,13 @@ export default defineConfig(({ mode }) => ({
     },
     optimizeDeps: {
         exclude: ['@wasmer/sdk'],
+        // Include preview2-shim to ensure single module instance
+        include: [
+            '@bytecodealliance/preview2-shim/cli',
+            '@bytecodealliance/preview2-shim/io',
+            '@bytecodealliance/preview2-shim/random',
+            '@bytecodealliance/preview2-shim/filesystem',
+        ],
     },
     build: {
         target: 'esnext',

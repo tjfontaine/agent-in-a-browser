@@ -114,7 +114,9 @@ export async function spawnInteractive(
  * This queries the module registry to determine dispatch mode.
  */
 export function isInteractiveCommand(command: string): boolean {
-    return isInteractiveCommandImpl(command);
+    const result = isInteractiveCommandImpl(command);
+    console.log(`[ModuleLoader] isInteractiveCommand('${command}') => ${result}`);
+    return result;
 }
 
 /**

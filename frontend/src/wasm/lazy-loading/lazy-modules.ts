@@ -518,3 +518,7 @@ export async function initializeForSyncMode(): Promise<void> {
 
 // Re-export hasJSPI for consumers
 export { hasJSPI };
+
+// Auto-register modules at import time
+// This ensures commands like vim are registered before any queries
+registerAllModules();

@@ -47,7 +47,7 @@ async function getTerminalText(page: Page): Promise<string> {
 }
 
 // Helper to wait for terminal output containing text
-async function waitForTerminalOutput(page: Page, text: string, timeout = 15000): Promise<void> {
+async function waitForTerminalOutput(page: Page, text: string, timeout = 5000): Promise<void> {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
         const screenText = await getTerminalText(page);
@@ -61,7 +61,7 @@ async function waitForTerminalOutput(page: Page, text: string, timeout = 15000):
 }
 
 // Helper to wait for TUI to be ready
-async function waitForTuiReady(page: Page, timeout = 30000): Promise<void> {
+async function waitForTuiReady(page: Page, timeout = 5000): Promise<void> {
     await page.waitForSelector('canvas', { timeout });
     await page.waitForFunction(
         () => {
@@ -79,7 +79,7 @@ async function enterShellMode(page: Page): Promise<void> {
     await typeInTerminal(page, '/sh');
     await pressKey(page, 'Enter');
     // Wait for shell prompt ($ or similar)
-    await waitForTerminalOutput(page, '$', 10000);
+    await waitForTerminalOutput(page, '$', 5000);
 }
 
 // Helper to exit vim with :q!
@@ -103,7 +103,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         await pressKey(page, 'Enter');
 
         // Should show NORMAL mode indicator
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
 
         // Exit vim
         await forceExitVim(page);
@@ -113,7 +113,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         await typeInTerminal(page, 'vi');
         await pressKey(page, 'Enter');
 
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
         await forceExitVim(page);
     });
 
@@ -121,7 +121,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         await typeInTerminal(page, 'edit');
         await pressKey(page, 'Enter');
 
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
         await forceExitVim(page);
     });
 
@@ -129,7 +129,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         await typeInTerminal(page, 'vim test.txt');
         await pressKey(page, 'Enter');
 
-        await waitForTerminalOutput(page, 'test.txt', 10000);
+        await waitForTerminalOutput(page, 'test.txt', 5000);
         await forceExitVim(page);
     });
 });
@@ -141,7 +141,7 @@ test.describe('Vim Mode Transitions', () => {
         await enterShellMode(page);
         await typeInTerminal(page, 'vim');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
     });
 
     test.afterEach(async ({ page }) => {
@@ -184,7 +184,7 @@ test.describe('Vim Text Editing', () => {
         await enterShellMode(page);
         await typeInTerminal(page, 'vim');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
     });
 
     test.afterEach(async ({ page }) => {
@@ -225,7 +225,7 @@ test.describe('Vim Undo/Redo', () => {
         await enterShellMode(page);
         await typeInTerminal(page, 'vim');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
     });
 
     test.afterEach(async ({ page }) => {
@@ -256,7 +256,7 @@ test.describe('Vim File Operations', () => {
     test(':q quits editor', async ({ page }) => {
         await typeInTerminal(page, 'vim');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
 
         await typeInTerminal(page, ':q');
         await pressKey(page, 'Enter');
@@ -268,7 +268,7 @@ test.describe('Vim File Operations', () => {
     test(':q! force quits modified file', async ({ page }) => {
         await typeInTerminal(page, 'vim');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
 
         // Make a change
         await pressKey(page, 'i');
@@ -285,7 +285,7 @@ test.describe('Vim File Operations', () => {
     test(':w saves file and :wq saves and quits', async ({ page }) => {
         await typeInTerminal(page, 'vim e2e_test_file.txt');
         await pressKey(page, 'Enter');
-        await waitForTerminalOutput(page, 'NORMAL', 10000);
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
 
         // Insert text
         await pressKey(page, 'i');
