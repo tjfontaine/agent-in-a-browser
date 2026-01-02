@@ -1036,13 +1036,24 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     }));
                             }
                             0x0D => {
-                                // Enter - add server
+                                // Enter - add server and try to connect
                                 let url = url_input.clone();
                                 if !url.is_empty() {
+                                    // Add the server first
                                     self.add_remote_server(&url);
-                                    self.overlay = Some(Overlay::ServerManager(
-                                        ServerManagerView::ServerList { selected: 0 },
-                                    ));
+
+                                    // Get the newly added server's ID
+                                    if let Some(server) = self.remote_servers.last() {
+                                        let server_id = server.id.clone();
+
+                                        // Try auto-connect
+                                        self.try_connect_new_server_in_wizard(&server_id);
+                                    } else {
+                                        // Fallback: just go to list
+                                        self.overlay = Some(Overlay::ServerManager(
+                                            ServerManagerView::ServerList { selected: 0 },
+                                        ));
+                                    }
                                 }
                             }
                             0x7F | 0x08 => {
@@ -1425,6 +1436,117 @@ impl<R: PollableRead, W: Write> App<R, W> {
     fn set_server_token(&mut self, id: &str, token: &str) {
         ServerManager::set_token(&mut self.remote_servers, id, token);
         self.save_servers();
+    }
+
+    /// Try to connect a newly added server in the wizard context
+    /// On success: close overlay and show success message
+    /// On OAuth required: trigger OAuth flow, then return to list
+    /// On other failure: show SetToken dialog for bearer key entry
+    fn try_connect_new_server_in_wizard(&mut self, id: &str) {
+        let idx = self.remote_servers.iter().position(|s| s.id == id);
+        if let Some(idx) = idx {
+            self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
+            let server = &self.remote_servers[idx];
+            let server_name = server.name.clone();
+            let server_id = server.id.clone();
+
+            match ServerManager::connect_server(server) {
+                Ok(tools) => {
+                    let tool_count = tools.len();
+                    self.remote_servers[idx].status = ServerConnectionStatus::Connected;
+                    self.remote_servers[idx].tools = tools;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!(
+                            "Connected to '{}'. {} tools available.",
+                            server_name, tool_count
+                        ),
+                    });
+                    // Success - close wizard
+                    self.overlay = None;
+                }
+                Err(McpError::OAuthRequired(server_url)) => {
+                    // OAuth required - trigger OAuth flow
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Server requires OAuth. Opening authorization popup..."
+                            .to_string(),
+                    });
+
+                    let redirect_uri = format!(
+                        "{}/oauth-callback",
+                        std::env::var("ORIGIN")
+                            .unwrap_or_else(|_| "https://agent.edge-agent.dev".to_string())
+                    );
+                    let client_id = server_id.clone();
+
+                    use crate::bridge::oauth_client::perform_oauth_flow;
+                    match perform_oauth_flow(&server_url, &server_id, &client_id, &redirect_uri) {
+                        Ok(token_response) => {
+                            self.remote_servers[idx].bearer_token =
+                                Some(token_response.access_token.clone());
+                            self.save_servers();
+
+                            // Retry connection with token
+                            let server = &self.remote_servers[idx];
+                            match ServerManager::connect_server(server) {
+                                Ok(tools) => {
+                                    let tool_count = tools.len();
+                                    self.remote_servers[idx].status =
+                                        ServerConnectionStatus::Connected;
+                                    self.remote_servers[idx].tools = tools;
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!(
+                                            "Connected to '{}'. {} tools available.",
+                                            server_name, tool_count
+                                        ),
+                                    });
+                                    self.overlay = None;
+                                }
+                                Err(e) => {
+                                    self.remote_servers[idx].status =
+                                        ServerConnectionStatus::Error(e.to_string());
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!("Connection failed after OAuth: {}", e),
+                                    });
+                                    self.overlay = Some(Overlay::ServerManager(
+                                        ServerManagerView::ServerList { selected: 0 },
+                                    ));
+                                }
+                            }
+                        }
+                        Err(oauth_err) => {
+                            self.remote_servers[idx].status =
+                                ServerConnectionStatus::Error(oauth_err.to_string());
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("OAuth failed: {}", oauth_err),
+                            });
+                            self.overlay =
+                                Some(Overlay::ServerManager(ServerManagerView::ServerList {
+                                    selected: 0,
+                                }));
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Connection failed - offer to set bearer token
+                    self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Connection failed: {}. Enter API key if required.", e),
+                    });
+                    // Flow to SetToken dialog
+                    self.overlay = Some(Overlay::ServerManager(ServerManagerView::SetToken {
+                        server_id: server_id.clone(),
+                        token_input: String::new(),
+                        error: Some(e.to_string()),
+                    }));
+                }
+            }
+        }
     }
 
     fn toggle_server_connection(&mut self, id: &str) {
