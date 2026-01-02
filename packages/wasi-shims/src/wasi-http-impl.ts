@@ -1014,24 +1014,46 @@ export const outgoingHandler = {
             // Create an async promise that awaits the fetch for headers/status
             // then returns a streaming response with the actual metadata
             const fetchPromise = (async (): Promise<StreamingResponse> => {
-                const response = await fetch(fetchUrl, fetchOptions);
+                try {
+                    const response = await fetch(fetchUrl, fetchOptions);
 
-                // Extract response headers
-                const responseHeaders: [string, Uint8Array][] = [];
-                response.headers.forEach((value, name) => {
-                    responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
-                });
+                    // Extract response headers
+                    const responseHeaders: [string, Uint8Array][] = [];
+                    response.headers.forEach((value, name) => {
+                        responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
+                    });
 
-                // Get body stream for lazy reading
-                const bodyStream = response.body
-                    ? createStreamingInputStream(response.body.getReader())
-                    : createInputStreamFromBytes(new Uint8Array(0));
+                    // Get body stream for lazy reading
+                    const bodyStream = response.body
+                        ? createStreamingInputStream(response.body.getReader())
+                        : createInputStreamFromBytes(new Uint8Array(0));
 
-                return {
-                    status: response.status,
-                    headers: responseHeaders,
-                    bodyStream
-                };
+                    return {
+                        status: response.status,
+                        headers: responseHeaders,
+                        bodyStream
+                    };
+                } catch (error) {
+                    // Handle network errors, CORS errors, etc. gracefully
+                    // Return a synthetic 502 Bad Gateway response instead of crashing
+                    const errorMessage = error instanceof Error ? error.message : 'Network error';
+                    console.error('[http] Fetch failed:', method, url, '-', errorMessage);
+
+                    const errorBody = JSON.stringify({
+                        error: 'network_error',
+                        message: errorMessage,
+                        url: url
+                    });
+
+                    return {
+                        status: 502,
+                        headers: [
+                            ['content-type', new TextEncoder().encode('application/json')],
+                            ['x-error-source', new TextEncoder().encode('wasi-http-shim')]
+                        ],
+                        bodyStream: createInputStreamFromBytes(new TextEncoder().encode(errorBody))
+                    };
+                }
             })();
 
             // Return async FutureIncomingResponse that await the fetch
