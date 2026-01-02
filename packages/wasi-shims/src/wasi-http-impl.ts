@@ -34,6 +34,37 @@ function shouldIntercept(url: string): boolean {
     return url.includes('localhost') && url.includes('/mcp');
 }
 
+// ============ CORS Proxy Configuration ============
+// Domains that should be routed through the CORS proxy
+const CORS_PROXY_DOMAINS = [
+    'mcp.stripe.com',
+];
+
+// The CORS proxy endpoint (same origin, different path)
+const CORS_PROXY_PATH = '/cors-proxy';
+
+/**
+ * Check if a URL should be routed through the CORS proxy.
+ * Returns true for external MCP servers in the allowlist.
+ */
+function shouldProxyViaCors(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+        return CORS_PROXY_DOMAINS.includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Rewrite a URL to go through the CORS proxy.
+ */
+function getCorsProxyUrl(targetUrl: string): string {
+    // Use same origin as current page
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}${CORS_PROXY_PATH}?url=${encodeURIComponent(targetUrl)}`;
+}
+
 /**
  * Create an InputStream from a byte array
  * This allows the WASM component to read the request body
@@ -887,7 +918,14 @@ export const outgoingHandler = {
         // For HTTPS requests, use async fetch with streaming body 
         // Pattern: Await fetch for status/headers, then stream body via JSPI
         if (schemeStr === 'https') {
-            console.log('[http] Using async fetch (streaming body):', method, url);
+            // Check if this URL should go through the CORS proxy
+            let fetchUrl = url;
+            if (shouldProxyViaCors(url)) {
+                fetchUrl = getCorsProxyUrl(url);
+                console.log('[http] Routing through CORS proxy:', method, url, '->', fetchUrl);
+            } else {
+                console.log('[http] Using async fetch (streaming body):', method, url);
+            }
 
             // Build fetch options
             const fetchOptions: RequestInit = {
@@ -906,7 +944,7 @@ export const outgoingHandler = {
             // Create an async promise that awaits the fetch for headers/status
             // then returns a streaming response with the actual metadata
             const fetchPromise = (async (): Promise<StreamingResponse> => {
-                const response = await fetch(url, fetchOptions);
+                const response = await fetch(fetchUrl, fetchOptions);
 
                 // Extract response headers
                 const responseHeaders: [string, Uint8Array][] = [];
