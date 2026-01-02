@@ -5,7 +5,7 @@
 
 use rig::agent::Agent;
 use rig::completion::{Chat, Message as RigMessage, Prompt};
-use rig::streaming::StreamingPrompt;
+use rig::streaming::StreamingChat;
 use rig::tool::server::ToolServer;
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
@@ -213,7 +213,10 @@ enum ActiveStreamState {
 impl ActiveStream {
     /// Create a new ActiveStream from a RigAgent and message.
     /// Returns immediately - actual connection happens during poll_once().
-    pub fn start(agent: &RigAgent, message: &str) -> Self {
+    ///
+    /// The `history` parameter contains previous conversation messages that
+    /// provide context for the current prompt.
+    pub fn start(agent: &RigAgent, message: &str, history: Vec<RigMessage>) -> Self {
         use std::future::IntoFuture;
 
         let buffer = StreamingBuffer::new();
@@ -221,11 +224,17 @@ impl ActiveStream {
 
         let state = match &agent.agent_type {
             AgentType::Anthropic(agent) => {
-                let future = agent.stream_prompt(&message).multi_turn(5).into_future();
+                let future = agent
+                    .stream_chat(&message, history.clone())
+                    .multi_turn(5)
+                    .into_future();
                 ActiveStreamState::ConnectingAnthropic(Box::pin(future))
             }
             AgentType::OpenAI(agent) => {
-                let future = agent.stream_prompt(&message).multi_turn(5).into_future();
+                let future = agent
+                    .stream_chat(&message, history)
+                    .multi_turn(5)
+                    .into_future();
                 ActiveStreamState::ConnectingOpenAI(Box::pin(future))
             }
         };

@@ -748,9 +748,21 @@ impl<R: PollableRead, W: Write> App<R, W> {
         // Get reference to agent
         let agent = self.rig_agent.as_ref().unwrap();
 
+        // Convert our messages to rig-core format for conversation history
+        // Skip system messages and only include user/assistant pairs
+        let history: Vec<rig::completion::Message> = self
+            .messages
+            .iter()
+            .filter_map(|m| match m.role {
+                Role::User => Some(rig::completion::Message::user(&m.content)),
+                Role::Assistant => Some(rig::completion::Message::assistant(&m.content)),
+                Role::System | Role::Tool => None, // Skip system and tool messages
+            })
+            .collect();
+
         // Start streaming with poll-once pattern - returns immediately
         // allowing the main loop to render between polls
-        let active_stream = ActiveStream::start(agent, &message);
+        let active_stream = ActiveStream::start(agent, &message, history);
 
         // Store the stream for polling in the main loop
         self.active_stream = Some(active_stream);
