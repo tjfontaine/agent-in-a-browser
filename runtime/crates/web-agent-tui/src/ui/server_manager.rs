@@ -119,14 +119,14 @@ pub const API_FORMATS: &[(&str, &str, &str, &str)] = &[
     (
         "anthropic",
         "Anthropic (Claude)",
-        "https://api.anthropic.com/v1",
+        "https://api.anthropic.com", // rig-core adds /v1/messages
         "claude-haiku-4-5-20251015", // Claude Haiku 4.5
     ),
     (
         "google",
         "Google (Gemini)",
         "https://generativelanguage.googleapis.com/v1beta",
-        "gemini-3-flash-preview", // Gemini 3 Flash
+        "gemini-3-flash-preview", // Gemini 3 Flash Preview
     ),
     (
         "openrouter",
@@ -605,16 +605,21 @@ pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static st
             ("codex-max", "Codex-Max (Software Dev)"),
         ],
         "google" | "gemini" => vec![
-            // Gemini 3 series (latest as of late 2025)
-            ("gemini-3-pro", "Gemini 3 Pro (Most Powerful)"),
-            ("gemini-3-flash", "Gemini 3 Flash (Fast)"),
-            ("gemini-3-deep-think", "Gemini 3 Deep Think (Complex)"),
+            // Gemini 3 series (preview, launched late 2025)
+            (
+                "gemini-3-flash-preview",
+                "Gemini 3 Flash Preview (Fast, Default)",
+            ),
+            (
+                "gemini-3-pro-preview",
+                "Gemini 3 Pro Preview (Most Powerful)",
+            ),
             // Gemini 2.5 series
-            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
             ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-            ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite (Fastest)"),
+            ("gemini-2.5-pro-preview-06-05", "Gemini 2.5 Pro Preview"),
             // Gemini 2.0 series
             ("gemini-2.0-flash", "Gemini 2.0 Flash"),
+            ("gemini-2.0-flash-lite", "Gemini 2.0 Flash Lite (Fastest)"),
         ],
         "openrouter" => vec![
             ("anthropic/claude-haiku-4-5", "Claude Haiku 4.5"),
@@ -704,18 +709,14 @@ fn render_model_selector(
 }
 
 /// Available AI providers (id, name, default_base_url)
-/// If base_url is None, the user must provide one (custom provider)
+/// If base_url is None, rig-core uses its built-in default (recommended for standard providers)
 pub const PROVIDERS: &[(&str, &str, Option<&str>)] = &[
-    (
-        "anthropic",
-        "Anthropic (Claude)",
-        Some("https://api.anthropic.com/v1"),
-    ),
-    ("openai", "OpenAI (GPT)", Some("https://api.openai.com/v1")),
+    ("anthropic", "Anthropic (Claude)", None), // rig-core default: api.anthropic.com
+    ("openai", "OpenAI (GPT)", None),          // rig-core default: api.openai.com
     (
         "gemini",
         "Google (Gemini)",
-        Some("https://generativelanguage.googleapis.com"),
+        None, // rig-core default: generativelanguage.googleapis.com
     ),
     ("custom", "Custom (OpenAI-compatible)", None),
 ];
