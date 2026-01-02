@@ -151,6 +151,144 @@ impl Default for StreamingBuffer {
     }
 }
 
+/// Result of polling the stream once
+#[derive(Debug)]
+pub enum PollResult {
+    /// Got a chunk, more data expected
+    Chunk,
+    /// Stream completed successfully
+    Complete,
+    /// Stream ended with an error
+    Error(String),
+}
+
+/// Active streaming session that can be polled once per tick.
+/// This allows the TUI to render between stream chunks.
+pub struct ActiveStream {
+    /// The underlying stream (type-erased)
+    stream: ActiveStreamInner,
+    /// Buffer to accumulate content
+    buffer: StreamingBuffer,
+}
+
+/// Type-erased inner stream to handle different providers
+enum ActiveStreamInner {
+    Anthropic(
+        rig::agent::prompt_request::streaming::StreamingResult<
+            super::wasi_completion_model::AnthropicStreamingResponse,
+        >,
+    ),
+    OpenAI(
+        rig::agent::prompt_request::streaming::StreamingResult<
+            super::wasi_completion_model::OpenAIStreamingResponse,
+        >,
+    ),
+}
+
+impl ActiveStream {
+    /// Create a new ActiveStream from a RigAgent and message
+    pub fn start(agent: &RigAgent, message: &str) -> Self {
+        use std::future::IntoFuture;
+
+        let buffer = StreamingBuffer::new();
+        let message = message.to_string();
+
+        let stream = match &agent.agent_type {
+            AgentType::Anthropic(agent) => {
+                let stream =
+                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
+                ActiveStreamInner::Anthropic(stream)
+            }
+            AgentType::OpenAI(agent) => {
+                let stream =
+                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
+                ActiveStreamInner::OpenAI(stream)
+            }
+        };
+
+        ActiveStream { stream, buffer }
+    }
+
+    /// Get a clone of the buffer for reading content
+    pub fn buffer(&self) -> StreamingBuffer {
+        self.buffer.clone()
+    }
+
+    /// Poll the stream once, process any available item, and return.
+    /// This allows the caller to render UI between polls.
+    pub fn poll_once(&mut self) -> PollResult {
+        use futures::Stream;
+        use rig::agent::MultiTurnStreamItem;
+        use rig::streaming::StreamedAssistantContent;
+        use std::task::Poll;
+
+        // Check if cancelled
+        if self.buffer.is_cancelled() {
+            self.buffer.set_complete();
+            return PollResult::Complete;
+        }
+
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // Helper to process a stream item (same for both providers)
+        fn process_item<R>(item: MultiTurnStreamItem<R>, buffer: &StreamingBuffer) {
+            match item {
+                MultiTurnStreamItem::StreamAssistantItem(content) => match content {
+                    StreamedAssistantContent::Text(text) => {
+                        buffer.set_tool_activity(None);
+                        buffer.append(&text.text);
+                    }
+                    StreamedAssistantContent::ToolCall(tool_call) => {
+                        let tool_name = tool_call.function.name.clone();
+                        buffer.set_tool_activity(Some(format!("🔧 Calling {}...", tool_name)));
+                    }
+                    _ => {}
+                },
+                _ => {
+                    buffer.set_tool_activity(None);
+                }
+            }
+        }
+
+        // Poll and process based on provider type
+        match &mut self.stream {
+            ActiveStreamInner::Anthropic(stream) => match stream.as_mut().poll_next(&mut cx) {
+                Poll::Ready(Some(Ok(item))) => {
+                    process_item(item, &self.buffer);
+                    PollResult::Chunk
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    self.buffer.set_error(e.to_string());
+                    self.buffer.set_complete();
+                    PollResult::Error(e.to_string())
+                }
+                Poll::Ready(None) => {
+                    self.buffer.set_complete();
+                    PollResult::Complete
+                }
+                Poll::Pending => PollResult::Chunk,
+            },
+            ActiveStreamInner::OpenAI(stream) => match stream.as_mut().poll_next(&mut cx) {
+                Poll::Ready(Some(Ok(item))) => {
+                    process_item(item, &self.buffer);
+                    PollResult::Chunk
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    self.buffer.set_error(e.to_string());
+                    self.buffer.set_complete();
+                    PollResult::Error(e.to_string())
+                }
+                Poll::Ready(None) => {
+                    self.buffer.set_complete();
+                    PollResult::Complete
+                }
+                Poll::Pending => PollResult::Chunk,
+            },
+        }
+    }
+}
+
 /// Error type for RigAgent operations
 #[derive(Debug)]
 pub enum RigAgentError {
@@ -413,157 +551,6 @@ impl RigAgent {
     /// Get the MCP client for direct tool calls if needed
     pub fn mcp_client(&self) -> &McpClient {
         &self.mcp_client
-    }
-
-    /// Start streaming a prompt response using rig's for_each_blocking
-    ///
-    /// This uses rig-core's WASIP2 blocking iteration which suspends via JSPI
-    /// on each HTTP read, keeping the UI responsive.
-    pub fn stream_prompt_with_buffer(&self, message: &str, buffer: StreamingBuffer) {
-        use rig::agent::prompt_request::streaming::for_each_blocking;
-        use rig::agent::MultiTurnStreamItem;
-        use rig::streaming::StreamedAssistantContent;
-        use std::future::IntoFuture;
-
-        let message = message.to_string();
-
-        match &self.agent_type {
-            AgentType::Anthropic(agent) => {
-                let stream_result =
-                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
-
-                let mut stream = stream_result;
-
-                // Use rig's for_each_blocking for WASIP2-compatible iteration
-                let result = for_each_blocking(&mut stream, |item| {
-                    // Check for cancellation on each chunk
-                    if buffer.is_cancelled() {
-                        return;
-                    }
-
-                    match item {
-                        MultiTurnStreamItem::StreamAssistantItem(content) => match content {
-                            StreamedAssistantContent::Text(text) => {
-                                buffer.set_tool_activity(None);
-                                buffer.append(&text.text);
-                            }
-                            StreamedAssistantContent::ToolCall(tool_call) => {
-                                let tool_name = tool_call.function.name.clone();
-                                buffer.set_tool_activity(Some(format!(
-                                    "🔧 Calling {}...",
-                                    tool_name
-                                )));
-                            }
-                            _ => {}
-                        },
-                        _ => {
-                            buffer.set_tool_activity(None);
-                        }
-                    }
-                });
-
-                if let Err(e) = result {
-                    buffer.set_error(e.to_string());
-                } else {
-                    buffer.set_complete();
-                }
-            }
-            AgentType::OpenAI(agent) => {
-                // Get the stream (block_on for the initial await)
-                let stream_result =
-                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
-                let mut stream = stream_result;
-
-                let result = for_each_blocking(&mut stream, |item| {
-                    if buffer.is_cancelled() {
-                        return;
-                    }
-
-                    match item {
-                        MultiTurnStreamItem::StreamAssistantItem(content) => match content {
-                            StreamedAssistantContent::Text(text) => {
-                                buffer.set_tool_activity(None);
-                                buffer.append(&text.text);
-                            }
-                            StreamedAssistantContent::ToolCall(tool_call) => {
-                                let tool_name = tool_call.function.name.clone();
-                                buffer.set_tool_activity(Some(format!(
-                                    "🔧 Calling {}...",
-                                    tool_name
-                                )));
-                            }
-                            _ => {}
-                        },
-                        _ => {
-                            buffer.set_tool_activity(None);
-                        }
-                    }
-                });
-
-                if let Err(e) = result {
-                    buffer.set_error(e.to_string());
-                } else {
-                    buffer.set_complete();
-                }
-            }
-        }
-    }
-
-    /// Internal: Run the OpenAI streaming loop
-    async fn run_stream_openai(
-        agent: Agent<WasiOpenAIModel>,
-        message: String,
-        buffer: StreamingBuffer,
-    ) {
-        use rig::agent::MultiTurnStreamItem;
-        use rig::streaming::StreamedAssistantContent;
-
-        // Use multi_turn(5) to enable tool execution during streaming
-        let mut stream = agent.stream_prompt(&message).multi_turn(5).await;
-
-        while let Some(result) = stream.next().await {
-            // Check for cancellation
-            if buffer.is_cancelled() {
-                break;
-            }
-
-            match result {
-                Ok(item) => {
-                    match item {
-                        MultiTurnStreamItem::StreamAssistantItem(content) => {
-                            match content {
-                                StreamedAssistantContent::Text(text) => {
-                                    // Clear tool activity when text arrives
-                                    buffer.set_tool_activity(None);
-                                    buffer.append(text.text.as_str());
-                                }
-                                StreamedAssistantContent::ToolCall(tool_call) => {
-                                    // Show tool is being called
-                                    let tool_name = tool_call.function.name.clone();
-                                    buffer.set_tool_activity(Some(format!(
-                                        "🔧 Calling {}...",
-                                        tool_name
-                                    )));
-                                }
-                                _ => {
-                                    // ToolCallDelta, Reasoning, etc.
-                                }
-                            }
-                        }
-                        _ => {
-                            // Turn completed - clear tool activity
-                            buffer.set_tool_activity(None);
-                        }
-                    }
-                }
-                Err(e) => {
-                    buffer.set_error(e.to_string());
-                    return;
-                }
-            }
-        }
-
-        buffer.set_complete();
     }
 }
 

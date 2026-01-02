@@ -8,7 +8,7 @@ use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend
 use crate::bridge::{
     get_local_tool_definitions, get_system_message,
     mcp_client::ToolDefinition,
-    rig_agent::{RigAgent, StreamingBuffer},
+    rig_agent::{ActiveStream, PollResult, RigAgent, StreamingBuffer},
     McpClient,
 };
 
@@ -73,8 +73,8 @@ pub struct App<R: Read, W: Write> {
     pub(crate) overlay: Option<Overlay>,
     /// Loaded configuration
     config: Config,
-    /// Active streaming buffer for async response streaming
-    streaming_buffer: Option<StreamingBuffer>,
+    /// Active streaming session for async response streaming (poll-once pattern)
+    active_stream: Option<ActiveStream>,
 }
 
 /// A message in the chat history
@@ -138,7 +138,7 @@ impl<R: Read, W: Write> App<R, W> {
             remote_servers: Vec::new(),
             overlay: None,
             config,
-            streaming_buffer: None,
+            active_stream: None,
         }
     }
 
@@ -156,8 +156,8 @@ impl<R: Read, W: Write> App<R, W> {
             // Handle input (including resize events from stdin)
             self.handle_input();
 
-            // Poll streaming buffer if active
-            self.poll_streaming_buffer();
+            // Poll active stream if streaming
+            self.poll_stream();
 
             // Render
             self.render();
@@ -707,12 +707,12 @@ impl<R: Read, W: Write> App<R, W> {
         // Get reference to agent
         let agent = self.rig_agent.as_ref().unwrap();
 
-        // Use streaming with for_each_blocking for WASIP2 compatibility
-        // This uses JSPI suspension during blocking_read instead of block_on which deadlocks
+        // Start streaming with poll-once pattern - returns immediately
+        // allowing the main loop to render between polls
+        let active_stream = ActiveStream::start(agent, &message);
 
-        // Create streaming buffer
-        let buffer = StreamingBuffer::new();
-        self.streaming_buffer = Some(buffer.clone());
+        // Store the stream for polling in the main loop
+        self.active_stream = Some(active_stream);
 
         // Add placeholder assistant message
         self.messages.push(Message {
@@ -720,37 +720,32 @@ impl<R: Read, W: Write> App<R, W> {
             content: "".to_string(),
         });
 
-        // Start streaming - this will block until complete but JSPI handles suspension
-        agent.stream_prompt_with_buffer(&message, buffer.clone());
-
-        // Streaming completed - update final message
-        let final_content = buffer.get_content();
-
-        if let Some(last_msg) = self.messages.last_mut() {
-            if last_msg.role == Role::Assistant {
-                last_msg.content = final_content;
-            }
-        }
-
-        self.streaming_buffer = None;
-        self.state = AppState::Ready;
+        // Don't block! Return to main loop which will call poll_stream() on each tick
     }
 
-    /// Poll the streaming buffer and update the assistant message
-    fn poll_streaming_buffer(&mut self) {
+    /// Poll the active stream and update the assistant message.
+    /// Called on each tick while in Streaming state.
+    /// Uses poll-once pattern to allow UI updates between chunks.
+    fn poll_stream(&mut self) {
         // Only poll if we're in streaming state
         if self.state != AppState::Streaming {
             return;
         }
 
-        let buffer = match &self.streaming_buffer {
-            Some(buf) => buf.clone(),
+        let stream = match &mut self.active_stream {
+            Some(s) => s,
             None => {
-                // No buffer, transition back to ready
+                // No stream, transition back to ready
                 self.state = AppState::Ready;
                 return;
             }
         };
+
+        // Poll once - this may return immediately or suspend via JSPI
+        let result = stream.poll_once();
+
+        // Get the buffer for content updates
+        let buffer = stream.buffer();
 
         // Get latest content from buffer
         let content = buffer.get_content();
@@ -768,19 +763,32 @@ impl<R: Read, W: Write> App<R, W> {
             }
         }
 
-        // Check if streaming is complete
-        if buffer.is_complete() {
-            // Check for errors
-            if let Some(error) = buffer.get_error() {
+        // Check result to determine if we're done
+        match result {
+            PollResult::Chunk => {
+                // More data expected, continue polling on next tick
+            }
+            PollResult::Complete => {
+                // Check for errors in the buffer
+                if let Some(error) = buffer.get_error() {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Streaming error: {}", error),
+                    });
+                }
+
+                // Clean up and return to ready state
+                self.active_stream = None;
+                self.state = AppState::Ready;
+            }
+            PollResult::Error(e) => {
                 self.messages.push(Message {
                     role: Role::System,
-                    content: format!("Streaming error: {}", error),
+                    content: format!("Streaming error: {}", e),
                 });
+                self.active_stream = None;
+                self.state = AppState::Ready;
             }
-
-            // Clean up and return to ready state
-            self.streaming_buffer = None;
-            self.state = AppState::Ready;
         }
 
         // Check if cancelled
@@ -789,7 +797,7 @@ impl<R: Read, W: Write> App<R, W> {
                 role: Role::System,
                 content: "Streaming cancelled.".to_string(),
             });
-            self.streaming_buffer = None;
+            self.active_stream = None;
             self.state = AppState::Ready;
         }
     }
