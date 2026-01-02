@@ -1223,7 +1223,13 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             };
 
                             // Pre-select API format based on provider
-                            let api_format = if *provider_id == "anthropic" { 1 } else { 0 };
+                            // API_FORMATS: 0=openai, 1=anthropic, 2=google/gemini, 3=openrouter
+                            let api_format = match *provider_id {
+                                "anthropic" => 1,
+                                "gemini" | "google" => 2,
+                                "openrouter" => 3,
+                                _ => 0, // default to openai
+                            };
 
                             self.overlay = Some(Overlay::ProviderWizard {
                                 step: start_step,
