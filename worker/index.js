@@ -8,6 +8,7 @@ const CORS_PROXY_ALLOWLIST = [
     'access.stripe.com',
     'api.githubcopilot.com',
     'github.com',
+    'generativelanguage.googleapis.com',  // Google Gemini API
 ];
 
 /**

@@ -41,6 +41,7 @@ const CORS_PROXY_DOMAINS = [
     'access.stripe.com',
     'api.githubcopilot.com',
     'github.com',
+    'generativelanguage.googleapis.com',  // Google Gemini API
 ];
 
 // The CORS proxy endpoint (same origin, different path)
