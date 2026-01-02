@@ -7,7 +7,7 @@ use ratatui::Terminal;
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
     get_local_tool_definitions, get_system_message,
-    mcp_client::ToolDefinition,
+    mcp_client::{McpError, ToolDefinition},
     rig_agent::{ActiveStream, PollResult, RigAgent},
     McpClient,
 };
@@ -1450,6 +1450,79 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             name, tool_count
                         ),
                     });
+                }
+                Err(McpError::OAuthRequired(server_url)) => {
+                    // OAuth required - trigger OAuth flow
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!(
+                            "Server requires OAuth authentication. Opening authorization popup..."
+                        ),
+                    });
+
+                    // Get redirect URI from origin (browser will provide this via HTTP interception)
+                    let redirect_uri = format!(
+                        "{}/oauth-callback",
+                        std::env::var("ORIGIN")
+                            .unwrap_or_else(|_| "https://agent.edge-agent.dev".to_string())
+                    );
+
+                    // Use server ID as client ID for now (server may provide real client_id via registration)
+                    let client_id = self.remote_servers[idx].id.clone();
+                    let server_id = self.remote_servers[idx].id.clone();
+
+                    // Perform OAuth flow
+                    use crate::bridge::oauth_client::perform_oauth_flow;
+                    match perform_oauth_flow(&server_url, &server_id, &client_id, &redirect_uri) {
+                        Ok(token_response) => {
+                            // Store the token and retry connection
+                            self.remote_servers[idx].bearer_token =
+                                Some(token_response.access_token.clone());
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: "OAuth authorization successful. Connecting..."
+                                    .to_string(),
+                            });
+
+                            // Save servers to persist the token
+                            self.save_servers();
+
+                            // Retry connection with the new token
+                            let server = &self.remote_servers[idx];
+                            match ServerManager::connect_server(server) {
+                                Ok(tools) => {
+                                    let tool_count = tools.len();
+                                    let name = self.remote_servers[idx].name.clone();
+                                    self.remote_servers[idx].status =
+                                        ServerConnectionStatus::Connected;
+                                    self.remote_servers[idx].tools = tools;
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!(
+                                            "Connected to '{}'. {} tools available.",
+                                            name, tool_count
+                                        ),
+                                    });
+                                }
+                                Err(e) => {
+                                    self.remote_servers[idx].status =
+                                        ServerConnectionStatus::Error(e.to_string());
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: format!("Failed to connect after OAuth: {}", e),
+                                    });
+                                }
+                            }
+                        }
+                        Err(oauth_err) => {
+                            self.remote_servers[idx].status =
+                                ServerConnectionStatus::Error(oauth_err.to_string());
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("OAuth failed: {}", oauth_err),
+                            });
+                        }
+                    }
                 }
                 Err(e) => {
                     self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
