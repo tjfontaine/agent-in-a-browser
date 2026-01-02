@@ -8,6 +8,9 @@
 import { launchTui } from './wasm/tui/tui-loader.js';
 import './index.css';
 
+// Import OAuth handler to register window.__mcpOAuthHandler
+import './oauth-handler.js';
+
 // Create full-screen terminal container
 const root = document.getElementById('root')!;
 root.innerHTML = '<div id="terminal" style="width: 100%; height: 100vh;"></div>';
