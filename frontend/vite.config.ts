@@ -3,7 +3,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
 export default defineConfig(({ mode }) => ({
-    // Custom domain: agent.atxconsulting.com (no subpath needed)
+    // Custom domain: agent.edge-agent.dev (no subpath needed)
     base: '/',
     plugins: [
         // Polyfill Node.js core modules for browser compatibility

@@ -2,7 +2,7 @@
 
 *✨ Lovingly vibed with [Antigravity](https://antigravity.google) ✨*
 
-**🚀 Try it now: [agent.atxconsulting.com](https://agent.atxconsulting.com)** — hosted on Cloudflare Workers (static assets only, no backend processing)
+**🚀 Try it now: [agent.edge-agent.dev](https://agent.edge-agent.dev)** — hosted on Cloudflare Workers (static assets only, no backend processing)
 
 A fully browser-native AI coding assistant. No server required for execution—just your API key and a browser.
 

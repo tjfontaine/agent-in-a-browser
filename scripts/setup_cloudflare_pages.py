@@ -22,8 +22,8 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 ACCOUNT_ID = os.environ["CLOUDFLARE_ACCOUNT_ID"]
 PROJECT_NAME = "agent-in-a-browser"
-CUSTOM_DOMAIN = "agent.atxconsulting.com"
-BASE_DOMAIN = "atxconsulting.com"
+CUSTOM_DOMAIN = "agent.edge-agent.dev"
+BASE_DOMAIN = "edge-agent.dev"
 
 
 def main():
