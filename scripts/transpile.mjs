@@ -34,6 +34,8 @@ const ASYNC_IMPORTS = [
     // IO
     `wasi:io/streams@${V}#[method]input-stream.blocking-read`,
     `wasi:io/streams@${V}#[method]output-stream.blocking-write-and-flush`,
+    // Polling - required for HTTP response waiting
+    `wasi:io/poll@${V}#[method]pollable.block`,
     // Filesystem
     `wasi:filesystem/types@${V}#[method]descriptor.read`,
     `wasi:filesystem/types@${V}#[method]descriptor.write`,

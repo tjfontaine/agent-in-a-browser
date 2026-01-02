@@ -216,10 +216,17 @@ impl WasiHttpClient {
 
         let status = response_result.status();
 
-        // Convert response headers to http::HeaderMap
-        let headers = http::HeaderMap::new();
-        // Note: WASI response headers would need to be extracted here
-        // For now, we return an empty header map
+        // Convert response headers from WASI to http::HeaderMap
+        let wasi_headers = response_result.headers();
+        let mut headers = http::HeaderMap::new();
+        for (name, value) in wasi_headers.entries() {
+            if let Ok(header_name) = http::header::HeaderName::try_from(name.as_str()) {
+                if let Ok(header_value) = http::header::HeaderValue::from_bytes(&value) {
+                    headers.insert(header_name, header_value);
+                }
+            }
+        }
+        eprintln!("[WasiHttpClient] Response headers: {:?}", headers.len());
 
         // Get stream
         let incoming_body = response_result
@@ -275,16 +282,27 @@ impl Stream for WasiBodyStream {
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // JSPI makes blocking_read async from JavaScript's perspective
+        // println!("[wasi_http_adapter] blocking_read start");
         match self.stream.blocking_read(8192) {
             Ok(chunk) => {
+                // println!("[wasi_http_adapter] blocking_read returned {} bytes", chunk.len());
                 if chunk.is_empty() {
+                    println!(
+                        "[wasi_http_adapter] blocking_read returned empty chunk -> Stream EOF"
+                    );
                     Poll::Ready(None)
                 } else {
                     Poll::Ready(Some(Ok(Bytes::from(chunk))))
                 }
             }
-            Err(StreamError::Closed) => Poll::Ready(None),
-            Err(e) => Poll::Ready(Some(Err(instance_error(format!("Read error: {:?}", e))))),
+            Err(StreamError::Closed) => {
+                println!("[wasi_http_adapter] blocking_read Closed -> Stream EOF");
+                Poll::Ready(None)
+            }
+            Err(e) => {
+                println!("[wasi_http_adapter] blocking_read Error: {:?}", e);
+                Poll::Ready(Some(Err(instance_error(format!("Read error: {:?}", e)))))
+            }
         }
     }
 }

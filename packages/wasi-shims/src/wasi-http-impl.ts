@@ -885,12 +885,11 @@ export const outgoingHandler = {
         }
 
         // For HTTPS requests, use async fetch with streaming body 
-        // Pattern: Return immediately with status 200 and a streaming InputStream
-        // The JSPI suspension happens in InputStream.blockingRead(), not Pollable.block()
+        // Pattern: Await fetch for status/headers, then stream body via JSPI
         if (schemeStr === 'https') {
             console.log('[http] Using async fetch (streaming body):', method, url);
 
-            // Start the fetch immediately (don't await it yet)
+            // Build fetch options
             const fetchOptions: RequestInit = {
                 method,
                 headers: Object.fromEntries(
@@ -904,15 +903,39 @@ export const outgoingHandler = {
                 fetchOptions.body = new Blob([body as BlobPart]);
             }
 
-            // Create a streaming InputStream that starts fetch lazily and suspends on reads
-            const streamingBody = createLazyFetchStream(url, fetchOptions);
+            // Create an async promise that awaits the fetch for headers/status
+            // then returns a streaming response with the actual metadata
+            const fetchPromise = (async (): Promise<StreamingResponse> => {
+                const response = await fetch(url, fetchOptions);
 
-            // Return immediately with a "ready" response - suspension happens during body read
-            return new FutureIncomingResponse({
-                status: 200, // Will be actual status when reading begins
-                headers: [] as [string, Uint8Array][], // Headers come with first read
-                bodyStream: streamingBody
-            });
+                console.log('[http] Fetch complete, status:', response.status, 'headers:', response.headers);
+
+                // Extract response headers
+                const responseHeaders: [string, Uint8Array][] = [];
+                response.headers.forEach((value, name) => {
+                    responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
+                });
+
+                console.log('[http] Response headers count:', responseHeaders.length);
+                for (const [name, value] of responseHeaders) {
+                    console.log('[http]   ', name, ':', new TextDecoder().decode(value));
+                }
+
+                // Get body stream for lazy reading
+                const bodyStream = response.body
+                    ? createStreamingInputStream(response.body.getReader())
+                    : createInputStreamFromBytes(new Uint8Array(0));
+
+                return {
+                    status: response.status,
+                    headers: responseHeaders,
+                    bodyStream
+                };
+            })();
+
+            // Return async FutureIncomingResponse that await the fetch
+            // JSPI will suspend on Pollable.block() until fetch completes
+            return new FutureIncomingResponse(fetchPromise);
         }
 
         // Fallback to synchronous XMLHttpRequest for HTTP requests (localhost)
