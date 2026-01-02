@@ -38,6 +38,7 @@ function shouldIntercept(url: string): boolean {
 // Domains that should be routed through the CORS proxy
 const CORS_PROXY_DOMAINS = [
     'mcp.stripe.com',
+    'access.stripe.com',
     'api.githubcopilot.com',
     'github.com',
 ];

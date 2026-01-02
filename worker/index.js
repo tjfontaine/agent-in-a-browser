@@ -5,6 +5,7 @@
 // Allowlist of domains that can be proxied
 const CORS_PROXY_ALLOWLIST = [
     'mcp.stripe.com',
+    'access.stripe.com',
     'api.githubcopilot.com',
     'github.com',
 ];

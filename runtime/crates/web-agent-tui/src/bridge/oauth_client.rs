@@ -189,7 +189,23 @@ impl OAuthClient {
             // Response was valid JSON but missing required fields - try fallbacks
         }
 
-        // Try OpenID Connect discovery
+        // Try root-level well-known (strip path from base URL)
+        if response.status == 404 || response.status == 200 {
+            if let Some(root_base) = extract_origin(base) {
+                let root_url = format!("{}/.well-known/oauth-authorization-server", root_base);
+                let root_response = HttpClient::request("GET", &root_url, &[], None)?;
+
+                if root_response.status == 200 {
+                    if let Ok(metadata) =
+                        serde_json::from_slice::<AuthServerMetadata>(&root_response.body)
+                    {
+                        return Ok(metadata);
+                    }
+                }
+            }
+        }
+
+        // Try OpenID Connect discovery (path-specific first, then root)
         if response.status == 404 || response.status == 200 {
             let oidc_url = format!("{}/.well-known/openid-configuration", base);
             let oidc_response = HttpClient::request("GET", &oidc_url, &[], None)?;
@@ -201,6 +217,20 @@ impl OAuthClient {
                     return Ok(metadata);
                 }
             }
+
+            // Try root-level OIDC discovery
+            if let Some(root_base) = extract_origin(base) {
+                let root_oidc_url = format!("{}/.well-known/openid-configuration", root_base);
+                let root_oidc_response = HttpClient::request("GET", &root_oidc_url, &[], None)?;
+
+                if root_oidc_response.status == 200 {
+                    if let Ok(metadata) =
+                        serde_json::from_slice::<AuthServerMetadata>(&root_oidc_response.body)
+                    {
+                        return Ok(metadata);
+                    }
+                }
+            }
         }
 
         // Fallback: construct metadata for well-known OAuth providers
@@ -210,6 +240,20 @@ impl OAuthClient {
                 authorization_endpoint: format!("{}/authorize", base),
                 token_endpoint: format!("{}/access_token", base),
                 registration_endpoint: None,
+                response_types_supported: vec!["code".to_string()],
+                grant_types_supported: vec!["authorization_code".to_string()],
+                code_challenge_methods_supported: vec!["S256".to_string()],
+                scopes_supported: vec![],
+            });
+        }
+
+        // Stripe MCP doesn't implement RFC 8414, construct endpoints manually
+        // Auth server URL is https://access.stripe.com/mcp
+        if base.contains("access.stripe.com") {
+            return Ok(AuthServerMetadata {
+                authorization_endpoint: format!("{}/authorize", base),
+                token_endpoint: format!("{}/token", base),
+                registration_endpoint: Some(format!("{}/register", base)),
                 response_types_supported: vec!["code".to_string()],
                 grant_types_supported: vec!["authorization_code".to_string()],
                 code_challenge_methods_supported: vec!["S256".to_string()],
@@ -559,6 +603,19 @@ pub fn parse_www_authenticate(header: &str) -> Option<(Option<String>, Option<St
     }
 
     Some((resource_metadata, scope))
+}
+
+/// Extract origin (scheme + host) from a URL
+fn extract_origin(url: &str) -> Option<String> {
+    // Find scheme end
+    let scheme_end = url.find("://")?;
+    let after_scheme = &url[scheme_end + 3..];
+    // Find path start (first / after scheme)
+    if let Some(path_start) = after_scheme.find('/') {
+        Some(url[..scheme_end + 3 + path_start].to_string())
+    } else {
+        Some(url.to_string())
+    }
 }
 
 /// URL-encode a string
