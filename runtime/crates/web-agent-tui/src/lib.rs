@@ -21,9 +21,45 @@ use bindings::Guest;
 pub use app::App;
 pub use backend::WasiBackend;
 
-/// WASI stdin wrapper that implements std::io::Read
-struct WasiStdin {
+// Re-export poll API for use in App
+pub use bindings::wasi::clocks::monotonic_clock::subscribe_duration;
+pub use bindings::wasi::io::poll::{poll, Pollable};
+
+/// Trait for stdin types that support poll-based waiting
+pub trait PollableRead: std::io::Read {
+    /// Get a pollable that becomes ready when input is available
+    fn subscribe(&self) -> Pollable;
+
+    /// Try to read without blocking - returns Ok(0) if no data available
+    fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize>;
+}
+
+/// WASI stdin wrapper that implements std::io::Read and poll-based waiting
+pub struct WasiStdin {
     stream: bindings::wasi::io::streams::InputStream,
+}
+
+impl WasiStdin {
+    /// Get a pollable that becomes ready when input is available
+    pub fn subscribe(&self) -> bindings::wasi::io::poll::Pollable {
+        self.stream.subscribe()
+    }
+
+    /// Try to read without blocking - returns Ok(0) if no data available
+    pub fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self.stream.read(buf.len() as u64) {
+            Ok(bytes) => {
+                let len = bytes.len().min(buf.len());
+                buf[..len].copy_from_slice(&bytes[..len]);
+                Ok(len)
+            }
+            Err(bindings::wasi::io::streams::StreamError::Closed) => Ok(0),
+            Err(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "no data available",
+            )),
+        }
+    }
 }
 
 impl std::io::Read for WasiStdin {
@@ -39,6 +75,16 @@ impl std::io::Read for WasiStdin {
                 "read failed",
             )),
         }
+    }
+}
+
+impl PollableRead for WasiStdin {
+    fn subscribe(&self) -> Pollable {
+        WasiStdin::subscribe(self)
+    }
+
+    fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+        WasiStdin::try_read(self, buf)
     }
 }
 

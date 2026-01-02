@@ -8,7 +8,7 @@ use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend
 use crate::bridge::{
     get_local_tool_definitions, get_system_message,
     mcp_client::ToolDefinition,
-    rig_agent::{ActiveStream, PollResult, RigAgent, StreamingBuffer},
+    rig_agent::{ActiveStream, PollResult, RigAgent},
     McpClient,
 };
 
@@ -20,7 +20,9 @@ use crate::ui::{
     render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
     ServerConnectionStatus, ServerManagerView, ServerStatus,
 };
-use std::io::{Read, Write};
+use crate::PollableRead;
+use crate::{poll, subscribe_duration};
+use std::io::Write;
 
 /// App state enumeration
 #[derive(Clone, Copy, PartialEq)]
@@ -36,7 +38,7 @@ pub enum AppState {
 }
 
 /// Main application state
-pub struct App<R: Read, W: Write> {
+pub struct App<R: PollableRead, W: Write> {
     /// Current mode
     pub(crate) mode: Mode,
     /// Current state
@@ -92,7 +94,7 @@ pub enum Role {
     Tool,
 }
 
-impl<R: Read, W: Write> App<R, W> {
+impl<R: PollableRead, W: Write> App<R, W> {
     /// Create a new App with std Read/Write streams
     pub fn new(stdin: R, mut stdout: W, width: u16, height: u16) -> Self {
         // Enter alternate screen mode
@@ -153,8 +155,25 @@ impl<R: Read, W: Write> App<R, W> {
         // Main loop: input then render
         // (This order ensures resize events are processed before drawing)
         while !self.should_quit {
-            // Handle input (including resize events from stdin)
-            self.handle_input();
+            // During streaming, use poll-based waiting on stdin + timer
+            // This allows us to respond to input while waiting for stream data
+            if self.state == AppState::Streaming {
+                // Create pollables: stdin (for user input) and timer (for stream polling)
+                let stdin_pollable = self.stdin.subscribe();
+                let timer_pollable = subscribe_duration(10_000_000); // 10ms in nanoseconds
+
+                // Wait for either stdin or timer
+                let ready = poll(&[&stdin_pollable, &timer_pollable]);
+
+                // If stdin is ready (index 0), handle input
+                if ready.iter().any(|&idx| idx == 0) {
+                    self.handle_streaming_input();
+                }
+                // Timer always fires after 10ms, we'll poll stream below
+            } else {
+                // Handle input (including resize events from stdin)
+                self.handle_input();
+            }
 
             // Poll active stream if streaming
             self.poll_stream();
@@ -286,6 +305,28 @@ impl<R: Read, W: Write> App<R, W> {
                 }
                 Err(_) => break, // Error or would block
             }
+        }
+    }
+
+    /// Handle input during streaming - only look for ESC to cancel
+    fn handle_streaming_input(&mut self) {
+        // Try to read without blocking
+        let mut buf = [0u8; 32];
+        match self.stdin.try_read(&mut buf) {
+            Ok(0) => {} // No data
+            Ok(n) => {
+                let bytes = &buf[..n];
+                // Check for ESC key (0x1B) to cancel streaming
+                if bytes.contains(&0x1B) {
+                    // Cancel active stream
+                    if let Some(ref stream) = self.active_stream {
+                        stream.buffer().cancel();
+                    }
+                    self.state = AppState::Ready;
+                    self.active_stream = None;
+                }
+            }
+            Err(_) => {} // Would block or error
         }
     }
 
@@ -720,6 +761,9 @@ impl<R: Read, W: Write> App<R, W> {
             content: "".to_string(),
         });
 
+        // Set state to streaming so poll_stream() will process it
+        self.state = AppState::Streaming;
+
         // Don't block! Return to main loop which will call poll_stream() on each tick
     }
 
@@ -765,8 +809,8 @@ impl<R: Read, W: Write> App<R, W> {
 
         // Check result to determine if we're done
         match result {
-            PollResult::Chunk => {
-                // More data expected, continue polling on next tick
+            PollResult::Chunk | PollResult::Pending => {
+                // More data expected (or pending), continue polling on next tick
             }
             PollResult::Complete => {
                 // Check for errors in the buffer

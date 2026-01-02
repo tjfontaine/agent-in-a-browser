@@ -85,7 +85,6 @@ export const monotonicClock = {
 
     subscribeDuration(duration) {
         const durationNanos = BigInt(duration);
-        console.log(`[monotonic-clock] subscribeDuration: ${durationNanos}ns (${Number(durationNanos) / 1e9}s)`);
         return new DurationPollable(durationNanos);
     }
 };

@@ -173,15 +173,21 @@ const stdoutStream = new CustomOutputStream({
     blockingFlush(): void { },
 });
 
-// Create stderr stream (also goes to terminal)
+// Create stderr stream (also goes to terminal AND console.log for debugging)
 const stderrStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
-        if (currentTerminal && contents.length > 0) {
+        if (contents.length > 0) {
             try {
                 const text = textDecoder.decode(contents);
-                // Skip empty writes - ghostty-web crashes on empty strings
+                // Skip empty writes
                 if (text.length > 0) {
-                    currentTerminal.write(text);
+                    // Log to browser console for debugging WASM output
+                    console.log('[WASM stderr]', text.trimEnd());
+
+                    // Also write to terminal if available
+                    if (currentTerminal) {
+                        currentTerminal.write(text);
+                    }
                 }
             } catch (e) {
                 console.error('[ghostty-shim] Terminal stderr write error:', e);

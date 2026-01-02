@@ -141,7 +141,7 @@ fn render_main_panel(
 /// Simplified render function that takes &App directly
 ///
 /// This is the preferred API for rendering the application UI.
-pub fn render_app<R: std::io::Read, W: std::io::Write>(
+pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
     frame: &mut Frame,
     app: &crate::app::App<R, W>,
 ) {

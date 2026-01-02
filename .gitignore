@@ -50,4 +50,4 @@ packages/wasm-vim/wasm/
 
 # Test results and reports
 frontend/test-results/
-frontend/playwright-report/
+frontend/playwright-report/runtime/vendor/

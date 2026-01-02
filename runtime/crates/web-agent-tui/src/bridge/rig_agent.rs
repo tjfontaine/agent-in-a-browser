@@ -3,7 +3,6 @@
 //! High-level agent abstraction using rig-core's Agent for multi-turn
 //! conversations with automatic tool calling.
 
-use futures::StreamExt;
 use rig::agent::Agent;
 use rig::completion::{Chat, Message as RigMessage, Prompt};
 use rig::streaming::StreamingPrompt;
@@ -156,6 +155,8 @@ impl Default for StreamingBuffer {
 pub enum PollResult {
     /// Got a chunk, more data expected
     Chunk,
+    /// No data available yet, still pending
+    Pending,
     /// Stream completed successfully
     Complete,
     /// Stream ended with an error
@@ -165,20 +166,44 @@ pub enum PollResult {
 /// Active streaming session that can be polled once per tick.
 /// This allows the TUI to render between stream chunks.
 pub struct ActiveStream {
-    /// The underlying stream (type-erased)
-    stream: ActiveStreamInner,
+    /// The underlying stream state
+    state: ActiveStreamState,
     /// Buffer to accumulate content
     buffer: StreamingBuffer,
 }
 
-/// Type-erased inner stream to handle different providers
-enum ActiveStreamInner {
-    Anthropic(
+/// State machine for stream lifecycle
+enum ActiveStreamState {
+    /// Still connecting to the API (polling the stream creation future)
+    ConnectingAnthropic(
+        std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                    Output = rig::agent::prompt_request::streaming::StreamingResult<
+                        super::wasi_completion_model::AnthropicStreamingResponse,
+                    >,
+                >,
+            >,
+        >,
+    ),
+    ConnectingOpenAI(
+        std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                    Output = rig::agent::prompt_request::streaming::StreamingResult<
+                        super::wasi_completion_model::OpenAIStreamingResponse,
+                    >,
+                >,
+            >,
+        >,
+    ),
+    /// Stream is ready, polling for chunks
+    StreamingAnthropic(
         rig::agent::prompt_request::streaming::StreamingResult<
             super::wasi_completion_model::AnthropicStreamingResponse,
         >,
     ),
-    OpenAI(
+    StreamingOpenAI(
         rig::agent::prompt_request::streaming::StreamingResult<
             super::wasi_completion_model::OpenAIStreamingResponse,
         >,
@@ -186,27 +211,26 @@ enum ActiveStreamInner {
 }
 
 impl ActiveStream {
-    /// Create a new ActiveStream from a RigAgent and message
+    /// Create a new ActiveStream from a RigAgent and message.
+    /// Returns immediately - actual connection happens during poll_once().
     pub fn start(agent: &RigAgent, message: &str) -> Self {
         use std::future::IntoFuture;
 
         let buffer = StreamingBuffer::new();
         let message = message.to_string();
 
-        let stream = match &agent.agent_type {
+        let state = match &agent.agent_type {
             AgentType::Anthropic(agent) => {
-                let stream =
-                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
-                ActiveStreamInner::Anthropic(stream)
+                let future = agent.stream_prompt(&message).multi_turn(5).into_future();
+                ActiveStreamState::ConnectingAnthropic(Box::pin(future))
             }
             AgentType::OpenAI(agent) => {
-                let stream =
-                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
-                ActiveStreamInner::OpenAI(stream)
+                let future = agent.stream_prompt(&message).multi_turn(5).into_future();
+                ActiveStreamState::ConnectingOpenAI(Box::pin(future))
             }
         };
 
-        ActiveStream { stream, buffer }
+        ActiveStream { state, buffer }
     }
 
     /// Get a clone of the buffer for reading content
@@ -220,6 +244,7 @@ impl ActiveStream {
         use futures::Stream;
         use rig::agent::MultiTurnStreamItem;
         use rig::streaming::StreamedAssistantContent;
+        use std::future::Future;
         use std::task::Poll;
 
         // Check if cancelled
@@ -251,41 +276,96 @@ impl ActiveStream {
             }
         }
 
-        // Poll and process based on provider type
-        match &mut self.stream {
-            ActiveStreamInner::Anthropic(stream) => match stream.as_mut().poll_next(&mut cx) {
-                Poll::Ready(Some(Ok(item))) => {
-                    process_item(item, &self.buffer);
-                    PollResult::Chunk
-                }
-                Poll::Ready(Some(Err(e))) => {
-                    self.buffer.set_error(e.to_string());
-                    self.buffer.set_complete();
-                    PollResult::Error(e.to_string())
-                }
-                Poll::Ready(None) => {
-                    self.buffer.set_complete();
-                    PollResult::Complete
-                }
-                Poll::Pending => PollResult::Chunk,
-            },
-            ActiveStreamInner::OpenAI(stream) => match stream.as_mut().poll_next(&mut cx) {
-                Poll::Ready(Some(Ok(item))) => {
-                    process_item(item, &self.buffer);
-                    PollResult::Chunk
-                }
-                Poll::Ready(Some(Err(e))) => {
-                    self.buffer.set_error(e.to_string());
-                    self.buffer.set_complete();
-                    PollResult::Error(e.to_string())
-                }
-                Poll::Ready(None) => {
-                    self.buffer.set_complete();
-                    PollResult::Complete
-                }
-                Poll::Pending => PollResult::Chunk,
-            },
+        // Handle state machine - first poll connection, then poll stream
+        // Use a placeholder for state transitions
+        enum Transition {
+            None,
+            ToStreamingAnthropic(
+                rig::agent::prompt_request::streaming::StreamingResult<
+                    super::wasi_completion_model::AnthropicStreamingResponse,
+                >,
+            ),
+            ToStreamingOpenAI(
+                rig::agent::prompt_request::streaming::StreamingResult<
+                    super::wasi_completion_model::OpenAIStreamingResponse,
+                >,
+            ),
         }
+
+        let (result, transition) = match &mut self.state {
+            ActiveStreamState::ConnectingAnthropic(future) => {
+                match future.as_mut().poll(&mut cx) {
+                    Poll::Ready(stream) => {
+                        // Connection complete, transition to streaming
+                        (
+                            PollResult::Pending,
+                            Transition::ToStreamingAnthropic(stream),
+                        )
+                    }
+                    Poll::Pending => (PollResult::Pending, Transition::None),
+                }
+            }
+            ActiveStreamState::ConnectingOpenAI(future) => {
+                match future.as_mut().poll(&mut cx) {
+                    Poll::Ready(stream) => {
+                        // Connection complete, transition to streaming
+                        (PollResult::Pending, Transition::ToStreamingOpenAI(stream))
+                    }
+                    Poll::Pending => (PollResult::Pending, Transition::None),
+                }
+            }
+            ActiveStreamState::StreamingAnthropic(stream) => {
+                let result = match stream.as_mut().poll_next(&mut cx) {
+                    Poll::Ready(Some(Ok(item))) => {
+                        process_item(item, &self.buffer);
+                        PollResult::Chunk
+                    }
+                    Poll::Ready(Some(Err(e))) => {
+                        self.buffer.set_error(e.to_string());
+                        self.buffer.set_complete();
+                        PollResult::Error(e.to_string())
+                    }
+                    Poll::Ready(None) => {
+                        self.buffer.set_complete();
+                        PollResult::Complete
+                    }
+                    Poll::Pending => PollResult::Pending,
+                };
+                (result, Transition::None)
+            }
+            ActiveStreamState::StreamingOpenAI(stream) => {
+                let result = match stream.as_mut().poll_next(&mut cx) {
+                    Poll::Ready(Some(Ok(item))) => {
+                        process_item(item, &self.buffer);
+                        PollResult::Chunk
+                    }
+                    Poll::Ready(Some(Err(e))) => {
+                        self.buffer.set_error(e.to_string());
+                        self.buffer.set_complete();
+                        PollResult::Error(e.to_string())
+                    }
+                    Poll::Ready(None) => {
+                        self.buffer.set_complete();
+                        PollResult::Complete
+                    }
+                    Poll::Pending => PollResult::Pending,
+                };
+                (result, Transition::None)
+            }
+        };
+
+        // Apply state transition if needed
+        match transition {
+            Transition::None => {}
+            Transition::ToStreamingAnthropic(stream) => {
+                self.state = ActiveStreamState::StreamingAnthropic(stream);
+            }
+            Transition::ToStreamingOpenAI(stream) => {
+                self.state = ActiveStreamState::StreamingOpenAI(stream);
+            }
+        }
+
+        result
     }
 }
 

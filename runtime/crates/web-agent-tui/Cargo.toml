@@ -10,12 +10,15 @@ crate-type = ["cdylib"]
 # TUI framework - no default features to avoid crossterm
 ratatui = { version = "0.30", default-features = false }
 
-# AI Agent framework (wasm feature for browser compatibility)
-rig-core = { version = "0.27", default-features = false, features = ["wasm"] }
+# AI Agent framework (wasip2 feature for WASI component model + wasm for relaxed Send bounds)
+rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
+    "wasip2",
+    "wasm",
+] }
 
-# WASM support
-wit-bindgen = "0.50"
-wit-bindgen-rt = "0.44"
+# WASM support with async features for streaming
+wit-bindgen = { version = "0.50", features = ["async", "async-spawn"] }
+wit-bindgen-rt = { version = "0.44", features = ["async"] }
 
 # Serialization for config and AI messages
 toml = "0.9"
@@ -25,10 +28,10 @@ serde_json = "1.0"
 # HTTP client abstractions for rig-core compatibility
 bytes = "1.5"
 http = "1.0"
-futures = { version = "0.3", default-features = false, features = ["alloc"] }
-
-# WASM async support for streaming
-wasm-bindgen-futures = "0.4"
+futures = { version = "0.3", default-features = false, features = [
+    "alloc",
+    "executor",
+] }
 
 
 [package.metadata.component]

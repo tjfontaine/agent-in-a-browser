@@ -3,25 +3,26 @@
 //! This widget composes all sub-widgets (Messages, Input, StatusBar, AuxPanel, Overlay)
 //! and handles the main layout.
 
+use crate::PollableRead;
 use ratatui::prelude::*;
-use std::io::{Read, Write};
+use std::io::Write;
 
 use crate::app::App;
 use crate::ui::panels::AuxPanelWidget;
 use crate::ui::{InputBoxWidget, MessagesWidget, StatusBarWidget};
 
 /// Widget wrapper for rendering the entire App UI
-pub struct AppWidget<'a, R: Read, W: Write> {
+pub struct AppWidget<'a, R: PollableRead, W: Write> {
     app: &'a App<R, W>,
 }
 
-impl<'a, R: Read, W: Write> AppWidget<'a, R, W> {
+impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
     pub fn new(app: &'a App<R, W>) -> Self {
         Self { app }
     }
 }
 
-impl<'a, R: Read, W: Write> Widget for AppWidget<'a, R, W> {
+impl<'a, R: PollableRead, W: Write> Widget for AppWidget<'a, R, W> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // Check if we have enough width for split layout (min 80 cols)
         let use_split = area.width >= 80;
@@ -66,7 +67,7 @@ impl<'a, R: Read, W: Write> Widget for AppWidget<'a, R, W> {
     }
 }
 
-impl<'a, R: Read, W: Write> AppWidget<'a, R, W> {
+impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
     fn render_main_panel(&self, area: Rect, buf: &mut Buffer) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)

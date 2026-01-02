@@ -36,6 +36,7 @@ const ASYNC_IMPORTS = [
     `wasi:io/streams@${V}#[method]output-stream.blocking-write-and-flush`,
     // Polling - required for HTTP response waiting
     `wasi:io/poll@${V}#[method]pollable.block`,
+    `wasi:io/poll@${V}#poll`,
     // Filesystem
     `wasi:filesystem/types@${V}#[method]descriptor.read`,
     `wasi:filesystem/types@${V}#[method]descriptor.write`,
@@ -64,6 +65,7 @@ const shims = (prefix) => ({
     'wasi:cli/*': `${prefix}/ghostty-cli-shim.js#*`,
     'wasi:clocks/*': `${prefix}/clocks-impl.js#*`,
     'wasi:filesystem/*': `${prefix}/opfs-filesystem-impl.js#*`,
+    'wasi:io/poll': `${prefix}/poll-impl.js`,
     'wasi:io/*': '@bytecodealliance/preview2-shim/io#*',
     'wasi:random/*': '@bytecodealliance/preview2-shim/random#*',
     'wasi:sockets/*': '@bytecodealliance/preview2-shim/sockets#*',
