@@ -707,21 +707,33 @@ impl<R: Read, W: Write> App<R, W> {
         // Get reference to agent
         let agent = self.rig_agent.as_ref().unwrap();
 
-        // Create a streaming buffer and an empty assistant message
+        // Use streaming with for_each_blocking for WASIP2 compatibility
+        // This uses JSPI suspension during blocking_read instead of block_on which deadlocks
+
+        // Create streaming buffer
         let buffer = StreamingBuffer::new();
         self.streaming_buffer = Some(buffer.clone());
 
-        // Add empty assistant message to be filled incrementally
+        // Add placeholder assistant message
         self.messages.push(Message {
             role: Role::Assistant,
-            content: String::new(),
+            content: "".to_string(),
         });
 
-        // Start async streaming (non-blocking)
-        agent.stream_prompt_with_buffer(message, buffer);
+        // Start streaming - this will block until complete but JSPI handles suspension
+        agent.stream_prompt_with_buffer(&message, buffer.clone());
 
-        // Transition to streaming state - the main loop will poll the buffer
-        self.state = AppState::Streaming;
+        // Streaming completed - update final message
+        let final_content = buffer.get_content();
+
+        if let Some(last_msg) = self.messages.last_mut() {
+            if last_msg.role == Role::Assistant {
+                last_msg.content = final_content;
+            }
+        }
+
+        self.streaming_buffer = None;
+        self.state = AppState::Ready;
     }
 
     /// Poll the streaming buffer and update the assistant message
