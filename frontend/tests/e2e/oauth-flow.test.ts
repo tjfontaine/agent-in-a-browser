@@ -8,7 +8,7 @@
  * - Token exchange with mocked auth server
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('OAuth Infrastructure', () => {
     test.beforeEach(async ({ page }) => {
@@ -22,8 +22,7 @@ test.describe('OAuth Infrastructure', () => {
     test('OAuth handler is registered on window', async ({ page }) => {
         // Verify the global OAuth handler was registered
         const hasHandler = await page.evaluate(() => {
-            // @ts-expect-error - __mcpOAuthHandler is set by oauth-handler.ts
-            return typeof window.__mcpOAuthHandler === 'function';
+            return typeof (window as unknown as { __mcpOAuthHandler?: unknown }).__mcpOAuthHandler === 'function';
         });
         expect(hasHandler).toBe(true);
     });
@@ -32,8 +31,7 @@ test.describe('OAuth Infrastructure', () => {
         // We can't actually open a popup in headless mode, but we can verify
         // the handler function exists and has the right signature
         const handlerInfo = await page.evaluate(() => {
-            // @ts-expect-error - __mcpOAuthHandler is set by oauth-handler.ts
-            const handler = window.__mcpOAuthHandler;
+            const handler = (window as unknown as { __mcpOAuthHandler?: (...args: unknown[]) => unknown }).__mcpOAuthHandler;
             if (!handler) return null;
             return {
                 name: handler.name,
@@ -78,7 +76,7 @@ test.describe('OAuth Infrastructure', () => {
 });
 
 test.describe('OAuth Popup Message Passing', () => {
-    test('OAuth callback sends message to opener', async ({ page, context }) => {
+    test('OAuth callback sends message to opener', async ({ page }) => {
         // First, navigate to main page
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
@@ -134,8 +132,7 @@ test.describe('OAuth WASI HTTP Interception', () => {
     test('__oauth_popup__ requests are intercepted', async ({ page }) => {
         // Mock the OAuth handler to immediately return a code
         await page.evaluate(() => {
-            // @ts-expect-error - Replace handler with mock
-            window.__mcpOAuthHandler = async (
+            (window as unknown as { __mcpOAuthHandler: unknown }).__mcpOAuthHandler = async (
                 authUrl: string,
                 _serverId: string,
                 _serverUrl: string,
@@ -152,8 +149,7 @@ test.describe('OAuth WASI HTTP Interception', () => {
         // This is tricky because we need to trigger it from WASM...
         // For now, let's just verify the handler replacement worked
         const handlerName = await page.evaluate(() => {
-            // @ts-expect-error - __mcpOAuthHandler is set
-            return window.__mcpOAuthHandler?.toString().includes('Mock OAuth handler');
+            return ((window as unknown as { __mcpOAuthHandler?: () => void }).__mcpOAuthHandler)?.toString().includes('Mock OAuth handler');
         });
 
         // Our mock handler should be in place
