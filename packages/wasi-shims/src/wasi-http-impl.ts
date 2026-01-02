@@ -908,18 +908,11 @@ export const outgoingHandler = {
             const fetchPromise = (async (): Promise<StreamingResponse> => {
                 const response = await fetch(url, fetchOptions);
 
-                console.log('[http] Fetch complete, status:', response.status, 'headers:', response.headers);
-
                 // Extract response headers
                 const responseHeaders: [string, Uint8Array][] = [];
                 response.headers.forEach((value, name) => {
                     responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
                 });
-
-                console.log('[http] Response headers count:', responseHeaders.length);
-                for (const [name, value] of responseHeaders) {
-                    console.log('[http]   ', name, ':', new TextDecoder().decode(value));
-                }
 
                 // Get body stream for lazy reading
                 const bodyStream = response.body

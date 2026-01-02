@@ -226,7 +226,6 @@ impl WasiHttpClient {
                 }
             }
         }
-        eprintln!("[WasiHttpClient] Response headers: {:?}", headers.len());
 
         // Get stream
         let incoming_body = response_result
