@@ -169,6 +169,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
         // Auto-connect all predefined MCP servers
         self.auto_connect_servers();
+
+        // Initialize sandbox MCP (local tools)
+        self.init_sandbox_mcp();
+
         self.render(); // Re-render to show connection results
 
         // Main loop: input then render
@@ -1722,6 +1726,29 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 role: Role::System,
                 content: format!("MCP servers: {} connected, {} failed", connected, failed),
             });
+        }
+    }
+
+    /// Initialize sandbox MCP connection at startup
+    /// This connects to the local sandbox MCP and fetches available tools
+    fn init_sandbox_mcp(&mut self) {
+        match self.mcp_client.list_tools() {
+            Ok(tools) => {
+                self.server_status.local_connected = true;
+                self.server_status.local_tool_count = tools.len();
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("Sandbox MCP connected: {} tools available", tools.len()),
+                });
+            }
+            Err(e) => {
+                self.server_status.local_connected = false;
+                self.server_status.local_tool_count = 0;
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: format!("Sandbox MCP connection failed: {}", e),
+                });
+            }
         }
     }
 
