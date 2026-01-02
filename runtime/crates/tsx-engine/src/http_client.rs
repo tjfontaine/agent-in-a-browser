@@ -21,7 +21,7 @@ impl FetchResponse {
     pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.bytes.clone())
     }
-    
+
     /// Get body as string, using lossy conversion for non-UTF8
     pub fn text_lossy(&self) -> String {
         String::from_utf8_lossy(&self.bytes).to_string()
@@ -66,17 +66,19 @@ fn read_body_bytes(
 
     let mut bytes = Vec::new();
     loop {
-        let pollable = stream.subscribe();
-        pollable.block();
-        
-        match stream.read(65536) {
+        // Use blocking_read for JSPI suspension - this will suspend until data is available
+        match stream.blocking_read(65536) {
             Ok(chunk) => {
                 if chunk.is_empty() {
+                    // Empty chunk after blocking_read means stream ended
                     break;
                 }
                 bytes.extend(chunk);
             }
-            Err(_) => break,
+            Err(_) => {
+                // Stream closed or error - we're done reading
+                break;
+            }
         }
     }
 
@@ -106,28 +108,40 @@ pub fn fetch(
 
     // Build request
     let request = OutgoingRequest::new(header_fields);
-    request.set_method(&method).map_err(|_| "Failed to set method")?;
-    request.set_scheme(Some(&scheme)).map_err(|_| "Failed to set scheme")?;
-    request.set_authority(Some(&authority)).map_err(|_| "Failed to set authority")?;
-    request.set_path_with_query(Some(&path)).map_err(|_| "Failed to set path")?;
+    request
+        .set_method(&method)
+        .map_err(|_| "Failed to set method")?;
+    request
+        .set_scheme(Some(&scheme))
+        .map_err(|_| "Failed to set scheme")?;
+    request
+        .set_authority(Some(&authority))
+        .map_err(|_| "Failed to set authority")?;
+    request
+        .set_path_with_query(Some(&path))
+        .map_err(|_| "Failed to set path")?;
 
     // Write body if provided
     if let Some(body_bytes) = body {
         let outgoing_body = request.body().map_err(|_| "Failed to get outgoing body")?;
-        let stream = outgoing_body.write().map_err(|_| "Failed to get write stream")?;
-        
+        let stream = outgoing_body
+            .write()
+            .map_err(|_| "Failed to get write stream")?;
+
         let mut offset = 0;
         while offset < body_bytes.len() {
             let chunk_size = std::cmp::min(65536, body_bytes.len() - offset);
             let chunk = &body_bytes[offset..offset + chunk_size];
-            
+
             let pollable = stream.subscribe();
             pollable.block();
-            
-            stream.write(chunk).map_err(|_| "Failed to write body chunk")?;
+
+            stream
+                .write(chunk)
+                .map_err(|_| "Failed to write body chunk")?;
             offset += chunk_size;
         }
-        
+
         drop(stream);
         crate::bindings::wasi::http::types::OutgoingBody::finish(outgoing_body, None)
             .map_err(|_| "Failed to finish body")?;
@@ -137,16 +151,23 @@ pub fn fetch(
     let future_response = outgoing_handler::handle(request, None)
         .map_err(|e| format!("HTTP request failed: {:?}", e))?;
 
-    // Wait for response
+    // Wait for response - use block() to allow JSPI suspension
     loop {
+        // Subscribe to the future and block until ready
+        let pollable = future_response.subscribe();
+        pollable.block();
+
         if let Some(result) = future_response.get() {
-            let response = result.map_err(|_| "Response error")?
-                                 .map_err(|e| format!("HTTP error: {:?}", e))?;
+            let response = result
+                .map_err(|_| "Response error")?
+                .map_err(|e| format!("HTTP error: {:?}", e))?;
 
             let status = response.status();
             let ok = status >= 200 && status < 300;
 
-            let body_handle = response.consume().map_err(|_| "Failed to consume response body")?;
+            let body_handle = response
+                .consume()
+                .map_err(|_| "Failed to consume response body")?;
             let bytes = read_body_bytes(body_handle)?;
 
             return Ok(FetchResponse { status, ok, bytes });
@@ -177,7 +198,10 @@ pub fn fetch_request(
     // Parse JSON headers
     let mut header_vec = Vec::new();
     if let Some(headers_str) = headers_json {
-        for pair in headers_str.trim_matches(|c| c == '{' || c == '}').split(',') {
+        for pair in headers_str
+            .trim_matches(|c| c == '{' || c == '}')
+            .split(',')
+        {
             let parts: Vec<&str> = pair.splitn(2, ':').collect();
             if parts.len() == 2 {
                 let key = parts[0].trim().trim_matches('"');
@@ -189,10 +213,5 @@ pub fn fetch_request(
         }
     }
 
-    fetch(
-        method_enum,
-        url,
-        &header_vec,
-        body.map(|s| s.as_bytes()),
-    )
+    fetch(method_enum, url, &header_vec, body.map(|s| s.as_bytes()))
 }

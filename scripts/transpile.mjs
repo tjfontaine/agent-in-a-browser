@@ -66,6 +66,7 @@ const shims = (prefix) => ({
     'wasi:clocks/*': `${prefix}/clocks-impl.js#*`,
     'wasi:filesystem/*': `${prefix}/opfs-filesystem-impl.js#*`,
     'wasi:io/poll': `${prefix}/poll-impl.js`,
+    'wasi:io/streams': `${prefix}/streams.js`,
     'wasi:io/*': '@bytecodealliance/preview2-shim/io#*',
     'wasi:random/*': '@bytecodealliance/preview2-shim/random#*',
     'wasi:sockets/*': '@bytecodealliance/preview2-shim/sockets#*',
