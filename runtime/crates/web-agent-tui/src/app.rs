@@ -1146,27 +1146,38 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     0x0D => {
                         // Enter - handle selection
                         if *selected == 0 {
-                            // Refresh from API - show message about static list
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: "Using static model list. Select a model below."
-                                    .to_string(),
-                            });
+                            // Refresh from API - extract data first
+                            let provider_id = provider.clone();
+                            // Need to handle refresh outside of this match
+                            self.handle_model_refresh(&provider_id);
                         } else {
                             // Select a model (index - 1 because of refresh option)
                             let model_idx = *selected - 1;
-                            let static_models =
-                                crate::ui::server_manager::get_models_for_provider(provider);
 
-                            if let Some((id, name)) = static_models.get(model_idx) {
-                                // Update the model
-                                self.set_model(id);
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!("Model changed to: {} ({})", name, id),
-                                });
-                                self.overlay = None;
-                            }
+                            // Use fetched models if available, otherwise static
+                            let (model_id, model_name) = if let Some(models) = fetched_models {
+                                if let Some((id, name)) = models.get(model_idx) {
+                                    (id.clone(), name.clone())
+                                } else {
+                                    return;
+                                }
+                            } else {
+                                let static_models =
+                                    crate::ui::server_manager::get_models_for_provider(provider);
+                                if let Some((id, name)) = static_models.get(model_idx) {
+                                    (id.to_string(), name.to_string())
+                                } else {
+                                    return;
+                                }
+                            };
+
+                            // Update the model
+                            self.set_model(&model_id);
+                            self.messages.push(Message {
+                                role: Role::System,
+                                content: format!("Model changed to: {} ({})", model_name, model_id),
+                            });
+                            self.overlay = None;
                         }
                     }
                     _ => {}
@@ -1421,6 +1432,58 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                 }
             }
+        }
+    }
+
+    // === Model Refresh Methods ===
+
+    /// Handle refreshing the model list from the provider API
+    fn handle_model_refresh(&mut self, provider_id: &str) {
+        use crate::bridge::models_api::fetch_models_for_provider;
+
+        let api_key = self.get_api_key().map(|s| s.to_string());
+        let base_url = self.get_base_url().map(|s| s.to_string());
+
+        if let Some(key) = api_key {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Fetching models from API...".to_string(),
+            });
+
+            match fetch_models_for_provider(provider_id, &key, base_url.as_deref()) {
+                Ok(models) => {
+                    let model_names: Vec<(String, String)> =
+                        models.into_iter().map(|m| (m.id, m.name)).collect();
+                    let count = model_names.len();
+
+                    // Update overlay with fetched models
+                    if let Some(Overlay::ModelSelector {
+                        selected,
+                        fetched_models,
+                        ..
+                    }) = &mut self.overlay
+                    {
+                        *fetched_models = Some(model_names);
+                        *selected = 1; // Move to first model
+                    }
+
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Loaded {} models from API.", count),
+                    });
+                }
+                Err(e) => {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Failed to fetch models: {}. Using static list.", e),
+                    });
+                }
+            }
+        } else {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "No API key set. Using static model list.".to_string(),
+            });
         }
     }
 

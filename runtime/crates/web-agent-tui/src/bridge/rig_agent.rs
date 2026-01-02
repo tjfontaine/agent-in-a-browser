@@ -582,7 +582,7 @@ impl RigAgent {
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        Self::anthropic(api_key, "claude-haiku-4-5-20251001", preamble, mcp_client)
+        Self::anthropic(api_key, "claude-haiku-4-5-20251015", preamble, mcp_client)
     }
 
     /// Simple prompt (no history, non-streaming)

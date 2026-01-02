@@ -120,7 +120,7 @@ pub const API_FORMATS: &[(&str, &str, &str, &str)] = &[
         "anthropic",
         "Anthropic (Claude)",
         "https://api.anthropic.com/v1",
-        "claude-haiku-4-5-20251001", // Claude Haiku 4.5
+        "claude-haiku-4-5-20251015", // Claude Haiku 4.5
     ),
     (
         "google",
@@ -569,32 +569,60 @@ pub fn render_overlay(
 }
 
 /// Model options for each provider (static fallback when API refresh not used)
+/// Updated January 2026 with latest available models
 pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static str)> {
     match provider {
         "anthropic" => vec![
-            ("claude-haiku-4-5-20251001", "Claude Haiku 4.5 (Fast)"),
-            ("claude-sonnet-4-20250514", "Claude Sonnet 4"),
-            ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet"),
-            ("claude-3-opus-20240229", "Claude 3 Opus"),
+            // Claude 4 series (latest as of late 2025)
+            (
+                "claude-haiku-4-5-20251015",
+                "Claude Haiku 4.5 (Fast, Default)",
+            ),
+            ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
+            (
+                "claude-opus-4-5-20251124",
+                "Claude Opus 4.5 (Most Powerful)",
+            ),
+            ("claude-opus-4-1-20250805", "Claude Opus 4.1"),
+            ("claude-sonnet-4-20250522", "Claude Sonnet 4"),
+            // Claude 3 series (legacy)
+            ("claude-3-7-sonnet-20250224", "Claude 3.7 Sonnet"),
         ],
         "openai" => vec![
-            ("codex-mini-latest", "Codex Mini (Coding)"),
-            ("o3-mini", "o3 Mini (Reasoning)"),
+            // GPT-5 series (latest as of late 2025)
+            ("gpt-5.2", "GPT-5.2 (Latest)"),
+            ("gpt-5.1", "GPT-5.1"),
+            ("gpt-5", "GPT-5"),
+            // o-series reasoning models
+            ("o4-mini", "o4-mini (Fast Reasoning)"),
+            ("o3-pro", "o3-pro (Deep Reasoning)"),
+            ("o3", "o3 (Reasoning)"),
+            // GPT-4 series
+            ("gpt-4.1", "GPT-4.1 (Coding)"),
             ("gpt-4o", "GPT-4o"),
             ("gpt-4o-mini", "GPT-4o Mini (Fast)"),
-            ("o1", "o1 (Reasoning)"),
+            // Specialized
+            ("codex-max", "Codex-Max (Software Dev)"),
         ],
         "google" | "gemini" => vec![
-            ("gemini-3-flash-preview", "Gemini 3 Flash"),
+            // Gemini 3 series (latest as of late 2025)
+            ("gemini-3-pro", "Gemini 3 Pro (Most Powerful)"),
+            ("gemini-3-flash", "Gemini 3 Flash (Fast)"),
+            ("gemini-3-deep-think", "Gemini 3 Deep Think (Complex)"),
+            // Gemini 2.5 series
+            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
             ("gemini-2.5-flash", "Gemini 2.5 Flash"),
             ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite (Fastest)"),
+            // Gemini 2.0 series
             ("gemini-2.0-flash", "Gemini 2.0 Flash"),
         ],
         "openrouter" => vec![
             ("anthropic/claude-haiku-4-5", "Claude Haiku 4.5"),
-            ("anthropic/claude-sonnet-4", "Claude Sonnet 4"),
-            ("openai/gpt-4o", "GPT-4o"),
-            ("google/gemini-2.5-flash", "Gemini 2.5 Flash"),
+            ("anthropic/claude-sonnet-4-5", "Claude Sonnet 4.5"),
+            ("anthropic/claude-opus-4-5", "Claude Opus 4.5"),
+            ("openai/gpt-5.2", "GPT-5.2"),
+            ("openai/o4-mini", "o4-mini"),
+            ("google/gemini-3-flash", "Gemini 3 Flash"),
         ],
         _ => vec![],
     }

@@ -6,6 +6,7 @@
 pub mod http_client;
 pub mod local_tools;
 pub mod mcp_client;
+pub mod models_api;
 pub mod oauth_client;
 pub mod remote_mcp_client;
 pub mod rig_agent;

@@ -68,7 +68,7 @@ impl WasiAnthropicModel {
 
     /// Create with Claude Haiku (fast, cheap)
     pub fn haiku(api_key: &str) -> Result<Self, rig::http_client::Error> {
-        Self::new(api_key, "claude-haiku-4-5-20251001")
+        Self::new(api_key, "claude-haiku-4-5-20251015")
     }
 
     /// Create with Claude Sonnet (balanced)
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_anthropic_max_tokens() {
         assert_eq!(
-            WasiAnthropicModel::calculate_max_tokens("claude-haiku-4-5-20251001"),
+            WasiAnthropicModel::calculate_max_tokens("claude-haiku-4-5-20251015"),
             8_192
         );
         assert_eq!(

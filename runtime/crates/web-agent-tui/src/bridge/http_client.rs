@@ -310,6 +310,30 @@ impl HttpClient {
 
         Self::request_streaming("POST", url, &headers, Some(json_body.as_bytes()))
     }
+
+    /// Make a GET request with optional authorization (for fetching JSON APIs)
+    pub fn get_json(url: &str, api_key: Option<&str>) -> Result<HttpResponse, HttpError> {
+        let mut headers = vec![("Accept", "application/json")];
+
+        let auth_header;
+        if let Some(key) = api_key {
+            auth_header = format!("Bearer {}", key);
+            headers.push(("Authorization", &auth_header));
+        }
+
+        Self::request("GET", url, &headers, None)
+    }
+
+    /// Make a GET request with custom headers (for Anthropic which uses x-api-key)
+    pub fn get_json_with_headers(
+        url: &str,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<HttpResponse, HttpError> {
+        let mut headers = vec![("Accept", "application/json")];
+        headers.extend_from_slice(extra_headers);
+
+        Self::request("GET", url, &headers, None)
+    }
 }
 
 /// Parse URL into (scheme, authority, path)
