@@ -25,21 +25,24 @@ const ALLOWED_ORIGINS = [
     'http://localhost:3000',  // Vite dev server
     'http://localhost:4173',  // Vite preview server
 ];
-
 /**
  * Check if an origin is allowed to use the proxy
- * Also allows null origin from same-origin Web Worker contexts
+ * For null origins (from Web Workers), requires a custom header for security
  */
-function isAllowedOrigin(origin, requestUrl) {
-    // Allow null origin from Web Workers (same-origin requests)
-    // When a fetch comes from a Worker blob, origin may be null but it's still same-origin
-    if (!origin || origin === 'null') {
-        // For null origins, check if the request is coming to our domain
-        // This is a same-origin request from a Web Worker
-        const url = new URL(requestUrl);
-        return url.hostname === 'agent.edge-agent.dev';
+function isAllowedOrigin(origin, request) {
+    // Allow explicitly listed origins
+    if (origin && ALLOWED_ORIGINS.includes(origin)) {
+        return true;
     }
-    return ALLOWED_ORIGINS.includes(origin);
+
+    // For null/missing origins (Web Workers), require our custom header
+    // This prevents abuse while allowing our own Workers to use the proxy
+    if (!origin || origin === 'null') {
+        const agentHeader = request.headers.get('X-Agent-Proxy');
+        return agentHeader === 'web-agent';
+    }
+
+    return false;
 }
 
 /**
@@ -50,7 +53,7 @@ async function handleCorsProxy(request) {
     const origin = request.headers.get('Origin');
 
     // Validate origin - only allow requests from our own domains
-    if (!isAllowedOrigin(origin, request.url)) {
+    if (!isAllowedOrigin(origin, request)) {
         return new Response('Origin not allowed', { status: 403 });
     }
 

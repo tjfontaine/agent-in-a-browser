@@ -993,7 +993,8 @@ export const outgoingHandler = {
         if (schemeStr === 'https') {
             // Check if this URL should go through the CORS proxy
             let fetchUrl = url;
-            if (shouldProxyViaCors(url)) {
+            const isProxied = shouldProxyViaCors(url);
+            if (isProxied) {
                 fetchUrl = getCorsProxyUrl(url);
                 console.log('[http] Routing through CORS proxy:', method, url, '->', fetchUrl);
             } else {
@@ -1001,13 +1002,20 @@ export const outgoingHandler = {
             }
 
             // Build fetch options
+            const filteredHeaders = Object.fromEntries(
+                Object.entries(headers).filter(([name]) =>
+                    name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host'
+                )
+            );
+
+            // Add proxy auth header for CORS proxy requests (required for Web Worker context)
+            if (isProxied) {
+                filteredHeaders['X-Agent-Proxy'] = 'web-agent';
+            }
+
             const fetchOptions: RequestInit = {
                 method,
-                headers: Object.fromEntries(
-                    Object.entries(headers).filter(([name]) =>
-                        name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host'
-                    )
-                ),
+                headers: filteredHeaders,
             };
 
             if (body && body.length > 0) {
