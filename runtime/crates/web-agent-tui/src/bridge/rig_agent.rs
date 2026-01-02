@@ -3,20 +3,60 @@
 //! High-level agent abstraction using rig-core's Agent for multi-turn
 //! conversations with automatic tool calling.
 
-use futures::executor::block_on;
 use futures::StreamExt;
 use rig::agent::Agent;
 use rig::completion::{Chat, Message as RigMessage, Prompt};
 use rig::streaming::StreamingPrompt;
 use rig::tool::server::ToolServer;
-use rig::tool::ToolSet;
-use std::future::IntoFuture;
+use std::future::{Future, IntoFuture};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 
 use super::mcp_client::McpClient;
-use super::rig_tools::{LocalToolAdapter, McpToolAdapter};
 use super::wasi_completion_model::{WasiAnthropicModel, WasiOpenAIModel};
+
+/// WASIP2-compatible block_on implementation.
+///
+/// Unlike `futures::executor::block_on`, this doesn't use thread parking
+/// which fails in WASM. Instead, it polls with a noop waker and relies on
+/// JSPI to suspend the WASM stack during blocking operations.
+///
+/// IMPORTANT: This only works in WASIP2/JSPI environments where blocking
+/// WASI calls (like poll.block() and blocking_read) suspend the stack.
+fn wasm_block_on<F: Future>(mut future: F) -> F::Output {
+    use futures::task::noop_waker;
+
+    let waker = noop_waker();
+    let mut cx = Context::from_waker(&waker);
+
+    // SAFETY: We're pinning a local future that won't be moved
+    let mut future = unsafe { Pin::new_unchecked(&mut future) };
+
+    let mut pending_count = 0u32;
+    loop {
+        match future.as_mut().poll(&mut cx) {
+            Poll::Ready(result) => return result,
+            Poll::Pending => {
+                pending_count += 1;
+                if pending_count > 50 {
+                    panic!(
+                        "[wasm_block_on] DEADLOCK DETECTED: future returned Pending {} times. \
+                         This indicates an await point that cannot be resolved without a working waker. \
+                         Check for tokio::sync primitives or other async mechanisms that require an executor.",
+                        pending_count
+                    );
+                }
+                // In WASIP2/JSPI, blocking WASI calls inside the future will
+                // suspend the WASM stack. When they return, we continue polling.
+                // If we get Pending without a blocking call, we need to yield.
+                // Use a short sleep to avoid busy-spinning.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    }
+}
 
 /// Shared buffer for streaming content
 ///
@@ -169,36 +209,18 @@ enum AgentType {
     OpenAI(Agent<WasiOpenAIModel>),
 }
 
-/// Build a ToolSet with all our tools
-fn build_tool_set(mcp_client: &McpClient) -> Result<ToolSet, String> {
-    let mut tool_set = ToolSet::default();
-
-    // Add MCP tools to the toolset
-    for tool in McpToolAdapter::from_mcp_client(mcp_client)? {
-        tool_set.add_tool(tool);
-    }
-
-    // Add local tools to the toolset
-    for tool in LocalToolAdapter::all_local_tools() {
-        tool_set.add_tool(tool);
-    }
-
-    Ok(tool_set)
-}
-
 /// Build the tool server handle with our tools
+///
+/// Uses rig_tools::build_tool_set to create ToolDyn adapters, then adds them
+/// before calling run() - this avoids block_on deadlock.
 fn build_tool_server(
     mcp_client: &McpClient,
 ) -> Result<rig::tool::server::ToolServerHandle, String> {
-    let tool_set = build_tool_set(mcp_client)?;
+    let tool_set = super::rig_tools::build_tool_set(mcp_client)?;
 
-    // Start the tool server (this spawns the background task)
-    let handle = ToolServer::new().run();
-
-    // Add our toolset to the running server asynchronously
-    // Using block_on since we're in sync context (WASI/JSPI handles this)
-    block_on(handle.append_toolset(tool_set))
-        .map_err(|e| format!("Failed to add tools to server: {}", e))?;
+    // Add tools BEFORE run() to avoid block_on deadlock
+    // (run() spawns a background task that would deadlock with block_on)
+    let handle = ToolServer::new().add_tools(tool_set).run();
 
     Ok(handle)
 }
@@ -341,8 +363,8 @@ impl RigAgent {
     /// This uses JSPI to bridge async to sync execution.
     pub fn prompt(&self, message: &str) -> Result<String, RigAgentError> {
         let result = match &self.agent_type {
-            AgentType::Anthropic(agent) => block_on(agent.prompt(message).into_future()),
-            AgentType::OpenAI(agent) => block_on(agent.prompt(message).into_future()),
+            AgentType::Anthropic(agent) => wasm_block_on(agent.prompt(message).into_future()),
+            AgentType::OpenAI(agent) => wasm_block_on(agent.prompt(message).into_future()),
         };
 
         result.map_err(|e| RigAgentError::Completion(e.to_string()))
@@ -358,10 +380,10 @@ impl RigAgent {
     ) -> Result<String, RigAgentError> {
         let result = match &self.agent_type {
             AgentType::Anthropic(agent) => {
-                block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
             }
             AgentType::OpenAI(agent) => {
-                block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
             }
         };
 
@@ -381,8 +403,8 @@ impl RigAgent {
             .collect();
 
         let result = match &self.agent_type {
-            AgentType::Anthropic(agent) => block_on(agent.chat(prompt, rig_history)),
-            AgentType::OpenAI(agent) => block_on(agent.chat(prompt, rig_history)),
+            AgentType::Anthropic(agent) => wasm_block_on(agent.chat(prompt, rig_history)),
+            AgentType::OpenAI(agent) => wasm_block_on(agent.chat(prompt, rig_history)),
         };
 
         result.map_err(|e| RigAgentError::Completion(e.to_string()))
@@ -393,90 +415,98 @@ impl RigAgent {
         &self.mcp_client
     }
 
-    /// Start streaming a prompt response
+    /// Start streaming a prompt response using rig's for_each_blocking
     ///
-    /// This spawns an async task to process the stream and writes chunks
-    /// to the provided StreamingBuffer. The caller should poll the buffer
-    /// for new content during their render loop.
-    ///
-    /// Returns immediately - the streaming happens in the background.
+    /// This uses rig-core's WASIP2 blocking iteration which suspends via JSPI
+    /// on each HTTP read, keeping the UI responsive.
     pub fn stream_prompt_with_buffer(&self, message: &str, buffer: StreamingBuffer) {
-        let message = message.to_string();
-
-        // Clone agent for the async block
-        match &self.agent_type {
-            AgentType::Anthropic(agent) => {
-                let agent = agent.clone();
-                let buffer = buffer.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    Self::run_stream_anthropic(agent, message, buffer).await;
-                });
-            }
-            AgentType::OpenAI(agent) => {
-                let agent = agent.clone();
-                let buffer = buffer.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    Self::run_stream_openai(agent, message, buffer).await;
-                });
-            }
-        }
-    }
-
-    /// Internal: Run the Anthropic streaming loop
-    async fn run_stream_anthropic(
-        agent: Agent<WasiAnthropicModel>,
-        message: String,
-        buffer: StreamingBuffer,
-    ) {
+        use rig::agent::prompt_request::streaming::for_each_blocking;
         use rig::agent::MultiTurnStreamItem;
         use rig::streaming::StreamedAssistantContent;
+        use std::future::IntoFuture;
 
-        // Use multi_turn(5) to enable tool execution during streaming
-        let mut stream = agent.stream_prompt(&message).multi_turn(5).await;
+        let message = message.to_string();
 
-        while let Some(result) = stream.next().await {
-            // Check for cancellation
-            if buffer.is_cancelled() {
-                break;
-            }
+        match &self.agent_type {
+            AgentType::Anthropic(agent) => {
+                let stream_result =
+                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
 
-            match result {
-                Ok(item) => {
+                let mut stream = stream_result;
+
+                // Use rig's for_each_blocking for WASIP2-compatible iteration
+                let result = for_each_blocking(&mut stream, |item| {
+                    // Check for cancellation on each chunk
+                    if buffer.is_cancelled() {
+                        return;
+                    }
+
                     match item {
-                        MultiTurnStreamItem::StreamAssistantItem(content) => {
-                            match content {
-                                StreamedAssistantContent::Text(text) => {
-                                    // Clear tool activity when text arrives
-                                    buffer.set_tool_activity(None);
-                                    buffer.append(text.text.as_str());
-                                }
-                                StreamedAssistantContent::ToolCall(tool_call) => {
-                                    // Show tool is being called
-                                    let tool_name = tool_call.function.name.clone();
-                                    buffer.set_tool_activity(Some(format!(
-                                        "🔧 Calling {}...",
-                                        tool_name
-                                    )));
-                                }
-                                _ => {
-                                    // ToolCallDelta, Reasoning, etc.
-                                }
+                        MultiTurnStreamItem::StreamAssistantItem(content) => match content {
+                            StreamedAssistantContent::Text(text) => {
+                                buffer.set_tool_activity(None);
+                                buffer.append(&text.text);
                             }
-                        }
+                            StreamedAssistantContent::ToolCall(tool_call) => {
+                                let tool_name = tool_call.function.name.clone();
+                                buffer.set_tool_activity(Some(format!(
+                                    "🔧 Calling {}...",
+                                    tool_name
+                                )));
+                            }
+                            _ => {}
+                        },
                         _ => {
-                            // Turn completed - clear tool activity
                             buffer.set_tool_activity(None);
                         }
                     }
-                }
-                Err(e) => {
+                });
+
+                if let Err(e) = result {
                     buffer.set_error(e.to_string());
-                    return;
+                } else {
+                    buffer.set_complete();
+                }
+            }
+            AgentType::OpenAI(agent) => {
+                // Get the stream (block_on for the initial await)
+                let stream_result =
+                    wasm_block_on(agent.stream_prompt(&message).multi_turn(5).into_future());
+                let mut stream = stream_result;
+
+                let result = for_each_blocking(&mut stream, |item| {
+                    if buffer.is_cancelled() {
+                        return;
+                    }
+
+                    match item {
+                        MultiTurnStreamItem::StreamAssistantItem(content) => match content {
+                            StreamedAssistantContent::Text(text) => {
+                                buffer.set_tool_activity(None);
+                                buffer.append(&text.text);
+                            }
+                            StreamedAssistantContent::ToolCall(tool_call) => {
+                                let tool_name = tool_call.function.name.clone();
+                                buffer.set_tool_activity(Some(format!(
+                                    "🔧 Calling {}...",
+                                    tool_name
+                                )));
+                            }
+                            _ => {}
+                        },
+                        _ => {
+                            buffer.set_tool_activity(None);
+                        }
+                    }
+                });
+
+                if let Err(e) = result {
+                    buffer.set_error(e.to_string());
+                } else {
+                    buffer.set_complete();
                 }
             }
         }
-
-        buffer.set_complete();
     }
 
     /// Internal: Run the OpenAI streaming loop
