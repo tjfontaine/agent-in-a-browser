@@ -29,5 +29,5 @@ pub use rig_client::{
 };
 pub use rig_tools::{build_tool_set, LocalToolAdapter, McpToolAdapter};
 pub use system_prompt::{get_system_message, SystemMessage};
-pub use wasi_completion_model::{WasiAnthropicModel, WasiOpenAIModel};
+pub use wasi_completion_model::{AnthropicModel, GeminiModel, OpenAIModel};
 pub use wasi_http_adapter::WasiHttpClient;

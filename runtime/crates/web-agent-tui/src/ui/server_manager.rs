@@ -712,6 +712,11 @@ pub const PROVIDERS: &[(&str, &str, Option<&str>)] = &[
         Some("https://api.anthropic.com/v1"),
     ),
     ("openai", "OpenAI (GPT)", Some("https://api.openai.com/v1")),
+    (
+        "gemini",
+        "Google (Gemini)",
+        Some("https://generativelanguage.googleapis.com"),
+    ),
     ("custom", "Custom (OpenAI-compatible)", None),
 ];
 

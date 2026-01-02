@@ -14,7 +14,10 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use super::mcp_client::McpClient;
-use super::wasi_completion_model::{WasiAnthropicModel, WasiOpenAIModel};
+use super::wasi_completion_model::{
+    create_anthropic_client, create_gemini_client, create_openai_client, AnthropicModel,
+    GeminiModel, OpenAIModel,
+};
 
 /// WASIP2-compatible block_on implementation.
 ///
@@ -172,42 +175,57 @@ pub struct ActiveStream {
     buffer: StreamingBuffer,
 }
 
-/// State machine for stream lifecycle
+/// Type-erased stream item - extracts only what we need from MultiTurnStreamItem<R>
+pub enum StreamItem {
+    /// Text content from assistant
+    Text(String),
+    /// Tool call in progress
+    ToolCall { name: String },
+    /// Tool result received
+    ToolResult,
+    /// Final response
+    Final,
+    /// Other content we don't handle
+    Other,
+}
+
+impl StreamItem {
+    /// Convert from any MultiTurnStreamItem<R> - erases the R type
+    fn from_multi_turn<R>(item: rig::agent::MultiTurnStreamItem<R>) -> Self {
+        use rig::agent::MultiTurnStreamItem;
+        use rig::streaming::StreamedAssistantContent;
+
+        match item {
+            MultiTurnStreamItem::StreamAssistantItem(content) => match content {
+                StreamedAssistantContent::Text(text) => StreamItem::Text(text.text),
+                StreamedAssistantContent::ToolCall(tc) => StreamItem::ToolCall {
+                    name: tc.function.name,
+                },
+                StreamedAssistantContent::Final(_) => StreamItem::Final,
+                _ => StreamItem::Other,
+            },
+            MultiTurnStreamItem::StreamUserItem(_) => StreamItem::ToolResult,
+            MultiTurnStreamItem::FinalResponse(_) => StreamItem::Final,
+            _ => StreamItem::Other, // Handle any future variants
+        }
+    }
+}
+
+/// Type-erased streaming result
+type ErasedStreamResult = Result<StreamItem, rig::agent::prompt_request::streaming::StreamingError>;
+
+/// Type-erased stream
+type ErasedStream = std::pin::Pin<Box<dyn futures::Stream<Item = ErasedStreamResult>>>;
+
+/// Type-erased future that produces an erased stream
+type ErasedConnectFuture = std::pin::Pin<Box<dyn std::future::Future<Output = ErasedStream>>>;
+
+/// State machine for stream lifecycle - unified across all providers
 enum ActiveStreamState {
-    /// Still connecting to the API (polling the stream creation future)
-    ConnectingAnthropic(
-        std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                    Output = rig::agent::prompt_request::streaming::StreamingResult<
-                        super::wasi_completion_model::AnthropicStreamingResponse,
-                    >,
-                >,
-            >,
-        >,
-    ),
-    ConnectingOpenAI(
-        std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                    Output = rig::agent::prompt_request::streaming::StreamingResult<
-                        super::wasi_completion_model::OpenAIStreamingResponse,
-                    >,
-                >,
-            >,
-        >,
-    ),
+    /// Still connecting to the API
+    Connecting(ErasedConnectFuture),
     /// Stream is ready, polling for chunks
-    StreamingAnthropic(
-        rig::agent::prompt_request::streaming::StreamingResult<
-            super::wasi_completion_model::AnthropicStreamingResponse,
-        >,
-    ),
-    StreamingOpenAI(
-        rig::agent::prompt_request::streaming::StreamingResult<
-            super::wasi_completion_model::OpenAIStreamingResponse,
-        >,
-    ),
+    Streaming(ErasedStream),
 }
 
 impl ActiveStream {
@@ -217,25 +235,53 @@ impl ActiveStream {
     /// The `history` parameter contains previous conversation messages that
     /// provide context for the current prompt.
     pub fn start(agent: &RigAgent, message: &str, history: Vec<RigMessage>) -> Self {
+        use futures::StreamExt;
         use std::future::IntoFuture;
 
         let buffer = StreamingBuffer::new();
         let message = message.to_string();
 
+        // Create a type-erased connecting future that maps to StreamItem
         let state = match &agent.agent_type {
             AgentType::Anthropic(agent) => {
                 let future = agent
-                    .stream_chat(&message, history.clone())
+                    .stream_chat(&message, history)
                     .multi_turn(5)
                     .into_future();
-                ActiveStreamState::ConnectingAnthropic(Box::pin(future))
+                // Wrap in a future that maps the stream to erased items
+                let erased_future: ErasedConnectFuture = Box::pin(async move {
+                    let stream = future.await;
+                    let mapped: ErasedStream =
+                        Box::pin(stream.map(|r| r.map(StreamItem::from_multi_turn)));
+                    mapped
+                });
+                ActiveStreamState::Connecting(erased_future)
             }
             AgentType::OpenAI(agent) => {
                 let future = agent
                     .stream_chat(&message, history)
                     .multi_turn(5)
                     .into_future();
-                ActiveStreamState::ConnectingOpenAI(Box::pin(future))
+                let erased_future: ErasedConnectFuture = Box::pin(async move {
+                    let stream = future.await;
+                    let mapped: ErasedStream =
+                        Box::pin(stream.map(|r| r.map(StreamItem::from_multi_turn)));
+                    mapped
+                });
+                ActiveStreamState::Connecting(erased_future)
+            }
+            AgentType::Gemini(agent) => {
+                let future = agent
+                    .stream_chat(&message, history)
+                    .multi_turn(5)
+                    .into_future();
+                let erased_future: ErasedConnectFuture = Box::pin(async move {
+                    let stream = future.await;
+                    let mapped: ErasedStream =
+                        Box::pin(stream.map(|r| r.map(StreamItem::from_multi_turn)));
+                    mapped
+                });
+                ActiveStreamState::Connecting(erased_future)
             }
         };
 
@@ -250,10 +296,6 @@ impl ActiveStream {
     /// Poll the stream once, process any available item, and return.
     /// This allows the caller to render UI between polls.
     pub fn poll_once(&mut self) -> PollResult {
-        use futures::Stream;
-        use rig::agent::MultiTurnStreamItem;
-        use rig::streaming::StreamedAssistantContent;
-        use std::future::Future;
         use std::task::Poll;
 
         // Check if cancelled
@@ -265,87 +307,34 @@ impl ActiveStream {
         let waker = futures::task::noop_waker();
         let mut cx = Context::from_waker(&waker);
 
-        // Helper to process a stream item (same for both providers)
-        fn process_item<R>(item: MultiTurnStreamItem<R>, buffer: &StreamingBuffer) {
-            match item {
-                MultiTurnStreamItem::StreamAssistantItem(content) => match content {
-                    StreamedAssistantContent::Text(text) => {
-                        buffer.set_tool_activity(None);
-                        buffer.append(&text.text);
-                    }
-                    StreamedAssistantContent::ToolCall(tool_call) => {
-                        let tool_name = tool_call.function.name.clone();
-                        buffer.set_tool_activity(Some(format!("🔧 Calling {}...", tool_name)));
-                    }
-                    _ => {}
-                },
-                _ => {
-                    buffer.set_tool_activity(None);
-                }
-            }
-        }
-
-        // Handle state machine - first poll connection, then poll stream
-        // Use a placeholder for state transitions
+        // Handle state machine - unified for all providers
         enum Transition {
             None,
-            ToStreamingAnthropic(
-                rig::agent::prompt_request::streaming::StreamingResult<
-                    super::wasi_completion_model::AnthropicStreamingResponse,
-                >,
-            ),
-            ToStreamingOpenAI(
-                rig::agent::prompt_request::streaming::StreamingResult<
-                    super::wasi_completion_model::OpenAIStreamingResponse,
-                >,
-            ),
+            ToStreaming(ErasedStream),
         }
 
         let (result, transition) = match &mut self.state {
-            ActiveStreamState::ConnectingAnthropic(future) => {
-                match future.as_mut().poll(&mut cx) {
-                    Poll::Ready(stream) => {
-                        // Connection complete, transition to streaming
-                        (
-                            PollResult::Pending,
-                            Transition::ToStreamingAnthropic(stream),
-                        )
-                    }
-                    Poll::Pending => (PollResult::Pending, Transition::None),
-                }
-            }
-            ActiveStreamState::ConnectingOpenAI(future) => {
-                match future.as_mut().poll(&mut cx) {
-                    Poll::Ready(stream) => {
-                        // Connection complete, transition to streaming
-                        (PollResult::Pending, Transition::ToStreamingOpenAI(stream))
-                    }
-                    Poll::Pending => (PollResult::Pending, Transition::None),
-                }
-            }
-            ActiveStreamState::StreamingAnthropic(stream) => {
+            ActiveStreamState::Connecting(future) => match future.as_mut().poll(&mut cx) {
+                Poll::Ready(stream) => (PollResult::Pending, Transition::ToStreaming(stream)),
+                Poll::Pending => (PollResult::Pending, Transition::None),
+            },
+            ActiveStreamState::Streaming(stream) => {
                 let result = match stream.as_mut().poll_next(&mut cx) {
                     Poll::Ready(Some(Ok(item))) => {
-                        process_item(item, &self.buffer);
-                        PollResult::Chunk
-                    }
-                    Poll::Ready(Some(Err(e))) => {
-                        self.buffer.set_error(e.to_string());
-                        self.buffer.set_complete();
-                        PollResult::Error(e.to_string())
-                    }
-                    Poll::Ready(None) => {
-                        self.buffer.set_complete();
-                        PollResult::Complete
-                    }
-                    Poll::Pending => PollResult::Pending,
-                };
-                (result, Transition::None)
-            }
-            ActiveStreamState::StreamingOpenAI(stream) => {
-                let result = match stream.as_mut().poll_next(&mut cx) {
-                    Poll::Ready(Some(Ok(item))) => {
-                        process_item(item, &self.buffer);
+                        // Process the type-erased item
+                        match item {
+                            StreamItem::Text(text) => {
+                                self.buffer.set_tool_activity(None);
+                                self.buffer.append(&text);
+                            }
+                            StreamItem::ToolCall { name } => {
+                                self.buffer
+                                    .set_tool_activity(Some(format!("🔧 Calling {}...", name)));
+                            }
+                            StreamItem::ToolResult | StreamItem::Final | StreamItem::Other => {
+                                self.buffer.set_tool_activity(None);
+                            }
+                        }
                         PollResult::Chunk
                     }
                     Poll::Ready(Some(Err(e))) => {
@@ -364,14 +353,8 @@ impl ActiveStream {
         };
 
         // Apply state transition if needed
-        match transition {
-            Transition::None => {}
-            Transition::ToStreamingAnthropic(stream) => {
-                self.state = ActiveStreamState::StreamingAnthropic(stream);
-            }
-            Transition::ToStreamingOpenAI(stream) => {
-                self.state = ActiveStreamState::StreamingOpenAI(stream);
-            }
+        if let Transition::ToStreaming(stream) = transition {
+            self.state = ActiveStreamState::Streaming(stream);
         }
 
         result
@@ -411,6 +394,7 @@ pub struct RigAgentConfig {
 pub enum Provider {
     Anthropic,
     OpenAI,
+    Gemini,
 }
 
 impl Default for Provider {
@@ -432,8 +416,9 @@ pub struct RigAgent {
 
 /// Type-erased agent to handle different providers
 enum AgentType {
-    Anthropic(Agent<WasiAnthropicModel>),
-    OpenAI(Agent<WasiOpenAIModel>),
+    Anthropic(Agent<AnthropicModel>),
+    OpenAI(Agent<OpenAIModel>),
+    Gemini(Agent<GeminiModel>),
 }
 
 /// Build the tool server handle with our tools
@@ -457,35 +442,14 @@ impl RigAgent {
     pub fn anthropic(
         api_key: &str,
         model: &str,
+        base_url: Option<&str>,
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        let completion_model = WasiAnthropicModel::new(api_key, model)
+        let client = create_anthropic_client(api_key, base_url)
             .map_err(|e| RigAgentError::ClientCreation(e.to_string()))?;
-
-        let tool_handle = build_tool_server(&mcp_client).map_err(RigAgentError::ToolSetCreation)?;
-
-        let agent = rig::agent::AgentBuilder::new(completion_model)
-            .preamble(preamble)
-            .tool_server_handle(tool_handle)
-            .build();
-
-        Ok(Self {
-            agent_type: AgentType::Anthropic(agent),
-            mcp_client,
-        })
-    }
-
-    /// Create a new RigAgent with Anthropic and a custom base URL
-    pub fn anthropic_with_base_url(
-        api_key: &str,
-        model: &str,
-        base_url: &str,
-        preamble: &str,
-        mcp_client: McpClient,
-    ) -> Result<Self, RigAgentError> {
-        let completion_model = WasiAnthropicModel::with_base_url(api_key, model, base_url)
-            .map_err(|e| RigAgentError::ClientCreation(e.to_string()))?;
+        // Use with_model() to ensure max_tokens is set (falls back to 4096 for unknown models)
+        let completion_model = AnthropicModel::with_model(client, model);
 
         let tool_handle = build_tool_server(&mcp_client).map_err(RigAgentError::ToolSetCreation)?;
 
@@ -504,11 +468,13 @@ impl RigAgent {
     pub fn openai(
         api_key: &str,
         model: &str,
+        base_url: Option<&str>,
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        let completion_model = WasiOpenAIModel::new(api_key, model)
+        let client = create_openai_client(api_key, base_url)
             .map_err(|e| RigAgentError::ClientCreation(e.to_string()))?;
+        let completion_model = OpenAIModel::new(client, model);
 
         let tool_handle = build_tool_server(&mcp_client).map_err(RigAgentError::ToolSetCreation)?;
 
@@ -523,18 +489,17 @@ impl RigAgent {
         })
     }
 
-    /// Create a new RigAgent with OpenAI-compatible API and custom base URL
-    ///
-    /// This is useful for Ollama, Groq, vLLM, and other OpenAI-compatible providers.
-    pub fn openai_with_base_url(
+    /// Create a new RigAgent with Gemini
+    pub fn gemini(
         api_key: &str,
         model: &str,
-        base_url: &str,
+        base_url: Option<&str>,
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        let completion_model = WasiOpenAIModel::with_base_url(api_key, model, base_url)
+        let client = create_gemini_client(api_key, base_url)
             .map_err(|e| RigAgentError::ClientCreation(e.to_string()))?;
+        let completion_model = GeminiModel::new(client, model);
 
         let tool_handle = build_tool_server(&mcp_client).map_err(RigAgentError::ToolSetCreation)?;
 
@@ -544,7 +509,7 @@ impl RigAgent {
             .build();
 
         Ok(Self {
-            agent_type: AgentType::OpenAI(agent),
+            agent_type: AgentType::Gemini(agent),
             mcp_client,
         })
     }
@@ -554,7 +519,7 @@ impl RigAgent {
     /// # Arguments
     /// * `api_key` - API key for the provider
     /// * `model` - Model name
-    /// * `api_format` - Either "anthropic" or "openai"
+    /// * `api_format` - "anthropic", "openai", or "gemini"
     /// * `base_url` - Optional custom base URL
     /// * `preamble` - System prompt
     /// * `mcp_client` - MCP client for tool calling
@@ -566,13 +531,10 @@ impl RigAgent {
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        match (api_format, base_url) {
-            ("anthropic", None) => Self::anthropic(api_key, model, preamble, mcp_client),
-            ("anthropic", Some(url)) => {
-                Self::anthropic_with_base_url(api_key, model, url, preamble, mcp_client)
-            }
-            (_, None) => Self::openai(api_key, model, preamble, mcp_client),
-            (_, Some(url)) => Self::openai_with_base_url(api_key, model, url, preamble, mcp_client),
+        match api_format {
+            "anthropic" => Self::anthropic(api_key, model, base_url, preamble, mcp_client),
+            "gemini" | "google" => Self::gemini(api_key, model, base_url, preamble, mcp_client),
+            _ => Self::openai(api_key, model, base_url, preamble, mcp_client),
         }
     }
 
@@ -582,7 +544,13 @@ impl RigAgent {
         preamble: &str,
         mcp_client: McpClient,
     ) -> Result<Self, RigAgentError> {
-        Self::anthropic(api_key, "claude-haiku-4-5-20251015", preamble, mcp_client)
+        Self::anthropic(
+            api_key,
+            "claude-haiku-4-5-20251015",
+            None,
+            preamble,
+            mcp_client,
+        )
     }
 
     /// Simple prompt (no history, non-streaming)
@@ -592,6 +560,7 @@ impl RigAgent {
         let result = match &self.agent_type {
             AgentType::Anthropic(agent) => wasm_block_on(agent.prompt(message).into_future()),
             AgentType::OpenAI(agent) => wasm_block_on(agent.prompt(message).into_future()),
+            AgentType::Gemini(agent) => wasm_block_on(agent.prompt(message).into_future()),
         };
 
         result.map_err(|e| RigAgentError::Completion(e.to_string()))
@@ -612,6 +581,9 @@ impl RigAgent {
             AgentType::OpenAI(agent) => {
                 wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
             }
+            AgentType::Gemini(agent) => {
+                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+            }
         };
 
         result.map_err(|e| RigAgentError::Completion(e.to_string()))
@@ -630,8 +602,9 @@ impl RigAgent {
             .collect();
 
         let result = match &self.agent_type {
-            AgentType::Anthropic(agent) => wasm_block_on(agent.chat(prompt, rig_history)),
-            AgentType::OpenAI(agent) => wasm_block_on(agent.chat(prompt, rig_history)),
+            AgentType::Anthropic(agent) => wasm_block_on(agent.chat(prompt, rig_history.clone())),
+            AgentType::OpenAI(agent) => wasm_block_on(agent.chat(prompt, rig_history.clone())),
+            AgentType::Gemini(agent) => wasm_block_on(agent.chat(prompt, rig_history)),
         };
 
         result.map_err(|e| RigAgentError::Completion(e.to_string()))

@@ -84,9 +84,14 @@ pub fn fetch_anthropic_models(api_key: &str) -> Result<Vec<AvailableModel>, Stri
     let url = "https://api.anthropic.com/v1/models";
 
     // Anthropic uses x-api-key header instead of Bearer token
+    // anthropic-dangerous-direct-browser-access is required for browser CORS
     let response = HttpClient::get_json_with_headers(
         url,
-        &[("x-api-key", api_key), ("anthropic-version", "2023-06-01")],
+        &[
+            ("x-api-key", api_key),
+            ("anthropic-version", "2023-06-01"),
+            ("anthropic-dangerous-direct-browser-access", "true"),
+        ],
     )
     .map_err(|e| format!("HTTP error: {}", e))?;
 
@@ -113,6 +118,65 @@ pub fn fetch_anthropic_models(api_key: &str) -> Result<Vec<AvailableModel>, Stri
     Ok(models)
 }
 
+/// Gemini models list response
+#[derive(Deserialize)]
+struct GeminiModelsResponse {
+    models: Vec<GeminiModelInfo>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiModelInfo {
+    name: String,
+    display_name: Option<String>,
+}
+
+/// Fetch models from Gemini API
+///
+/// Gemini uses query parameter auth (?key=API_KEY) instead of headers
+pub fn fetch_gemini_models(api_key: &str) -> Result<Vec<AvailableModel>, String> {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+        api_key
+    );
+
+    // Gemini doesn't need auth headers - key is in URL
+    let response =
+        HttpClient::get_json_with_headers(&url, &[]).map_err(|e| format!("HTTP error: {}", e))?;
+
+    if response.status != 200 {
+        return Err(format!(
+            "API returned status {}: {}",
+            response.status,
+            String::from_utf8_lossy(&response.body)
+        ));
+    }
+
+    let models_response: GeminiModelsResponse = serde_json::from_slice(&response.body)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Filter to generative models only
+    let models: Vec<AvailableModel> = models_response
+        .models
+        .into_iter()
+        .filter(|m| m.name.contains("gemini"))
+        .map(|m| {
+            // Model name comes as "models/gemini-1.5-pro" - extract just the model ID
+            let id = m
+                .name
+                .strip_prefix("models/")
+                .unwrap_or(&m.name)
+                .to_string();
+            AvailableModel {
+                name: m.display_name.unwrap_or_else(|| id.clone()),
+                id,
+            }
+        })
+        .collect();
+
+    Ok(models)
+}
+
 /// Fetch models based on provider type
 pub fn fetch_models_for_provider(
     provider: &str,
@@ -121,7 +185,7 @@ pub fn fetch_models_for_provider(
 ) -> Result<Vec<AvailableModel>, String> {
     match provider {
         "anthropic" => fetch_anthropic_models(api_key),
-        "openai" | "custom" => fetch_openai_models(api_key, base_url),
-        _ => Err(format!("Unknown provider: {}", provider)),
+        "gemini" | "google" => fetch_gemini_models(api_key),
+        "openai" | "custom" | _ => fetch_openai_models(api_key, base_url),
     }
 }
