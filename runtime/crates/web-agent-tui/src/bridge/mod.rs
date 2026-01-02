@@ -1,17 +1,12 @@
 //! Bridge to AI and MCP services
 //!
-//! Provides:
-//! - `HttpClient` - WASI HTTP wrapper for making API calls
-//! - `McpClient` - Client for calling remote MCP tools
-//! - `local_tools` - Client-local tools (task_write, etc.)
-//! - `system_prompt` - Agent system prompt
-//! - `wasi_completion_model` - Custom CompletionModel for rig-core Agent
-//! - `rig_tools` - Tool adapters for rig-core Agent integration
-//! - `rig_agent` - High-level Agent wrapper for rig-core
+//! This module contains bridges to external systems like LLM providers,
+//! MCP servers, and HTTP clients.
 
 pub mod http_client;
 pub mod local_tools;
 pub mod mcp_client;
+pub mod oauth_client;
 pub mod remote_mcp_client;
 pub mod rig_agent;
 pub mod rig_client;

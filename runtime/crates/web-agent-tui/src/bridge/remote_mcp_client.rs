@@ -218,6 +218,12 @@ impl RemoteMcpClient {
         // TODO: Parse MCP-Session-Id from response headers if present
         // Currently HttpClient doesn't expose response headers
 
+        // Check for 401 Unauthorized - OAuth required
+        if response.status == 401 {
+            // Return OAuthRequired error with server URL for OAuth flow
+            return Err(McpError::OAuthRequired(self.base_url.clone()));
+        }
+
         if response.status >= 400 {
             return Err(McpError::HttpError(format!(
                 "HTTP {} - {}",

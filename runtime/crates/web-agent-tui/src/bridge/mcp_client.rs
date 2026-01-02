@@ -61,6 +61,8 @@ pub enum McpError {
     RpcError(String),
     NotInitialized,
     LockError,
+    /// OAuth authentication required - contains server URL for OAuth flow
+    OAuthRequired(String),
 }
 
 impl std::fmt::Display for McpError {
@@ -71,6 +73,7 @@ impl std::fmt::Display for McpError {
             McpError::RpcError(msg) => write!(f, "RPC error: {}", msg),
             McpError::NotInitialized => write!(f, "MCP client not initialized"),
             McpError::LockError => write!(f, "Failed to acquire lock"),
+            McpError::OAuthRequired(url) => write!(f, "OAuth required for {}", url),
         }
     }
 }
