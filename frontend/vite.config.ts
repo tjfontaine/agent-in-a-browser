@@ -50,38 +50,67 @@ export default defineConfig(({ mode }) => ({
         proxy: {
             // CORS proxy for external MCP servers (same as worker/index.js for local dev)
             '/cors-proxy': {
-                target: 'http://placeholder', // Will be replaced by configure
+                target: 'https://mcp.stripe.com', // Placeholder, bypass handles everything
                 changeOrigin: true,
-                configure: (proxy, _options) => {
-                    // Custom handler to extract target URL and forward
-                    proxy.on('proxyReq', (proxyReq, req, _res) => {
-                        const url = new URL(req.url!, `http://${req.headers.host}`);
-                        const targetUrl = url.searchParams.get('url');
-                        if (targetUrl) {
-                            const target = new URL(targetUrl);
-                            proxyReq.setHeader('host', target.host);
-                        }
-                    });
-                },
-                router: (req: { url?: string; headers: { host?: string } }) => {
+                bypass: async (req, res) => {
+                    if (!res) return; // Guard for TypeScript
+
                     // Extract target URL from query parameter
-                    const url = new URL(req.url!, `http://${req.headers.host}`);
-                    const targetUrl = url.searchParams.get('url');
-                    if (targetUrl) {
-                        const target = new URL(targetUrl);
-                        return `${target.protocol}//${target.host}`;
+                    const reqUrl = new URL(req.url!, `http://localhost`);
+                    const targetUrl = reqUrl.searchParams.get('url');
+
+                    if (!targetUrl) {
+                        res.writeHead(400, { 'Content-Type': 'text/plain' });
+                        res.end('Missing url parameter');
+                        return false; // Don't continue to proxy
                     }
-                    return 'http://localhost'; // Fallback
-                },
-                rewrite: (path) => {
-                    // Extract the path from the target URL
-                    const url = new URL(`http://localhost${path}`);
-                    const targetUrl = url.searchParams.get('url');
-                    if (targetUrl) {
-                        const target = new URL(targetUrl);
-                        return target.pathname + target.search;
+
+                    try {
+                        // Forward headers from original request (filter out problematic ones)
+                        const headers: Record<string, string> = {};
+                        for (const [key, value] of Object.entries(req.headers)) {
+                            if (key.toLowerCase() !== 'host' &&
+                                key.toLowerCase() !== 'origin' &&
+                                key.toLowerCase() !== 'connection' &&
+                                key.toLowerCase() !== 'content-length' &&
+                                typeof value === 'string') {
+                                headers[key] = value;
+                            }
+                        }
+
+                        // Collect request body
+                        const chunks: Buffer[] = [];
+                        for await (const chunk of req) {
+                            chunks.push(Buffer.from(chunk));
+                        }
+                        const body = Buffer.concat(chunks);
+
+                        // Make the actual request to target
+                        const response = await fetch(targetUrl, {
+                            method: req.method || 'POST',
+                            headers,
+                            body: body.length > 0 ? body : undefined,
+                        });
+
+                        // Build response headers with CORS
+                        const responseHeaders: Record<string, string> = {
+                            'Access-Control-Allow-Origin': (req.headers.origin as string) || '*',
+                            'Access-Control-Expose-Headers': '*',
+                        };
+                        response.headers.forEach((value, key) => {
+                            if (key.toLowerCase() !== 'content-encoding') {
+                                responseHeaders[key] = value;
+                            }
+                        });
+
+                        res.writeHead(response.status, responseHeaders);
+                        const responseBody = await response.arrayBuffer();
+                        res.end(Buffer.from(responseBody));
+                    } catch (err) {
+                        res.writeHead(502, { 'Content-Type': 'text/plain' });
+                        res.end(`Proxy error: ${err}`);
                     }
-                    return path;
+                    return false; // Don't continue to proxy
                 },
             },
             // Proxy API requests to backend

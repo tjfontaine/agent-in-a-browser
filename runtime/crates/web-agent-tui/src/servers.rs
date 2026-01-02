@@ -3,7 +3,8 @@
 //! Handles MCP server connections, tool collection, and routing.
 
 use crate::bridge::local_tools::{format_tasks_for_display, try_execute_local_tool, Task};
-use crate::bridge::mcp_client::ToolDefinition;
+use crate::bridge::mcp_client::{McpError, ToolDefinition};
+use crate::bridge::remote_mcp_client::RemoteMcpClient;
 use crate::ui::{AuxContent, AuxContentKind, RemoteServerEntry, ServerConnectionStatus};
 use serde_json::Value;
 
@@ -136,7 +137,13 @@ pub struct ServerManager;
 impl ServerManager {
     /// Add a new remote server entry. Returns true if added, false if already exists.
     pub fn add_server(servers: &mut Vec<RemoteServerEntry>, url: &str) -> bool {
-        let url = url.trim().trim_end_matches('/').to_string();
+        // Normalize URL: trim, ensure https:// prefix, remove trailing slash
+        let url = url.trim();
+        let url = if url.starts_with("http://") || url.starts_with("https://") {
+            url.trim_end_matches('/').to_string()
+        } else {
+            format!("https://{}", url.trim_end_matches('/'))
+        };
 
         // Generate ID from URL
         let id = url
@@ -183,6 +190,20 @@ impl ServerManager {
         }
     }
 
+    /// Connect to a remote MCP server
+    ///
+    /// Performs MCP 2025-11-25 initialization handshake and fetches tools.
+    pub fn connect_server(server: &RemoteServerEntry) -> Result<Vec<ToolDefinition>, McpError> {
+        // Normalize URL: ensure https:// prefix
+        let url = if server.url.starts_with("http://") || server.url.starts_with("https://") {
+            server.url.clone()
+        } else {
+            format!("https://{}", server.url)
+        };
+        let mut client = RemoteMcpClient::new(&url, server.bearer_token.clone());
+        client.connect()
+    }
+
     /// Toggle server connection state
     pub fn toggle_connection(servers: &mut [RemoteServerEntry], id: &str) {
         if let Some(server) = servers.iter_mut().find(|s| s.id == id) {
@@ -192,7 +213,7 @@ impl ServerManager {
                     server.tools.clear();
                 }
                 _ => {
-                    // TODO: Actually connect via MCP client
+                    // Mark as connecting - actual connection happens in app layer
                     server.status = ServerConnectionStatus::Connecting;
                 }
             }

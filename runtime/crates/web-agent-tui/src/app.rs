@@ -12,7 +12,7 @@ use crate::bridge::{
     McpClient,
 };
 
-use crate::config::{self, Config};
+use crate::config::{self, Config, ServersConfig};
 use crate::input::InputBuffer;
 use crate::servers::{ServerManager, ToolCollector};
 
@@ -114,6 +114,21 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let loaded_history = config::load_agent_history();
         let loaded_history_len = loaded_history.len();
 
+        // Load saved MCP servers from config
+        let servers_config = ServersConfig::load();
+        let remote_servers: Vec<RemoteServerEntry> = servers_config
+            .servers
+            .into_iter()
+            .map(|s| RemoteServerEntry {
+                id: s.id,
+                name: s.name,
+                url: s.url,
+                status: ServerConnectionStatus::Disconnected,
+                tools: Vec::new(),
+                bearer_token: s.api_key,
+            })
+            .collect();
+
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
@@ -137,7 +152,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 remote_servers: Vec::new(),
             },
             cancelled: false,
-            remote_servers: Vec::new(),
+            remote_servers,
             overlay: None,
             config,
             active_stream: None,
@@ -959,7 +974,20 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     match *selected {
                                         0 => {
                                             // Connect/Disconnect
-                                            self.toggle_server_connection(&sid);
+                                            // Check if already connected
+                                            if let Some(server) =
+                                                self.remote_servers.iter().find(|s| s.id == sid)
+                                            {
+                                                if server.status
+                                                    == ServerConnectionStatus::Connected
+                                                {
+                                                    // Disconnect
+                                                    self.toggle_server_connection(&sid);
+                                                } else {
+                                                    // Actually connect
+                                                    self.connect_remote_server_by_id(&sid);
+                                                }
+                                            }
                                         }
                                         1 => {
                                             // Set API Key
@@ -1382,18 +1410,75 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
     fn add_remote_server(&mut self, url: &str) {
         ServerManager::add_server(&mut self.remote_servers, url);
+        self.save_servers();
     }
 
     fn remove_remote_server(&mut self, id: &str) {
         ServerManager::remove_server(&mut self.remote_servers, id);
+        self.save_servers();
     }
 
     fn set_server_token(&mut self, id: &str, token: &str) {
         ServerManager::set_token(&mut self.remote_servers, id, token);
+        self.save_servers();
     }
 
     fn toggle_server_connection(&mut self, id: &str) {
         ServerManager::toggle_connection(&mut self.remote_servers, id);
+    }
+
+    /// Connect to a remote server by ID (used by both /mcp connect and wizard)
+    fn connect_remote_server_by_id(&mut self, id: &str) {
+        // Find the server index
+        let idx = self.remote_servers.iter().position(|s| s.id == id);
+        if let Some(idx) = idx {
+            // Mark as connecting
+            self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
+
+            // Perform actual connection
+            let server = &self.remote_servers[idx];
+            match ServerManager::connect_server(server) {
+                Ok(tools) => {
+                    let tool_count = tools.len();
+                    let name = self.remote_servers[idx].name.clone();
+                    self.remote_servers[idx].status = ServerConnectionStatus::Connected;
+                    self.remote_servers[idx].tools = tools;
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!(
+                            "Connected to '{}'. {} tools available.",
+                            name, tool_count
+                        ),
+                    });
+                }
+                Err(e) => {
+                    self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Failed to connect: {}", e),
+                    });
+                }
+            }
+        }
+    }
+
+    /// Save current servers to persistent config
+    fn save_servers(&self) {
+        use crate::config::ServerEntry;
+        let servers_config = ServersConfig {
+            servers: self
+                .remote_servers
+                .iter()
+                .map(|s| ServerEntry {
+                    id: s.id.clone(),
+                    name: s.name.clone(),
+                    url: s.url.clone(),
+                    api_key: s.bearer_token.clone(),
+                    enabled: true,
+                })
+                .collect(),
+        };
+        let _ = servers_config.save();
     }
 
     /// Collect all tools with server prefixes for multi-server routing
@@ -1650,17 +1735,44 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             if let Some(id_str) = parts.get(2) {
                                 if let Ok(id) = id_str.parse::<usize>() {
                                     if id > 0 && id <= self.remote_servers.len() {
-                                        // Mark as connecting and trigger connection
-                                        self.remote_servers[id - 1].status =
+                                        let idx = id - 1;
+                                        // Mark as connecting
+                                        self.remote_servers[idx].status =
                                             ServerConnectionStatus::Connecting;
                                         self.messages.push(Message {
                                             role: Role::System,
                                             content: format!(
                                                 "Connecting to '{}'...",
-                                                self.remote_servers[id - 1].name
+                                                self.remote_servers[idx].name
                                             ),
                                         });
-                                        // TODO: Actually connect to the server
+
+                                        // Perform actual connection
+                                        let server = &self.remote_servers[idx];
+                                        match ServerManager::connect_server(server) {
+                                            Ok(tools) => {
+                                                let tool_count = tools.len();
+                                                let name = self.remote_servers[idx].name.clone();
+                                                self.remote_servers[idx].status =
+                                                    ServerConnectionStatus::Connected;
+                                                self.remote_servers[idx].tools = tools;
+                                                self.messages.push(Message {
+                                                    role: Role::System,
+                                                    content: format!(
+                                                        "Connected to '{}'. {} tools available.",
+                                                        name, tool_count
+                                                    ),
+                                                });
+                                            }
+                                            Err(e) => {
+                                                self.remote_servers[idx].status =
+                                                    ServerConnectionStatus::Error(e.to_string());
+                                                self.messages.push(Message {
+                                                    role: Role::System,
+                                                    content: format!("Failed to connect: {}", e),
+                                                });
+                                            }
+                                        }
                                     } else {
                                         self.messages.push(Message {
                                             role: Role::System,

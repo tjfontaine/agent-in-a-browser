@@ -12,6 +12,7 @@
 pub mod http_client;
 pub mod local_tools;
 pub mod mcp_client;
+pub mod remote_mcp_client;
 pub mod rig_agent;
 pub mod rig_client;
 pub mod rig_tools;
