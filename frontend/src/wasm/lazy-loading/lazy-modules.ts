@@ -192,6 +192,10 @@ async function loadTsxEngine(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] tsx-engine loaded in ${loadTime.toFixed(0)}ms`);
 
+    // Use JSPI wrapper when available since poll-impl.js makes run() async
+    if (hasJSPI) {
+        return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    }
     // Wrap the sync command interface to provide spawn()
     return wrapSyncModule(module.command);
 }
@@ -214,6 +218,10 @@ async function loadSqliteModule(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] sqlite-module loaded in ${loadTime.toFixed(0)}ms`);
 
+    // Use JSPI wrapper when available since poll-impl.js makes run() async
+    if (hasJSPI) {
+        return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    }
     // Wrap the sync command interface to provide spawn()
     return wrapSyncModule(module.command);
 }
