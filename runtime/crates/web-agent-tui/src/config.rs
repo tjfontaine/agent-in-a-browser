@@ -103,6 +103,7 @@ impl ProviderSettings {
     pub fn get_api_format(&self, provider_id: &str) -> &str {
         self.api_format.as_deref().unwrap_or(match provider_id {
             "anthropic" => "anthropic",
+            "gemini" | "google" => "gemini",
             _ => "openai", // Default to OpenAI format for unknown providers
         })
     }
