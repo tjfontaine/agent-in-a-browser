@@ -4,6 +4,206 @@
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
 pub mod wasi {
+    pub mod cli {
+        /// Terminal input.
+        ///
+        /// In the future, this may include functions for disabling echoing,
+        /// disabling input buffering so that keyboard events are sent through
+        /// immediately, querying supported features, and so on.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_input {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// The input side of a terminal.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct TerminalInput {
+                handle: _rt::Resource<TerminalInput>,
+            }
+            impl TerminalInput {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for TerminalInput {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:cli/terminal-input@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]terminal-input"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+        }
+        /// Terminal output.
+        ///
+        /// In the future, this may include functions for querying the terminal
+        /// size, being notified of terminal size changes, querying supported
+        /// features, and so on.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_output {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// The output side of a terminal.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct TerminalOutput {
+                handle: _rt::Resource<TerminalOutput>,
+            }
+            impl TerminalOutput {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for TerminalOutput {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:cli/terminal-output@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]terminal-output"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+        }
+        /// An interface providing an optional `terminal-output` for stdout as a
+        /// link-time authority.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_stdout {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type TerminalOutput = super::super::super::wasi::cli::terminal_output::TerminalOutput;
+            #[allow(unused_unsafe, clippy::all)]
+            /// If stdout is connected to a terminal, return a `terminal-output` handle
+            /// allowing further interaction with it.
+            pub fn get_terminal_stdout() -> Option<TerminalOutput> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 8]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:cli/terminal-stdout@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "get-terminal-stdout"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                    let result4 = match l2 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l3 = *ptr0.add(4).cast::<i32>();
+                                unsafe {
+                                    super::super::super::wasi::cli::terminal_output::TerminalOutput::from_handle(
+                                        l3 as u32,
+                                    )
+                                }
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result4
+                }
+            }
+        }
+        /// An interface providing an optional `terminal-output` for stderr as a
+        /// link-time authority.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_stderr {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type TerminalOutput = super::super::super::wasi::cli::terminal_output::TerminalOutput;
+            #[allow(unused_unsafe, clippy::all)]
+            /// If stderr is connected to a terminal, return a `terminal-output` handle
+            /// allowing further interaction with it.
+            pub fn get_terminal_stderr() -> Option<TerminalOutput> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 8]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:cli/terminal-stderr@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "get-terminal-stderr"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                    let result4 = match l2 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l3 = *ptr0.add(4).cast::<i32>();
+                                unsafe {
+                                    super::super::super::wasi::cli::terminal_output::TerminalOutput::from_handle(
+                                        l3 as u32,
+                                    )
+                                }
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result4
+                }
+            }
+        }
+    }
     pub mod io {
         #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
         pub mod error {
@@ -1989,9 +2189,9 @@ pub(crate) use __export_ratatui_demo_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 1551] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x8c\x0b\x01A\x02\x01\
-A\x0c\x01B\x04\x04\0\x05error\x03\x01\x01h\0\x01@\x01\x04self\x01\0s\x04\0\x1d[m\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 1883] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xd8\x0d\x01A\x02\x01\
+A\x15\x01B\x04\x04\0\x05error\x03\x01\x01h\0\x01@\x01\x04self\x01\0s\x04\0\x1d[m\
 ethod]error.to-debug-string\x01\x02\x03\0\x13wasi:io/error@0.2.4\x05\0\x01B\x0a\x04\
 \0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[method]pollab\
 le.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.block\x01\x03\
@@ -2014,13 +2214,20 @@ utput-stream.subscribe\x01\x16\x01@\x02\x04self\x11\x03lenw\0\x13\x04\0\"[method
 ]output-stream.write-zeroes\x01\x17\x04\05[method]output-stream.blocking-write-z\
 eroes-and-flush\x01\x17\x01@\x03\x04self\x11\x03src\x09\x03lenw\0\x0d\x04\0\x1c[\
 method]output-stream.splice\x01\x18\x04\0%[method]output-stream.blocking-splice\x01\
-\x18\x03\0\x15wasi:io/streams@0.2.4\x05\x04\x02\x03\0\x02\x0cinput-stream\x02\x03\
-\0\x02\x0doutput-stream\x01B\x0f\x02\x03\x02\x01\x05\x04\0\x0cinput-stream\x03\0\
-\0\x02\x03\x02\x01\x06\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01r\
-\x02\x03cwds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01\
+\x18\x03\0\x15wasi:io/streams@0.2.4\x05\x04\x01B\x01\x04\0\x0eterminal-input\x03\
+\x01\x03\0\x1dwasi:cli/terminal-input@0.2.4\x05\x05\x01B\x01\x04\0\x0fterminal-o\
+utput\x03\x01\x03\0\x1ewasi:cli/terminal-output@0.2.4\x05\x06\x02\x03\0\x04\x0ft\
+erminal-output\x01B\x06\x02\x03\x02\x01\x07\x04\0\x0fterminal-output\x03\0\0\x01\
+i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13get-terminal-stdout\x01\x04\x03\0\x1ewasi:c\
+li/terminal-stdout@0.2.4\x05\x08\x01B\x06\x02\x03\x02\x01\x07\x04\0\x0fterminal-\
+output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13get-terminal-stderr\x01\x04\
+\x03\0\x1ewasi:cli/terminal-stderr@0.2.4\x05\x09\x02\x03\0\x02\x0cinput-stream\x02\
+\x03\0\x02\x0doutput-stream\x01B\x0f\x02\x03\x02\x01\x0a\x04\0\x0cinput-stream\x03\
+\0\0\x02\x03\x02\x01\x0b\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01\
+r\x02\x03cwds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01\
 @\x06\x04names\x04args\x08\x03env\x07\x05stdin\x09\x06stdout\x0a\x06stderr\x0a\0\
 z\x04\0\x03run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shel\
-l:unix/command@0.1.0\x05\x07\x04\0\x1dshell:unix/ratatui-demo@0.1.0\x04\0\x0b\x12\
+l:unix/command@0.1.0\x05\x0c\x04\0\x1dshell:unix/ratatui-demo@0.1.0\x04\0\x0b\x12\
 \x01\0\x0cratatui-demo\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-co\
 mponent\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]

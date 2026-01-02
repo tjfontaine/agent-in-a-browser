@@ -807,6 +807,206 @@ pub mod mcp {
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
 pub mod wasi {
+    pub mod cli {
+        /// Terminal input.
+        ///
+        /// In the future, this may include functions for disabling echoing,
+        /// disabling input buffering so that keyboard events are sent through
+        /// immediately, querying supported features, and so on.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_input {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// The input side of a terminal.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct TerminalInput {
+                handle: _rt::Resource<TerminalInput>,
+            }
+            impl TerminalInput {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for TerminalInput {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:cli/terminal-input@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]terminal-input"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+        }
+        /// Terminal output.
+        ///
+        /// In the future, this may include functions for querying the terminal
+        /// size, being notified of terminal size changes, querying supported
+        /// features, and so on.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_output {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// The output side of a terminal.
+            #[derive(Debug)]
+            #[repr(transparent)]
+            pub struct TerminalOutput {
+                handle: _rt::Resource<TerminalOutput>,
+            }
+            impl TerminalOutput {
+                #[doc(hidden)]
+                pub unsafe fn from_handle(handle: u32) -> Self {
+                    Self {
+                        handle: unsafe { _rt::Resource::from_handle(handle) },
+                    }
+                }
+                #[doc(hidden)]
+                pub fn take_handle(&self) -> u32 {
+                    _rt::Resource::take_handle(&self.handle)
+                }
+                #[doc(hidden)]
+                pub fn handle(&self) -> u32 {
+                    _rt::Resource::handle(&self.handle)
+                }
+            }
+            unsafe impl _rt::WasmResource for TerminalOutput {
+                #[inline]
+                unsafe fn drop(_handle: u32) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unreachable!();
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        #[link(wasm_import_module = "wasi:cli/terminal-output@0.2.4")]
+                        unsafe extern "C" {
+                            #[link_name = "[resource-drop]terminal-output"]
+                            fn drop(_: u32);
+                        }
+                        unsafe { drop(_handle) };
+                    }
+                }
+            }
+        }
+        /// An interface providing an optional `terminal-output` for stdout as a
+        /// link-time authority.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_stdout {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type TerminalOutput = super::super::super::wasi::cli::terminal_output::TerminalOutput;
+            #[allow(unused_unsafe, clippy::all)]
+            /// If stdout is connected to a terminal, return a `terminal-output` handle
+            /// allowing further interaction with it.
+            pub fn get_terminal_stdout() -> Option<TerminalOutput> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 8]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:cli/terminal-stdout@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "get-terminal-stdout"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                    let result4 = match l2 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l3 = *ptr0.add(4).cast::<i32>();
+                                unsafe {
+                                    super::super::super::wasi::cli::terminal_output::TerminalOutput::from_handle(
+                                        l3 as u32,
+                                    )
+                                }
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result4
+                }
+            }
+        }
+        /// An interface providing an optional `terminal-output` for stderr as a
+        /// link-time authority.
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod terminal_stderr {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type TerminalOutput = super::super::super::wasi::cli::terminal_output::TerminalOutput;
+            #[allow(unused_unsafe, clippy::all)]
+            /// If stderr is connected to a terminal, return a `terminal-output` handle
+            /// allowing further interaction with it.
+            pub fn get_terminal_stderr() -> Option<TerminalOutput> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 8]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 8]);
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "wasi:cli/terminal-stderr@0.2.4")]
+                    unsafe extern "C" {
+                        #[link_name = "get-terminal-stderr"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = i32::from(*ptr0.add(0).cast::<u8>());
+                    let result4 = match l2 {
+                        0 => None,
+                        1 => {
+                            let e = {
+                                let l3 = *ptr0.add(4).cast::<i32>();
+                                unsafe {
+                                    super::super::super::wasi::cli::terminal_output::TerminalOutput::from_handle(
+                                        l3 as u32,
+                                    )
+                                }
+                            };
+                            Some(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result4
+                }
+            }
+        }
+    }
     pub mod clocks {
         /// WASI Monotonic Clock is a clock API intended to let users measure elapsed
         /// time.
@@ -12812,8 +13012,8 @@ pub(crate) use __export_ts_runtime_mcp_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 11232] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xdbV\x01A\x02\x01A(\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 11564] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xa7Y\x01A\x02\x01A1\x01\
 B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[meth\
 od]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[method]pollable.b\
 lock\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04poll\x01\x06\x03\0\
@@ -13004,36 +13204,43 @@ ror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\x01\x07\x01@
 \x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x03\0\x20wasi:h\
 ttp/outgoing-handler@0.2.4\x05\x14\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10\
 get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi\
-:random/random@0.2.4\x05\x15\x01B.\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\
-\x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\x01\
-r\x02\x04colsy\x04rowsy\x04\0\x0dterminal-size\x03\0\x06\x04\0\x0clazy-process\x03\
-\x01\x01h\x08\x01i\x01\x01@\x01\x04self\x09\0\x0a\x04\0'[method]lazy-process.get\
--ready-pollable\x01\x0b\x01@\x01\x04self\x09\0\x7f\x04\0\x1d[method]lazy-process\
-.is-ready\x01\x0c\x01p}\x01@\x02\x04self\x09\x04data\x0d\0w\x04\0\x20[method]laz\
-y-process.write-stdin\x01\x0e\x01@\x01\x04self\x09\x01\0\x04\0\x20[method]lazy-p\
-rocess.close-stdin\x01\x0f\x01@\x02\x04self\x09\x09max-bytesw\0\x0d\x04\0\x20[me\
-thod]lazy-process.read-stdout\x01\x10\x04\0\x20[method]lazy-process.read-stderr\x01\
-\x10\x01kz\x01@\x01\x04self\x09\0\x11\x04\0\x1d[method]lazy-process.try-wait\x01\
-\x12\x01@\x01\x04self\x09\0\x07\x04\0&[method]lazy-process.get-terminal-size\x01\
-\x13\x01@\x02\x04self\x09\x04size\x07\x01\0\x04\0&[method]lazy-process.set-termi\
-nal-size\x01\x14\x01@\x02\x04self\x09\x07enabled\x7f\x01\0\x04\0![method]lazy-pr\
-ocess.set-raw-mode\x01\x15\x04\0\x20[method]lazy-process.is-raw-mode\x01\x0c\x01\
-@\x02\x04self\x09\x06signum}\x01\0\x04\0\x20[method]lazy-process.send-signal\x01\
-\x16\x01ks\x01@\x01\x07commands\0\x17\x04\0\x0fget-lazy-module\x01\x18\x01ps\x01\
-i\x08\x01@\x04\x06modules\x07commands\x04args\x19\x03env\x05\0\x1a\x04\0\x12spaw\
-n-lazy-command\x01\x1b\x01@\x05\x06modules\x07commands\x04args\x19\x03env\x05\x04\
-size\x07\0\x1a\x04\0\x11spawn-interactive\x01\x1c\x01@\x01\x07commands\0\x7f\x04\
-\0\x16is-interactive-command\x01\x1d\x03\0\x1emcp:module-loader/loader@0.1.0\x05\
-\x16\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-outparam\x01B\x08\
-\x02\x03\x02\x01\x17\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\x01\x18\x04\0\
-\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07request\x04\x0cres\
-ponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/incoming-handler@\
-0.2.4\x05\x19\x01B\x0f\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\
+:random/random@0.2.4\x05\x15\x01B\x01\x04\0\x0eterminal-input\x03\x01\x03\0\x1dw\
+asi:cli/terminal-input@0.2.4\x05\x16\x01B\x01\x04\0\x0fterminal-output\x03\x01\x03\
+\0\x1ewasi:cli/terminal-output@0.2.4\x05\x17\x02\x03\0\x0b\x0fterminal-output\x01\
+B\x06\x02\x03\x02\x01\x18\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01\
+@\0\0\x03\x04\0\x13get-terminal-stdout\x01\x04\x03\0\x1ewasi:cli/terminal-stdout\
+@0.2.4\x05\x19\x01B\x06\x02\x03\x02\x01\x18\x04\0\x0fterminal-output\x03\0\0\x01\
+i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13get-terminal-stderr\x01\x04\x03\0\x1ewasi:c\
+li/terminal-stderr@0.2.4\x05\x1a\x01B.\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\
+\0\0\x01o\x02ss\x01p\x02\x01r\x02\x03cwds\x04vars\x03\x04\0\x08exec-env\x03\0\x04\
+\x01r\x02\x04colsy\x04rowsy\x04\0\x0dterminal-size\x03\0\x06\x04\0\x0clazy-proce\
+ss\x03\x01\x01h\x08\x01i\x01\x01@\x01\x04self\x09\0\x0a\x04\0'[method]lazy-proce\
+ss.get-ready-pollable\x01\x0b\x01@\x01\x04self\x09\0\x7f\x04\0\x1d[method]lazy-p\
+rocess.is-ready\x01\x0c\x01p}\x01@\x02\x04self\x09\x04data\x0d\0w\x04\0\x20[meth\
+od]lazy-process.write-stdin\x01\x0e\x01@\x01\x04self\x09\x01\0\x04\0\x20[method]\
+lazy-process.close-stdin\x01\x0f\x01@\x02\x04self\x09\x09max-bytesw\0\x0d\x04\0\x20\
+[method]lazy-process.read-stdout\x01\x10\x04\0\x20[method]lazy-process.read-stde\
+rr\x01\x10\x01kz\x01@\x01\x04self\x09\0\x11\x04\0\x1d[method]lazy-process.try-wa\
+it\x01\x12\x01@\x01\x04self\x09\0\x07\x04\0&[method]lazy-process.get-terminal-si\
+ze\x01\x13\x01@\x02\x04self\x09\x04size\x07\x01\0\x04\0&[method]lazy-process.set\
+-terminal-size\x01\x14\x01@\x02\x04self\x09\x07enabled\x7f\x01\0\x04\0![method]l\
+azy-process.set-raw-mode\x01\x15\x04\0\x20[method]lazy-process.is-raw-mode\x01\x0c\
+\x01@\x02\x04self\x09\x06signum}\x01\0\x04\0\x20[method]lazy-process.send-signal\
+\x01\x16\x01ks\x01@\x01\x07commands\0\x17\x04\0\x0fget-lazy-module\x01\x18\x01ps\
+\x01i\x08\x01@\x04\x06modules\x07commands\x04args\x19\x03env\x05\0\x1a\x04\0\x12\
+spawn-lazy-command\x01\x1b\x01@\x05\x06modules\x07commands\x04args\x19\x03env\x05\
+\x04size\x07\0\x1a\x04\0\x11spawn-interactive\x01\x1c\x01@\x01\x07commands\0\x7f\
+\x04\0\x16is-interactive-command\x01\x1d\x03\0\x1emcp:module-loader/loader@0.1.0\
+\x05\x1b\x02\x03\0\x07\x10incoming-request\x02\x03\0\x07\x11response-outparam\x01\
+B\x08\x02\x03\x02\x01\x1c\x04\0\x10incoming-request\x03\0\0\x02\x03\x02\x01\x1d\x04\
+\0\x11response-outparam\x03\0\x02\x01i\x01\x01i\x03\x01@\x02\x07request\x04\x0cr\
+esponse-out\x05\x01\0\x04\0\x06handle\x01\x06\x04\0\x20wasi:http/incoming-handle\
+r@0.2.4\x05\x1e\x01B\x0f\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\
 \x02\x01\x08\x04\0\x0doutput-stream\x03\0\x02\x01o\x02ss\x01p\x04\x01r\x02\x03cw\
 ds\x04vars\x05\x04\0\x08exec-env\x03\0\x06\x01ps\x01i\x01\x01i\x03\x01@\x06\x04n\
 ames\x04args\x08\x03env\x07\x05stdin\x09\x06stdout\x0a\x06stderr\x0a\0z\x04\0\x03\
 run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shell:unix/comm\
-and@0.1.0\x05\x1a\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0e\
+and@0.1.0\x05\x1f\x04\0#mcp:ts-runtime/ts-runtime-mcp@0.2.0\x04\0\x0b\x14\x01\0\x0e\
 ts-runtime-mcp\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x07\
 0.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]

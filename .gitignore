@@ -20,6 +20,18 @@ runtime/wit/deps/random/
 runtime/wit/deps/sockets/
 runtime/wit/deps.lock
 
+# WIT deps in crates (copied from main runtime)
+runtime/crates/*/wit/deps/cli/
+runtime/crates/*/wit/deps/clocks/
+runtime/crates/*/wit/deps/filesystem/
+runtime/crates/*/wit/deps/http/
+runtime/crates/*/wit/deps/io/
+runtime/crates/*/wit/deps/random/
+runtime/crates/*/wit/deps/sockets/
+
+# Vendored crates
+runtime/vendor/
+
 # WASM build artifacts
 *.wasm
 !frontend/src/wasm/*.wasm

@@ -1,5 +1,6 @@
 //! File manipulation commands: ls, cat, touch, mkdir, rmdir, rm, mv, cp
 
+use crate::bindings::wasi::cli::terminal_stdout::get_terminal_stdout;
 use futures_lite::io::AsyncWriteExt;
 use lexopt::prelude::*;
 use runtime_macros::shell_commands;
@@ -15,7 +16,7 @@ impl FileCommands {
     /// ls - list directory
     #[shell_command(
         name = "ls",
-        usage = "ls [-la] [PATH]...",
+        usage = "ls [-lahrtSdRF1] [--color=auto|always|never] [PATH]...",
         description = "List directory contents"
     )]
     fn cmd_ls(
@@ -26,7 +27,8 @@ impl FileCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd_str = env.cwd.to_string_lossy().to_string();
-        
+        let no_color = env.get_var("NO_COLOR").is_some();
+
         Box::pin(async move {
             let (opts, remaining) = parse_common(&args);
             if opts.help {
@@ -35,21 +37,68 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
+            // Parse flags
             let mut long_format = false;
             let mut show_all = false;
+            let mut human_readable = false;
+            let mut sort_by_time = false;
+            let mut sort_by_size = false;
+            let mut reverse_sort = false;
+            let mut _one_per_line = false;
+            let mut dir_only = false;
+            let mut recursive = false;
+            let mut classify = false;
+            let mut color_mode = ColorMode::Auto;
             let mut paths: Vec<String> = Vec::new();
-            let mut parser = make_parser(remaining);
-            
+
+            // Manual parsing to handle --color=value
+            let mut i = 0;
+            while i < remaining.len() {
+                let arg = &remaining[i];
+                if arg.starts_with("--color") {
+                    if arg == "--color" || arg == "--color=auto" {
+                        color_mode = ColorMode::Auto;
+                    } else if arg == "--color=always" {
+                        color_mode = ColorMode::Always;
+                    } else if arg == "--color=never" {
+                        color_mode = ColorMode::Never;
+                    }
+                    i += 1;
+                    continue;
+                }
+                i += 1;
+            }
+
+            // Use lexopt for short flags
+            let mut parser = make_parser(remaining.clone());
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('l') => long_format = true,
                     Short('a') => show_all = true,
+                    Short('h') => human_readable = true,
+                    Short('t') => sort_by_time = true,
+                    Short('S') => sort_by_size = true,
+                    Short('r') => reverse_sort = true,
+                    Short('1') => _one_per_line = true,
+                    Short('d') => dir_only = true,
+                    Short('R') => recursive = true,
+                    Short('F') => classify = true,
+                    Long(_) => {} // Already handled above
                     Value(val) => paths.push(val.string().unwrap_or_default()),
                     _ => {}
                 }
             }
-            
+
+            // Determine if we should use color using WASI isatty equivalent
+            // get_terminal_stdout() returns Some(_) if stdout is a TTY, None otherwise
+            let is_tty = get_terminal_stdout().is_some();
+            let use_color = match color_mode {
+                ColorMode::Always => true,
+                ColorMode::Never => false,
+                ColorMode::Auto => !no_color && is_tty,
+            };
+
             if paths.is_empty() {
                 let path = if cwd_str == "." || cwd_str.is_empty() {
                     "/".to_string()
@@ -58,7 +107,7 @@ impl FileCommands {
                 };
                 paths.push(path);
             }
-            
+
             for path in paths {
                 let resolved = if path.starts_with('/') {
                     path.clone()
@@ -67,7 +116,56 @@ impl FileCommands {
                 } else {
                     format!("{}/{}", cwd_str, path)
                 };
-                
+
+                // Handle -d flag: list directory itself, not its contents
+                if dir_only {
+                    match std::fs::metadata(&resolved) {
+                        Ok(meta) => {
+                            let name = std::path::Path::new(&resolved)
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| resolved.clone());
+                            let line = format_entry(
+                                &name,
+                                &meta,
+                                long_format,
+                                human_readable,
+                                use_color,
+                                classify,
+                            );
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                        }
+                        Err(e) => {
+                            let msg = format!("ls: {}: {}\n", resolved, e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                            return 1;
+                        }
+                    }
+                    continue;
+                }
+
+                // Handle recursive listing
+                if recursive {
+                    if let Err(code) = list_recursive(
+                        &resolved,
+                        show_all,
+                        long_format,
+                        human_readable,
+                        use_color,
+                        classify,
+                        sort_by_time,
+                        sort_by_size,
+                        reverse_sort,
+                        &mut stdout,
+                        &mut stderr,
+                    )
+                    .await
+                    {
+                        return code;
+                    }
+                    continue;
+                }
+
                 match std::fs::read_dir(&resolved) {
                     Ok(entries) => {
                         let mut items: Vec<(String, std::fs::Metadata)> = entries
@@ -80,22 +178,20 @@ impl FileCommands {
                                 e.metadata().ok().map(|m| (name, m))
                             })
                             .collect();
-                        items.sort_by(|a, b| a.0.cmp(&b.0));
+
+                        // Sort items
+                        sort_entries(&mut items, sort_by_time, sort_by_size, reverse_sort);
 
                         for (name, meta) in items {
-                            if long_format {
-                                let size = meta.len();
-                                let is_dir = if meta.is_dir() { "d" } else { "-" };
-                                let line = format!("{} {:>8}  {}\n", is_dir, size, name);
-                                let _ = stdout.write_all(line.as_bytes()).await;
-                            } else {
-                                let display = if meta.is_dir() {
-                                    format!("{}/\n", name)
-                                } else {
-                                    format!("{}\n", name)
-                                };
-                                let _ = stdout.write_all(display.as_bytes()).await;
-                            }
+                            let line = format_entry(
+                                &name,
+                                &meta,
+                                long_format,
+                                human_readable,
+                                use_color,
+                                classify,
+                            );
+                            let _ = stdout.write_all(line.as_bytes()).await;
                         }
                     }
                     Err(e) => {
@@ -132,7 +228,7 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let mut buf = [0u8; 4096];
                 let mut reader = stdin;
@@ -195,12 +291,12 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"touch: missing file operand\n").await;
                 return 1;
             }
-            
+
             let mut exit_code = 0;
             for arg in &remaining {
                 let path = if arg.starts_with('/') {
@@ -208,7 +304,7 @@ impl FileCommands {
                 } else {
                     format!("{}/{}", cwd, arg)
                 };
-                
+
                 if let Err(e) = std::fs::OpenOptions::new()
                     .create(true)
                     .write(true)
@@ -245,11 +341,11 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             let mut parents = false;
             let mut dirs: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('p') => parents = true,
@@ -257,12 +353,12 @@ impl FileCommands {
                     _ => {}
                 }
             }
-            
+
             if dirs.is_empty() {
                 let _ = stderr.write_all(b"mkdir: missing operand\n").await;
                 return 1;
             }
-            
+
             let mut exit_code = 0;
             for dir in dirs {
                 let path = if dir.starts_with('/') {
@@ -270,13 +366,13 @@ impl FileCommands {
                 } else {
                     format!("{}/{}", cwd, dir)
                 };
-                
+
                 let result = if parents {
                     std::fs::create_dir_all(&path)
                 } else {
                     std::fs::create_dir(&path)
                 };
-                
+
                 if let Err(e) = result {
                     let msg = format!("mkdir: {}: {}\n", path, e);
                     let _ = stderr.write_all(msg.as_bytes()).await;
@@ -309,12 +405,12 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"rmdir: missing operand\n").await;
                 return 1;
             }
-            
+
             let mut exit_code = 0;
             for dir in &remaining {
                 let path = if dir.starts_with('/') {
@@ -322,7 +418,7 @@ impl FileCommands {
                 } else {
                     format!("{}/{}", cwd, dir)
                 };
-                
+
                 if let Err(e) = std::fs::remove_dir(&path) {
                     let msg = format!("rmdir: {}: {}\n", path, e);
                     let _ = stderr.write_all(msg.as_bytes()).await;
@@ -355,12 +451,12 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             let mut recursive = false;
             let mut force = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('r') | Short('R') => recursive = true,
@@ -369,7 +465,7 @@ impl FileCommands {
                     _ => {}
                 }
             }
-            
+
             if files.is_empty() {
                 eprintln!("[debug] rm: no files after parsing, force={}", force);
                 if !force {
@@ -377,8 +473,7 @@ impl FileCommands {
                 }
                 return if force { 0 } else { 1 };
             }
-            
-            
+
             let mut exit_code = 0;
             for file in files {
                 let path = if file.starts_with('/') {
@@ -386,7 +481,7 @@ impl FileCommands {
                 } else {
                     format!("{}/{}", cwd, file)
                 };
-                
+
                 let metadata = match std::fs::metadata(&path) {
                     Ok(m) => m,
                     Err(e) => {
@@ -398,7 +493,7 @@ impl FileCommands {
                         continue;
                     }
                 };
-                
+
                 let result = if metadata.is_dir() {
                     if recursive {
                         std::fs::remove_dir_all(&path)
@@ -411,7 +506,7 @@ impl FileCommands {
                 } else {
                     std::fs::remove_file(&path)
                 };
-                
+
                 if let Err(e) = result {
                     if !force {
                         let msg = format!("rm: {}: {}\n", path, e);
@@ -446,19 +541,23 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.len() < 2 {
                 let _ = stderr.write_all(b"mv: missing destination operand\n").await;
                 return 1;
             }
-            
+
             let resolve = |p: &str| -> String {
-                if p.starts_with('/') { p.to_string() } else { format!("{}/{}", cwd, p) }
+                if p.starts_with('/') {
+                    p.to_string()
+                } else {
+                    format!("{}/{}", cwd, p)
+                }
             };
-            
+
             let src = resolve(&remaining[0]);
             let dst = resolve(&remaining[1]);
-            
+
             if let Err(e) = std::fs::rename(&src, &dst) {
                 let msg = format!("mv: {}: {}\n", src, e);
                 let _ = stderr.write_all(msg.as_bytes()).await;
@@ -490,11 +589,11 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             let mut recursive = false;
             let mut paths: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('r') | Short('R') => recursive = true,
@@ -502,19 +601,23 @@ impl FileCommands {
                     _ => {}
                 }
             }
-            
+
             if paths.len() < 2 {
                 let _ = stderr.write_all(b"cp: missing destination operand\n").await;
                 return 1;
             }
-            
+
             let resolve = |p: &str| -> String {
-                if p.starts_with('/') { p.to_string() } else { format!("{}/{}", cwd, p) }
+                if p.starts_with('/') {
+                    p.to_string()
+                } else {
+                    format!("{}/{}", cwd, p)
+                }
             };
-            
+
             let src = resolve(&paths[0]);
             let dst = resolve(&paths[1]);
-            
+
             let metadata = match std::fs::metadata(&src) {
                 Ok(m) => m,
                 Err(e) => {
@@ -523,7 +626,7 @@ impl FileCommands {
                     return 1;
                 }
             };
-            
+
             if metadata.is_dir() {
                 if !recursive {
                     let msg = format!("cp: {}: is a directory (use -r)\n", src);
@@ -566,12 +669,12 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             let mut search_path = "/".to_string();
             let mut name_pattern: Option<String> = None;
             let mut type_filter: Option<char> = None;
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Long("name") | Short('n') => {
@@ -596,7 +699,7 @@ impl FileCommands {
                     _ => {}
                 }
             }
-            
+
             fn find_recursive(
                 dir: &str,
                 pattern: &Option<String>,
@@ -609,35 +712,35 @@ impl FileCommands {
                         let path_str = path.to_string_lossy().to_string();
                         let file_name = entry.file_name().to_string_lossy().to_string();
                         let is_dir = path.is_dir();
-                        
+
                         // Check type filter
                         let type_ok = match type_filter {
                             Some('f') => !is_dir,
                             Some('d') => is_dir,
                             _ => true,
                         };
-                        
+
                         // Check name pattern (glob-like)
                         let name_ok = match pattern {
                             Some(pat) => glob_match(pat, &file_name),
                             None => true,
                         };
-                        
+
                         if type_ok && name_ok {
                             results.push(path_str.clone());
                         }
-                        
+
                         if is_dir {
                             find_recursive(&path_str, pattern, type_filter, results);
                         }
                     }
                 }
             }
-            
+
             let mut results = Vec::new();
             find_recursive(&search_path, &name_pattern, type_filter, &mut results);
             results.sort();
-            
+
             for path in results {
                 let _ = stdout.write_all(path.as_bytes()).await;
                 let _ = stdout.write_all(b"\n").await;
@@ -668,11 +771,11 @@ impl FileCommands {
                     return 0;
                 }
             }
-            
+
             let mut unified = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('u') => unified = true,
@@ -680,19 +783,23 @@ impl FileCommands {
                     _ => {}
                 }
             }
-            
+
             if files.len() < 2 {
                 let _ = stderr.write_all(b"diff: need two files to compare\n").await;
                 return 1;
             }
-            
+
             let resolve = |p: &str| -> String {
-                if p.starts_with('/') { p.to_string() } else { format!("{}/{}", cwd, p) }
+                if p.starts_with('/') {
+                    p.to_string()
+                } else {
+                    format!("{}/{}", cwd, p)
+                }
             };
-            
+
             let path1 = resolve(&files[0]);
             let path2 = resolve(&files[1]);
-            
+
             let content1 = match std::fs::read_to_string(&path1) {
                 Ok(c) => c,
                 Err(e) => {
@@ -701,7 +808,7 @@ impl FileCommands {
                     return 1;
                 }
             };
-            
+
             let content2 = match std::fs::read_to_string(&path2) {
                 Ok(c) => c,
                 Err(e) => {
@@ -710,23 +817,27 @@ impl FileCommands {
                     return 1;
                 }
             };
-            
+
             let lines1: Vec<&str> = content1.lines().collect();
             let lines2: Vec<&str> = content2.lines().collect();
-            
+
             let mut has_diff = false;
-            
+
             if unified {
-                let _ = stdout.write_all(format!("--- {}\n", files[0]).as_bytes()).await;
-                let _ = stdout.write_all(format!("+++ {}\n", files[1]).as_bytes()).await;
+                let _ = stdout
+                    .write_all(format!("--- {}\n", files[0]).as_bytes())
+                    .await;
+                let _ = stdout
+                    .write_all(format!("+++ {}\n", files[1]).as_bytes())
+                    .await;
             }
-            
+
             // Simple line-by-line diff
             let max_lines = std::cmp::max(lines1.len(), lines2.len());
             for i in 0..max_lines {
                 let l1 = lines1.get(i);
                 let l2 = lines2.get(i);
-                
+
                 match (l1, l2) {
                     (Some(a), Some(b)) if a != b => {
                         has_diff = true;
@@ -734,7 +845,9 @@ impl FileCommands {
                             let _ = stdout.write_all(format!("-{}\n", a).as_bytes()).await;
                             let _ = stdout.write_all(format!("+{}\n", b).as_bytes()).await;
                         } else {
-                            let _ = stdout.write_all(format!("{}c{}\n", i + 1, i + 1).as_bytes()).await;
+                            let _ = stdout
+                                .write_all(format!("{}c{}\n", i + 1, i + 1).as_bytes())
+                                .await;
                             let _ = stdout.write_all(format!("< {}\n", a).as_bytes()).await;
                             let _ = stdout.write_all(b"---\n").await;
                             let _ = stdout.write_all(format!("> {}\n", b).as_bytes()).await;
@@ -767,8 +880,12 @@ impl FileCommands {
                     }
                 }
             }
-            
-            if has_diff { 1 } else { 0 }
+
+            if has_diff {
+                1
+            } else {
+                0
+            }
         })
     }
 
@@ -808,7 +925,9 @@ impl FileCommands {
                 };
 
                 let file_type = detect_file_type(&path);
-                let _ = stdout.write_all(format!("{}: {}\n", file, file_type).as_bytes()).await;
+                let _ = stdout
+                    .write_all(format!("{}: {}\n", file, file_type).as_bytes())
+                    .await;
             }
 
             0
@@ -849,7 +968,11 @@ impl FileCommands {
                 if std::fs::metadata(&resolved).is_ok() {
                     let _ = stdout.write_all(format!("{}\n", resolved).as_bytes()).await;
                 } else {
-                    let _ = stderr.write_all(format!("realpath: {}: No such file or directory\n", path).as_bytes()).await;
+                    let _ = stderr
+                        .write_all(
+                            format!("realpath: {}: No such file or directory\n", path).as_bytes(),
+                        )
+                        .await;
                     exit_code = 1;
                 }
             }
@@ -908,10 +1031,14 @@ impl FileCommands {
                     format!("{}/{}", cwd, path)
                 };
 
-                match calculate_disk_usage(&full_path, summary_only, human_readable, &mut stdout).await {
+                match calculate_disk_usage(&full_path, summary_only, human_readable, &mut stdout)
+                    .await
+                {
                     Ok(_) => {}
                     Err(e) => {
-                        let _ = stderr.write_all(format!("du: {}: {}\n", path, e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("du: {}: {}\n", path, e).as_bytes())
+                            .await;
                     }
                 }
             }
@@ -974,7 +1101,9 @@ impl FileCommands {
                     // Read symlink target
                     match std::fs::read_link(&path) {
                         Ok(target) => {
-                            let _ = stdout.write_all(format!("{}\n", target.display()).as_bytes()).await;
+                            let _ = stdout
+                                .write_all(format!("{}\n", target.display()).as_bytes())
+                                .await;
                         }
                         Err(_) => {
                             // Not a symlink - print nothing (like GNU readlink)
@@ -992,7 +1121,7 @@ impl FileCommands {
 fn glob_match(pattern: &str, text: &str) -> bool {
     let mut p_chars = pattern.chars().peekable();
     let mut t_chars = text.chars().peekable();
-    
+
     while let Some(pc) = p_chars.next() {
         match pc {
             '*' => {
@@ -1024,7 +1153,7 @@ fn glob_match(pattern: &str, text: &str) -> bool {
             }
         }
     }
-    
+
     t_chars.peek().is_none()
 }
 
@@ -1078,7 +1207,10 @@ fn detect_file_type(path: &str) -> String {
         if data.starts_with(b"{\n") || data.starts_with(b"{\r\n") || data.starts_with(b"{\"") {
             return "JSON data".to_string();
         }
-        if data.starts_with(b"<!DOCTYPE html") || data.starts_with(b"<!doctype html") || data.starts_with(b"<html") {
+        if data.starts_with(b"<!DOCTYPE html")
+            || data.starts_with(b"<!doctype html")
+            || data.starts_with(b"<html")
+        {
             return "HTML document".to_string();
         }
         if data.starts_with(b"<?xml") {
@@ -1118,7 +1250,9 @@ fn detect_file_type(path: &str) -> String {
         if is_text {
             // Try to determine text type
             let text = String::from_utf8_lossy(sample);
-            if text.contains("function") && (text.contains("const ") || text.contains("let ") || text.contains("var ")) {
+            if text.contains("function")
+                && (text.contains("const ") || text.contains("let ") || text.contains("var "))
+            {
                 return "JavaScript source, ASCII text".to_string();
             }
             if text.contains("fn ") && text.contains("let ") && text.contains("->") {
@@ -1149,7 +1283,9 @@ fn resolve_canonical_path(cwd: &str, path: &str) -> String {
     for part in abs_path.split('/') {
         match part {
             "" | "." => {}
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             _ => parts.push(part),
         }
     }
@@ -1169,15 +1305,16 @@ async fn calculate_disk_usage(
     stdout: &mut piper::Writer,
 ) -> Result<u64, String> {
     use futures_lite::io::AsyncWriteExt;
-    
-    let metadata = std::fs::metadata(path)
-        .map_err(|e| e.to_string())?;
+
+    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
 
     if metadata.is_file() {
         let size = metadata.len();
         if !summary_only {
             let display = format_size(size, human_readable);
-            let _ = stdout.write_all(format!("{}\t{}\n", display, path).as_bytes()).await;
+            let _ = stdout
+                .write_all(format!("{}\t{}\n", display, path).as_bytes())
+                .await;
         }
         return Ok(size);
     }
@@ -1187,24 +1324,27 @@ async fn calculate_disk_usage(
     }
 
     let mut total: u64 = 0;
-    
+
     for entry in std::fs::read_dir(path).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         let entry_str = entry_path.to_string_lossy().to_string();
-        
+
         // Recursive call using Box::pin for async recursion
         total += Box::pin(calculate_disk_usage(
             &entry_str,
             true, // Always summarize children
             human_readable,
             stdout,
-        )).await?;
+        ))
+        .await?;
     }
 
     if !summary_only {
         let display = format_size(total, human_readable);
-        let _ = stdout.write_all(format!("{}\t{}\n", display, path).as_bytes()).await;
+        let _ = stdout
+            .write_all(format!("{}\t{}\n", display, path).as_bytes())
+            .await;
     }
 
     Ok(total)
@@ -1229,6 +1369,207 @@ fn format_size(bytes: u64, human_readable: bool) -> String {
         format!("{:.1}K", bytes as f64 / KB as f64)
     } else {
         format!("{}B", bytes)
+    }
+}
+
+// =============================================================================
+// ls command helpers
+// =============================================================================
+
+/// Color mode for ls output
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ColorMode {
+    Auto,
+    Always,
+    Never,
+}
+
+// ANSI color codes
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_DIR: &str = "\x1b[1;34m"; // Bold blue
+const COLOR_SYMLINK: &str = "\x1b[36m"; // Cyan
+#[allow(dead_code)] // Reserved for executable file highlighting
+const COLOR_EXEC: &str = "\x1b[1;32m"; // Bold green
+
+/// Format a single ls entry with optional color and classification
+fn format_entry(
+    name: &str,
+    meta: &std::fs::Metadata,
+    long_format: bool,
+    human_readable: bool,
+    use_color: bool,
+    classify: bool,
+) -> String {
+    let is_dir = meta.is_dir();
+    let is_symlink = meta.file_type().is_symlink();
+
+    // Build the name with color and classifier
+    let colored_name = if use_color {
+        if is_dir {
+            format!("{}{}{}", COLOR_DIR, name, COLOR_RESET)
+        } else if is_symlink {
+            format!("{}{}{}", COLOR_SYMLINK, name, COLOR_RESET)
+        } else {
+            name.to_string()
+        }
+    } else {
+        name.to_string()
+    };
+
+    // Add classifier suffix
+    let suffix = if classify {
+        if is_dir {
+            "/"
+        } else if is_symlink {
+            "@"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    };
+
+    if long_format {
+        let size = meta.len();
+        let size_str = if human_readable {
+            format_size(size, true)
+        } else {
+            format!("{:>8}", size)
+        };
+        let type_char = if is_dir {
+            "d"
+        } else if is_symlink {
+            "l"
+        } else {
+            "-"
+        };
+        format!("{} {}  {}{}\n", type_char, size_str, colored_name, suffix)
+    } else {
+        if is_dir && !classify && !use_color {
+            // Traditional ls shows trailing / for directories in non-color mode
+            format!("{}/\n", name)
+        } else {
+            format!("{}{}\n", colored_name, suffix)
+        }
+    }
+}
+
+/// Sort entries by the specified criteria
+fn sort_entries(
+    items: &mut Vec<(String, std::fs::Metadata)>,
+    sort_by_time: bool,
+    sort_by_size: bool,
+    reverse: bool,
+) {
+    if sort_by_time {
+        items.sort_by(|a, b| {
+            let time_a = a.1.modified().ok();
+            let time_b = b.1.modified().ok();
+            let cmp = time_b.cmp(&time_a); // Newest first
+            if reverse {
+                cmp.reverse()
+            } else {
+                cmp
+            }
+        });
+    } else if sort_by_size {
+        items.sort_by(|a, b| {
+            let cmp = b.1.len().cmp(&a.1.len()); // Largest first
+            if reverse {
+                cmp.reverse()
+            } else {
+                cmp
+            }
+        });
+    } else {
+        // Default: alphabetical
+        items.sort_by(|a, b| {
+            let cmp = a.0.cmp(&b.0);
+            if reverse {
+                cmp.reverse()
+            } else {
+                cmp
+            }
+        });
+    }
+}
+
+/// List directory recursively (ls -R)
+async fn list_recursive(
+    path: &str,
+    show_all: bool,
+    long_format: bool,
+    human_readable: bool,
+    use_color: bool,
+    classify: bool,
+    sort_by_time: bool,
+    sort_by_size: bool,
+    reverse_sort: bool,
+    stdout: &mut piper::Writer,
+    stderr: &mut piper::Writer,
+) -> Result<(), i32> {
+    use futures_lite::io::AsyncWriteExt;
+
+    // Print directory header
+    let header = format!("{}:\n", path);
+    let _ = stdout.write_all(header.as_bytes()).await;
+
+    match std::fs::read_dir(path) {
+        Ok(entries) => {
+            let mut items: Vec<(String, std::fs::Metadata)> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if !show_all && name.starts_with('.') {
+                        return None;
+                    }
+                    e.metadata().ok().map(|m| (name, m))
+                })
+                .collect();
+
+            sort_entries(&mut items, sort_by_time, sort_by_size, reverse_sort);
+
+            // Collect subdirectories for recursive listing
+            let mut subdirs: Vec<String> = Vec::new();
+
+            for (name, meta) in &items {
+                let line =
+                    format_entry(name, meta, long_format, human_readable, use_color, classify);
+                let _ = stdout.write_all(line.as_bytes()).await;
+
+                if meta.is_dir() {
+                    subdirs.push(format!("{}/{}", path, name));
+                }
+            }
+
+            // Add blank line between directory listings
+            let _ = stdout.write_all(b"\n").await;
+
+            // Recurse into subdirectories
+            for subdir in subdirs {
+                Box::pin(list_recursive(
+                    &subdir,
+                    show_all,
+                    long_format,
+                    human_readable,
+                    use_color,
+                    classify,
+                    sort_by_time,
+                    sort_by_size,
+                    reverse_sort,
+                    stdout,
+                    stderr,
+                ))
+                .await?;
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("ls: {}: {}\n", path, e);
+            let _ = stderr.write_all(msg.as_bytes()).await;
+            Err(1)
+        }
     }
 }
 

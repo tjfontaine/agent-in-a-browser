@@ -342,8 +342,8 @@ impl ShellOptions {
     /// Create default options (like non-interactive bash).
     pub fn new() -> Self {
         Self {
-            braceexpand: true,  // -B is on by default
-            hashall: true,      // -h is on by default
+            braceexpand: true,     // -B is on by default
+            hashall: true,         // -h is on by default
             expand_aliases: false, // Off in non-interactive
             ..Default::default()
         }
@@ -452,7 +452,7 @@ pub struct ShellEnv {
     pub functions: HashMap<String, String>,
     /// Are we in a function scope?
     pub in_function: bool,
-    
+
     // Loop control
     /// Current loop nesting depth (0 = not in loop)
     pub loop_depth: usize,
@@ -460,9 +460,13 @@ pub struct ShellEnv {
     pub break_level: usize,
     /// Continue level requested (0 = no continue, 1 = continue innermost, etc.)
     pub continue_level: usize,
-    
+
     /// Command aliases (name -> expansion)
     pub aliases: HashMap<String, String>,
+
+    /// Whether stdout is connected to a terminal (for color output).
+    /// This is the shell equivalent of isatty(STDOUT_FILENO).
+    pub is_interactive: bool,
 
     // Legacy compatibility fields (to avoid breaking existing code)
     /// Alias for exported variables lookup
@@ -498,6 +502,8 @@ impl ShellEnv {
             continue_level: 0,
             // Aliases
             aliases: HashMap::new(),
+            // Interactive mode (default false, set true for REPL)
+            is_interactive: false,
             // Legacy compatibility
             env_vars: HashMap::new(),
             local_vars: HashMap::new(),
@@ -514,15 +520,15 @@ impl ShellEnv {
     pub fn get_variable(&self, name: &str) -> Option<&ShellVariable> {
         self.resolve_nameref(name, 0)
     }
-    
+
     /// Resolve nameref chain (with recursion limit to prevent infinite loops).
     fn resolve_nameref(&self, name: &str, depth: usize) -> Option<&ShellVariable> {
         if depth > 10 {
             return None; // Prevent infinite nameref loops
         }
-        
+
         let var = self.variables.get(name)?;
-        
+
         if var.nameref {
             // The value contains the name of the target variable
             let target_name = var.value.as_string();
@@ -530,7 +536,7 @@ impl ShellEnv {
                 return self.resolve_nameref(&target_name, depth + 1);
             }
         }
-        
+
         Some(var)
     }
 
@@ -542,7 +548,8 @@ impl ShellEnv {
 
     /// Get all variable names matching a prefix.
     pub fn variable_names_with_prefix(&self, prefix: &str) -> Vec<String> {
-        self.variables.keys()
+        self.variables
+            .keys()
             .filter(|k| k.starts_with(prefix))
             .cloned()
             .collect()
@@ -647,26 +654,29 @@ impl ShellEnv {
         }
 
         // Then check new variable system
-        self.variables.get(name).map(|v| {
-            // This is a bit awkward - we store String in ShellValue but need &String
-            // For now, check env_vars as fallback for exported vars
-            match &v.value {
-                ShellValue::String(s) => {
-                    // Return from env_vars if exported (it's always in sync)
-                    if v.exported {
-                        self.env_vars.get(name).unwrap_or(s)
-                    } else {
-                        // This won't work directly - need to rethink
-                        // For now, always check env_vars
-                        self.env_vars.get(name).or(Some(s)).unwrap()
+        self.variables
+            .get(name)
+            .map(|v| {
+                // This is a bit awkward - we store String in ShellValue but need &String
+                // For now, check env_vars as fallback for exported vars
+                match &v.value {
+                    ShellValue::String(s) => {
+                        // Return from env_vars if exported (it's always in sync)
+                        if v.exported {
+                            self.env_vars.get(name).unwrap_or(s)
+                        } else {
+                            // This won't work directly - need to rethink
+                            // For now, always check env_vars
+                            self.env_vars.get(name).or(Some(s)).unwrap()
+                        }
+                    }
+                    _ => {
+                        // For arrays, fall back to env_vars
+                        self.env_vars.get(name).expect("array variable")
                     }
                 }
-                _ => {
-                    // For arrays, fall back to env_vars
-                    self.env_vars.get(name).expect("array variable")
-                }
-            }
-        }).or_else(|| self.env_vars.get(name))
+            })
+            .or_else(|| self.env_vars.get(name))
     }
 
     /// Get a variable value as String (owned, preferred method).
@@ -795,7 +805,12 @@ impl ShellEnv {
     }
 
     /// Set array element: arr[index]=value
-    pub fn set_array_element(&mut self, name: &str, index: &str, value: &str) -> Result<(), String> {
+    pub fn set_array_element(
+        &mut self,
+        name: &str,
+        index: &str,
+        value: &str,
+    ) -> Result<(), String> {
         let var = self
             .variables
             .entry(name.to_string())
@@ -1118,22 +1133,13 @@ mod tests {
         env.set_indexed_array("arr", vec!["one".into(), "two".into(), "three".into()])
             .unwrap();
 
-        assert_eq!(
-            env.get_array_element("arr", "0"),
-            Some("one".to_string())
-        );
-        assert_eq!(
-            env.get_array_element("arr", "1"),
-            Some("two".to_string())
-        );
+        assert_eq!(env.get_array_element("arr", "0"), Some("one".to_string()));
+        assert_eq!(env.get_array_element("arr", "1"), Some("two".to_string()));
         assert_eq!(env.get_array_length("arr"), 3);
 
         // Modify element
         env.set_array_element("arr", "1", "TWO").unwrap();
-        assert_eq!(
-            env.get_array_element("arr", "1"),
-            Some("TWO".to_string())
-        );
+        assert_eq!(env.get_array_element("arr", "1"), Some("TWO".to_string()));
 
         // Get all values
         let vals = env.get_array_values("arr");
@@ -1145,16 +1151,20 @@ mod tests {
         let mut env = ShellEnv::new();
 
         // Declare as indexed array
-        env.declare_variable("myarr", true, false, false, false, false, false, false, false)
-            .unwrap();
+        env.declare_variable(
+            "myarr", true, false, false, false, false, false, false, false,
+        )
+        .unwrap();
         assert!(env
             .get_variable("myarr")
             .map(|v| v.value.is_array())
             .unwrap_or(false));
 
         // Declare with export
-        env.declare_variable("myexport", false, false, true, false, false, false, false, false)
-            .unwrap();
+        env.declare_variable(
+            "myexport", false, false, true, false, false, false, false, false,
+        )
+        .unwrap();
         assert!(env
             .get_variable("myexport")
             .map(|v| v.exported)

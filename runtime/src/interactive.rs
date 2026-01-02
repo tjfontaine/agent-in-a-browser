@@ -91,6 +91,7 @@ fn run_interactive_shell(
     // Create shell environment from exec-env
     let mut shell_env = ShellEnv::new();
     shell_env.cwd = PathBuf::from(&env.cwd);
+    shell_env.is_interactive = true; // We're in an interactive terminal
 
     // Copy environment variables
     for (key, value) in &env.vars {

@@ -32,6 +32,11 @@ world edtui-module {
     import wasi:clocks/monotonic-clock@0.2.4;
     import terminal:info/size@0.1.0;
     
+    // Terminal detection for isatty-style checks
+    import wasi:cli/terminal-input@0.2.4;
+    import wasi:cli/terminal-output@0.2.4;
+    import wasi:cli/terminal-stdout@0.2.4;
+    import wasi:cli/terminal-stderr@0.2.4;
+    
     export command;
 }
-
