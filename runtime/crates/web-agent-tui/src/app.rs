@@ -1208,18 +1208,19 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     0x0D => {
                         // Enter - select provider and open wizard for configuration
                         if let Some((provider_id, _name, base_url)) = PROVIDERS.get(*selected) {
-                            // All providers go to wizard for configuration
-                            // Pre-fill base URL for preconfigured providers (can be overridden)
+                            // Standard providers skip base_url (rig-core has defaults)
+                            // Custom providers need to specify everything
                             let prefilled_url = base_url.unwrap_or("").to_string();
                             let prefilled_model =
                                 self.config.providers.get(provider_id).model.clone();
 
                             // Determine start step based on provider type
-                            // Custom goes to API format selection first
+                            // - custom: goes to API format selection first
+                            // - standard providers: skip to model selection (rig-core has base_url defaults)
                             let start_step = if *provider_id == "custom" {
                                 ProviderWizardStep::SelectApiFormat
                             } else {
-                                ProviderWizardStep::EnterBaseUrl
+                                ProviderWizardStep::EnterModel // Skip base_url for standard providers
                             };
 
                             // Pre-select API format based on provider
