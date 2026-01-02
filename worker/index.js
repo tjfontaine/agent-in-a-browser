@@ -28,9 +28,17 @@ const ALLOWED_ORIGINS = [
 
 /**
  * Check if an origin is allowed to use the proxy
+ * Also allows null origin from same-origin Web Worker contexts
  */
-function isAllowedOrigin(origin) {
-    if (!origin) return false;
+function isAllowedOrigin(origin, requestUrl) {
+    // Allow null origin from Web Workers (same-origin requests)
+    // When a fetch comes from a Worker blob, origin may be null but it's still same-origin
+    if (!origin || origin === 'null') {
+        // For null origins, check if the request is coming to our domain
+        // This is a same-origin request from a Web Worker
+        const url = new URL(requestUrl);
+        return url.hostname === 'agent.edge-agent.dev';
+    }
     return ALLOWED_ORIGINS.includes(origin);
 }
 
@@ -42,7 +50,7 @@ async function handleCorsProxy(request) {
     const origin = request.headers.get('Origin');
 
     // Validate origin - only allow requests from our own domains
-    if (!isAllowedOrigin(origin)) {
+    if (!isAllowedOrigin(origin, request.url)) {
         return new Response('Origin not allowed', { status: 403 });
     }
 
