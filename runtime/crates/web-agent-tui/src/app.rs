@@ -1083,14 +1083,13 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 ));
                             }
                             0x0D => {
-                                // Enter - set token
+                                // Enter - set token and try to connect
                                 let sid = server_id.clone();
                                 let token = token_input.clone();
                                 if !token.is_empty() {
                                     self.set_server_token(&sid, &token);
-                                    self.overlay = Some(Overlay::ServerManager(
-                                        ServerManagerView::ServerList { selected: 0 },
-                                    ));
+                                    // Try to connect with the new token
+                                    self.try_connect_new_server_in_wizard(&sid);
                                 }
                             }
                             0x7F | 0x08 => {
