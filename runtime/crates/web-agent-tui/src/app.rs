@@ -167,6 +167,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
         // Initial render
         self.render();
 
+        // Auto-connect all predefined MCP servers
+        self.auto_connect_servers();
+        self.render(); // Re-render to show connection results
+
         // Main loop: input then render
         // (This order ensures resize events are processed before drawing)
         while !self.should_quit {
@@ -1532,6 +1536,71 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     });
                 }
             }
+        }
+    }
+
+    /// Auto-connect all predefined MCP servers at startup
+    /// Only notifies of errors, does not retry on failure
+    fn auto_connect_servers(&mut self) {
+        if self.remote_servers.is_empty() {
+            return;
+        }
+
+        // Collect server IDs first to avoid borrow issues
+        let server_ids: Vec<String> = self.remote_servers.iter().map(|s| s.id.clone()).collect();
+        let server_count = server_ids.len();
+
+        self.messages.push(Message {
+            role: Role::System,
+            content: format!("Connecting to {} saved MCP server(s)...", server_count),
+        });
+
+        let mut connected = 0;
+        let mut failed = 0;
+
+        for id in server_ids {
+            if let Some(idx) = self.remote_servers.iter().position(|s| s.id == id) {
+                self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
+                let server = &self.remote_servers[idx];
+
+                match ServerManager::connect_server(server) {
+                    Ok(tools) => {
+                        self.remote_servers[idx].status = ServerConnectionStatus::Connected;
+                        self.remote_servers[idx].tools = tools;
+                        connected += 1;
+                    }
+                    Err(McpError::OAuthRequired(_)) => {
+                        // OAuth required - mark as needing auth, don't auto-trigger popup at startup
+                        self.remote_servers[idx].status = ServerConnectionStatus::Error(
+                            "OAuth required - use /mcp connect to authenticate".to_string(),
+                        );
+                        failed += 1;
+                        self.messages.push(Message {
+                            role: Role::System,
+                            content: format!(
+                                "'{}': OAuth authentication required",
+                                self.remote_servers[idx].name
+                            ),
+                        });
+                    }
+                    Err(e) => {
+                        self.remote_servers[idx].status =
+                            ServerConnectionStatus::Error(e.to_string());
+                        failed += 1;
+                        self.messages.push(Message {
+                            role: Role::System,
+                            content: format!("'{}': {}", self.remote_servers[idx].name, e),
+                        });
+                    }
+                }
+            }
+        }
+
+        if connected > 0 || failed > 0 {
+            self.messages.push(Message {
+                role: Role::System,
+                content: format!("MCP servers: {} connected, {} failed", connected, failed),
+            });
         }
     }
 
