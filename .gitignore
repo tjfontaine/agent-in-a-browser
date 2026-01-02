@@ -51,3 +51,10 @@ packages/wasm-vim/wasm/
 # Test results and reports
 frontend/test-results/
 frontend/playwright-report/runtime/vendor/
+
+# Volatile/generated files
+frontend/playwright-report/
+frontend/test-results/
+frontend/src/wasm/web-agent-tui/
+frontend/src/wasm/ratatui-demo/
+frontend/src/wasm/edtui-module/
