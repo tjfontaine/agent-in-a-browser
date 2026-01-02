@@ -15,16 +15,19 @@ This workflow builds the Rust WASM component, runs tests, and transpiles for the
 
 ## Steps
 
-### 1. Build Rust WASM Component (Release)
+### 1. Build Rust WASM Components (Release)
 
 // turbo
 
 ```bash
 cd runtime && cargo component build --release --target wasm32-wasip2
+cd runtime/crates/web-agent-tui && cargo component build --release --target wasm32-wasip2
 ```
 
-This compiles the Rust MCP server to a WASM component at:
-`target/wasm32-wasip2/release/ts-runtime-mcp.wasm`
+This compiles two Rust WASM components:
+
+- `target/wasm32-wasip2/release/ts-runtime-mcp.wasm` - MCP server, shell, and sandbox tools
+- `target/wasm32-wasip2/release/web_agent_tui.wasm` - TUI application, AI agent, OAuth client
 
 ### 2. Run Rust Unit Tests
 
@@ -46,9 +49,12 @@ cd frontend && npm run transpile:all
 
 This uses `jco` to transpile all WASM components to JavaScript modules:
 
-- `frontend/src/wasm/mcp-server/` - Main shell and MCP tools
-- `frontend/src/wasm/tsx-engine/` - TypeScript execution (lazy-loaded)
-- `frontend/src/wasm/sqlite-module/` - SQLite database (lazy-loaded)
+- `frontend/src/wasm/mcp-server-jspi/` - Main shell and MCP tools
+- `frontend/src/wasm/web-agent-tui/` - TUI application with AI agent
+- `packages/wasm-tsx/wasm/` - TypeScript execution (lazy-loaded)
+- `packages/wasm-sqlite/wasm/` - SQLite database (lazy-loaded)
+- `packages/wasm-vim/wasm/` - Vim editor (lazy-loaded)
+- `packages/wasm-ratatui/wasm/` - Interactive TUI demos (lazy-loaded)
 
 ### 4. Run Frontend Unit Tests
 

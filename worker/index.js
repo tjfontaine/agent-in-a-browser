@@ -5,6 +5,8 @@
 // Allowlist of domains that can be proxied
 const CORS_PROXY_ALLOWLIST = [
     'mcp.stripe.com',
+    'api.githubcopilot.com',
+    'github.com',
 ];
 
 /**
@@ -43,8 +45,8 @@ async function handleCorsProxy(request) {
         return new Response('Origin not allowed', { status: 403 });
     }
 
-    // Only allow POST for MCP requests
-    if (request.method !== 'POST' && request.method !== 'OPTIONS') {
+    // Allow GET (for OAuth discovery), POST (for MCP), and OPTIONS (for CORS preflight)
+    if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'OPTIONS') {
         return new Response('Method not allowed', { status: 405 });
     }
 
@@ -54,7 +56,7 @@ async function handleCorsProxy(request) {
             status: 204,
             headers: {
                 'Access-Control-Allow-Origin': origin,
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
                 'Access-Control-Max-Age': '86400',
             },

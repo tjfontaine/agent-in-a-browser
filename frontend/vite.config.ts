@@ -78,18 +78,26 @@ export default defineConfig(({ mode }) => ({
                             }
                         }
 
-                        // Collect request body
-                        const chunks: Buffer[] = [];
-                        for await (const chunk of req) {
-                            chunks.push(Buffer.from(chunk));
+                        const method = req.method || 'GET';
+
+                        // Only collect body for methods that support it
+                        let body: Uint8Array | undefined;
+                        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+                            const chunks: Buffer[] = [];
+                            for await (const chunk of req) {
+                                chunks.push(Buffer.from(chunk));
+                            }
+                            const bodyBuffer = Buffer.concat(chunks);
+                            if (bodyBuffer.length > 0) {
+                                body = new Uint8Array(bodyBuffer);
+                            }
                         }
-                        const body = Buffer.concat(chunks);
 
                         // Make the actual request to target
                         const response = await fetch(targetUrl, {
-                            method: req.method || 'POST',
+                            method,
                             headers,
-                            body: body.length > 0 ? body : undefined,
+                            body: body as BodyInit | undefined,
                         });
 
                         // Build response headers with CORS

@@ -180,31 +180,48 @@ impl OAuthClient {
 
         let response = HttpClient::request("GET", &url, &[], None)?;
 
-        if response.status == 404 {
-            // Try OpenID Connect discovery
-            let oidc_url = format!("{}/.well-known/openid-configuration", base);
-            let response = HttpClient::request("GET", &oidc_url, &[], None)?;
-
-            if response.status >= 400 {
-                return Err(OAuthError::MetadataError(format!(
-                    "Auth server metadata not found at {} or {}",
-                    url, oidc_url
-                )));
+        // Try to parse the response if we got a 200
+        if response.status == 200 {
+            // Try parsing - if it fails (e.g., missing required fields), fall through to fallback
+            if let Ok(metadata) = serde_json::from_slice::<AuthServerMetadata>(&response.body) {
+                return Ok(metadata);
             }
-
-            let metadata: AuthServerMetadata = serde_json::from_slice(&response.body)?;
-            return Ok(metadata);
+            // Response was valid JSON but missing required fields - try fallbacks
         }
 
-        if response.status >= 400 {
-            return Err(OAuthError::MetadataError(format!(
-                "Failed to fetch auth server metadata: HTTP {}",
-                response.status
-            )));
+        // Try OpenID Connect discovery
+        if response.status == 404 || response.status == 200 {
+            let oidc_url = format!("{}/.well-known/openid-configuration", base);
+            let oidc_response = HttpClient::request("GET", &oidc_url, &[], None)?;
+
+            if oidc_response.status == 200 {
+                if let Ok(metadata) =
+                    serde_json::from_slice::<AuthServerMetadata>(&oidc_response.body)
+                {
+                    return Ok(metadata);
+                }
+            }
         }
 
-        let metadata: AuthServerMetadata = serde_json::from_slice(&response.body)?;
-        Ok(metadata)
+        // Fallback: construct metadata for well-known OAuth providers
+        // GitHub doesn't implement RFC 8414, so we need to construct endpoints manually
+        if base.contains("github.com") {
+            return Ok(AuthServerMetadata {
+                authorization_endpoint: format!("{}/authorize", base),
+                token_endpoint: format!("{}/access_token", base),
+                registration_endpoint: None,
+                response_types_supported: vec!["code".to_string()],
+                grant_types_supported: vec!["authorization_code".to_string()],
+                code_challenge_methods_supported: vec!["S256".to_string()],
+                scopes_supported: vec![],
+            });
+        }
+
+        // No discovery worked and no fallback available
+        Err(OAuthError::MetadataError(format!(
+            "Auth server metadata not found at {} and no fallback available for {}",
+            url, base
+        )))
     }
 
     /// Generate PKCE parameters
