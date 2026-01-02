@@ -55,14 +55,19 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
             console.log('[AsyncMode] Loading Sync-mode MCP server...');
-            // Dynamic import for sync module - may not exist in CI builds
-            // @ts-expect-error - Sync module may not be built in all environments
-            const module: McpServerModule = await import('../mcp-server-sync/ts-runtime-mcp.js');
-            // With --tla-compat, we must await $init before accessing exports
-            if (module.$init) {
-                await module.$init;
+            // Dynamic import for sync module - use runtime path to prevent Vite from pre-resolving
+            // This module may not exist in CI builds (only JSPI mode is transpiled)
+            const syncPath = '../mcp-server-sync/ts-runtime-mcp.js';
+            try {
+                const module: McpServerModule = await import(/* @vite-ignore */ syncPath);
+                // With --tla-compat, we must await $init before accessing exports
+                if (module.$init) {
+                    await module.$init;
+                }
+                cachedIncomingHandler = module.incomingHandler as IncomingHandler;
+            } catch (err) {
+                throw new Error(`Sync mode MCP server not available. JSPI is required. Error: ${err}`);
             }
-            cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         }
         return cachedIncomingHandler;
     })();
