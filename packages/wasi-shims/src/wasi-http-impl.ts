@@ -915,6 +915,76 @@ export const outgoingHandler = {
             });
         }
 
+        // Handle OAuth popup requests from WASM
+        // URL format: https://__oauth_popup__/start?auth_url=<encoded_auth_url>&server_id=<id>&server_url=<url>&code_verifier=<verifier>&state=<state>
+        if (authority === '__oauth_popup__') {
+            console.log('[http] OAuth popup request:', path);
+
+            const oauthPromise = (async (): Promise<StreamingResponse> => {
+                try {
+                    // Parse parameters from path (query string)
+                    const queryStart = path.indexOf('?');
+                    const queryString = queryStart >= 0 ? path.slice(queryStart + 1) : '';
+                    const params = new URLSearchParams(queryString);
+
+                    const authUrl = params.get('auth_url');
+                    const serverId = params.get('server_id') || '';
+                    const serverUrl = params.get('server_url') || '';
+                    const codeVerifier = params.get('code_verifier') || '';
+                    const state = params.get('state') || '';
+
+                    if (!authUrl) {
+                        return {
+                            status: 400,
+                            headers: [['content-type', new TextEncoder().encode('application/json')]],
+                            bodyStream: createInputStreamFromBytes(
+                                new TextEncoder().encode(JSON.stringify({ error: 'Missing auth_url parameter' }))
+                            )
+                        };
+                    }
+
+                    // Use global OAuth handler registered by frontend
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const globalWindow = typeof window !== 'undefined' ? window as any : null;
+                    const openOAuthPopup = globalWindow?.__mcpOAuthHandler;
+
+                    if (!openOAuthPopup) {
+                        console.error('[http] OAuth handler not registered. Register via window.__mcpOAuthHandler');
+                        return {
+                            status: 500,
+                            headers: [['content-type', new TextEncoder().encode('application/json')]],
+                            bodyStream: createInputStreamFromBytes(
+                                new TextEncoder().encode(JSON.stringify({ error: 'OAuth handler not registered' }))
+                            )
+                        };
+                    }
+
+                    // Open popup and wait for authorization code
+                    const code = await openOAuthPopup(authUrl, serverId, serverUrl, codeVerifier, state);
+
+                    // Return the code to WASM
+                    const responseBody = JSON.stringify({ code, state });
+                    return {
+                        status: 200,
+                        headers: [['content-type', new TextEncoder().encode('application/json')]],
+                        bodyStream: createInputStreamFromBytes(new TextEncoder().encode(responseBody))
+                    };
+                } catch (err) {
+                    const errorMsg = err instanceof Error ? err.message : String(err);
+                    console.error('[http] OAuth popup error:', errorMsg);
+                    return {
+                        status: 500,
+                        headers: [['content-type', new TextEncoder().encode('application/json')]],
+                        bodyStream: createInputStreamFromBytes(
+                            new TextEncoder().encode(JSON.stringify({ error: errorMsg }))
+                        )
+                    };
+                }
+            })();
+
+            return new FutureIncomingResponse(oauthPromise);
+        }
+
         // For HTTPS requests, use async fetch with streaming body 
         // Pattern: Await fetch for status/headers, then stream body via JSPI
         if (schemeStr === 'https') {

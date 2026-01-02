@@ -398,6 +398,124 @@ impl OAuthClient {
     }
 }
 
+/// Request OAuth popup from browser via special HTTP request
+///
+/// Makes HTTP request to `https://__oauth_popup__/start` which is intercepted
+/// by the TypeScript WASI HTTP shim and opens a browser popup for OAuth.
+/// Returns the authorization code on success.
+pub fn request_oauth_popup(
+    auth_url: &str,
+    server_id: &str,
+    server_url: &str,
+    code_verifier: &str,
+    state: &str,
+) -> Result<String, OAuthError> {
+    // Build the special OAuth popup URL
+    let popup_url = format!(
+        "https://__oauth_popup__/start?auth_url={}&server_id={}&server_url={}&code_verifier={}&state={}",
+        url_encode(auth_url),
+        url_encode(server_id),
+        url_encode(server_url),
+        url_encode(code_verifier),
+        url_encode(state),
+    );
+
+    let response = HttpClient::request("GET", &popup_url, &[], None)?;
+
+    if response.status >= 400 {
+        let error_body = String::from_utf8_lossy(&response.body);
+        return Err(OAuthError::TokenError(format!(
+            "OAuth popup failed: HTTP {} - {}",
+            response.status, error_body
+        )));
+    }
+
+    // Parse the response to get the authorization code
+    #[derive(Deserialize)]
+    struct PopupResponse {
+        code: Option<String>,
+        error: Option<String>,
+    }
+
+    let popup_result: PopupResponse = serde_json::from_slice(&response.body)?;
+
+    if let Some(error) = popup_result.error {
+        return Err(OAuthError::TokenError(error));
+    }
+
+    popup_result.code.ok_or_else(|| {
+        OAuthError::TokenError("No authorization code in popup response".to_string())
+    })
+}
+
+/// Perform the complete OAuth flow for an MCP server
+///
+/// 1. Discover protected resource metadata
+/// 2. Discover authorization server metadata
+/// 3. Generate PKCE parameters
+/// 4. Build authorization URL
+/// 5. Request popup from browser
+/// 6. Exchange code for token
+///
+/// Returns the access token on success.
+pub fn perform_oauth_flow(
+    server_url: &str,
+    server_id: &str,
+    client_id: &str,
+    redirect_uri: &str,
+) -> Result<TokenResponse, OAuthError> {
+    let oauth = OAuthClient::new(server_url);
+
+    // 1. Discover protected resource metadata
+    let resource_meta = oauth.discover_protected_resource()?;
+
+    // 2. Get first authorization server
+    let auth_server_url = resource_meta
+        .authorization_servers
+        .first()
+        .ok_or_else(|| OAuthError::MetadataError("No authorization servers found".to_string()))?;
+
+    // 3. Discover auth server metadata
+    let auth_meta = oauth.discover_auth_server(auth_server_url)?;
+
+    // 4. Generate PKCE
+    let pkce = OAuthClient::generate_pkce();
+
+    // 5. Build state (random string for CSRF protection)
+    let state = pkce.code_verifier[..16].to_string(); // Use part of verifier as state
+
+    // 6. Determine scope from resource metadata
+    let scope = if !resource_meta.scopes_supported.is_empty() {
+        Some(resource_meta.scopes_supported.join(" "))
+    } else {
+        None
+    };
+
+    // 7. Build authorization URL
+    let auth_url = oauth.build_authorization_url(
+        &auth_meta,
+        &pkce,
+        client_id,
+        redirect_uri,
+        scope.as_deref(),
+        &state,
+    );
+
+    // 8. Request popup from browser
+    let code = request_oauth_popup(
+        &auth_url,
+        server_id,
+        server_url,
+        &pkce.code_verifier,
+        &state,
+    )?;
+
+    // 9. Exchange code for token
+    let token = oauth.exchange_code_for_token(&auth_meta, &code, &pkce, client_id, redirect_uri)?;
+
+    Ok(token)
+}
+
 /// Parse WWW-Authenticate header for OAuth challenge
 pub fn parse_www_authenticate(header: &str) -> Option<(Option<String>, Option<String>)> {
     // Format: Bearer resource_metadata="url", scope="scopes"

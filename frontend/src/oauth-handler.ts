@@ -24,8 +24,9 @@ let oauthPopup: Window | null = null;
 
 /**
  * Generate a random state string for OAuth
+ * @internal Reserved for future use
  */
-function generateState(): string {
+function _generateState(): string {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
@@ -194,5 +195,16 @@ window.addEventListener('message', (event) => {
     }
 });
 
+// Register global OAuth handler for WASI HTTP shim interception
+// This allows WASM code to trigger OAuth popups via special HTTP requests
+declare global {
+    interface Window {
+        __mcpOAuthHandler?: typeof openOAuthPopup;
+    }
+}
+window.__mcpOAuthHandler = openOAuthPopup;
+console.log('[OAuth] Registered global OAuth handler');
+
 // Export for use by the TUI
 export type { OAuthFlowState };
+
