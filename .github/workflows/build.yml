@@ -57,29 +57,16 @@ jobs:
         working-directory: runtime
         run: wit-deps update
 
-      - name: Build main WASM component
+      - name: Build all WASM components
         working-directory: runtime
-        run: cargo component build --release --target wasm32-wasip2
-
-      - name: Build tsx-engine WASM module
-        working-directory: runtime/crates/tsx-engine
-        run: cargo component build --release --target wasm32-wasip2
-
-      - name: Build sqlite-module WASM module
-        working-directory: runtime/crates/sqlite-module
-        run: cargo component build --release --target wasm32-wasip2
-
-      - name: Build ratatui-demo WASM module
-        working-directory: runtime/crates/ratatui-demo
-        run: cargo component build --release --target wasm32-wasip2
-
-      - name: Build edtui-module WASM module
-        working-directory: runtime/crates/edtui-module
-        run: cargo component build --release --target wasm32-wasip2
-
-      - name: Build web-agent-tui WASM module
-        working-directory: runtime/crates/web-agent-tui
-        run: cargo component build --release --target wasm32-wasip2
+        run: |
+          cargo component build --release --target wasm32-wasip2 \
+            -p ts-runtime-mcp \
+            -p tsx-engine \
+            -p sqlite-module \
+            -p ratatui-demo \
+            -p edtui-module \
+            -p web-agent-tui
 
       - name: Verify main component
         run: wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
