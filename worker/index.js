@@ -15,10 +15,34 @@ function isAllowedHost(hostname) {
 }
 
 /**
+ * Allowed origins that can use the CORS proxy
+ */
+const ALLOWED_ORIGINS = [
+    'https://agent.edge-agent.dev',
+    'http://localhost:5173',  // Vite dev server
+    'http://localhost:4173',  // Vite preview server
+];
+
+/**
+ * Check if an origin is allowed to use the proxy
+ */
+function isAllowedOrigin(origin) {
+    if (!origin) return false;
+    return ALLOWED_ORIGINS.includes(origin);
+}
+
+/**
  * Handle CORS proxy requests
  * Forwards requests to whitelisted domains and adds CORS headers
  */
 async function handleCorsProxy(request) {
+    const origin = request.headers.get('Origin');
+
+    // Validate origin - only allow requests from our own domains
+    if (!isAllowedOrigin(origin)) {
+        return new Response('Origin not allowed', { status: 403 });
+    }
+
     // Only allow POST for MCP requests
     if (request.method !== 'POST' && request.method !== 'OPTIONS') {
         return new Response('Method not allowed', { status: 405 });
@@ -29,7 +53,7 @@ async function handleCorsProxy(request) {
         return new Response(null, {
             status: 204,
             headers: {
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': origin,
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
                 'Access-Control-Max-Age': '86400',
@@ -62,6 +86,7 @@ async function handleCorsProxy(request) {
     const headers = new Headers(request.headers);
     // Remove headers that shouldn't be forwarded
     headers.delete('host');
+    headers.delete('origin');
     headers.delete('cf-connecting-ip');
     headers.delete('cf-ipcountry');
     headers.delete('cf-ray');
@@ -74,9 +99,9 @@ async function handleCorsProxy(request) {
             body: request.body,
         });
 
-        // Create response with CORS headers
+        // Create response with CORS headers (origin-specific, not wildcard)
         const responseHeaders = new Headers(response.headers);
-        responseHeaders.set('Access-Control-Allow-Origin', '*');
+        responseHeaders.set('Access-Control-Allow-Origin', origin);
         responseHeaders.set('Access-Control-Expose-Headers', '*');
 
         return new Response(response.body, {
