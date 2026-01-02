@@ -149,6 +149,12 @@ const stdinStream = new CustomInputStream({
 // Text decoder for output
 const textDecoder = new TextDecoder();
 
+// Helper: Convert bare LF to CRLF for proper terminal display
+function convertToCrlf(text: string): string {
+    // First normalize all line endings to LF, then convert to CRLF
+    return text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+}
+
 // Create stdout stream using our CustomOutputStream
 const stdoutStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
@@ -157,7 +163,8 @@ const stdoutStream = new CustomOutputStream({
                 const text = textDecoder.decode(contents);
                 // Skip empty writes - ghostty-web crashes on empty strings
                 if (text.length > 0) {
-                    currentTerminal.write(text);
+                    // Convert line endings for proper terminal display
+                    currentTerminal.write(convertToCrlf(text));
                 }
             } catch (e) {
                 // Log what we tried to write when it failed
@@ -186,7 +193,8 @@ const stderrStream = new CustomOutputStream({
 
                     // Also write to terminal if available
                     if (currentTerminal) {
-                        currentTerminal.write(text);
+                        // Convert line endings for proper terminal display
+                        currentTerminal.write(convertToCrlf(text));
                     }
                 }
             } catch (e) {
