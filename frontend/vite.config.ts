@@ -48,6 +48,42 @@ export default defineConfig(({ mode }) => ({
             allow: ['..'],
         },
         proxy: {
+            // CORS proxy for external MCP servers (same as worker/index.js for local dev)
+            '/cors-proxy': {
+                target: 'http://placeholder', // Will be replaced by configure
+                changeOrigin: true,
+                configure: (proxy, _options) => {
+                    // Custom handler to extract target URL and forward
+                    proxy.on('proxyReq', (proxyReq, req, _res) => {
+                        const url = new URL(req.url!, `http://${req.headers.host}`);
+                        const targetUrl = url.searchParams.get('url');
+                        if (targetUrl) {
+                            const target = new URL(targetUrl);
+                            proxyReq.setHeader('host', target.host);
+                        }
+                    });
+                },
+                router: (req: { url?: string; headers: { host?: string } }) => {
+                    // Extract target URL from query parameter
+                    const url = new URL(req.url!, `http://${req.headers.host}`);
+                    const targetUrl = url.searchParams.get('url');
+                    if (targetUrl) {
+                        const target = new URL(targetUrl);
+                        return `${target.protocol}//${target.host}`;
+                    }
+                    return 'http://localhost'; // Fallback
+                },
+                rewrite: (path) => {
+                    // Extract the path from the target URL
+                    const url = new URL(`http://localhost${path}`);
+                    const targetUrl = url.searchParams.get('url');
+                    if (targetUrl) {
+                        const target = new URL(targetUrl);
+                        return target.pathname + target.search;
+                    }
+                    return path;
+                },
+            },
             // Proxy API requests to backend
             '/messages': {
                 target: 'http://localhost:3002',

@@ -19,7 +19,7 @@ function isAllowedHost(hostname) {
  */
 const ALLOWED_ORIGINS = [
     'https://agent.edge-agent.dev',
-    'http://localhost:5173',  // Vite dev server
+    'http://localhost:3000',  // Vite dev server
     'http://localhost:4173',  // Vite preview server
 ];
 
