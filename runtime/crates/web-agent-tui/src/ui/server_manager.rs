@@ -87,8 +87,13 @@ pub enum Overlay {
         selected_provider: usize,
         selected_api_format: usize,
         selected_model: usize,
+        /// Which field is selected in ProviderConfig view (0=Model, 1=BaseURL, 2=ApiKey, 3=Apply&Save, 4=Save, 5=Back)
+        selected_field: usize,
         base_url_input: String,
         model_input: String,
+        api_key_input: String,
+        /// Models fetched from API (None = not fetched, Some([]) = empty/failed)
+        fetched_models: Option<Vec<(String, String)>>,
     },
 }
 
@@ -97,14 +102,14 @@ pub enum Overlay {
 pub enum ProviderWizardStep {
     /// Select provider from list
     SelectProvider,
-    /// Select API format type for custom provider
-    SelectApiFormat,
-    /// Enter custom base URL (for custom providers)
-    EnterBaseUrl,
-    /// Enter model name
-    EnterModel,
-    /// Review and confirm
-    Confirm,
+    /// View/edit provider configuration (new main step)
+    ProviderConfig,
+    /// Edit model (text input or list selection)
+    EditModel,
+    /// Edit base URL (text input)
+    EditBaseUrl,
+    /// Edit API key (masked text input)
+    EditApiKey,
 }
 
 /// Available API format types for custom providers
@@ -551,8 +556,11 @@ pub fn render_overlay(
             selected_provider,
             selected_api_format,
             selected_model,
+            selected_field,
             base_url_input,
             model_input,
+            api_key_input,
+            fetched_models,
         } => {
             render_provider_wizard(
                 frame,
@@ -561,8 +569,11 @@ pub fn render_overlay(
                 *selected_provider,
                 *selected_api_format,
                 *selected_model,
+                *selected_field,
                 base_url_input,
                 model_input,
+                api_key_input,
+                fetched_models.as_ref(),
             );
         }
     }
@@ -777,46 +788,226 @@ pub fn render_provider_wizard(
     area: Rect,
     step: &ProviderWizardStep,
     selected_provider: usize,
-    selected_api_format: usize,
+    _selected_api_format: usize,
     selected_model: usize,
+    selected_field: usize,
     base_url_input: &str,
     model_input: &str,
+    api_key_input: &str,
+    fetched_models: Option<&Vec<(String, String)>>,
 ) {
     match step {
         ProviderWizardStep::SelectProvider => {
             render_provider_selector(frame, area, selected_provider);
         }
-        ProviderWizardStep::SelectApiFormat => {
-            let popup = centered_rect(50, 30, area);
+        ProviderWizardStep::ProviderConfig => {
+            let popup = centered_rect(55, 45, area);
             frame.render_widget(Clear, popup);
 
-            let items: Vec<ListItem> = API_FORMATS
-                .iter()
-                .map(|(id, name, default_url, example_model)| {
-                    ListItem::new(vec![
-                        Line::from(vec![
+            let (_provider_id, provider_name, _) = PROVIDERS
+                .get(selected_provider)
+                .unwrap_or(&("custom", "Custom", None));
+
+            let block = Block::default()
+                .title(format!("⚙️  Configure: {}", provider_name))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+
+            let inner = block.inner(popup);
+            frame.render_widget(block, popup);
+
+            // Build list items for config fields
+            let mut items: Vec<ListItem> = Vec::new();
+
+            // 0: Model field
+            let model_display = if model_input.is_empty() {
+                "(not set)"
+            } else {
+                model_input
+            };
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("Model:    ", Style::default().fg(Color::DarkGray)),
+                Span::styled(model_display, Style::default().fg(Color::Yellow)),
+            ])));
+
+            // 1: Base URL field
+            let base_url_display = if base_url_input.is_empty() {
+                "(default)"
+            } else {
+                base_url_input
+            };
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("Base URL: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(base_url_display, Style::default().fg(Color::Cyan)),
+            ])));
+
+            // 2: API Key field
+            let api_key_status = if api_key_input.is_empty() {
+                "✗ not set"
+            } else {
+                "✓ configured"
+            };
+            let api_key_color = if api_key_input.is_empty() {
+                Color::Red
+            } else {
+                Color::Green
+            };
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("API Key:  ", Style::default().fg(Color::DarkGray)),
+                Span::styled(api_key_status, Style::default().fg(api_key_color)),
+            ])));
+
+            // Separator
+            items.push(ListItem::new(Line::from("")));
+
+            // 3: Apply & Save action
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(
+                    "[Apply & Save]",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  set as default", Style::default().fg(Color::DarkGray)),
+            ])));
+
+            // 4: Save action
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(
+                    "[Save]",
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "          keep settings",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ])));
+
+            // 5: Back action
+            items.push(ListItem::new(Line::from(vec![Span::styled(
+                "[Back]",
+                Style::default().fg(Color::DarkGray),
+            )])));
+
+            let list = List::new(items)
+                .highlight_style(
+                    Style::default()
+                        .add_modifier(Modifier::REVERSED)
+                        .fg(Color::Cyan),
+                )
+                .highlight_symbol("▶ ");
+
+            let mut state = ListState::default();
+            // Map selected_field to actual list index (skip separator at index 3)
+            let list_idx = if selected_field >= 3 {
+                selected_field + 1
+            } else {
+                selected_field
+            };
+            state.select(Some(list_idx));
+            frame.render_stateful_widget(list, inner, &mut state);
+
+            // Hints at bottom
+            let hints = Paragraph::new("↑↓ Navigate │ Enter Edit/Select │ Esc Close")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+            if hint_area.y < area.height {
+                frame.render_widget(hints, hint_area);
+            }
+        }
+        ProviderWizardStep::EditModel => {
+            let popup = centered_rect(55, 50, area);
+            frame.render_widget(Clear, popup);
+
+            let (provider_id, _, _) = PROVIDERS
+                .get(selected_provider)
+                .unwrap_or(&("openai", "OpenAI", None));
+
+            // Use fetched models if available, otherwise use static fallback
+            let static_models = get_models_for_provider(provider_id);
+            let model_count = if let Some(models) = fetched_models {
+                models.len()
+            } else {
+                static_models.len()
+            };
+
+            // Build items from fetched or static models
+            let mut items: Vec<ListItem> = if let Some(models) = fetched_models {
+                models
+                    .iter()
+                    .map(|(id, name)| {
+                        ListItem::new(Line::from(vec![
+                            Span::styled(name.as_str(), Style::default().fg(Color::White)),
+                            Span::styled(
+                                format!(" ({})", id),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]))
+                    })
+                    .collect()
+            } else {
+                static_models
+                    .iter()
+                    .map(|(id, name)| {
+                        ListItem::new(Line::from(vec![
                             Span::styled(*name, Style::default().fg(Color::White)),
                             Span::styled(
                                 format!(" ({})", id),
                                 Style::default().fg(Color::DarkGray),
                             ),
-                        ]),
-                        Line::from(vec![
-                            Span::styled("  URL: ", Style::default().fg(Color::DarkGray)),
-                            Span::styled(*default_url, Style::default().fg(Color::Cyan)),
-                        ]),
-                        Line::from(vec![
-                            Span::styled("  Model: ", Style::default().fg(Color::DarkGray)),
-                            Span::styled(*example_model, Style::default().fg(Color::Yellow)),
-                        ]),
-                    ])
-                })
-                .collect();
+                        ]))
+                    })
+                    .collect()
+            };
+
+            // Add [Refresh from API] at the top when not yet fetched
+            if fetched_models.is_none() {
+                items.insert(
+                    0,
+                    ListItem::new(Line::from(vec![
+                        Span::styled("🔄 ", Style::default().fg(Color::Cyan)),
+                        Span::styled(
+                            "[Refresh from API]",
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                );
+            }
+
+            // Add custom input option at the end
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("✏️  ", Style::default().fg(Color::Yellow)),
+                Span::styled("Custom: ", Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    if model_input.is_empty() {
+                        "(type to enter)"
+                    } else {
+                        model_input
+                    },
+                    Style::default().fg(if model_input.is_empty() {
+                        Color::DarkGray
+                    } else {
+                        Color::Cyan
+                    }),
+                ),
+            ])));
+
+            // Title shows if using API or static models
+            let title = if fetched_models.is_some() {
+                format!("🤖 {} Models (API)", provider_id)
+            } else {
+                format!("🤖 {} Models", provider_id)
+            };
 
             let list = List::new(items)
                 .block(
                     Block::default()
-                        .title("🔌 Select API Format")
+                        .title(title)
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded),
                 )
@@ -828,24 +1019,35 @@ pub fn render_provider_wizard(
                 .highlight_symbol("▶ ");
 
             let mut state = ListState::default();
-            state.select(Some(selected_api_format));
+            state.select(Some(selected_model));
             frame.render_stateful_widget(list, popup, &mut state);
 
-            // Hints at bottom
-            let hints = Paragraph::new("↑↓ Navigate │ Enter Select │ Esc Close")
+            // Hints - show refresh option when not yet fetched
+            let hints = if selected_model == model_count {
+                if fetched_models.is_none() {
+                    "Type model │ r Refresh │ Enter Save │ Esc Cancel"
+                } else {
+                    "Type model name │ Enter to save │ Esc to cancel"
+                }
+            } else if fetched_models.is_none() {
+                "↑↓ Navigate │ r Refresh │ Enter Save │ Esc Cancel"
+            } else {
+                "↑↓ Navigate │ Enter to save │ Esc to cancel"
+            };
+            let hints_widget = Paragraph::new(hints)
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Center);
             let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
             if hint_area.y < area.height {
-                frame.render_widget(hints, hint_area);
+                frame.render_widget(hints_widget, hint_area);
             }
         }
-        ProviderWizardStep::EnterBaseUrl => {
+        ProviderWizardStep::EditBaseUrl => {
             let popup = centered_rect(60, 25, area);
             frame.render_widget(Clear, popup);
 
             let block = Block::default()
-                .title("🔗 Enter Base URL")
+                .title("🔗 Edit Base URL")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
 
@@ -854,7 +1056,7 @@ pub fn render_provider_wizard(
 
             // Instructions
             let instructions = Paragraph::new(vec![
-                Line::from("Enter the base URL for your OpenAI-compatible API."),
+                Line::from("Enter base URL (leave empty for default)."),
                 Line::from("Examples: http://localhost:11434/v1 (Ollama)"),
                 Line::from("         https://api.groq.com/openai/v1 (Groq)"),
                 Line::from(""),
@@ -875,7 +1077,7 @@ pub fn render_provider_wizard(
             frame.render_widget(input_text, input_inner);
 
             // Hints
-            let hints = Paragraph::new("Enter to continue │ Esc to cancel")
+            let hints = Paragraph::new("Enter to save │ Esc to cancel")
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Center);
             let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
@@ -883,119 +1085,52 @@ pub fn render_provider_wizard(
                 frame.render_widget(hints, hint_area);
             }
         }
-        ProviderWizardStep::EnterModel => {
-            let popup = centered_rect(55, 50, area);
-            frame.render_widget(Clear, popup);
-
-            // Get API format ID to determine which models to show
-            let (api_format_id, _, _, _) = API_FORMATS
-                .get(selected_api_format)
-                .unwrap_or(&("openai", "OpenAI", "", ""));
-
-            // Get models for this API format
-            let models = get_models_for_provider(api_format_id);
-
-            // Build items: models + "Custom..." option at the end
-            let mut items: Vec<ListItem> = models
-                .iter()
-                .map(|(id, name)| {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(*name, Style::default().fg(Color::White)),
-                        Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
-                    ]))
-                })
-                .collect();
-
-            // Add custom input option at the end
-            items.push(ListItem::new(Line::from(vec![
-                Span::styled("✏️  ", Style::default().fg(Color::Yellow)),
-                Span::styled("Custom Model: ", Style::default().fg(Color::Yellow)),
-                Span::styled(
-                    if model_input.is_empty() {
-                        "(type to enter)"
-                    } else {
-                        model_input
-                    },
-                    Style::default().fg(if model_input.is_empty() {
-                        Color::DarkGray
-                    } else {
-                        Color::Cyan
-                    }),
-                ),
-            ])));
-
-            let list = List::new(items)
-                .block(
-                    Block::default()
-                        .title(format!("🤖 Select {} Model", api_format_id))
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded),
-                )
-                .highlight_style(
-                    Style::default()
-                        .add_modifier(Modifier::REVERSED)
-                        .fg(Color::Cyan),
-                )
-                .highlight_symbol("▶ ");
-
-            let mut state = ListState::default();
-            state.select(Some(selected_model));
-            frame.render_stateful_widget(list, popup, &mut state);
-
-            // Hints
-            let hints = if selected_model == models.len() {
-                "Type model name │ Enter to continue │ Esc to cancel"
-            } else {
-                "↑↓ Navigate │ Enter to select │ Esc to cancel"
-            };
-            let hints_widget = Paragraph::new(hints)
-                .style(Style::default().fg(Color::DarkGray))
-                .alignment(Alignment::Center);
-            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
-            if hint_area.y < area.height {
-                frame.render_widget(hints_widget, hint_area);
-            }
-        }
-        ProviderWizardStep::Confirm => {
-            let popup = centered_rect(50, 30, area);
+        ProviderWizardStep::EditApiKey => {
+            let popup = centered_rect(60, 25, area);
             frame.render_widget(Clear, popup);
 
             let block = Block::default()
-                .title("✓ Confirm Configuration")
+                .title("🔑 Edit API Key")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
 
             let inner = block.inner(popup);
             frame.render_widget(block, popup);
 
-            let (provider_id, provider_name, _) = PROVIDERS
+            // Instructions
+            let (provider_id, _, _) = PROVIDERS
                 .get(selected_provider)
                 .unwrap_or(&("custom", "Custom", None));
 
-            let summary = Paragraph::new(vec![
-                Line::from(vec![
-                    Span::styled("Provider: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(*provider_name, Style::default().fg(Color::White)),
-                ]),
-                Line::from(vec![
-                    Span::styled("ID: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(*provider_id, Style::default().fg(Color::Cyan)),
-                ]),
-                Line::from(vec![
-                    Span::styled("Base URL: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(base_url_input, Style::default().fg(Color::Green)),
-                ]),
-                Line::from(vec![
-                    Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(model_input, Style::default().fg(Color::Yellow)),
-                ]),
+            let instructions = Paragraph::new(vec![
+                Line::from(format!("Enter API key for {}.", provider_id)),
                 Line::from(""),
-                Line::from(Span::styled(
-                    "Press Enter to apply, Esc to cancel",
-                    Style::default().fg(Color::DarkGray),
-                )),
-            ]);
-            frame.render_widget(summary, inner);
+            ])
+            .style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(instructions, Rect::new(inner.x, inner.y, inner.width, 2));
+
+            // Input field (masked)
+            let input_area = Rect::new(inner.x, inner.y + 2, inner.width, 3);
+            let input_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Cyan));
+            let input_inner = input_block.inner(input_area);
+            frame.render_widget(input_block, input_area);
+
+            // Show masked key
+            let masked = "*".repeat(api_key_input.len().min(40));
+            let input_text = Paragraph::new(format!("{}▋", masked));
+            frame.render_widget(input_text, input_inner);
+
+            // Hints
+            let hints = Paragraph::new("Enter to save │ Esc to cancel")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
+            if hint_area.y < area.height {
+                frame.render_widget(hints, hint_area);
+            }
         }
     }
 }

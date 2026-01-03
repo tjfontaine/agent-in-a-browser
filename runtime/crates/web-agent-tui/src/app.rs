@@ -257,6 +257,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Set the provider (anthropic or openai)
     pub fn set_provider(&mut self, provider: &str) {
         self.config.providers.default = provider.to_string();
+        // Ensure provider settings exist in config (creates with defaults if missing)
+        // This makes sure the model is stored in config.toml, not just a fallback
+        let _ = self.config.providers.get_or_create(provider);
         let _ = self.config.save();
         // Invalidate the agent so it's recreated with the new provider
         self.rig_agent = None;
@@ -1207,38 +1210,41 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                     0x0D => {
                         // Enter - select provider and open wizard for configuration
-                        if let Some((provider_id, _name, base_url)) = PROVIDERS.get(*selected) {
-                            // Standard providers skip base_url (rig-core has defaults)
-                            // Custom providers need to specify everything
-                            let prefilled_url = base_url.unwrap_or("").to_string();
-                            let prefilled_model =
-                                self.config.providers.get(provider_id).model.clone();
+                        if let Some((provider_id, _name, _base_url)) = PROVIDERS.get(*selected) {
+                            // Load current settings for this provider
+                            let settings = self.config.providers.get(provider_id);
+                            let saved_model = settings.model.clone();
+                            let saved_base_url = settings.base_url.clone().unwrap_or_default();
+                            let saved_api_key = settings.api_key.clone().unwrap_or_default();
 
-                            // Determine start step based on provider type
-                            // - custom: goes to API format selection first
-                            // - standard providers: skip to model selection (rig-core has base_url defaults)
-                            let start_step = if *provider_id == "custom" {
-                                ProviderWizardStep::SelectApiFormat
+                            // Get default model if not set
+                            let prefilled_model = if saved_model.is_empty() {
+                                crate::ui::server_manager::get_models_for_provider(provider_id)
+                                    .first()
+                                    .map(|(id, _)| id.to_string())
+                                    .unwrap_or_default()
                             } else {
-                                ProviderWizardStep::EnterModel // Skip base_url for standard providers
+                                saved_model
                             };
 
-                            // Pre-select API format based on provider
-                            // API_FORMATS: 0=openai, 1=anthropic, 2=google/gemini, 3=openrouter
+                            // Pre-select API format based on provider (kept for future use)
                             let api_format = match *provider_id {
                                 "anthropic" => 1,
                                 "gemini" | "google" => 2,
                                 "openrouter" => 3,
-                                _ => 0, // default to openai
+                                _ => 0,
                             };
 
                             self.overlay = Some(Overlay::ProviderWizard {
-                                step: start_step,
+                                step: ProviderWizardStep::ProviderConfig,
                                 selected_provider: *selected,
                                 selected_api_format: api_format,
                                 selected_model: 0,
-                                base_url_input: prefilled_url,
+                                selected_field: 0, // Start at Model field
+                                base_url_input: saved_base_url,
                                 model_input: prefilled_model,
+                                api_key_input: saved_api_key,
+                                fetched_models: None,
                             });
                         }
                     }
@@ -1248,13 +1254,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
             Overlay::ProviderWizard {
                 step,
                 selected_provider,
-                selected_api_format,
+                selected_api_format: _,
                 selected_model,
+                selected_field,
                 base_url_input,
                 model_input,
+                api_key_input,
+                fetched_models,
             } => {
                 use crate::ui::server_manager::{
-                    get_models_for_provider, ProviderWizardStep, API_FORMATS, PROVIDERS,
+                    get_models_for_provider, ProviderWizardStep, PROVIDERS,
                 };
 
                 match step {
@@ -1274,116 +1283,287 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 }
                             }
                             0x0D => {
-                                if let Some((provider_id, _, base_url)) =
-                                    PROVIDERS.get(*selected_provider)
+                                // Enter - go to ProviderConfig to view/edit settings
+                                if let Some((provider_id, _, _)) = PROVIDERS.get(*selected_provider)
                                 {
-                                    if *provider_id == "custom" || base_url.is_none() {
-                                        *step = ProviderWizardStep::EnterBaseUrl;
-                                    } else {
-                                        // Pre-fill base URL and go to model step
-                                        *base_url_input = base_url.unwrap_or("").to_string();
-                                        *step = ProviderWizardStep::EnterModel;
+                                    // Load current settings for this provider
+                                    let settings = self.config.providers.get(provider_id);
+                                    *model_input = settings.model.clone();
+                                    *base_url_input = settings.base_url.clone().unwrap_or_default();
+                                    *api_key_input = settings.api_key.clone().unwrap_or_default();
+
+                                    // If model is empty, use default from provider's model list
+                                    if model_input.is_empty() {
+                                        *model_input = get_models_for_provider(provider_id)
+                                            .first()
+                                            .map(|(id, _)| id.to_string())
+                                            .unwrap_or_default();
                                     }
+
+                                    *step = ProviderWizardStep::ProviderConfig;
+                                    *selected_field = 0; // Start at Model field
                                 }
                             }
                             _ => {}
                         }
                     }
-                    ProviderWizardStep::SelectApiFormat => {
-                        // Handle API format selection for custom providers
-                        let max_items = API_FORMATS.len();
+                    ProviderWizardStep::ProviderConfig => {
+                        // Config view with selectable fields:
+                        // 0=Model, 1=BaseURL, 2=ApiKey, 3=Apply&Save, 4=Save, 5=Back
+                        const MAX_FIELDS: usize = 6;
+
                         match byte {
-                            0x1B => self.overlay = None,
+                            0x1B => {
+                                // Esc - go back to provider selection
+                                *step = ProviderWizardStep::SelectProvider;
+                            }
                             0xF0 | 0x6B => {
-                                if *selected_api_format > 0 {
-                                    *selected_api_format -= 1;
+                                // Up arrow
+                                if *selected_field > 0 {
+                                    *selected_field -= 1;
                                 }
                             }
                             0xF1 | 0x6A => {
-                                if *selected_api_format + 1 < max_items {
-                                    *selected_api_format += 1;
+                                // Down arrow
+                                if *selected_field + 1 < MAX_FIELDS {
+                                    *selected_field += 1;
                                 }
                             }
                             0x0D => {
-                                // Proceeding to URL step - pre-fill with format defaults
-                                if let Some((_, _, default_url, default_model)) =
-                                    API_FORMATS.get(*selected_api_format)
-                                {
-                                    // Only pre-fill if currently empty
-                                    if base_url_input.is_empty() {
-                                        *base_url_input = default_url.to_string();
+                                // Enter - action depends on selected field
+                                match *selected_field {
+                                    0 => {
+                                        // Edit Model
+                                        *selected_model = 0; // Reset selection
+                                        *step = ProviderWizardStep::EditModel;
                                     }
-                                    if model_input.is_empty() {
-                                        *model_input = default_model.to_string();
+                                    1 => {
+                                        // Edit Base URL
+                                        *step = ProviderWizardStep::EditBaseUrl;
                                     }
+                                    2 => {
+                                        // Edit API Key
+                                        *step = ProviderWizardStep::EditApiKey;
+                                    }
+                                    3 => {
+                                        // Apply & Save - set as default and save
+                                        let (provider_id, _, _) = PROVIDERS
+                                            .get(*selected_provider)
+                                            .unwrap_or(&("custom", "Custom", None));
+                                        let provider_id = provider_id.to_string();
+                                        let model = model_input.clone();
+                                        let base_url = base_url_input.clone();
+                                        let api_key = api_key_input.clone();
+
+                                        // Close overlay
+                                        self.overlay = None;
+
+                                        // Set as default provider
+                                        self.set_provider(&provider_id);
+
+                                        // Save model
+                                        if !model.is_empty() {
+                                            self.set_model(&model);
+                                        }
+
+                                        // Save base URL
+                                        if !base_url.is_empty() {
+                                            self.config.current_provider_settings_mut().base_url =
+                                                Some(base_url);
+                                        } else {
+                                            self.config.current_provider_settings_mut().base_url =
+                                                None;
+                                        }
+
+                                        // Save API key
+                                        if !api_key.is_empty() {
+                                            self.set_api_key(&api_key);
+                                        }
+
+                                        let _ = self.config.save();
+
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Provider switched to {} with model {}",
+                                                provider_id,
+                                                self.model_name()
+                                            ),
+                                        });
+                                    }
+                                    4 => {
+                                        // Save only - save without changing default provider
+                                        let (provider_id, _, _) = PROVIDERS
+                                            .get(*selected_provider)
+                                            .unwrap_or(&("custom", "Custom", None));
+                                        let provider_id = provider_id.to_string();
+                                        let model = model_input.clone();
+                                        let base_url = base_url_input.clone();
+                                        let api_key = api_key_input.clone();
+
+                                        // Close overlay
+                                        self.overlay = None;
+
+                                        // Save to provider settings (without setting as default)
+                                        let settings =
+                                            self.config.providers.get_or_create(&provider_id);
+                                        if !model.is_empty() {
+                                            settings.model = model;
+                                        }
+                                        if !base_url.is_empty() {
+                                            settings.base_url = Some(base_url);
+                                        } else {
+                                            settings.base_url = None;
+                                        }
+                                        if !api_key.is_empty() {
+                                            settings.api_key = Some(api_key);
+                                        }
+
+                                        let _ = self.config.save();
+
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: format!(
+                                                "Saved settings for {} (model: {})",
+                                                provider_id,
+                                                self.config.providers.get(&provider_id).model
+                                            ),
+                                        });
+                                    }
+                                    5 => {
+                                        // Back - return to provider selection without saving
+                                        *step = ProviderWizardStep::SelectProvider;
+                                    }
+                                    _ => {}
                                 }
-                                *step = ProviderWizardStep::EnterBaseUrl;
                             }
                             _ => {}
                         }
                     }
-                    ProviderWizardStep::EnterBaseUrl => {
-                        match byte {
-                            0x1B => self.overlay = None,
-                            0x0D => {
-                                // Enter - proceed to model step if URL is valid
-                                if base_url_input.starts_with("http://")
-                                    || base_url_input.starts_with("https://")
-                                {
-                                    *step = ProviderWizardStep::EnterModel;
-                                }
-                            }
-                            0x7F | 0x08 => {
-                                // Backspace
-                                base_url_input.pop();
-                            }
-                            b if b >= 0x20 && b < 0x7F => {
-                                // Printable ASCII
-                                base_url_input.push(b as char);
-                            }
-                            _ => {}
-                        }
-                    }
-                    ProviderWizardStep::EnterModel => {
-                        // Get API format to determine available models
-                        let (api_format_id, _, _, _) = API_FORMATS
-                            .get(*selected_api_format)
-                            .unwrap_or(&("openai", "OpenAI", "", ""));
-                        let models = get_models_for_provider(api_format_id);
-                        let max_items = models.len() + 1; // +1 for custom input option
-                        let is_custom_selected = *selected_model == models.len();
+                    ProviderWizardStep::EditModel => {
+                        // Model selection with list + custom input
+                        // When not fetched: [0]=Refresh, [1..N]=static models, [N+1]=custom
+                        // When fetched: [0..N-1]=API models, [N]=custom
+                        let (provider_id, _, _) = PROVIDERS
+                            .get(*selected_provider)
+                            .unwrap_or(&("openai", "OpenAI", None));
+
+                        // Use fetched models if available, otherwise static
+                        let static_models = get_models_for_provider(provider_id);
+                        let has_fetched = fetched_models.is_some();
+                        let model_count = if let Some(models) = fetched_models.as_ref() {
+                            models.len()
+                        } else {
+                            static_models.len()
+                        };
+                        // When not fetched, add 1 for [Refresh] option at top
+                        let offset = if has_fetched { 0 } else { 1 };
+                        let max_items = model_count + offset + 1; // +1 for custom option
+                        let is_refresh_selected = !has_fetched && *selected_model == 0;
+                        let is_custom_selected = *selected_model == model_count + offset;
 
                         match byte {
-                            0x1B => self.overlay = None,
+                            0x1B => {
+                                // Esc - back to config view
+                                *step = ProviderWizardStep::ProviderConfig;
+                            }
                             0xF0 | 0x6B => {
-                                // Up arrow
                                 if *selected_model > 0 {
                                     *selected_model -= 1;
                                 }
                             }
                             0xF1 | 0x6A => {
-                                // Down arrow
                                 if *selected_model + 1 < max_items {
                                     *selected_model += 1;
                                 }
                             }
                             0x0D => {
-                                // Enter - select model or proceed with custom
-                                if is_custom_selected {
-                                    // Custom input - only proceed if model_input is not empty
-                                    if !model_input.is_empty() {
-                                        *step = ProviderWizardStep::Confirm;
+                                // Enter - depends on selection
+                                if is_refresh_selected {
+                                    // Refresh selected - check if API key is set
+                                    let provider_id = provider_id.to_string();
+                                    let api_key = api_key_input.clone();
+                                    let base_url = if base_url_input.is_empty() {
+                                        None
+                                    } else {
+                                        Some(base_url_input.clone())
+                                    };
+
+                                    // Use wizard's api_key_input, falling back to config
+                                    let key = if api_key.is_empty() {
+                                        self.config.providers.get(&provider_id).api_key.clone()
+                                    } else {
+                                        Some(api_key)
+                                    };
+
+                                    if key.is_some() {
+                                        self.handle_wizard_model_refresh(
+                                            &provider_id,
+                                            key.as_deref(),
+                                            base_url.as_deref(),
+                                        );
+                                    } else {
+                                        // No API key - redirect to API key entry
+                                        self.messages.push(Message {
+                                            role: Role::System,
+                                            content: "Please enter an API key first.".to_string(),
+                                        });
+                                        *step = ProviderWizardStep::EditApiKey;
                                     }
-                                } else if let Some((model_id, _)) = models.get(*selected_model) {
-                                    // Select from list
-                                    *model_input = model_id.to_string();
-                                    *step = ProviderWizardStep::Confirm;
+                                } else if is_custom_selected {
+                                    // Custom input - only proceed if not empty
+                                    if !model_input.is_empty() {
+                                        *step = ProviderWizardStep::ProviderConfig;
+                                    }
+                                } else {
+                                    // Model from list - adjust index for offset
+                                    let model_idx = *selected_model - offset;
+                                    let model_id = if let Some(models) = fetched_models.as_ref() {
+                                        models.get(model_idx).map(|(id, _)| id.clone())
+                                    } else {
+                                        static_models.get(model_idx).map(|(id, _)| id.to_string())
+                                    };
+                                    if let Some(id) = model_id {
+                                        *model_input = id;
+                                        *step = ProviderWizardStep::ProviderConfig;
+                                    }
                                 }
                             }
                             0x7F | 0x08 => {
                                 // Backspace - only when custom is selected
                                 if is_custom_selected {
                                     model_input.pop();
+                                }
+                            }
+                            0x72 => {
+                                // 'r' - refresh models from API (same as selecting Refresh option)
+                                let provider_id = provider_id.to_string();
+                                let api_key = api_key_input.clone();
+                                let base_url = if base_url_input.is_empty() {
+                                    None
+                                } else {
+                                    Some(base_url_input.clone())
+                                };
+
+                                let key = if api_key.is_empty() {
+                                    self.config.providers.get(&provider_id).api_key.clone()
+                                } else {
+                                    Some(api_key)
+                                };
+
+                                if key.is_some() {
+                                    self.handle_wizard_model_refresh(
+                                        &provider_id,
+                                        key.as_deref(),
+                                        base_url.as_deref(),
+                                    );
+                                } else {
+                                    // No API key - redirect to API key entry
+                                    self.messages.push(Message {
+                                        role: Role::System,
+                                        content: "Please enter an API key first.".to_string(),
+                                    });
+                                    *step = ProviderWizardStep::EditApiKey;
                                 }
                             }
                             b if b >= 0x20 && b < 0x7F => {
@@ -1395,45 +1575,41 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             _ => {}
                         }
                     }
-                    ProviderWizardStep::Confirm => {
+                    ProviderWizardStep::EditBaseUrl => {
                         match byte {
-                            0x1B => self.overlay = None,
-                            0x0D => {
-                                // Enter - apply configuration
-                                // Clone values to avoid borrow issues
-                                let (provider_id, _, _) = PROVIDERS
-                                    .get(*selected_provider)
-                                    .unwrap_or(&("custom", "Custom", None));
-                                let provider_id = provider_id.to_string();
-                                let model = model_input.clone();
-                                let base_url = base_url_input.clone();
-
-                                // Close overlay first
-                                self.overlay = None;
-
-                                // Update provider and model in config
-                                self.set_provider(&provider_id);
-
-                                // Set the model if provided
-                                if !model.is_empty() {
-                                    self.set_model(&model);
-                                }
-
-                                // Store base URL if provided
-                                if !base_url.is_empty() {
-                                    self.set_base_url(&base_url);
-                                }
-
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!(
-                                        "Provider switched to {} with model {}",
-                                        provider_id,
-                                        self.model_name()
-                                    ),
-                                });
+                            0x1B => {
+                                // Esc - back to config view
+                                *step = ProviderWizardStep::ProviderConfig;
                             }
-
+                            0x0D => {
+                                // Enter - save and return to config (empty is valid = use default)
+                                *step = ProviderWizardStep::ProviderConfig;
+                            }
+                            0x7F | 0x08 => {
+                                base_url_input.pop();
+                            }
+                            b if b >= 0x20 && b < 0x7F => {
+                                base_url_input.push(b as char);
+                            }
+                            _ => {}
+                        }
+                    }
+                    ProviderWizardStep::EditApiKey => {
+                        match byte {
+                            0x1B => {
+                                // Esc - back to config view
+                                *step = ProviderWizardStep::ProviderConfig;
+                            }
+                            0x0D => {
+                                // Enter - save and return to config
+                                *step = ProviderWizardStep::ProviderConfig;
+                            }
+                            0x7F | 0x08 => {
+                                api_key_input.pop();
+                            }
+                            b if b >= 0x20 && b < 0x7F => {
+                                api_key_input.push(b as char);
+                            }
                             _ => {}
                         }
                     }
@@ -1490,6 +1666,59 @@ impl<R: PollableRead, W: Write> App<R, W> {
             self.messages.push(Message {
                 role: Role::System,
                 content: "No API key set. Using static model list.".to_string(),
+            });
+        }
+    }
+
+    /// Handle model refresh for ProviderWizard overlay
+    fn handle_wizard_model_refresh(
+        &mut self,
+        provider_id: &str,
+        api_key: Option<&str>,
+        base_url: Option<&str>,
+    ) {
+        use crate::bridge::models_api::fetch_models_for_provider;
+
+        if let Some(key) = api_key {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "Fetching models from API...".to_string(),
+            });
+
+            match fetch_models_for_provider(provider_id, key, base_url) {
+                Ok(models) => {
+                    let model_names: Vec<(String, String)> =
+                        models.into_iter().map(|m| (m.id, m.name)).collect();
+                    let count = model_names.len();
+
+                    // Update ProviderWizard overlay with fetched models
+                    if let Some(Overlay::ProviderWizard {
+                        selected_model,
+                        fetched_models,
+                        ..
+                    }) = &mut self.overlay
+                    {
+                        *fetched_models = Some(model_names);
+                        *selected_model = 0; // Move to first model
+                    }
+
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Loaded {} models from API.", count),
+                    });
+                }
+                Err(e) => {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Failed to fetch models: {}. Using static list.", e),
+                    });
+                }
+            }
+        } else {
+            self.messages.push(Message {
+                role: Role::System,
+                content: "No API key set. Configure API key first, then press 'r' to refresh."
+                    .to_string(),
             });
         }
     }

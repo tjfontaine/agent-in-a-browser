@@ -99,6 +99,15 @@ impl ProviderSettings {
         }
     }
 
+    pub fn default_gemini() -> Self {
+        Self {
+            model: "gemini-3-flash-preview".to_string(),
+            api_key: None,
+            base_url: None,
+            api_format: Some("gemini".to_string()),
+        }
+    }
+
     /// Get the API format, defaulting based on provider name
     pub fn get_api_format(&self, provider_id: &str) -> &str {
         self.api_format.as_deref().unwrap_or(match provider_id {
@@ -277,6 +286,8 @@ impl ProvidersConfig {
             std::sync::LazyLock::new(ProviderSettings::default_anthropic);
         static DEFAULT_OPENAI: std::sync::LazyLock<ProviderSettings> =
             std::sync::LazyLock::new(ProviderSettings::default_openai);
+        static DEFAULT_GEMINI: std::sync::LazyLock<ProviderSettings> =
+            std::sync::LazyLock::new(ProviderSettings::default_gemini);
         static DEFAULT_EMPTY: std::sync::LazyLock<ProviderSettings> =
             std::sync::LazyLock::new(ProviderSettings::default);
 
@@ -285,6 +296,7 @@ impl ProvidersConfig {
             .unwrap_or_else(|| match provider {
                 "anthropic" => &DEFAULT_ANTHROPIC,
                 "openai" => &DEFAULT_OPENAI,
+                "gemini" | "google" => &DEFAULT_GEMINI,
                 _ => &DEFAULT_EMPTY,
             })
     }
@@ -295,6 +307,7 @@ impl ProvidersConfig {
             let default = match provider {
                 "anthropic" => ProviderSettings::default_anthropic(),
                 "openai" => ProviderSettings::default_openai(),
+                "gemini" | "google" => ProviderSettings::default_gemini(),
                 _ => ProviderSettings::default(),
             };
             self.providers.insert(provider.to_string(), default);
