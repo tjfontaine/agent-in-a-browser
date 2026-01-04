@@ -236,7 +236,8 @@ web-agent/
 │       ├── sqlite-module/   # SQLite database (lazy-loaded)
 │       ├── edtui-module/    # Vim-style editor (lazy-loaded)
 │       ├── ratatui-demo/    # TUI demo commands (lazy-loaded)
-│       └── web-agent-tui/   # Ratatui TUI application
+│       ├── web-agent-tui/   # Ratatui TUI application
+│       └── web-headless-agent/  # Headless agent WASM component
 │
 ├── frontend/                # ← Browser UI + agent
 │   ├── package.json
@@ -265,6 +266,7 @@ web-agent/
 │   └── vite.config.ts
 │
 ├── packages/                # ← Standalone npm packages
+│   ├── web-agent-core/      # Embeddable agent TypeScript API
 │   ├── wasm-loader/         # Core module registration system
 │   ├── wasm-modules/        # Aggregator for all module metadata
 │   ├── wasm-tsx/            # TSX engine metadata
@@ -287,6 +289,7 @@ The `packages/` directory contains npm packages designed for independent consump
 
 | Package | Purpose |
 |---------|---------|
+| `@tjfontaine/web-agent-core` | Embeddable agent with streaming API |
 | `@tjfontaine/wasm-loader` | Core module registration system for lazy-loaded WASM commands |
 | `@tjfontaine/wasm-modules` | Aggregator that re-exports all module metadata |
 | `@tjfontaine/wasm-tsx` | TSX/TypeScript engine metadata (`tsx`, `tsc`) |
