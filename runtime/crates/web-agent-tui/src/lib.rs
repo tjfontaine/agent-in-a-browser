@@ -3,6 +3,7 @@
 //! This crate provides the full agent TUI experience using ratatui,
 //! running as a WASM component in the browser with ghostty-web.
 
+pub mod agent_core;
 pub mod app;
 pub mod backend;
 pub mod bridge;
@@ -20,10 +21,11 @@ mod bindings;
 use bindings::Guest;
 
 // Re-export main types
+pub use agent_core::{AgentCore, Message, Role, ServerStatus};
 pub use app::App;
 pub use backend::WasiBackend;
 pub use display::{DisplayItem, NoticeKind, ToolStatus};
-pub use events::AgentEvent;
+pub use events::{AgentEvent, AgentState};
 
 // Re-export poll API for use in App
 pub use bindings::wasi::clocks::monotonic_clock::subscribe_duration;

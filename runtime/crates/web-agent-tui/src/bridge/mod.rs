@@ -21,7 +21,10 @@ pub use local_tools::{
     format_tasks_for_display, get_local_tool_definitions, try_execute_local_tool, Task,
 };
 pub use mcp_client::McpClient;
-pub use rig_agent::{ChatMessage, ChatRole, Provider, RigAgent, RigAgentError, StreamingBuffer};
+pub use rig_agent::{
+    ActiveStream, ChatMessage, ChatRole, PollResult, Provider, RigAgent, RigAgentError,
+    StreamingBuffer,
+};
 
 pub use rig_client::{
     create_anthropic_client, create_openai_client, create_openai_compatible_client,

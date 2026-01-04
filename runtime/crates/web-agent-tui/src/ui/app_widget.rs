@@ -78,8 +78,12 @@ impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
             .split(area);
 
         // Messages
-        MessagesWidget::new(&self.app.messages, &self.app.display_items, self.app.state)
-            .render(chunks[0], buf);
+        MessagesWidget::new(
+            self.app.agent.messages(),
+            &self.app.display_items,
+            self.app.state,
+        )
+        .render(chunks[0], buf);
 
         // Input Box - we can't set cursor here, caller must handle it
         let mut cursor_state = None;

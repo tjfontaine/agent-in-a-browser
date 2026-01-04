@@ -6,39 +6,7 @@
 use ratatui::{prelude::*, widgets::*};
 
 use crate::bridge::mcp_client::ToolDefinition;
-
-/// Remote server connection status
-#[derive(Clone, PartialEq, Debug)]
-pub enum ServerConnectionStatus {
-    Disconnected,
-    Connecting,
-    Connected,
-    AuthRequired,
-    Error(String),
-}
-
-impl std::fmt::Display for ServerConnectionStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ServerConnectionStatus::Disconnected => write!(f, "disconnected"),
-            ServerConnectionStatus::Connecting => write!(f, "connecting"),
-            ServerConnectionStatus::Connected => write!(f, "connected"),
-            ServerConnectionStatus::AuthRequired => write!(f, "auth required"),
-            ServerConnectionStatus::Error(msg) => write!(f, "error: {}", msg),
-        }
-    }
-}
-
-/// A remote MCP server entry
-#[derive(Clone)]
-pub struct RemoteServerEntry {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    pub status: ServerConnectionStatus,
-    pub tools: Vec<ToolDefinition>,
-    pub bearer_token: Option<String>,
-}
+use crate::servers::{RemoteServerEntry, ServerConnectionStatus};
 
 /// Server manager wizard view modes
 #[derive(Clone)]

@@ -15,15 +15,15 @@ pub mod theme;
 
 use ratatui::prelude::*;
 
-pub use crate::app::{AppState, Message};
+pub use crate::app::AppState;
+pub use crate::servers::{RemoteServerEntry, ServerConnectionStatus};
+pub use crate::Message;
 pub use input_box::InputBoxWidget;
 pub use messages::MessagesWidget;
 pub use panels::{
     render_aux_panel, AuxContent, AuxContentKind, AuxPanelWidget, RemoteServer, ServerStatus,
 };
-pub use server_manager::{
-    render_overlay, Overlay, RemoteServerEntry, ServerConnectionStatus, ServerManagerView,
-};
+pub use server_manager::{render_overlay, Overlay, ServerManagerView};
 pub use status_bar::StatusBarWidget;
 
 /// Application mode
@@ -174,12 +174,12 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.state,
         app.input.text(),
         app.input.cursor_pos(),
-        &app.messages,
+        app.agent.messages(),
         &app.display_items,
         &app.aux_content,
         &app.server_status,
-        app.model_name(),
+        app.agent.model(),
         app.overlay.as_ref(),
-        &app.remote_servers,
+        app.agent.remote_servers(),
     );
 }

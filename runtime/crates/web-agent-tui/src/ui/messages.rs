@@ -3,8 +3,9 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::app::{AppState, Message, Role};
+use crate::app::AppState;
 use crate::display::DisplayItem;
+use crate::{Message, Role};
 
 pub struct MessagesWidget<'a> {
     pub messages: &'a [Message],
@@ -39,18 +40,6 @@ impl<'a> Widget for MessagesWidget<'a> {
                         .add_modifier(Modifier::BOLD),
                 ),
                 Role::Assistant => ("◆ ", Style::default().fg(Color::Green)),
-                Role::System => (
-                    "• ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::DIM),
-                ),
-                Role::Tool => (
-                    "⚙ ",
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::ITALIC),
-                ),
             };
 
             // Word-wrap the content manually for better control

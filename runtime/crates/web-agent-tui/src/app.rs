@@ -6,22 +6,18 @@ use ratatui::Terminal;
 
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
-    get_local_tool_definitions, get_system_message,
-    mcp_client::{McpError, ToolDefinition},
-    rig_agent::{ActiveStream, PollResult, RigAgent},
-    McpClient,
+    get_local_tool_definitions, get_system_message, mcp_client::McpError, McpClient,
 };
 
 use crate::config::{self, Config, ServersConfig};
 use crate::input::InputBuffer;
-use crate::servers::{ServerManager, ToolCollector};
+use crate::servers::{RemoteServerEntry, ServerConnectionStatus, ServerManager};
 
 use crate::ui::{
-    render_ui, AuxContent, AuxContentKind, Mode, Overlay, RemoteServerEntry,
-    ServerConnectionStatus, ServerManagerView, ServerStatus,
+    render_ui, AuxContent, AuxContentKind, Mode, Overlay, ServerManagerView, ServerStatus,
 };
 use crate::PollableRead;
-use crate::{poll, subscribe_duration};
+use crate::{poll, subscribe_duration, AgentCore};
 use std::io::Write;
 
 /// App state enumeration
@@ -45,8 +41,6 @@ pub struct App<R: PollableRead, W: Write> {
     pub(crate) state: AppState,
     /// Input buffer with readline-like editing
     pub(crate) input: InputBuffer,
-    /// Chat/output history  
-    pub(crate) messages: Vec<Message>,
     /// Command history for up/down navigation
     history: Vec<String>,
     /// Current position in history
@@ -57,43 +51,21 @@ pub struct App<R: PollableRead, W: Write> {
     stdin: R,
     /// Should quit
     should_quit: bool,
-    /// Rig-core Agent for multi-turn tool calling
-    rig_agent: Option<RigAgent>,
-    /// MCP client (local sandbox)
-    mcp_client: McpClient,
     /// Pending message to send after API key is set
     pending_message: Option<String>,
     /// Auxiliary panel content
     pub(crate) aux_content: AuxContent,
-    /// Server connection status
+    /// Server connection status (ui display version)
     pub(crate) server_status: ServerStatus,
     /// Flag to cancel current operation
     cancelled: bool,
-    /// Remote MCP server connections
-    pub(crate) remote_servers: Vec<RemoteServerEntry>,
     /// Current overlay (modal popup)
     pub(crate) overlay: Option<Overlay>,
-    /// Loaded configuration
-    config: Config,
-    /// Active streaming session for async response streaming (poll-once pattern)
-    active_stream: Option<ActiveStream>,
     /// Display-only items (tool activity, notices) - never sent to API
     pub(crate) display_items: Vec<crate::display::DisplayItem>,
-}
 
-/// A message in the chat history
-#[derive(Clone)]
-pub struct Message {
-    pub role: Role,
-    pub content: String,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum Role {
-    User,
-    Assistant,
-    System,
-    Tool,
+    /// The Core Agent logic
+    pub(crate) agent: AgentCore,
 }
 
 impl<R: PollableRead, W: Write> App<R, W> {
@@ -116,7 +88,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let loaded_history = config::load_agent_history();
         let loaded_history_len = loaded_history.len();
 
-        // Load saved MCP servers from config
+        // Initialize AgentCore
+        let mut agent = AgentCore::new(config, mcp_client);
+
+        // Load saved MCP servers from config and add to agent
         let servers_config = ServersConfig::load();
         let remote_servers: Vec<RemoteServerEntry> = servers_config
             .servers
@@ -131,18 +106,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
             })
             .collect();
 
+        agent.remote_servers_mut().extend(remote_servers);
+
         Self {
             mode: Mode::Agent,
             state: AppState::Ready,
             input: InputBuffer::new(),
-            messages: Vec::new(), // Only User/Assistant pairs - direct API history
             history: loaded_history,
             history_index: loaded_history_len,
             terminal,
             stdin,
             should_quit: false,
-            rig_agent: None, // Lazily initialized when first used
-            mcp_client,
             pending_message: None,
             aux_content: AuxContent::default(),
             server_status: ServerStatus {
@@ -151,13 +125,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 remote_servers: Vec::new(),
             },
             cancelled: false,
-            remote_servers,
             overlay: None,
-            config,
-            active_stream: None,
             display_items: vec![crate::display::DisplayItem::info(
                 "Welcome to Agent in a Browser! Type /help for commands.",
             )],
+            agent,
         }
     }
 
@@ -244,79 +216,83 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
     /// Get the current model name for display
     pub fn model_name(&self) -> &str {
-        &self.config.current_provider_settings().model
+        self.agent.model()
     }
 
     /// Get the current provider name
     pub fn provider_name(&self) -> &str {
-        self.config.current_provider()
+        self.agent.provider()
     }
 
     /// Check if API key is set for the current provider
     pub fn has_api_key(&self) -> bool {
-        self.config
-            .current_provider_settings()
-            .api_key
-            .as_ref()
-            .map_or(false, |k| !k.is_empty())
+        self.agent.has_api_key()
     }
 
     /// Get the API key for the current provider
     pub fn get_api_key(&self) -> Option<&str> {
-        self.config.current_provider_settings().api_key.as_deref()
+        self.agent.api_key()
     }
 
     /// Set the API key for the current provider
     pub fn set_api_key(&mut self, key: &str) {
-        self.config.current_provider_settings_mut().api_key = Some(key.to_string());
-        let _ = self.config.save();
-        // Invalidate the agent so it's recreated with the new key
-        self.rig_agent = None;
+        self.agent.set_api_key(key);
     }
 
     /// Set the provider (anthropic or openai)
     pub fn set_provider(&mut self, provider: &str) {
-        self.config.providers.default = provider.to_string();
-        // Ensure provider settings exist in config (creates with defaults if missing)
-        // This makes sure the model is stored in config.toml, not just a fallback
-        let _ = self.config.providers.get_or_create(provider);
-        let _ = self.config.save();
-        // Invalidate the agent so it's recreated with the new provider
-        self.rig_agent = None;
+        self.agent.set_provider(provider);
     }
 
     /// Set the model for the current provider
     pub fn set_model(&mut self, model: &str) {
-        self.config.current_provider_settings_mut().model = model.to_string();
-        let _ = self.config.save();
-        // Invalidate the agent so it's recreated with the new model
-        self.rig_agent = None;
+        self.agent.set_model(model);
     }
 
     /// Get the base URL for the current provider
     pub fn get_base_url(&self) -> Option<&str> {
-        self.config.current_provider_settings().base_url.as_deref()
+        self.agent
+            .config()
+            .current_provider_settings()
+            .base_url
+            .as_deref()
     }
 
     /// Set the base URL for the current provider
     pub fn set_base_url(&mut self, url: &str) {
-        self.config.current_provider_settings_mut().base_url = Some(url.to_string());
-        let _ = self.config.save();
-        // Invalidate the agent so it's recreated with the new base URL
-        self.rig_agent = None;
+        self.agent.set_base_url(url);
     }
 
     fn render(&mut self) {
         let mode = self.mode;
         let state = self.state;
         let input = self.input.clone();
-        let messages = self.messages.clone();
+        let messages = self.agent.messages().to_vec();
         let aux_content = self.aux_content.clone();
+
+        // Sync server status from agent core to UI state
+        let agent_status = self.agent.server_status();
+        let remote_servers = self.agent.remote_servers().to_vec();
+
+        let ui_remote_servers: Vec<crate::ui::RemoteServer> = remote_servers
+            .iter()
+            .map(|s| crate::ui::RemoteServer {
+                name: s.name.clone(),
+                url: s.url.clone(),
+                connected: s.status == crate::servers::ServerConnectionStatus::Connected,
+                tool_count: s.tools.len(),
+            })
+            .collect();
+
+        self.server_status = crate::ui::ServerStatus {
+            local_connected: agent_status.local_connected,
+            local_tool_count: agent_status.local_tool_count,
+            remote_servers: ui_remote_servers,
+        };
         let server_status = self.server_status.clone();
 
-        let model_name = self.model_name().to_string();
+        let model_name = self.agent.model().to_string();
         let overlay = self.overlay.clone();
-        let remote_servers = self.remote_servers.clone();
         let display_items = self.display_items.clone();
 
         let _ = self.terminal.draw(|frame| {
@@ -367,11 +343,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // Check for ESC key (0x1B) to cancel streaming
                 if bytes.contains(&0x1B) {
                     // Cancel active stream
-                    if let Some(ref stream) = self.active_stream {
-                        stream.buffer().cancel();
-                    }
+                    self.agent.cancel();
                     self.state = AppState::Ready;
-                    self.active_stream = None;
                 }
             }
             Err(_) => {} // Would block or error
@@ -649,26 +622,24 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         // Simply reject if the last user message is identical (trimmed)
                         // This prevents both input replays and rapid double-sends
                         let is_duplicate = self
-                            .messages
+                            .agent
+                            .messages()
                             .iter()
                             .rev()
-                            .find(|m| m.role == Role::User)
+                            .find(|m| m.role == crate::agent_core::Role::User)
                             .map(|user_msg| user_msg.content.trim() == input.trim())
                             .unwrap_or(false);
 
-                        // If not a duplicate, add to history
-                        if !is_duplicate {
-                            self.messages.push(Message {
-                                role: Role::User,
-                                content: input.to_string(),
-                            });
-                        } else {
-                            // Duplicate detected - skip adding to history and don't send to AI
+                        // If not a duplicate, process it (send_to_ai will add it if needed via agent.send)
+                        // If it IS a duplicate, we might still want to retry if previous failed?
+                        // Current logic: strict duplicate prevention for immediate re-send.
+                        if is_duplicate {
+                            // Duplicate detected - skip
                             return;
                         }
 
                         // Always update history index to end
-                        self.history_index = self.messages.len();
+                        self.history_index = self.agent.messages().len();
 
                         // Regular message - send to AI
                         self.send_to_ai(&input);
@@ -681,10 +652,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Execute a shell command via MCP shell_eval
     fn execute_shell_command(&mut self, command: &str) {
         // Show the command with shell prompt
-        self.messages.push(Message {
-            role: Role::User,
-            content: format!("$ {}", command),
-        });
+        self.agent.add_user_message(&format!("$ {}", command));
 
         // Handle shell-local commands
         if command.trim() == "exit" {
@@ -695,7 +663,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         }
 
         if command.trim() == "clear" {
-            self.messages.clear();
+            self.agent.clear_messages();
             self.display_items.clear();
             self.display_items.push(crate::display::DisplayItem::info(
                 "Shell mode - type 'exit' or ^D to return",
@@ -710,7 +678,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             "command": command
         });
 
-        match self.mcp_client.call_tool("shell_eval", args) {
+        match self.agent.mcp_client().call_tool("shell_eval", args) {
             Ok(output) => {
                 // Update aux panel with full output
                 self.aux_content = AuxContent {
@@ -726,10 +694,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     output
                 };
 
-                self.messages.push(Message {
-                    role: Role::Tool,
-                    content: display,
-                });
+                // Use Assistant role for tool output since we don't have Tool/System roles in AgentCore
+                self.agent.add_assistant_message(&display);
             }
             Err(e) => {
                 self.display_items
@@ -741,252 +707,167 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     fn send_to_ai(&mut self, message: &str) {
-        // Guard: Don't start a new stream if we already have one active
-        if self.active_stream.is_some() {
+        if self.agent.is_streaming() {
             return;
         }
 
-        // Guard: Don't create duplicate streams for the same message
-        // This can happen if input events are buffered and replayed after streaming completes
-        // Check if the last message was from the user with the same content (already submitted)
-        if let Some(last_user_msg) = self.messages.iter().rev().find(|m| m.role == Role::User) {
-            // Use TRIMMED comparison to match handle_input logic
-            if last_user_msg.content.trim() == message.trim() {
-                // Same message already submitted - check if we have a recent assistant response
-                if let Some(last_msg) = self.messages.last() {
-                    if last_msg.role == Role::Assistant {
-                        return;
-                    }
-                }
-            }
+        let input = message.trim();
+        if input.is_empty() {
+            return;
         }
-        // Check if API key is set
-        let api_key = match self.get_api_key() {
-            Some(key) if !key.is_empty() => key.to_string(),
-            _ => {
-                // Store the message and prompt for API key
-                self.pending_message = Some(message.to_string());
-                self.state = AppState::NeedsApiKey;
-                self.display_items.push(crate::display::DisplayItem::info(
-                    "Please enter your API key:",
-                ));
-                return;
-            }
-        };
+
+        // Check for API key
+        if !self.agent.has_api_key() {
+            self.agent.add_user_message(input);
+            self.display_items.push(crate::display::DisplayItem::info(
+                "Please set your API key to proceed.",
+            ));
+            self.pending_message = Some(input.to_string());
+            self.state = AppState::NeedsApiKey;
+            self.overlay = Some(crate::ui::Overlay::ServerManager(
+                crate::ui::server_manager::ServerManagerView::SetToken {
+                    server_id: "__local__".to_string(),
+                    token_input: String::new(),
+                    error: None,
+                },
+            ));
+            return;
+        }
 
         self.state = AppState::Processing;
-        self.cancelled = false; // Reset cancellation flag
+        self.cancelled = false;
 
-        // Ensure RigAgent is initialized
-        if self.rig_agent.is_none() {
-            let preamble = get_system_message(&self.collect_all_tools()).content;
-            let model = self.model_name().to_string();
-            let provider = self.provider_name().to_string();
-            let api_format = self.config.current_api_format().to_string();
-            let base_url = self.get_base_url().map(|s| s.to_string());
+        // Initialize agent if needed
+        if self.agent.rig_agent().is_none() {
+            // Collect tools first (requires mutable borrow of self)
+            let tools = self.collect_all_tools();
+            let preambles = get_system_message(&tools);
 
-            let agent_result = RigAgent::from_config(
+            // Now borrow config immutably for settings
+            let config = self.agent.config();
+            let settings = config.current_provider_settings();
+            let api_key = settings.api_key.clone().unwrap_or_default();
+            let model = settings.model.clone();
+            let api_format = config.current_api_format().to_string();
+            let base_url = settings.base_url.clone();
+            let mcp_client = self.agent.mcp_client().clone();
+
+            let agent_result = crate::bridge::rig_agent::RigAgent::from_config(
                 &api_key,
                 &model,
                 &api_format,
                 base_url.as_deref(),
-                &preamble,
-                self.mcp_client.clone(),
+                &preambles.content,
+                mcp_client,
             );
 
             match agent_result {
                 Ok(agent) => {
-                    self.rig_agent = Some(agent);
-                    let provider_info = if let Some(url) = &base_url {
-                        format!("{} @ {}", provider, url)
-                    } else {
-                        provider.clone()
-                    };
-                    self.display_items
-                        .push(crate::display::DisplayItem::info(format!(
-                            "🤖 Agent initialized ({} / {})",
-                            provider_info, model
-                        )));
+                    self.agent.set_rig_agent(agent);
                 }
                 Err(e) => {
                     self.display_items
-                        .push(crate::display::DisplayItem::error(format!(
-                            "Failed to initialize agent: {}",
-                            e
-                        )));
+                        .push(crate::display::DisplayItem::error(e.to_string()));
                     self.state = AppState::Ready;
                     return;
                 }
             }
         }
 
-        // Get reference to agent
-        let agent = self.rig_agent.as_ref().unwrap();
+        // Determine if we should start a new stream or retry the last message
+        // If the last message in history is identical to input and role is User, assume retry.
+        let last_is_input = self
+            .agent
+            .messages()
+            .last()
+            .map(|m| m.role == crate::agent_core::Role::User && m.content == input)
+            .unwrap_or(false);
 
-        // Convert our messages to rig-core format for conversation history
-        // IMPORTANT: Exclude the CURRENT user message from history!
-        // The current message is passed separately to stream_chat(), so including
-        // it in history would cause it to appear twice in the API payload.
-        //
-        // We find the LAST User message by index and exclude it. This handles the case
-        // where System messages (like "Agent initialized") appear after the User message.
-        let last_user_idx = self
-            .messages
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, m)| m.role == Role::User)
-            .map(|(i, _)| i);
-
-        let history: Vec<rig::completion::Message> = self
-            .messages
-            .iter()
-            .enumerate()
-            .filter_map(|(i, m)| {
-                // Skip the last user message (it's passed separately as the prompt)
-                if Some(i) == last_user_idx {
-                    return None;
-                }
-                match m.role {
-                    Role::User => Some(rig::completion::Message::user(&m.content)),
-                    Role::Assistant => Some(rig::completion::Message::assistant(&m.content)),
-                    Role::System | Role::Tool => None, // Skip system and tool messages
-                }
-            })
-            .collect();
-
-        // Check if we should reuse an existing assistant message (for continuation)
-        // This handles cases where rig's multi-turn creates multiple streams or
-        // we receive duplicate input events that we want to treat as "continue"
-        let (initial_content, should_add_placeholder) = match self.messages.last() {
-            Some(msg) if msg.role == Role::Assistant => {
-                // There's already an assistant message - reuse it
-                (Some(msg.content.clone()), false)
-            }
-            _ => (None, true),
+        let result = if last_is_input {
+            self.agent.start_stream(input)
+        } else {
+            self.agent.send(input)
         };
 
-        // Start streaming with poll-once pattern - returns immediately
-        // allowing the main loop to render between polls
-        let active_stream = ActiveStream::start(agent, &message, history, initial_content);
-
-        // Store the stream for polling in the main loop
-        self.active_stream = Some(active_stream);
-
-        if should_add_placeholder {
-            // Add placeholder assistant message
-            self.messages.push(Message {
-                role: Role::Assistant,
-                content: String::new(),
-            });
+        match result {
+            Ok(_) => {
+                self.state = AppState::Streaming;
+            }
+            Err(e) => {
+                self.display_items
+                    .push(crate::display::DisplayItem::error(e));
+                self.state = AppState::Ready;
+            }
         }
-
-        // Set state to streaming so poll_stream() will process it
-        self.state = AppState::Streaming;
-
-        // Don't block! Return to main loop which will call poll_stream() on each tick
     }
 
     /// Poll the active stream and update the assistant message.
     /// Called on each tick while in Streaming state.
     /// Uses poll-once pattern to allow UI updates between chunks.
     fn poll_stream(&mut self) {
-        // Only poll if we're in streaming state
         if self.state != AppState::Streaming {
             return;
         }
 
-        let stream = match &mut self.active_stream {
-            Some(s) => s,
-            None => {
-                // No stream, transition back to ready
-                self.state = AppState::Ready;
-                return;
-            }
-        };
+        self.agent.poll_stream();
 
-        // Poll once - this may return immediately or suspend via JSPI
-        let result = stream.poll_once();
-
-        // Get the buffer for content updates
-        let buffer = stream.buffer();
-
-        // Get latest content from buffer
-        let content = buffer.get_content();
-        let tool_activity = buffer.get_tool_activity();
-
-        // Update the last assistant message with CLEAN content only (no tool activity)
-        if let Some(last_msg) = self.messages.last_mut() {
-            if last_msg.role == Role::Assistant {
-                // Only update if new content is longer (preserves content across stream restarts)
-                if content.len() >= last_msg.content.len() {
-                    last_msg.content = content;
-                }
-            }
-        }
-
-        // Tool activity goes to display_items (UI-only, never sent to API)
-        // Clear existing tool activity first, then add new if present
-        self.display_items
-            .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
-        if let Some(activity) = tool_activity {
-            // Parse tool name from activity string (format: "🔧 Calling tool_name...")
-            let tool_name = activity
-                .trim_start_matches("🔧 Calling ")
-                .trim_end_matches("...")
-                .to_string();
-            self.display_items
-                .push(crate::display::DisplayItem::tool_activity(tool_name));
-        }
-
-        // Check result to determine if we're done
-        match result {
-            PollResult::Chunk | PollResult::Pending => {
-                // More data expected (or pending), continue polling on next tick
-            }
-            PollResult::Complete => {
-                // Clear any remaining display items (tool activity)
-                self.display_items
-                    .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
-
-                // Check for errors in the buffer
-                if let Some(error) = buffer.get_error() {
-                    self.display_items
-                        .push(crate::display::DisplayItem::error(format!(
-                            "Streaming error: {}",
-                            error
-                        )));
-                }
-
-                // Clean up and return to ready state
-                self.active_stream = None;
-                self.state = AppState::Ready;
-            }
-            PollResult::Error(e) => {
-                // Clear tool activity display items
-                self.display_items
-                    .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
-
-                self.display_items
-                    .push(crate::display::DisplayItem::error(format!(
-                        "Streaming error: {}",
-                        e
-                    )));
-                self.active_stream = None;
-                self.state = AppState::Ready;
-            }
-        }
-
-        // Check if cancelled
-        if buffer.is_cancelled() {
-            // Clear tool activity display items
-            self.display_items
-                .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
-
-            self.display_items
-                .push(crate::display::DisplayItem::warning("Streaming cancelled."));
-            self.active_stream = None;
+        if !self.agent.is_streaming() {
             self.state = AppState::Ready;
+        }
+
+        while let Some(event) = self.agent.pop_event() {
+            match event {
+                crate::events::AgentEvent::StateChange { .. } => {}
+                crate::events::AgentEvent::Ready => {
+                    self.state = AppState::Ready;
+                }
+                crate::events::AgentEvent::StreamCancelled => {
+                    self.display_items
+                        .push(crate::display::DisplayItem::warning("Streaming cancelled."));
+                    self.state = AppState::Ready;
+                }
+                crate::events::AgentEvent::Notice { text, kind } => match kind {
+                    crate::display::NoticeKind::Info => {
+                        self.display_items
+                            .push(crate::display::DisplayItem::info(text));
+                    }
+                    crate::display::NoticeKind::Warning => {
+                        self.display_items
+                            .push(crate::display::DisplayItem::warning(text));
+                    }
+                    crate::display::NoticeKind::Error => {
+                        self.display_items
+                            .push(crate::display::DisplayItem::error(text));
+                    }
+                    _ => {}
+                },
+
+                // Stream events
+                crate::events::AgentEvent::StreamStart => {}
+                crate::events::AgentEvent::StreamChunk { .. } => {
+                    // Handled by agent state
+                }
+                crate::events::AgentEvent::StreamComplete { .. } => {}
+                crate::events::AgentEvent::StreamError { error } => {
+                    self.display_items
+                        .push(crate::display::DisplayItem::error(error));
+                    self.state = AppState::Ready;
+                }
+
+                // Tool events
+                crate::events::AgentEvent::ToolActivity {
+                    tool_name,
+                    status: _,
+                } => {
+                    // Only show Calling status for now
+                    self.display_items
+                        .push(crate::display::DisplayItem::tool_activity(tool_name));
+                }
+                crate::events::AgentEvent::ToolResult { .. } => {}
+
+                // Message events
+                crate::events::AgentEvent::UserMessage { .. } => {}
+            }
         }
     }
 
@@ -1001,7 +882,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             Overlay::ServerManager(view) => {
                 match view {
                     ServerManagerView::ServerList { selected } => {
-                        let max_items = 2 + self.remote_servers.len(); // Local + Add New + remotes
+                        let max_items = 2 + self.agent.remote_servers_mut().len(); // Local + Add New + remotes
                         match byte {
                             0x1B => {
                                 // Esc - close overlay
@@ -1040,7 +921,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 } else {
                                     // Remote server - show actions
                                     let idx = *selected - 2;
-                                    if let Some(server) = self.remote_servers.get(idx) {
+                                    if let Some(server) = self.agent.remote_servers_mut().get(idx) {
                                         self.overlay = Some(Overlay::ServerManager(
                                             ServerManagerView::ServerActions {
                                                 server_id: server.id.clone(),
@@ -1092,8 +973,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         0 => {
                                             // Connect/Disconnect
                                             // Check if already connected
-                                            if let Some(server) =
-                                                self.remote_servers.iter().find(|s| s.id == sid)
+                                            if let Some(server) = self
+                                                .agent
+                                                .remote_servers_mut()
+                                                .iter()
+                                                .find(|s| s.id == sid)
                                             {
                                                 if server.status
                                                     == ServerConnectionStatus::Connected
@@ -1156,7 +1040,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.add_remote_server(&url);
 
                                     // Get the newly added server's ID
-                                    if let Some(server) = self.remote_servers.last() {
+                                    if let Some(server) = self.agent.remote_servers_mut().last() {
                                         let server_id = server.id.clone();
 
                                         // Try auto-connect
@@ -1315,7 +1199,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         // Enter - select provider and open wizard for configuration
                         if let Some((provider_id, _name, _base_url)) = PROVIDERS.get(*selected) {
                             // Load current settings for this provider
-                            let settings = self.config.providers.get(provider_id);
+                            let settings = self.agent.config().providers.get(provider_id);
                             let saved_model = settings.model.clone();
                             let saved_base_url = settings.base_url.clone().unwrap_or_default();
                             let saved_api_key = settings.api_key.clone().unwrap_or_default();
@@ -1390,7 +1274,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 if let Some((provider_id, _, _)) = PROVIDERS.get(*selected_provider)
                                 {
                                     // Load current settings for this provider
-                                    let settings = self.config.providers.get(provider_id);
+                                    let settings = self.agent.config().providers.get(provider_id);
                                     *model_input = settings.model.clone();
                                     *base_url_input = settings.base_url.clone().unwrap_or_default();
                                     *api_key_input = settings.api_key.clone().unwrap_or_default();
@@ -1471,11 +1355,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                                         // Save base URL
                                         if !base_url.is_empty() {
-                                            self.config.current_provider_settings_mut().base_url =
-                                                Some(base_url);
+                                            self.agent
+                                                .config_mut()
+                                                .current_provider_settings_mut()
+                                                .base_url = Some(base_url);
                                         } else {
-                                            self.config.current_provider_settings_mut().base_url =
-                                                None;
+                                            self.agent
+                                                .config_mut()
+                                                .current_provider_settings_mut()
+                                                .base_url = None;
                                         }
 
                                         // Save API key
@@ -1483,7 +1371,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                             self.set_api_key(&api_key);
                                         }
 
-                                        let _ = self.config.save();
+                                        let _ = self.agent.config().save();
 
                                         self.notice(format!(
                                             "Provider switched to {} with model {}",
@@ -1505,26 +1393,31 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         self.overlay = None;
 
                                         // Save to provider settings (without setting as default)
-                                        let settings =
-                                            self.config.providers.get_or_create(&provider_id);
-                                        if !model.is_empty() {
-                                            settings.model = model;
-                                        }
-                                        if !base_url.is_empty() {
-                                            settings.base_url = Some(base_url);
-                                        } else {
-                                            settings.base_url = None;
-                                        }
-                                        if !api_key.is_empty() {
-                                            settings.api_key = Some(api_key);
+                                        {
+                                            let settings = self
+                                                .agent
+                                                .config_mut()
+                                                .providers
+                                                .get_or_create(&provider_id);
+                                            if !model.is_empty() {
+                                                settings.model = model;
+                                            }
+                                            if !base_url.is_empty() {
+                                                settings.base_url = Some(base_url);
+                                            } else {
+                                                settings.base_url = None;
+                                            }
+                                            if !api_key.is_empty() {
+                                                settings.api_key = Some(api_key);
+                                            }
                                         }
 
-                                        let _ = self.config.save();
+                                        let _ = self.agent.config_mut().save();
 
                                         self.notice(format!(
                                             "Saved settings for {} (model: {})",
                                             provider_id,
-                                            self.config.providers.get(&provider_id).model
+                                            self.agent.config().providers.get(&provider_id).model
                                         ));
                                     }
                                     5 => {
@@ -1588,7 +1481,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                                     // Use wizard's api_key_input, falling back to config
                                     let key = if api_key.is_empty() {
-                                        self.config.providers.get(&provider_id).api_key.clone()
+                                        self.agent
+                                            .config()
+                                            .providers
+                                            .get(&provider_id)
+                                            .api_key
+                                            .clone()
                                     } else {
                                         Some(api_key)
                                     };
@@ -1642,7 +1540,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 };
 
                                 let key = if api_key.is_empty() {
-                                    self.config.providers.get(&provider_id).api_key.clone()
+                                    self.agent
+                                        .config()
+                                        .providers
+                                        .get(&provider_id)
+                                        .api_key
+                                        .clone()
                                 } else {
                                     Some(api_key)
                                 };
@@ -1796,17 +1699,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
     // === Server Management Methods ===
 
     fn add_remote_server(&mut self, url: &str) {
-        ServerManager::add_server(&mut self.remote_servers, url);
+        ServerManager::add_server(self.agent.remote_servers_mut(), url);
         self.save_servers();
     }
 
     fn remove_remote_server(&mut self, id: &str) {
-        ServerManager::remove_server(&mut self.remote_servers, id);
+        ServerManager::remove_server(self.agent.remote_servers_mut(), id);
         self.save_servers();
     }
 
     fn set_server_token(&mut self, id: &str, token: &str) {
-        ServerManager::set_token(&mut self.remote_servers, id, token);
+        ServerManager::set_token(self.agent.remote_servers_mut(), id, token);
         self.save_servers();
     }
 
@@ -1815,18 +1718,22 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// On OAuth required: trigger OAuth flow, then return to list
     /// On other failure: show SetToken dialog for bearer key entry
     fn try_connect_new_server_in_wizard(&mut self, id: &str) {
-        let idx = self.remote_servers.iter().position(|s| s.id == id);
+        let idx = self
+            .agent
+            .remote_servers_mut()
+            .iter()
+            .position(|s| s.id == id);
         if let Some(idx) = idx {
-            self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
-            let server = &self.remote_servers[idx];
+            self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connecting;
+            let server = &self.agent.remote_servers_mut()[idx];
             let server_name = server.name.clone();
             let server_id = server.id.clone();
 
             match ServerManager::connect_server(server) {
                 Ok(tools) => {
                     let tool_count = tools.len();
-                    self.remote_servers[idx].status = ServerConnectionStatus::Connected;
-                    self.remote_servers[idx].tools = tools;
+                    self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connected;
+                    self.agent.remote_servers_mut()[idx].tools = tools;
                     self.notice(format!(
                         "Connected to '{}'. {} tools available.",
                         server_name, tool_count
@@ -1848,18 +1755,18 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     use crate::bridge::oauth_client::perform_oauth_flow;
                     match perform_oauth_flow(&server_url, &server_id, &client_id, &redirect_uri) {
                         Ok(token_response) => {
-                            self.remote_servers[idx].bearer_token =
+                            self.agent.remote_servers_mut()[idx].bearer_token =
                                 Some(token_response.access_token.clone());
                             self.save_servers();
 
                             // Retry connection with token
-                            let server = &self.remote_servers[idx];
+                            let server = &self.agent.remote_servers_mut()[idx];
                             match ServerManager::connect_server(server) {
                                 Ok(tools) => {
                                     let tool_count = tools.len();
-                                    self.remote_servers[idx].status =
+                                    self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Connected;
-                                    self.remote_servers[idx].tools = tools;
+                                    self.agent.remote_servers_mut()[idx].tools = tools;
                                     self.notice(format!(
                                         "Connected to '{}'. {} tools available.",
                                         server_name, tool_count
@@ -1867,7 +1774,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.overlay = None;
                                 }
                                 Err(e) => {
-                                    self.remote_servers[idx].status =
+                                    self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Error(e.to_string());
                                     self.notice(format!("Connection failed after OAuth: {}", e));
                                     self.overlay = Some(Overlay::ServerManager(
@@ -1877,7 +1784,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             }
                         }
                         Err(oauth_err) => {
-                            self.remote_servers[idx].status =
+                            self.agent.remote_servers_mut()[idx].status =
                                 ServerConnectionStatus::Error(oauth_err.to_string());
                             self.notice(format!("OAuth failed: {}", oauth_err));
                             self.overlay =
@@ -1889,7 +1796,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 }
                 Err(e) => {
                     // Connection failed - offer to set bearer token
-                    self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
+                    self.agent.remote_servers_mut()[idx].status =
+                        ServerConnectionStatus::Error(e.to_string());
                     self.notice(format!(
                         "Connection failed: {}. Enter API key if required.",
                         e
@@ -1906,25 +1814,29 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     fn toggle_server_connection(&mut self, id: &str) {
-        ServerManager::toggle_connection(&mut self.remote_servers, id);
+        ServerManager::toggle_connection(self.agent.remote_servers_mut(), id);
     }
 
     /// Connect to a remote server by ID (used by both /mcp connect and wizard)
     fn connect_remote_server_by_id(&mut self, id: &str) {
         // Find the server index
-        let idx = self.remote_servers.iter().position(|s| s.id == id);
+        let idx = self
+            .agent
+            .remote_servers_mut()
+            .iter()
+            .position(|s| s.id == id);
         if let Some(idx) = idx {
             // Mark as connecting
-            self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
+            self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connecting;
 
             // Perform actual connection
-            let server = &self.remote_servers[idx];
+            let server = &self.agent.remote_servers_mut()[idx];
             match ServerManager::connect_server(server) {
                 Ok(tools) => {
                     let tool_count = tools.len();
-                    let name = self.remote_servers[idx].name.clone();
-                    self.remote_servers[idx].status = ServerConnectionStatus::Connected;
-                    self.remote_servers[idx].tools = tools;
+                    let name = self.agent.remote_servers_mut()[idx].name.clone();
+                    self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connected;
+                    self.agent.remote_servers_mut()[idx].tools = tools;
                     self.notice(format!(
                         "Connected to '{}'. {} tools available.",
                         name, tool_count
@@ -1944,15 +1856,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     );
 
                     // Use server ID as client ID for now (server may provide real client_id via registration)
-                    let client_id = self.remote_servers[idx].id.clone();
-                    let server_id = self.remote_servers[idx].id.clone();
+                    let client_id = self.agent.remote_servers_mut()[idx].id.clone();
+                    let server_id = self.agent.remote_servers_mut()[idx].id.clone();
 
                     // Perform OAuth flow
                     use crate::bridge::oauth_client::perform_oauth_flow;
                     match perform_oauth_flow(&server_url, &server_id, &client_id, &redirect_uri) {
                         Ok(token_response) => {
                             // Store the token and retry connection
-                            self.remote_servers[idx].bearer_token =
+                            self.agent.remote_servers_mut()[idx].bearer_token =
                                 Some(token_response.access_token.clone());
                             self.notice("OAuth authorization successful. Connecting...");
 
@@ -1960,21 +1872,21 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             self.save_servers();
 
                             // Retry connection with the new token
-                            let server = &self.remote_servers[idx];
+                            let server = &self.agent.remote_servers_mut()[idx];
                             match ServerManager::connect_server(server) {
                                 Ok(tools) => {
                                     let tool_count = tools.len();
-                                    let name = self.remote_servers[idx].name.clone();
-                                    self.remote_servers[idx].status =
+                                    let name = self.agent.remote_servers_mut()[idx].name.clone();
+                                    self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Connected;
-                                    self.remote_servers[idx].tools = tools;
+                                    self.agent.remote_servers_mut()[idx].tools = tools;
                                     self.notice(format!(
                                         "Connected to '{}'. {} tools available.",
                                         name, tool_count
                                     ));
                                 }
                                 Err(e) => {
-                                    self.remote_servers[idx].status =
+                                    self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Error(e.to_string());
                                     self.notice_error(format!(
                                         "Failed to connect after OAuth: {}",
@@ -1984,14 +1896,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             }
                         }
                         Err(oauth_err) => {
-                            self.remote_servers[idx].status =
+                            self.agent.remote_servers_mut()[idx].status =
                                 ServerConnectionStatus::Error(oauth_err.to_string());
                             self.notice(format!("OAuth failed: {}", oauth_err));
                         }
                     }
                 }
                 Err(e) => {
-                    self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
+                    self.agent.remote_servers_mut()[idx].status =
+                        ServerConnectionStatus::Error(e.to_string());
                     self.notice_error(format!("Failed to connect: {}", e));
                 }
             }
@@ -2001,12 +1914,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Auto-connect all predefined MCP servers at startup
     /// Only notifies of errors, does not retry on failure
     fn auto_connect_servers(&mut self) {
-        if self.remote_servers.is_empty() {
+        if self.agent.remote_servers_mut().is_empty() {
             return;
         }
 
         // Collect server IDs first to avoid borrow issues
-        let server_ids: Vec<String> = self.remote_servers.iter().map(|s| s.id.clone()).collect();
+        let server_ids: Vec<String> = self
+            .agent
+            .remote_servers_mut()
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
         let server_count = server_ids.len();
 
         self.notice(format!(
@@ -2018,32 +1936,37 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let mut failed = 0;
 
         for id in server_ids {
-            if let Some(idx) = self.remote_servers.iter().position(|s| s.id == id) {
-                self.remote_servers[idx].status = ServerConnectionStatus::Connecting;
-                let server = &self.remote_servers[idx];
+            if let Some(idx) = self
+                .agent
+                .remote_servers_mut()
+                .iter()
+                .position(|s| s.id == id)
+            {
+                self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connecting;
+                let server = &self.agent.remote_servers_mut()[idx];
 
                 match ServerManager::connect_server(server) {
                     Ok(tools) => {
-                        self.remote_servers[idx].status = ServerConnectionStatus::Connected;
-                        self.remote_servers[idx].tools = tools;
+                        self.agent.remote_servers_mut()[idx].status =
+                            ServerConnectionStatus::Connected;
+                        self.agent.remote_servers_mut()[idx].tools = tools;
                         connected += 1;
                     }
                     Err(McpError::OAuthRequired(_)) => {
                         // OAuth required - mark as needing auth, don't auto-trigger popup at startup
-                        self.remote_servers[idx].status = ServerConnectionStatus::Error(
+                        self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Error(
                             "OAuth required - use /mcp connect to authenticate".to_string(),
                         );
                         failed += 1;
-                        self.notice(format!(
-                            "'{}': OAuth authentication required",
-                            self.remote_servers[idx].name
-                        ));
+                        let server_name = self.agent.remote_servers()[idx].name.clone();
+                        self.notice(format!("'{}': OAuth authentication required", server_name));
                     }
                     Err(e) => {
-                        self.remote_servers[idx].status =
+                        self.agent.remote_servers_mut()[idx].status =
                             ServerConnectionStatus::Error(e.to_string());
                         failed += 1;
-                        self.notice(format!("'{}': {}", self.remote_servers[idx].name, e));
+                        let server_name = self.agent.remote_servers()[idx].name.clone();
+                        self.notice(format!("'{}': {}", server_name, e));
                     }
                 }
             }
@@ -2060,7 +1983,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Initialize sandbox MCP connection at startup
     /// This connects to the local sandbox MCP and fetches available tools
     fn init_sandbox_mcp(&mut self) {
-        match self.mcp_client.list_tools() {
+        match self.agent.mcp_client().list_tools() {
             Ok(tools) => {
                 self.server_status.local_connected = true;
                 self.server_status.local_tool_count = tools.len();
@@ -2082,7 +2005,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
         use crate::config::ServerEntry;
         let servers_config = ServersConfig {
             servers: self
-                .remote_servers
+                .agent
+                .remote_servers()
                 .iter()
                 .map(|s| ServerEntry {
                     id: s.id.clone(),
@@ -2097,21 +2021,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     /// Collect all tools with server prefixes for multi-server routing
-    fn collect_all_tools(&mut self) -> Vec<ToolDefinition> {
-        // Use closure to access mcp_client
-        let (tools, local_connected, local_tool_count) =
-            ToolCollector::collect_all_tools(&self.remote_servers, || {
-                self.mcp_client.list_tools().map_err(|e| e.to_string())
-            });
-
-        self.server_status.local_connected = local_connected;
-        self.server_status.local_tool_count = local_tool_count;
-
-        if !local_connected {
-            self.notice_error("MCP connection error".to_string());
-        }
-
-        tools
+    fn collect_all_tools(&mut self) -> Vec<crate::bridge::mcp_client::ToolDefinition> {
+        self.agent.collect_all_tools()
     }
 
     /// Slash commands for tab completion
@@ -2203,7 +2114,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 }
 
                 // MCP tools
-                match self.mcp_client.list_tools() {
+                match self.agent.mcp_client().list_tools() {
                     Ok(mcp_tools) => {
                         self.server_status.local_connected = true;
                         self.server_status.local_tool_count = mcp_tools.len();
@@ -2242,7 +2153,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 self.server_status.local_tool_count
                             ));
 
-                            for (i, server) in self.remote_servers.iter().enumerate() {
+                            for (i, server) in self.agent.remote_servers_mut().iter().enumerate() {
                                 let status = match server.status {
                                     ServerConnectionStatus::Connected => "● connected",
                                     ServerConnectionStatus::Connecting => "◐ connecting",
@@ -2274,8 +2185,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                             .to_string()
                                     });
                                 // Generate a unique ID for the server
-                                let id = format!("remote-{}", self.remote_servers.len() + 1);
-                                self.remote_servers.push(RemoteServerEntry {
+                                let id =
+                                    format!("remote-{}", self.agent.remote_servers_mut().len() + 1);
+                                self.agent.remote_servers_mut().push(RemoteServerEntry {
                                     id,
                                     name: name.clone(),
                                     url: url.to_string(),
@@ -2283,10 +2195,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     tools: vec![],
                                     bearer_token: None,
                                 });
+                                let server_count = self.agent.remote_servers().len();
                                 self.notice(format!(
                                     "Added MCP server '{}'. Use /mcp connect {} to connect.",
-                                    name,
-                                    self.remote_servers.len()
+                                    name, server_count
                                 ));
                             } else {
                                 self.notice("Usage: /mcp add <url> [name]".to_string());
@@ -2296,8 +2208,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             // Remove server by index: /mcp remove <id>
                             if let Some(id_str) = parts.get(2) {
                                 if let Ok(id) = id_str.parse::<usize>() {
-                                    if id > 0 && id <= self.remote_servers.len() {
-                                        let removed = self.remote_servers.remove(id - 1);
+                                    if id > 0 && id <= self.agent.remote_servers_mut().len() {
+                                        let removed =
+                                            self.agent.remote_servers_mut().remove(id - 1);
                                         self.notice(format!(
                                             "Removed MCP server '{}'.",
                                             removed.name
@@ -2318,32 +2231,33 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             // Connect to server by index: /mcp connect <id>
                             if let Some(id_str) = parts.get(2) {
                                 if let Ok(id) = id_str.parse::<usize>() {
-                                    if id > 0 && id <= self.remote_servers.len() {
+                                    if id > 0 && id <= self.agent.remote_servers_mut().len() {
                                         let idx = id - 1;
                                         // Mark as connecting
-                                        self.remote_servers[idx].status =
+                                        self.agent.remote_servers_mut()[idx].status =
                                             ServerConnectionStatus::Connecting;
-                                        self.notice(format!(
-                                            "Connecting to '{}'...",
-                                            self.remote_servers[idx].name
-                                        ));
+                                        let server_name =
+                                            self.agent.remote_servers()[idx].name.clone();
+                                        self.notice(format!("Connecting to '{}'...", server_name));
 
                                         // Perform actual connection
-                                        let server = &self.remote_servers[idx];
+                                        let server = &self.agent.remote_servers_mut()[idx];
                                         match ServerManager::connect_server(server) {
                                             Ok(tools) => {
                                                 let tool_count = tools.len();
-                                                let name = self.remote_servers[idx].name.clone();
-                                                self.remote_servers[idx].status =
+                                                let name = self.agent.remote_servers_mut()[idx]
+                                                    .name
+                                                    .clone();
+                                                self.agent.remote_servers_mut()[idx].status =
                                                     ServerConnectionStatus::Connected;
-                                                self.remote_servers[idx].tools = tools;
+                                                self.agent.remote_servers_mut()[idx].tools = tools;
                                                 self.notice(format!(
                                                     "Connected to '{}'. {} tools available.",
                                                     name, tool_count
                                                 ));
                                             }
                                             Err(e) => {
-                                                self.remote_servers[idx].status =
+                                                self.agent.remote_servers_mut()[idx].status =
                                                     ServerConnectionStatus::Error(e.to_string());
                                                 self.notice_error(format!(
                                                     "Failed to connect: {}",
@@ -2365,13 +2279,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             // Disconnect from server by index: /mcp disconnect <id>
                             if let Some(id_str) = parts.get(2) {
                                 if let Ok(id) = id_str.parse::<usize>() {
-                                    if id > 0 && id <= self.remote_servers.len() {
-                                        self.remote_servers[id - 1].status =
+                                    if id > 0 && id <= self.agent.remote_servers_mut().len() {
+                                        let server_name =
+                                            self.agent.remote_servers()[id - 1].name.clone();
+                                        self.agent.remote_servers_mut()[id - 1].status =
                                             ServerConnectionStatus::Disconnected;
-                                        self.remote_servers[id - 1].tools.clear();
+                                        self.agent.remote_servers_mut()[id - 1].tools.clear();
                                         self.notice(format!(
                                             "Disconnected from '{}'.",
-                                            self.remote_servers[id - 1].name
+                                            server_name
                                         ));
                                     } else {
                                         self.notice("Invalid server ID. Use /mcp list to see IDs.");
@@ -2401,7 +2317,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // Open model selector overlay
                 self.overlay = Some(Overlay::ModelSelector {
                     selected: 0,
-                    provider: self.config.current_provider().to_string(),
+                    provider: self.agent.config().current_provider().to_string(),
                     fetched_models: None,
                 });
             }
@@ -2546,13 +2462,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     "not set"
                 };
 
+                let theme = self.agent.config().ui.theme.clone();
+                let aux_panel = self.agent.config().ui.aux_panel;
                 self.notice(format!(
                     "Configuration:\n  Provider: {}\n  Model: {}\n  API Key: {}\n  Theme: {}\n  Aux Panel: {}",
                     self.provider_name(),
                     self.model_name(),
                     api_key_status,
-                    self.config.ui.theme,
-                    if self.config.ui.aux_panel { "enabled" } else { "disabled" }
+                    theme,
+                    if aux_panel { "enabled" } else { "disabled" }
                 ));
             }
 
@@ -2561,8 +2479,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 if let Some(theme_name) = parts.get(1) {
                     let valid_themes = ["dark", "light", "gruvbox", "catppuccin", "tokyo-night"];
                     if valid_themes.contains(&theme_name.to_lowercase().as_str()) {
-                        self.config.ui.theme = theme_name.to_string();
-                        let _ = self.config.save();
+                        self.agent.config_mut().ui.theme = theme_name.to_string();
+                        let _ = self.agent.config().save();
                         self.notice(format!("Theme changed to: {}", theme_name));
                     } else {
                         self.notice(format!(
@@ -2572,14 +2490,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         ));
                     }
                 } else {
+                    let current_theme = self.agent.config().ui.theme.clone();
                     self.notice(format!(
                             "Current theme: {}. Usage: /theme <name>\nAvailable: dark, light, gruvbox, catppuccin",
-                            self.config.ui.theme
+                            current_theme
                         ));
                 }
             }
             "/clear" => {
-                self.messages.clear();
+                self.agent.clear_messages();
                 self.notice("Messages cleared.".to_string());
             }
             "/quit" | "/q" => {

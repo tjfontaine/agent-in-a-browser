@@ -5,8 +5,41 @@
 use crate::bridge::local_tools::{format_tasks_for_display, try_execute_local_tool, Task};
 use crate::bridge::mcp_client::{McpError, ToolDefinition};
 use crate::bridge::remote_mcp_client::RemoteMcpClient;
-use crate::ui::{AuxContent, AuxContentKind, RemoteServerEntry, ServerConnectionStatus};
+use crate::ui::{AuxContent, AuxContentKind, ServerStatus};
 use serde_json::Value;
+
+/// Remote server connection status
+#[derive(Clone, PartialEq, Debug)]
+pub enum ServerConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    AuthRequired,
+    Error(String),
+}
+
+impl std::fmt::Display for ServerConnectionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ServerConnectionStatus::Disconnected => write!(f, "disconnected"),
+            ServerConnectionStatus::Connecting => write!(f, "connecting"),
+            ServerConnectionStatus::Connected => write!(f, "connected"),
+            ServerConnectionStatus::AuthRequired => write!(f, "auth required"),
+            ServerConnectionStatus::Error(msg) => write!(f, "error: {}", msg),
+        }
+    }
+}
+
+/// A remote MCP server entry
+#[derive(Clone)]
+pub struct RemoteServerEntry {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub status: ServerConnectionStatus,
+    pub tools: Vec<ToolDefinition>,
+    pub bearer_token: Option<String>,
+}
 
 /// Results from tool execution including optional task updates
 pub struct ToolExecutionResult {

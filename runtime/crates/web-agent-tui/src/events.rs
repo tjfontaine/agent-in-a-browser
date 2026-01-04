@@ -3,7 +3,16 @@
 //! These events are emitted by the agent core and consumed by UI handlers.
 //! This enables multiple frontends (TUI, exec, web) on the same agent core.
 
-use crate::display::ToolStatus;
+use crate::display::{NoticeKind, ToolStatus};
+
+/// Agent state for state change events
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AgentState {
+    Ready,
+    Processing,
+    Streaming,
+    NeedsApiKey,
+}
 
 /// Events emitted by the agent core for handlers to process
 #[derive(Clone, Debug)]
@@ -33,6 +42,10 @@ pub enum AgentEvent {
     StreamCancelled,
     /// Agent is ready for next input
     Ready,
+    /// Notice for display (info, warning, error)
+    Notice { text: String, kind: NoticeKind },
+    /// Agent state changed
+    StateChange { state: AgentState },
 }
 
 impl AgentEvent {
