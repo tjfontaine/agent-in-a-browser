@@ -25,7 +25,7 @@ use crate::{poll, subscribe_duration};
 use std::io::Write;
 
 /// App state enumeration
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AppState {
     /// Normal operation - ready for input
     Ready,
@@ -77,6 +77,8 @@ pub struct App<R: PollableRead, W: Write> {
     config: Config,
     /// Active streaming session for async response streaming (poll-once pattern)
     active_stream: Option<ActiveStream>,
+    /// Display-only items (tool activity, notices) - never sent to API
+    pub(crate) display_items: Vec<crate::display::DisplayItem>,
 }
 
 /// A message in the chat history
@@ -133,10 +135,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             mode: Mode::Agent,
             state: AppState::Ready,
             input: InputBuffer::new(),
-            messages: vec![Message {
-                role: Role::System,
-                content: "Welcome to Agent in a Browser! Type /help for commands.".to_string(),
-            }],
+            messages: Vec::new(), // Only User/Assistant pairs - direct API history
             history: loaded_history,
             history_index: loaded_history_len,
             terminal,
@@ -156,7 +155,28 @@ impl<R: PollableRead, W: Write> App<R, W> {
             overlay: None,
             config,
             active_stream: None,
+            display_items: vec![crate::display::DisplayItem::info(
+                "Welcome to Agent in a Browser! Type /help for commands.",
+            )],
         }
+    }
+
+    /// Add an info notice to display_items (UI-only, never sent to API)
+    fn notice(&mut self, text: impl Into<String>) {
+        self.display_items
+            .push(crate::display::DisplayItem::info(text));
+    }
+
+    /// Add a warning notice to display_items
+    fn notice_warning(&mut self, text: impl Into<String>) {
+        self.display_items
+            .push(crate::display::DisplayItem::warning(text));
+    }
+
+    /// Add an error notice to display_items
+    fn notice_error(&mut self, text: impl Into<String>) {
+        self.display_items
+            .push(crate::display::DisplayItem::error(text));
     }
 
     /// Main run loop
@@ -297,6 +317,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let model_name = self.model_name().to_string();
         let overlay = self.overlay.clone();
         let remote_servers = self.remote_servers.clone();
+        let display_items = self.display_items.clone();
 
         let _ = self.terminal.draw(|frame| {
             render_ui(
@@ -306,6 +327,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 input.text(),
                 input.cursor_pos(),
                 &messages,
+                &display_items,
                 &aux_content,
                 &server_status,
                 &model_name,
@@ -466,10 +488,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x04 => {
                 if self.mode == Mode::Shell {
                     self.mode = Mode::Agent;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Exiting shell mode.".to_string(),
-                    });
+                    self.display_items
+                        .push(crate::display::DisplayItem::info("Exiting shell mode."));
                 } else {
                     self.should_quit = true;
                 }
@@ -479,10 +499,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x0E => {
                 if self.mode != Mode::Agent {
                     self.mode = Mode::Agent;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Switched to normal mode.".to_string(),
-                    });
+                    self.display_items.push(crate::display::DisplayItem::info(
+                        "Switched to normal mode.",
+                    ));
                 }
                 true
             }
@@ -490,16 +509,13 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x10 => {
                 if self.mode == Mode::Plan {
                     self.mode = Mode::Agent;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Exiting plan mode.".to_string(),
-                    });
+                    self.display_items
+                        .push(crate::display::DisplayItem::info("Exiting plan mode."));
                 } else if self.mode != Mode::Shell {
                     self.mode = Mode::Plan;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Entering plan mode. Type 'go' to execute plan, or /mode normal to exit.".to_string(),
-                    });
+                    self.display_items.push(crate::display::DisplayItem::info(
+                        "Entering plan mode. Type 'go' to execute plan, or /mode normal to exit.",
+                    ));
                 }
                 true
             }
@@ -535,10 +551,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 self.state = AppState::Ready;
                 self.pending_message = None;
                 self.input.clear();
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "API key entry cancelled.".to_string(),
-                });
+                self.display_items.push(crate::display::DisplayItem::info(
+                    "API key entry cancelled.",
+                ));
             }
             return;
         }
@@ -597,10 +612,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // set_api_key saves to config and invalidates agent
                 self.set_api_key(&input);
 
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "API key set and saved.".to_string(),
-                });
+                self.display_items
+                    .push(crate::display::DisplayItem::info("API key set and saved."));
                 self.state = AppState::Ready;
 
                 // If we have a pending message, send it now
@@ -626,19 +639,39 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         self.execute_shell_command(&input);
                     }
                     Mode::Agent | Mode::Plan => {
-                        // Add user message
-                        self.messages.push(Message {
-                            role: Role::User,
-                            content: input.clone(),
-                        });
-
-                        // Handle slash commands
+                        // Handle slash commands FIRST - don't add to history or send to AI
                         if input.starts_with('/') {
                             self.handle_slash_command(&input);
-                        } else {
-                            // Regular message - send to AI
-                            self.send_to_ai(&input);
+                            return;
                         }
+
+                        // Check for consecutive duplicate message submission
+                        // Simply reject if the last user message is identical (trimmed)
+                        // This prevents both input replays and rapid double-sends
+                        let is_duplicate = self
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| m.role == Role::User)
+                            .map(|user_msg| user_msg.content.trim() == input.trim())
+                            .unwrap_or(false);
+
+                        // If not a duplicate, add to history
+                        if !is_duplicate {
+                            self.messages.push(Message {
+                                role: Role::User,
+                                content: input.to_string(),
+                            });
+                        } else {
+                            // Duplicate detected - skip adding to history and don't send to AI
+                            return;
+                        }
+
+                        // Always update history index to end
+                        self.history_index = self.messages.len();
+
+                        // Regular message - send to AI
+                        self.send_to_ai(&input);
                     }
                 }
             }
@@ -656,19 +689,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
         // Handle shell-local commands
         if command.trim() == "exit" {
             self.mode = Mode::Agent;
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Exiting shell mode.".to_string(),
-            });
+            self.display_items
+                .push(crate::display::DisplayItem::info("Exiting shell mode."));
             return;
         }
 
         if command.trim() == "clear" {
             self.messages.clear();
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Shell mode - type 'exit' or ^D to return".to_string(),
-            });
+            self.display_items.clear();
+            self.display_items.push(crate::display::DisplayItem::info(
+                "Shell mode - type 'exit' or ^D to return",
+            ));
             return;
         }
 
@@ -701,10 +732,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 });
             }
             Err(e) => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Error: {}", e),
-                });
+                self.display_items
+                    .push(crate::display::DisplayItem::error(format!("Error: {}", e)));
             }
         }
 
@@ -712,6 +741,25 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     fn send_to_ai(&mut self, message: &str) {
+        // Guard: Don't start a new stream if we already have one active
+        if self.active_stream.is_some() {
+            return;
+        }
+
+        // Guard: Don't create duplicate streams for the same message
+        // This can happen if input events are buffered and replayed after streaming completes
+        // Check if the last message was from the user with the same content (already submitted)
+        if let Some(last_user_msg) = self.messages.iter().rev().find(|m| m.role == Role::User) {
+            // Use TRIMMED comparison to match handle_input logic
+            if last_user_msg.content.trim() == message.trim() {
+                // Same message already submitted - check if we have a recent assistant response
+                if let Some(last_msg) = self.messages.last() {
+                    if last_msg.role == Role::Assistant {
+                        return;
+                    }
+                }
+            }
+        }
         // Check if API key is set
         let api_key = match self.get_api_key() {
             Some(key) if !key.is_empty() => key.to_string(),
@@ -719,10 +767,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // Store the message and prompt for API key
                 self.pending_message = Some(message.to_string());
                 self.state = AppState::NeedsApiKey;
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Please enter your API key:".to_string(),
-                });
+                self.display_items.push(crate::display::DisplayItem::info(
+                    "Please enter your API key:",
+                ));
                 return;
             }
         };
@@ -755,16 +802,18 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     } else {
                         provider.clone()
                     };
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("🤖 Agent initialized ({} / {})", provider_info, model),
-                    });
+                    self.display_items
+                        .push(crate::display::DisplayItem::info(format!(
+                            "🤖 Agent initialized ({} / {})",
+                            provider_info, model
+                        )));
                 }
                 Err(e) => {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Failed to initialize agent: {}", e),
-                    });
+                    self.display_items
+                        .push(crate::display::DisplayItem::error(format!(
+                            "Failed to initialize agent: {}",
+                            e
+                        )));
                     self.state = AppState::Ready;
                     return;
                 }
@@ -775,29 +824,62 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let agent = self.rig_agent.as_ref().unwrap();
 
         // Convert our messages to rig-core format for conversation history
-        // Skip system messages and only include user/assistant pairs
+        // IMPORTANT: Exclude the CURRENT user message from history!
+        // The current message is passed separately to stream_chat(), so including
+        // it in history would cause it to appear twice in the API payload.
+        //
+        // We find the LAST User message by index and exclude it. This handles the case
+        // where System messages (like "Agent initialized") appear after the User message.
+        let last_user_idx = self
+            .messages
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, m)| m.role == Role::User)
+            .map(|(i, _)| i);
+
         let history: Vec<rig::completion::Message> = self
             .messages
             .iter()
-            .filter_map(|m| match m.role {
-                Role::User => Some(rig::completion::Message::user(&m.content)),
-                Role::Assistant => Some(rig::completion::Message::assistant(&m.content)),
-                Role::System | Role::Tool => None, // Skip system and tool messages
+            .enumerate()
+            .filter_map(|(i, m)| {
+                // Skip the last user message (it's passed separately as the prompt)
+                if Some(i) == last_user_idx {
+                    return None;
+                }
+                match m.role {
+                    Role::User => Some(rig::completion::Message::user(&m.content)),
+                    Role::Assistant => Some(rig::completion::Message::assistant(&m.content)),
+                    Role::System | Role::Tool => None, // Skip system and tool messages
+                }
             })
             .collect();
 
+        // Check if we should reuse an existing assistant message (for continuation)
+        // This handles cases where rig's multi-turn creates multiple streams or
+        // we receive duplicate input events that we want to treat as "continue"
+        let (initial_content, should_add_placeholder) = match self.messages.last() {
+            Some(msg) if msg.role == Role::Assistant => {
+                // There's already an assistant message - reuse it
+                (Some(msg.content.clone()), false)
+            }
+            _ => (None, true),
+        };
+
         // Start streaming with poll-once pattern - returns immediately
         // allowing the main loop to render between polls
-        let active_stream = ActiveStream::start(agent, &message, history);
+        let active_stream = ActiveStream::start(agent, &message, history, initial_content);
 
         // Store the stream for polling in the main loop
         self.active_stream = Some(active_stream);
 
-        // Add placeholder assistant message
-        self.messages.push(Message {
-            role: Role::Assistant,
-            content: "".to_string(),
-        });
+        if should_add_placeholder {
+            // Add placeholder assistant message
+            self.messages.push(Message {
+                role: Role::Assistant,
+                content: String::new(),
+            });
+        }
 
         // Set state to streaming so poll_stream() will process it
         self.state = AppState::Streaming;
@@ -833,16 +915,28 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let content = buffer.get_content();
         let tool_activity = buffer.get_tool_activity();
 
-        // Update the last assistant message (it should be the most recent)
+        // Update the last assistant message with CLEAN content only (no tool activity)
         if let Some(last_msg) = self.messages.last_mut() {
             if last_msg.role == Role::Assistant {
-                // Show content plus any current tool activity
-                if let Some(activity) = tool_activity {
-                    last_msg.content = format!("{}\n\n{}", content, activity);
-                } else {
+                // Only update if new content is longer (preserves content across stream restarts)
+                if content.len() >= last_msg.content.len() {
                     last_msg.content = content;
                 }
             }
+        }
+
+        // Tool activity goes to display_items (UI-only, never sent to API)
+        // Clear existing tool activity first, then add new if present
+        self.display_items
+            .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
+        if let Some(activity) = tool_activity {
+            // Parse tool name from activity string (format: "🔧 Calling tool_name...")
+            let tool_name = activity
+                .trim_start_matches("🔧 Calling ")
+                .trim_end_matches("...")
+                .to_string();
+            self.display_items
+                .push(crate::display::DisplayItem::tool_activity(tool_name));
         }
 
         // Check result to determine if we're done
@@ -851,12 +945,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // More data expected (or pending), continue polling on next tick
             }
             PollResult::Complete => {
+                // Clear any remaining display items (tool activity)
+                self.display_items
+                    .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
+
                 // Check for errors in the buffer
                 if let Some(error) = buffer.get_error() {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Streaming error: {}", error),
-                    });
+                    self.display_items
+                        .push(crate::display::DisplayItem::error(format!(
+                            "Streaming error: {}",
+                            error
+                        )));
                 }
 
                 // Clean up and return to ready state
@@ -864,10 +963,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 self.state = AppState::Ready;
             }
             PollResult::Error(e) => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Streaming error: {}", e),
-                });
+                // Clear tool activity display items
+                self.display_items
+                    .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
+
+                self.display_items
+                    .push(crate::display::DisplayItem::error(format!(
+                        "Streaming error: {}",
+                        e
+                    )));
                 self.active_stream = None;
                 self.state = AppState::Ready;
             }
@@ -875,10 +979,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
         // Check if cancelled
         if buffer.is_cancelled() {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Streaming cancelled.".to_string(),
-            });
+            // Clear tool activity display items
+            self.display_items
+                .retain(|d| !matches!(d, crate::display::DisplayItem::ToolActivity { .. }));
+
+            self.display_items
+                .push(crate::display::DisplayItem::warning("Streaming cancelled."));
             self.active_stream = None;
             self.state = AppState::Ready;
         }
@@ -1176,10 +1282,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                             // Update the model
                             self.set_model(&model_id);
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Model changed to: {} ({})", model_name, model_id),
-                            });
+                            self.notice(format!("Model changed to: {} ({})", model_name, model_id));
                             self.overlay = None;
                         }
                     }
@@ -1382,14 +1485,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                                         let _ = self.config.save();
 
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Provider switched to {} with model {}",
-                                                provider_id,
-                                                self.model_name()
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Provider switched to {} with model {}",
+                                            provider_id,
+                                            self.model_name()
+                                        ));
                                     }
                                     4 => {
                                         // Save only - save without changing default provider
@@ -1421,14 +1521,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                                         let _ = self.config.save();
 
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Saved settings for {} (model: {})",
-                                                provider_id,
-                                                self.config.providers.get(&provider_id).model
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Saved settings for {} (model: {})",
+                                            provider_id,
+                                            self.config.providers.get(&provider_id).model
+                                        ));
                                     }
                                     5 => {
                                         // Back - return to provider selection without saving
@@ -1504,10 +1601,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         );
                                     } else {
                                         // No API key - redirect to API key entry
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: "Please enter an API key first.".to_string(),
-                                        });
+                                        self.display_items.push(crate::display::DisplayItem::info(
+                                            "Please enter an API key first.",
+                                        ));
                                         *step = ProviderWizardStep::EditApiKey;
                                     }
                                 } else if is_custom_selected {
@@ -1559,10 +1655,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     );
                                 } else {
                                     // No API key - redirect to API key entry
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: "Please enter an API key first.".to_string(),
-                                    });
+                                    self.display_items.push(crate::display::DisplayItem::info(
+                                        "Please enter an API key first.",
+                                    ));
                                     *step = ProviderWizardStep::EditApiKey;
                                 }
                             }
@@ -1628,10 +1723,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let base_url = self.get_base_url().map(|s| s.to_string());
 
         if let Some(key) = api_key {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Fetching models from API...".to_string(),
-            });
+            self.notice("Fetching models from API...".to_string());
 
             match fetch_models_for_provider(provider_id, &key, base_url.as_deref()) {
                 Ok(models) => {
@@ -1650,23 +1742,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         *selected = 1; // Move to first model
                     }
 
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Loaded {} models from API.", count),
-                    });
+                    self.notice(format!("Loaded {} models from API.", count));
                 }
                 Err(e) => {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Failed to fetch models: {}. Using static list.", e),
-                    });
+                    self.notice_error(format!("Failed to fetch models: {}. Using static list.", e));
                 }
             }
         } else {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "No API key set. Using static model list.".to_string(),
-            });
+            self.notice("No API key set. Using static model list.".to_string());
         }
     }
 
@@ -1680,10 +1763,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         use crate::bridge::models_api::fetch_models_for_provider;
 
         if let Some(key) = api_key {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "Fetching models from API...".to_string(),
-            });
+            self.notice("Fetching models from API...".to_string());
 
             match fetch_models_for_provider(provider_id, key, base_url) {
                 Ok(models) => {
@@ -1702,24 +1782,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         *selected_model = 0; // Move to first model
                     }
 
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Loaded {} models from API.", count),
-                    });
+                    self.notice(format!("Loaded {} models from API.", count));
                 }
                 Err(e) => {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Failed to fetch models: {}. Using static list.", e),
-                    });
+                    self.notice_error(format!("Failed to fetch models: {}. Using static list.", e));
                 }
             }
         } else {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "No API key set. Configure API key first, then press 'r' to refresh."
-                    .to_string(),
-            });
+            self.notice("No API key set. Configure API key first, then press 'r' to refresh.");
         }
     }
 
@@ -1757,23 +1827,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     let tool_count = tools.len();
                     self.remote_servers[idx].status = ServerConnectionStatus::Connected;
                     self.remote_servers[idx].tools = tools;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!(
-                            "Connected to '{}'. {} tools available.",
-                            server_name, tool_count
-                        ),
-                    });
+                    self.notice(format!(
+                        "Connected to '{}'. {} tools available.",
+                        server_name, tool_count
+                    ));
                     // Success - close wizard
                     self.overlay = None;
                 }
                 Err(McpError::OAuthRequired(server_url)) => {
                     // OAuth required - trigger OAuth flow
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Server requires OAuth. Opening authorization popup..."
-                            .to_string(),
-                    });
+                    self.notice("Server requires OAuth. Opening authorization popup...");
 
                     let redirect_uri = format!(
                         "{}/oauth-callback",
@@ -1797,22 +1860,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.remote_servers[idx].status =
                                         ServerConnectionStatus::Connected;
                                     self.remote_servers[idx].tools = tools;
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!(
-                                            "Connected to '{}'. {} tools available.",
-                                            server_name, tool_count
-                                        ),
-                                    });
+                                    self.notice(format!(
+                                        "Connected to '{}'. {} tools available.",
+                                        server_name, tool_count
+                                    ));
                                     self.overlay = None;
                                 }
                                 Err(e) => {
                                     self.remote_servers[idx].status =
                                         ServerConnectionStatus::Error(e.to_string());
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!("Connection failed after OAuth: {}", e),
-                                    });
+                                    self.notice(format!("Connection failed after OAuth: {}", e));
                                     self.overlay = Some(Overlay::ServerManager(
                                         ServerManagerView::ServerList { selected: 0 },
                                     ));
@@ -1822,10 +1879,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         Err(oauth_err) => {
                             self.remote_servers[idx].status =
                                 ServerConnectionStatus::Error(oauth_err.to_string());
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("OAuth failed: {}", oauth_err),
-                            });
+                            self.notice(format!("OAuth failed: {}", oauth_err));
                             self.overlay =
                                 Some(Overlay::ServerManager(ServerManagerView::ServerList {
                                     selected: 0,
@@ -1836,10 +1890,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 Err(e) => {
                     // Connection failed - offer to set bearer token
                     self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Connection failed: {}. Enter API key if required.", e),
-                    });
+                    self.notice(format!(
+                        "Connection failed: {}. Enter API key if required.",
+                        e
+                    ));
                     // Flow to SetToken dialog
                     self.overlay = Some(Overlay::ServerManager(ServerManagerView::SetToken {
                         server_id: server_id.clone(),
@@ -1871,22 +1925,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     let name = self.remote_servers[idx].name.clone();
                     self.remote_servers[idx].status = ServerConnectionStatus::Connected;
                     self.remote_servers[idx].tools = tools;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!(
-                            "Connected to '{}'. {} tools available.",
-                            name, tool_count
-                        ),
-                    });
+                    self.notice(format!(
+                        "Connected to '{}'. {} tools available.",
+                        name, tool_count
+                    ));
                 }
                 Err(McpError::OAuthRequired(server_url)) => {
                     // OAuth required - trigger OAuth flow
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!(
-                            "Server requires OAuth authentication. Opening authorization popup..."
-                        ),
-                    });
+                    self.notice(format!(
+                        "Server requires OAuth authentication. Opening authorization popup..."
+                    ));
 
                     // Get redirect URI from origin (browser will provide this via HTTP interception)
                     let redirect_uri = format!(
@@ -1906,11 +1954,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             // Store the token and retry connection
                             self.remote_servers[idx].bearer_token =
                                 Some(token_response.access_token.clone());
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: "OAuth authorization successful. Connecting..."
-                                    .to_string(),
-                            });
+                            self.notice("OAuth authorization successful. Connecting...");
 
                             // Save servers to persist the token
                             self.save_servers();
@@ -1924,40 +1968,31 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.remote_servers[idx].status =
                                         ServerConnectionStatus::Connected;
                                     self.remote_servers[idx].tools = tools;
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!(
-                                            "Connected to '{}'. {} tools available.",
-                                            name, tool_count
-                                        ),
-                                    });
+                                    self.notice(format!(
+                                        "Connected to '{}'. {} tools available.",
+                                        name, tool_count
+                                    ));
                                 }
                                 Err(e) => {
                                     self.remote_servers[idx].status =
                                         ServerConnectionStatus::Error(e.to_string());
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: format!("Failed to connect after OAuth: {}", e),
-                                    });
+                                    self.notice_error(format!(
+                                        "Failed to connect after OAuth: {}",
+                                        e
+                                    ));
                                 }
                             }
                         }
                         Err(oauth_err) => {
                             self.remote_servers[idx].status =
                                 ServerConnectionStatus::Error(oauth_err.to_string());
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("OAuth failed: {}", oauth_err),
-                            });
+                            self.notice(format!("OAuth failed: {}", oauth_err));
                         }
                     }
                 }
                 Err(e) => {
                     self.remote_servers[idx].status = ServerConnectionStatus::Error(e.to_string());
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Failed to connect: {}", e),
-                    });
+                    self.notice_error(format!("Failed to connect: {}", e));
                 }
             }
         }
@@ -1974,10 +2009,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let server_ids: Vec<String> = self.remote_servers.iter().map(|s| s.id.clone()).collect();
         let server_count = server_ids.len();
 
-        self.messages.push(Message {
-            role: Role::System,
-            content: format!("Connecting to {} saved MCP server(s)...", server_count),
-        });
+        self.notice(format!(
+            "Connecting to {} saved MCP server(s)...",
+            server_count
+        ));
 
         let mut connected = 0;
         let mut failed = 0;
@@ -1999,32 +2034,26 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             "OAuth required - use /mcp connect to authenticate".to_string(),
                         );
                         failed += 1;
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: format!(
-                                "'{}': OAuth authentication required",
-                                self.remote_servers[idx].name
-                            ),
-                        });
+                        self.notice(format!(
+                            "'{}': OAuth authentication required",
+                            self.remote_servers[idx].name
+                        ));
                     }
                     Err(e) => {
                         self.remote_servers[idx].status =
                             ServerConnectionStatus::Error(e.to_string());
                         failed += 1;
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: format!("'{}': {}", self.remote_servers[idx].name, e),
-                        });
+                        self.notice(format!("'{}': {}", self.remote_servers[idx].name, e));
                     }
                 }
             }
         }
 
         if connected > 0 || failed > 0 {
-            self.messages.push(Message {
-                role: Role::System,
-                content: format!("MCP servers: {} connected, {} failed", connected, failed),
-            });
+            self.notice(format!(
+                "MCP servers: {} connected, {} failed",
+                connected, failed
+            ));
         }
     }
 
@@ -2035,18 +2064,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
             Ok(tools) => {
                 self.server_status.local_connected = true;
                 self.server_status.local_tool_count = tools.len();
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Sandbox MCP connected: {} tools available", tools.len()),
-                });
+                self.notice(format!(
+                    "Sandbox MCP connected: {} tools available",
+                    tools.len()
+                ));
             }
             Err(e) => {
                 self.server_status.local_connected = false;
                 self.server_status.local_tool_count = 0;
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Sandbox MCP connection failed: {}", e),
-                });
+                self.notice(format!("Sandbox MCP connection failed: {}", e));
             }
         }
     }
@@ -2082,10 +2108,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         self.server_status.local_tool_count = local_tool_count;
 
         if !local_connected {
-            self.messages.push(Message {
-                role: Role::System,
-                content: "MCP connection error".to_string(),
-            });
+            self.notice_error("MCP connection error".to_string());
         }
 
         tools
@@ -2135,10 +2158,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             _ => {
                 // Multiple matches - show them
                 let options = matches.join("  ");
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Completions: {}", options),
-                });
+                self.notice(format!("Completions: {}", options));
             }
         }
     }
@@ -2149,9 +2169,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
         match command {
             "/help" | "/h" => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: [
+                self.notice(
+                    [
                         "Commands:",
                         "  /help     - Show this help",
                         "  /tools    - List available tools",
@@ -2168,7 +2187,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         "  /quit     - Exit (or ^C)",
                     ]
                     .join("\n"),
-                });
+                );
             }
             "/tools" => {
                 // List all available tools
@@ -2201,10 +2220,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                 }
 
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: tool_list.join("\n"),
-                });
+                self.notice(tool_list.join("\n"));
             }
             "/servers" | "/mcp" => {
                 // Handle MCP subcommands or open overlay
@@ -2242,10 +2258,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 ));
                                 server_list.push(format!("      URL: {}", server.url));
                             }
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: server_list.join("\n"),
-                            });
+                            self.notice(server_list.join("\n"));
                         }
                         "add" => {
                             // Add new server: /mcp add <url> [name]
@@ -2270,19 +2283,13 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     tools: vec![],
                                     bearer_token: None,
                                 });
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: format!(
-                                        "Added MCP server '{}'. Use /mcp connect {} to connect.",
-                                        name,
-                                        self.remote_servers.len()
-                                    ),
-                                });
+                                self.notice(format!(
+                                    "Added MCP server '{}'. Use /mcp connect {} to connect.",
+                                    name,
+                                    self.remote_servers.len()
+                                ));
                             } else {
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: "Usage: /mcp add <url> [name]".to_string(),
-                                });
+                                self.notice("Usage: /mcp add <url> [name]".to_string());
                             }
                         }
                         "remove" => {
@@ -2291,32 +2298,20 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 if let Ok(id) = id_str.parse::<usize>() {
                                     if id > 0 && id <= self.remote_servers.len() {
                                         let removed = self.remote_servers.remove(id - 1);
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Removed MCP server '{}'.",
-                                                removed.name
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Removed MCP server '{}'.",
+                                            removed.name
+                                        ));
                                     } else {
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Invalid server ID. Use /mcp list to see IDs."
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Invalid server ID. Use /mcp list to see IDs."
+                                        ));
                                     }
                                 } else {
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: "Usage: /mcp remove <id>".to_string(),
-                                    });
+                                    self.notice("Usage: /mcp remove <id>".to_string());
                                 }
                             } else {
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: "Usage: /mcp remove <id>".to_string(),
-                                });
+                                self.notice("Usage: /mcp remove <id>".to_string());
                             }
                         }
                         "connect" => {
@@ -2328,13 +2323,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         // Mark as connecting
                                         self.remote_servers[idx].status =
                                             ServerConnectionStatus::Connecting;
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Connecting to '{}'...",
-                                                self.remote_servers[idx].name
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Connecting to '{}'...",
+                                            self.remote_servers[idx].name
+                                        ));
 
                                         // Perform actual connection
                                         let server = &self.remote_servers[idx];
@@ -2345,41 +2337,28 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                                 self.remote_servers[idx].status =
                                                     ServerConnectionStatus::Connected;
                                                 self.remote_servers[idx].tools = tools;
-                                                self.messages.push(Message {
-                                                    role: Role::System,
-                                                    content: format!(
-                                                        "Connected to '{}'. {} tools available.",
-                                                        name, tool_count
-                                                    ),
-                                                });
+                                                self.notice(format!(
+                                                    "Connected to '{}'. {} tools available.",
+                                                    name, tool_count
+                                                ));
                                             }
                                             Err(e) => {
                                                 self.remote_servers[idx].status =
                                                     ServerConnectionStatus::Error(e.to_string());
-                                                self.messages.push(Message {
-                                                    role: Role::System,
-                                                    content: format!("Failed to connect: {}", e),
-                                                });
+                                                self.notice_error(format!(
+                                                    "Failed to connect: {}",
+                                                    e
+                                                ));
                                             }
                                         }
                                     } else {
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: "Invalid server ID. Use /mcp list to see IDs."
-                                                .to_string(),
-                                        });
+                                        self.notice("Invalid server ID. Use /mcp list to see IDs.");
                                     }
                                 } else {
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: "Usage: /mcp connect <id>".to_string(),
-                                    });
+                                    self.notice("Usage: /mcp connect <id>".to_string());
                                 }
                             } else {
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: "Usage: /mcp connect <id>".to_string(),
-                                });
+                                self.notice("Usage: /mcp connect <id>".to_string());
                             }
                         }
                         "disconnect" => {
@@ -2390,41 +2369,25 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         self.remote_servers[id - 1].status =
                                             ServerConnectionStatus::Disconnected;
                                         self.remote_servers[id - 1].tools.clear();
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: format!(
-                                                "Disconnected from '{}'.",
-                                                self.remote_servers[id - 1].name
-                                            ),
-                                        });
+                                        self.notice(format!(
+                                            "Disconnected from '{}'.",
+                                            self.remote_servers[id - 1].name
+                                        ));
                                     } else {
-                                        self.messages.push(Message {
-                                            role: Role::System,
-                                            content: "Invalid server ID. Use /mcp list to see IDs."
-                                                .to_string(),
-                                        });
+                                        self.notice("Invalid server ID. Use /mcp list to see IDs.");
                                     }
                                 } else {
-                                    self.messages.push(Message {
-                                        role: Role::System,
-                                        content: "Usage: /mcp disconnect <id>".to_string(),
-                                    });
+                                    self.notice("Usage: /mcp disconnect <id>".to_string());
                                 }
                             } else {
-                                self.messages.push(Message {
-                                    role: Role::System,
-                                    content: "Usage: /mcp disconnect <id>".to_string(),
-                                });
+                                self.notice("Usage: /mcp disconnect <id>".to_string());
                             }
                         }
                         _ => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!(
+                            self.notice(format!(
                                     "Unknown subcommand: {}. Available: list, add, remove, connect, disconnect", 
                                     subcmd
-                                ),
-                            });
+                                ));
                         }
                     }
                 } else {
@@ -2450,45 +2413,33 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             // Show current provider configuration
                             let base_url = self.get_base_url().unwrap_or("(default)");
 
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!(
-                                    "Provider: {}\nModel: {}\nBase URL: {}\nAPI Key: {}",
-                                    self.provider_name(),
-                                    self.model_name(),
-                                    base_url,
-                                    if self.has_api_key() {
-                                        "✓ set"
-                                    } else {
-                                        "✗ not set"
-                                    }
-                                ),
-                            });
+                            self.notice(format!(
+                                "Provider: {}\nModel: {}\nBase URL: {}\nAPI Key: {}",
+                                self.provider_name(),
+                                self.model_name(),
+                                base_url,
+                                if self.has_api_key() {
+                                    "✓ set"
+                                } else {
+                                    "✗ not set"
+                                }
+                            ));
                         }
                         "anthropic" => {
                             // Quick switch to Anthropic
                             self.set_provider("anthropic");
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Switched to Anthropic ({})", self.model_name()),
-                            });
+                            self.notice(format!("Switched to Anthropic ({})", self.model_name()));
                         }
                         "openai" => {
                             // Quick switch to OpenAI
                             self.set_provider("openai");
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!("Switched to OpenAI ({})", self.model_name()),
-                            });
+                            self.notice(format!("Switched to OpenAI ({})", self.model_name()));
                         }
                         _ => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!(
+                            self.notice(format!(
                                     "Unknown subcommand: {}. Available: status, anthropic, openai\nOr use /provider with no args for the wizard.",
                                     subcmd
-                                ),
-                            });
+                                ));
                         }
                     }
                 } else {
@@ -2500,23 +2451,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
             "/plan" => {
                 // Enter plan mode
                 if self.mode == Mode::Plan {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content:
-                            "Already in plan mode. Type 'go' to execute or /mode normal to exit."
-                                .to_string(),
-                    });
+                    self.notice(
+                        "Already in plan mode. Type 'go' to execute or /mode normal to exit.",
+                    );
                 } else if self.mode == Mode::Shell {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "Exit shell mode first (^D or 'exit').".to_string(),
-                    });
+                    self.notice("Exit shell mode first (^D or 'exit').".to_string());
                 } else {
                     self.mode = Mode::Plan;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: "📋 PLAN MODE - Describe what you want to accomplish.\nType 'go' to execute plan, Ctrl+P to toggle, or /mode normal to exit.".to_string(),
-                    });
+                    self.notice("📋 PLAN MODE - Describe what you want to accomplish.\nType 'go' to execute plan, Ctrl+P to toggle, or /mode normal to exit.".to_string());
                 }
             }
             "/mode" => {
@@ -2525,32 +2467,20 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     match *mode_arg {
                         "normal" | "agent" => {
                             self.mode = Mode::Agent;
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: "Switched to normal mode.".to_string(),
-                            });
+                            self.notice("Switched to normal mode.".to_string());
                         }
                         "plan" => {
                             self.mode = Mode::Plan;
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: "📋 Switched to plan mode. Type 'go' to execute or /mode normal to exit.".to_string(),
-                            });
+                            self.notice("📋 Switched to plan mode. Type 'go' to execute or /mode normal to exit.".to_string());
                         }
                         "shell" => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: "Use /shell to enter shell mode.".to_string(),
-                            });
+                            self.notice("Use /shell to enter shell mode.".to_string());
                         }
                         _ => {
-                            self.messages.push(Message {
-                                role: Role::System,
-                                content: format!(
-                                    "Unknown mode: {}. Available: normal, plan, shell",
-                                    mode_arg
-                                ),
-                            });
+                            self.notice(format!(
+                                "Unknown mode: {}. Available: normal, plan, shell",
+                                mode_arg
+                            ));
                         }
                     }
                 } else {
@@ -2560,13 +2490,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         Mode::Plan => "plan",
                         Mode::Shell => "shell",
                     };
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!(
-                            "Current mode: {}\nUsage: /mode <normal|plan|shell>",
-                            mode_str
-                        ),
-                    });
+                    self.notice(format!(
+                        "Current mode: {}\nUsage: /mode <normal|plan|shell>",
+                        mode_str
+                    ));
                 }
             }
             "/shell" | "/sh" => {
@@ -2605,17 +2532,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 let _ = stdout.blocking_write_and_flush(b"\x1b[2J\x1b[H");
                 let _ = self.terminal.clear();
 
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Returned from shell".to_string(),
-                });
+                self.notice("Returned from shell".to_string());
             }
             "/key" => {
                 self.state = AppState::NeedsApiKey;
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Enter API key:".to_string(),
-                });
+                self.notice("Enter API key:".to_string());
             }
             "/config" => {
                 // Display current configuration
@@ -2625,17 +2546,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     "not set"
                 };
 
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!(
-                        "Configuration:\n  Provider: {}\n  Model: {}\n  API Key: {}\n  Theme: {}\n  Aux Panel: {}",
-                        self.provider_name(),
-                        self.model_name(),
-                        api_key_status,
-                        self.config.ui.theme,
-                        if self.config.ui.aux_panel { "enabled" } else { "disabled" }
-                    ),
-                });
+                self.notice(format!(
+                    "Configuration:\n  Provider: {}\n  Model: {}\n  API Key: {}\n  Theme: {}\n  Aux Panel: {}",
+                    self.provider_name(),
+                    self.model_name(),
+                    api_key_status,
+                    self.config.ui.theme,
+                    if self.config.ui.aux_panel { "enabled" } else { "disabled" }
+                ));
             }
 
             "/theme" => {
@@ -2645,45 +2563,30 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     if valid_themes.contains(&theme_name.to_lowercase().as_str()) {
                         self.config.ui.theme = theme_name.to_string();
                         let _ = self.config.save();
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: format!("Theme changed to: {}", theme_name),
-                        });
+                        self.notice(format!("Theme changed to: {}", theme_name));
                     } else {
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: format!(
-                                "Unknown theme: {}. Available: {}",
-                                theme_name,
-                                valid_themes.join(", ")
-                            ),
-                        });
+                        self.notice(format!(
+                            "Unknown theme: {}. Available: {}",
+                            theme_name,
+                            valid_themes.join(", ")
+                        ));
                     }
                 } else {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!(
+                    self.notice(format!(
                             "Current theme: {}. Usage: /theme <name>\nAvailable: dark, light, gruvbox, catppuccin",
                             self.config.ui.theme
-                        ),
-                    });
+                        ));
                 }
             }
             "/clear" => {
                 self.messages.clear();
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Messages cleared.".to_string(),
-                });
+                self.notice("Messages cleared.".to_string());
             }
             "/quit" | "/q" => {
                 self.should_quit = true;
             }
             _ => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Unknown: {}. Try /help", cmd),
-                });
+                self.notice(format!("Unknown: {}. Try /help", cmd));
             }
         }
     }

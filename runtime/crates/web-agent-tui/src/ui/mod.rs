@@ -51,6 +51,7 @@ pub fn render_ui(
     input: &str,
     cursor_pos: usize,
     messages: &[Message],
+    display_items: &[crate::display::DisplayItem],
     aux_content: &AuxContent,
     server_status: &ServerStatus,
     model_name: &str,
@@ -78,11 +79,29 @@ pub fn render_ui(
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(v_chunks[0]);
 
-        render_main_panel(frame, h_chunks[0], mode, state, input, cursor_pos, messages);
+        render_main_panel(
+            frame,
+            h_chunks[0],
+            mode,
+            state,
+            input,
+            cursor_pos,
+            messages,
+            display_items,
+        );
         render_aux_panel(frame, h_chunks[1], aux_content, server_status);
     } else {
         // Single column layout for narrow terminals
-        render_main_panel(frame, v_chunks[0], mode, state, input, cursor_pos, messages);
+        render_main_panel(
+            frame,
+            v_chunks[0],
+            mode,
+            state,
+            input,
+            cursor_pos,
+            messages,
+            display_items,
+        );
     }
 
     // Status bar
@@ -112,6 +131,7 @@ fn render_main_panel(
     input: &str,
     cursor_pos: usize,
     messages: &[Message],
+    display_items: &[crate::display::DisplayItem],
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -122,7 +142,10 @@ fn render_main_panel(
         .split(area);
 
     // Messages
-    frame.render_widget(MessagesWidget::new(messages, state), chunks[0]);
+    frame.render_widget(
+        MessagesWidget::new(messages, display_items, state),
+        chunks[0],
+    );
 
     // Input Box
     let mut cursor_state = None;
@@ -152,6 +175,7 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.input.text(),
         app.input.cursor_pos(),
         &app.messages,
+        &app.display_items,
         &app.aux_content,
         &app.server_status,
         app.model_name(),

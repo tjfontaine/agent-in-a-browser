@@ -8,6 +8,8 @@ pub mod backend;
 pub mod bridge;
 pub mod commands;
 pub mod config;
+pub mod display;
+pub mod events;
 pub mod input;
 pub mod servers;
 pub mod ui;
@@ -20,6 +22,8 @@ use bindings::Guest;
 // Re-export main types
 pub use app::App;
 pub use backend::WasiBackend;
+pub use display::{DisplayItem, NoticeKind, ToolStatus};
+pub use events::AgentEvent;
 
 // Re-export poll API for use in App
 pub use bindings::wasi::clocks::monotonic_clock::subscribe_duration;

@@ -4,15 +4,21 @@ use ratatui::{
 };
 
 use crate::app::{AppState, Message, Role};
+use crate::display::DisplayItem;
 
 pub struct MessagesWidget<'a> {
     pub messages: &'a [Message],
+    pub display_items: &'a [DisplayItem],
     pub state: AppState,
 }
 
 impl<'a> MessagesWidget<'a> {
-    pub fn new(messages: &'a [Message], state: AppState) -> Self {
-        Self { messages, state }
+    pub fn new(messages: &'a [Message], display_items: &'a [DisplayItem], state: AppState) -> Self {
+        Self {
+            messages,
+            display_items,
+            state,
+        }
     }
 }
 
@@ -57,6 +63,22 @@ impl<'a> Widget for MessagesWidget<'a> {
                     Span::styled(line_text.clone(), style.remove_modifier(Modifier::BOLD)),
                 ]));
             }
+        }
+
+        // Render display items (tool activity, notices) - these are UI-only
+        for display_item in self.display_items {
+            let text = display_item.display_text();
+            let style = match display_item {
+                DisplayItem::ToolActivity { .. } => Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::ITALIC),
+                DisplayItem::Notice { kind, .. } => match kind {
+                    crate::display::NoticeKind::Info => Style::default().fg(Color::Blue),
+                    crate::display::NoticeKind::Warning => Style::default().fg(Color::Yellow),
+                    crate::display::NoticeKind::Error => Style::default().fg(Color::Red),
+                },
+            };
+            lines.push(Line::from(Span::styled(text, style)));
         }
 
         // Add processing indicator
