@@ -1,0 +1,4 @@
+name = "edge-agent-website"
+
+# Cloudflare Pages configuration
+# Deploy with: wrangler pages deploy dist

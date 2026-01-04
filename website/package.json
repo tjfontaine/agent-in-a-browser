@@ -1,0 +1,16 @@
+{
+    "name": "edge-agent-website",
+    "version": "1.0.0",
+    "description": "Marketing website for edge-agent.dev",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "deploy": "npm run build && wrangler pages deploy dist"
+    },
+    "devDependencies": {
+        "vite": "^6.0.0",
+        "wrangler": "^3.0.0"
+    }
+}

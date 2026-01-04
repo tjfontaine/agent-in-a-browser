@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edge Agent - Browser-Native AI Coding Assistant</title>
+    <meta name="description"
+        content="A fully browser-native AI coding assistant. No server required - just your API key and a browser. Embeddable, private, and powerful." />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Edge Agent - Browser-Native AI Coding Assistant" />
+    <meta property="og:description"
+        content="A fully browser-native AI coding assistant with a real sandbox. No server required." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://edge-agent.dev" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="/src/landing.css">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">edge-agent</span>
+            </a>
+            <div class="nav-links">
+                <a href="/docs.html" class="nav-link">Docs</a>
+                <a href="https://github.com/tjfontaine/agent-in-a-browser" class="nav-link" target="_blank"
+                    rel="noopener">GitHub</a>
+                <a href="https://agent.edge-agent.dev" class="nav-cta">Try Now →</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="badge-icon">🚀</span>
+                <span>100% Browser-Native • Zero Install</span>
+            </div>
+            <h1 class="hero-title">
+                AI Coding Assistant<br>
+                <span class="gradient-text">In Your Browser</span>
+            </h1>
+            <p class="hero-subtitle">
+                A fully autonomous AI agent that runs entirely client-side.
+                No server required for execution—just your API key and a modern browser.
+            </p>
+            <div class="hero-actions">
+                <a href="https://agent.edge-agent.dev" class="btn btn-primary">
+                    <span>Launch Terminal</span>
+                    <span class="btn-icon">→</span>
+                </a>
+                <a href="/docs.html" class="btn btn-secondary">
+                    <span>Read the Docs</span>
+                </a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-value">50+</span>
+                    <span class="stat-label">Unix Commands</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <span class="stat-value">~150KB</span>
+                    <span class="stat-label">Total Bundle</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <span class="stat-value">3</span>
+                    <span class="stat-label">LLM Providers</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Terminal Preview Section -->
+    <section class="preview">
+        <div class="preview-container">
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <div class="terminal-dots">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                    </div>
+                    <span class="terminal-title">edge-agent</span>
+                </div>
+                <div class="terminal-body">
+                    <div class="terminal-line">
+                        <span class="prompt">$</span>
+                        <span class="command">Create a simple todo app in TypeScript</span>
+                    </div>
+                    <div class="terminal-output">
+                        <span class="assistant">Creating todo.ts with TypeScript...</span>
+                    </div>
+                    <div class="terminal-line">
+                        <span class="tool">📁 write_file</span>
+                        <span class="file">todo.ts</span>
+                    </div>
+                    <div class="terminal-line">
+                        <span class="tool">▶️ shell_eval</span>
+                        <span class="command-inline">tsx todo.ts</span>
+                    </div>
+                    <div class="terminal-output success">
+                        <span>✓ Todo app running successfully</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <div class="section-header">
+                <h2 class="section-title">What Sets Us Apart</h2>
+                <p class="section-subtitle">Built different, from the ground up</p>
+            </div>
+
+            <div class="features-grid">
+                <!-- Embeddable -->
+                <div class="feature-card feature-highlight">
+                    <div class="feature-icon">📦</div>
+                    <h3 class="feature-title">Embeddable</h3>
+                    <p class="feature-desc">
+                        Add an AI agent to any web app with <code>@tjfontaine/web-agent-core</code>.
+                        Three lines of code, full agent capabilities.
+                    </p>
+                    <div class="feature-code">
+                        <pre><code><span class="kw">import</span> { WebAgent } <span class="kw">from</span> <span class="str">'@tjfontaine/web-agent-core'</span>;
+<span class="kw">const</span> agent = <span class="kw">new</span> WebAgent({ provider, model, apiKey });
+<span class="kw">for await</span> (<span class="kw">const</span> event <span class="kw">of</span> agent.send(prompt)) { ... }</code></pre>
+                    </div>
+                </div>
+
+                <!-- Client-Side -->
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3 class="feature-title">Client-Side Execution</h3>
+                    <p class="feature-desc">
+                        All code runs in a WASM sandbox in your browser. No server-side execution,
+                        no cloud processing, no latency from round-trips.
+                    </p>
+                </div>
+
+                <!-- OPFS -->
+                <div class="feature-card">
+                    <div class="feature-icon">💾</div>
+                    <h3 class="feature-title">OPFS Filesystem</h3>
+                    <p class="feature-desc">
+                        Persistent storage using the browser's Origin Private File System.
+                        Your files survive page reloads and work offline.
+                    </p>
+                </div>
+
+                <!-- Privacy -->
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Privacy First</h3>
+                    <p class="feature-desc">
+                        API keys stay in your browser memory—never persisted, never sent to our servers.
+                        Direct API calls to your chosen provider.
+                    </p>
+                </div>
+
+                <!-- WASI P2 -->
+                <div class="feature-card">
+                    <div class="feature-icon">⚙️</div>
+                    <h3 class="feature-title">WASI P2 Sandbox</h3>
+                    <p class="feature-desc">
+                        Secure, isolated WebAssembly execution with Component Model.
+                        50+ Unix commands, TypeScript, SQLite, Git, and more.
+                    </p>
+                </div>
+
+                <!-- MCP Native -->
+                <div class="feature-card">
+                    <div class="feature-icon">🔌</div>
+                    <h3 class="feature-title">MCP Native</h3>
+                    <p class="feature-desc">
+                        Tools exposed via Model Context Protocol. Connect to external
+                        MCP servers for Stripe, GitHub, and custom integrations.
+                    </p>
+                </div>
+
+                <!-- Multi-Provider -->
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3 class="feature-title">Multi-Provider</h3>
+                    <p class="feature-desc">
+                        Works with Anthropic Claude, OpenAI GPT, Google Gemini, and any
+                        OpenAI-compatible endpoint. Bring your own key.
+                    </p>
+                </div>
+
+                <!-- Zero Install -->
+                <div class="feature-card">
+                    <div class="feature-icon">✨</div>
+                    <h3 class="feature-title">Zero Install</h3>
+                    <p class="feature-desc">
+                        Opens in any modern browser. No downloads, no dependencies,
+                        no friction. Works offline once loaded.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Capabilities Section -->
+    <section class="capabilities">
+        <div class="capabilities-container">
+            <div class="section-header">
+                <h2 class="section-title">Powerful Capabilities</h2>
+                <p class="section-subtitle">Everything you need, in the browser</p>
+            </div>
+
+            <div class="capabilities-grid">
+                <div class="capability">
+                    <span class="capability-icon">$</span>
+                    <div class="capability-content">
+                        <h4>Shell Commands</h4>
+                        <p>ls, cat, grep, sed, find, curl, jq, diff, sort, wc, and more</p>
+                    </div>
+                </div>
+                <div class="capability">
+                    <span class="capability-icon">TS</span>
+                    <div class="capability-content">
+                        <h4>TypeScript Execution</h4>
+                        <p>Run TSX with ESM imports auto-resolved from CDN</p>
+                    </div>
+                </div>
+                <div class="capability">
+                    <span class="capability-icon">🗃️</span>
+                    <div class="capability-content">
+                        <h4>SQLite Database</h4>
+                        <p>Full sqlite3 support with persistent storage</p>
+                    </div>
+                </div>
+                <div class="capability">
+                    <span class="capability-icon">📝</span>
+                    <div class="capability-content">
+                        <h4>Vim Editor</h4>
+                        <p>Modal editing with syntax highlighting</p>
+                    </div>
+                </div>
+                <div class="capability">
+                    <span class="capability-icon">🌿</span>
+                    <div class="capability-content">
+                        <h4>Git Version Control</h4>
+                        <p>init, add, commit, status, log, diff</p>
+                    </div>
+                </div>
+                <div class="capability">
+                    <span class="capability-icon">🌐</span>
+                    <div class="capability-content">
+                        <h4>HTTP Requests</h4>
+                        <p>curl and fetch() with full network access</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="cta-container">
+            <div class="cta-content">
+                <h2 class="cta-title">Ready to try it?</h2>
+                <p class="cta-subtitle">
+                    No sign-up required. Just bring your API key.
+                </p>
+                <a href="https://agent.edge-agent.dev" class="btn btn-primary btn-large">
+                    <span>Launch Terminal</span>
+                    <span class="btn-icon">→</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">edge-agent</span>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/tjfontaine/agent-in-a-browser" target="_blank" rel="noopener">GitHub</a>
+                <a href="/docs.html">Documentation</a>
+                <a href="https://www.npmjs.com/package/@tjfontaine/web-agent-core" target="_blank"
+                    rel="noopener">npm</a>
+            </div>
+            <div class="footer-note">
+                ✨ Lovingly vibed with <a href="https://antigravity.google" target="_blank"
+                    rel="noopener">Antigravity</a>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="/src/landing.ts"></script>
+</body>
+
+</html>

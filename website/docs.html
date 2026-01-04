@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Documentation - Edge Agent</title>
+    <meta name="description"
+        content="Get started with Edge Agent. Learn how to embed an AI agent in your web app or use the hosted terminal." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="/src/docs.css">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">edge-agent</span>
+            </a>
+            <div class="nav-links">
+                <a href="/docs.html" class="nav-link active">Docs</a>
+                <a href="https://github.com/tjfontaine/agent-in-a-browser" class="nav-link" target="_blank"
+                    rel="noopener">GitHub</a>
+                <a href="https://agent.edge-agent.dev" class="nav-cta">Try Now →</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Getting Started</h4>
+                    <ul class="sidebar-links">
+                        <li><a href="#overview" class="active">Overview</a></li>
+                        <li><a href="#quick-start">Quick Start</a></li>
+                        <li><a href="#providers">Providers</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Embedding</h4>
+                    <ul class="sidebar-links">
+                        <li><a href="#installation">Installation</a></li>
+                        <li><a href="#basic-usage">Basic Usage</a></li>
+                        <li><a href="#streaming">Streaming Events</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Tools & Capabilities</h4>
+                    <ul class="sidebar-links">
+                        <li><a href="#shell">Shell Commands</a></li>
+                        <li><a href="#filesystem">Filesystem</a></li>
+                        <li><a href="#mcp">MCP Integration</a></li>
+                        <li><a href="#stack">Technology Stack</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="docs-content">
+            <article class="docs-article">
+                <h1 id="overview">Edge Agent Documentation</h1>
+                <p class="lead">
+                    Edge Agent is a fully browser-native AI coding assistant. This documentation covers
+                    both using the hosted terminal and embedding the agent in your own applications.
+                </p>
+
+                <section id="quick-start">
+                    <h2>Quick Start</h2>
+                    <p>The fastest way to try Edge Agent is the hosted terminal:</p>
+                    <ol>
+                        <li>Go to <a href="https://agent.edge-agent.dev">agent.edge-agent.dev</a></li>
+                        <li>Run <code>/provider</code> to configure your AI provider</li>
+                        <li>Enter your API key when prompted</li>
+                        <li>Start chatting with the agent!</li>
+                    </ol>
+
+                    <div class="callout">
+                        <div class="callout-icon">🔒</div>
+                        <div class="callout-content">
+                            <strong>Privacy Note:</strong> Your API key is stored in browser memory only.
+                            It's never persisted to disk or sent to our servers.
+                        </div>
+                    </div>
+                </section>
+
+                <section id="providers">
+                    <h2>Supported Providers</h2>
+                    <p>Edge Agent works with multiple AI providers:</p>
+
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h4>Anthropic</h4>
+                            <p>Claude Opus 4.5, Sonnet 4.5, Haiku 4.5</p>
+                            <code>api.anthropic.com</code>
+                        </div>
+                        <div class="provider-card">
+                            <h4>OpenAI</h4>
+                            <p>GPT-5, o3, o4-mini</p>
+                            <code>api.openai.com</code>
+                        </div>
+                        <div class="provider-card">
+                            <h4>Google Gemini</h4>
+                            <p>Gemini 3 Pro, Gemini 3 Flash</p>
+                            <code>generativelanguage.googleapis.com</code>
+                        </div>
+                        <div class="provider-card">
+                            <h4>OpenAI-Compatible</h4>
+                            <p>Any API with OpenAI format</p>
+                            <code>your-api.example.com</code>
+                        </div>
+                    </div>
+                </section>
+
+                <hr>
+
+                <section id="installation">
+                    <h2>Installation</h2>
+                    <p>To embed Edge Agent in your own application:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>npm</span>
+                        </div>
+                        <pre><code>npm install @tjfontaine/web-agent-core</code></pre>
+                    </div>
+                </section>
+
+                <section id="basic-usage">
+                    <h2>Basic Usage</h2>
+                    <p>Import and initialize the agent:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>TypeScript</span>
+                        </div>
+                        <pre><code><span class="kw">import</span> { WebAgent } <span class="kw">from</span> <span class="str">'@tjfontaine/web-agent-core'</span>;
+
+<span class="comment">// Create agent instance</span>
+<span class="kw">const</span> agent = <span class="kw">new</span> WebAgent({
+  provider: <span class="str">'anthropic'</span>,
+  model: <span class="str">'claude-sonnet-4-20250514'</span>,
+  apiKey: <span class="str">'your-api-key'</span>
+});
+
+<span class="comment">// Initialize (loads WASM sandbox)</span>
+<span class="kw">await</span> agent.initialize();
+
+<span class="comment">// Send a message</span>
+<span class="kw">for await</span> (<span class="kw">const</span> event <span class="kw">of</span> agent.send(<span class="str">'Write a hello world in TypeScript'</span>)) {
+  <span class="kw">if</span> (event.type === <span class="str">'chunk'</span>) {
+    console.log(event.content);
+  }
+}</code></pre>
+                    </div>
+                </section>
+
+                <section id="streaming">
+                    <h2>Streaming Events</h2>
+                    <p>The <code>send()</code> method returns an AsyncGenerator that yields events:</p>
+
+                    <div class="event-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Event Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>chunk</code></td>
+                                    <td>Streaming text content from the model</td>
+                                </tr>
+                                <tr>
+                                    <td><code>tool_use</code></td>
+                                    <td>Agent is invoking a tool (shell, file, etc.)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>tool_result</code></td>
+                                    <td>Result from tool execution</td>
+                                </tr>
+                                <tr>
+                                    <td><code>complete</code></td>
+                                    <td>Response finished</td>
+                                </tr>
+                                <tr>
+                                    <td><code>error</code></td>
+                                    <td>Error occurred</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <hr>
+
+                <section id="shell">
+                    <h2>Shell Commands</h2>
+                    <p>The agent has access to 50+ Unix-like commands running in a WASM sandbox:</p>
+
+                    <div class="command-grid">
+                        <div class="command-category">
+                            <h4>File Operations</h4>
+                            <code>ls</code> <code>cat</code> <code>cp</code> <code>mv</code> <code>rm</code>
+                            <code>mkdir</code> <code>touch</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Text Processing</h4>
+                            <code>grep</code> <code>sed</code> <code>awk</code> <code>sort</code> <code>uniq</code>
+                            <code>wc</code> <code>head</code> <code>tail</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Development</h4>
+                            <code>tsx</code> <code>tsc</code> <code>git</code> <code>sqlite3</code> <code>vim</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Utilities</h4>
+                            <code>curl</code> <code>jq</code> <code>find</code> <code>xargs</code> <code>diff</code>
+                            <code>echo</code>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="filesystem">
+                    <h2>Filesystem</h2>
+                    <p>
+                        Files are stored using the browser's
+                        <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system"
+                            target="_blank" rel="noopener">
+                            Origin Private File System (OPFS)
+                        </a>.
+                        This provides:
+                    </p>
+                    <ul>
+                        <li>Persistent storage across sessions</li>
+                        <li>Sandboxed from your real filesystem</li>
+                        <li>Works offline once loaded</li>
+                        <li>No size limits beyond browser storage quotas</li>
+                    </ul>
+                </section>
+
+                <section id="mcp">
+                    <h2>MCP Integration</h2>
+                    <p>
+                        Edge Agent uses the
+                        <a href="https://spec.modelcontextprotocol.io/" target="_blank" rel="noopener">Model Context
+                            Protocol</a>
+                        for tool integration. You can connect to external MCP servers like:
+                    </p>
+                    <ul>
+                        <li><strong>Stripe</strong> - Access Stripe API through MCP</li>
+                        <li><strong>GitHub Copilot</strong> - Use GitHub's MCP endpoints</li>
+                        <li><strong>Custom servers</strong> - Add your own MCP-compatible tools</li>
+                    </ul>
+
+                    <p>Configure MCP servers using the <code>/mcp</code> command in the terminal.</p>
+                </section>
+
+                <section id="stack">
+                    <h2>Technology Stack</h2>
+                    <p>Edge Agent is built with modern, proven technologies:</p>
+
+                    <div class="command-grid">
+                        <div class="command-category">
+                            <h4>WASM Toolchain</h4>
+                            <code>@bytecodealliance/jco ^1.15</code>
+                            <code>@bytecodealliance/preview2-shim ^0.17</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Runtime</h4>
+                            <code>Rust + wasm32-wasip2</code>
+                            <code>Ratatui TUI</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Frontend</h4>
+                            <code>Vite ^7.3</code>
+                            <code>TypeScript ^5.7</code>
+                            <code>ghostty-web ^0.4</code>
+                        </div>
+                        <div class="command-category">
+                            <h4>Deployment</h4>
+                            <code>Cloudflare Workers</code>
+                            <code>Cloudflare Pages</code>
+                        </div>
+                    </div>
+                </section>
+
+                <hr>
+
+                <section class="docs-footer">
+                    <p>
+                        Need help? Check out the
+                        <a href="https://github.com/tjfontaine/agent-in-a-browser" target="_blank" rel="noopener">GitHub
+                            repository</a>
+                        or open an issue.
+                    </p>
+                </section>
+            </article>
+        </main>
+    </div>
+
+    <script type="module" src="/src/docs.ts"></script>
+</body>
+
+</html>
