@@ -112,8 +112,36 @@ export default defineConfig(({ mode }) => ({
                         });
 
                         res.writeHead(response.status, responseHeaders);
-                        const responseBody = await response.arrayBuffer();
-                        res.end(Buffer.from(responseBody));
+
+                        // Check if this is a streaming response (SSE)
+                        // Also check URL pattern for Gemini streaming endpoints
+                        const contentType = response.headers.get('content-type') || '';
+                        const isStreamingEndpoint = targetUrl.includes('streamGenerateContent');
+                        console.log('[CORS Proxy] Response status:', response.status, 'content-type:', contentType, 'isStreamingEndpoint:', isStreamingEndpoint);
+                        if ((contentType.includes('text/event-stream') || isStreamingEndpoint) && response.body) {
+                            console.log('[CORS Proxy] Streaming SSE response...');
+                            // Stream the response for SSE - critical for Gemini/etc
+                            const reader = response.body.getReader();
+                            let chunkCount = 0;
+                            const pump = async (): Promise<void> => {
+                                const { done, value } = await reader.read();
+                                if (done) {
+                                    console.log('[CORS Proxy] Stream done, total chunks:', chunkCount);
+                                    res.end();
+                                    return;
+                                }
+                                chunkCount++;
+                                console.log('[CORS Proxy] Chunk', chunkCount, 'size:', value.byteLength);
+                                res.write(Buffer.from(value));
+                                return pump();
+                            };
+                            await pump();
+                        } else {
+                            // Buffer non-streaming responses
+                            const responseBody = await response.arrayBuffer();
+                            console.log('[CORS Proxy] Buffered response size:', responseBody.byteLength);
+                            res.end(Buffer.from(responseBody));
+                        }
                     } catch (err) {
                         res.writeHead(502, { 'Content-Type': 'text/plain' });
                         res.end(`Proxy error: ${err}`);

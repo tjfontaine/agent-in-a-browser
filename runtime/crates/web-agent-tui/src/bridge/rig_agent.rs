@@ -98,7 +98,8 @@ impl StreamingBuffer {
 
     /// Get the current accumulated content
     pub fn get_content(&self) -> String {
-        self.content.lock().map(|c| c.clone()).unwrap_or_default()
+        let content = self.content.lock().map(|c| c.clone()).unwrap_or_default();
+        content
     }
 
     /// Check if streaming is complete
@@ -234,11 +235,21 @@ impl ActiveStream {
     ///
     /// The `history` parameter contains previous conversation messages that
     /// provide context for the current prompt.
-    pub fn start(agent: &RigAgent, message: &str, history: Vec<RigMessage>) -> Self {
+    pub fn start(
+        agent: &RigAgent,
+        message: &str,
+        history: Vec<RigMessage>,
+        initial_content: Option<String>,
+    ) -> Self {
         use futures::StreamExt;
         use std::future::IntoFuture;
 
         let buffer = StreamingBuffer::new();
+        if let Some(content) = initial_content {
+            if let Ok(mut lock) = buffer.content.lock() {
+                *lock = content;
+            }
+        }
         let message = message.to_string();
 
         // Create a type-erased connecting future that maps to StreamItem

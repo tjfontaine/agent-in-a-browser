@@ -281,27 +281,16 @@ impl Stream for WasiBodyStream {
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // JSPI makes blocking_read async from JavaScript's perspective
-        // println!("[wasi_http_adapter] blocking_read start");
         match self.stream.blocking_read(8192) {
             Ok(chunk) => {
-                // println!("[wasi_http_adapter] blocking_read returned {} bytes", chunk.len());
                 if chunk.is_empty() {
-                    println!(
-                        "[wasi_http_adapter] blocking_read returned empty chunk -> Stream EOF"
-                    );
                     Poll::Ready(None)
                 } else {
                     Poll::Ready(Some(Ok(Bytes::from(chunk))))
                 }
             }
-            Err(StreamError::Closed) => {
-                println!("[wasi_http_adapter] blocking_read Closed -> Stream EOF");
-                Poll::Ready(None)
-            }
-            Err(e) => {
-                println!("[wasi_http_adapter] blocking_read Error: {:?}", e);
-                Poll::Ready(Some(Err(instance_error(format!("Read error: {:?}", e)))))
-            }
+            Err(StreamError::Closed) => Poll::Ready(None),
+            Err(e) => Poll::Ready(Some(Err(instance_error(format!("Read error: {:?}", e))))),
         }
     }
 }

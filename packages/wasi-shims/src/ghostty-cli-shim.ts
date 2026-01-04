@@ -180,7 +180,7 @@ const stdoutStream = new CustomOutputStream({
     blockingFlush(): void { },
 });
 
-// Create stderr stream (also goes to terminal AND console.log for debugging)
+// Create stderr stream (goes to console.log only to avoid corrupting TUI)
 const stderrStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
         if (contents.length > 0) {
@@ -189,13 +189,8 @@ const stderrStream = new CustomOutputStream({
                 // Skip empty writes
                 if (text.length > 0) {
                     // Log to browser console for debugging WASM output
+                    // Note: We intentionally don't write to terminal to avoid corrupting the TUI
                     console.log('[WASM stderr]', text.trimEnd());
-
-                    // Also write to terminal if available
-                    if (currentTerminal) {
-                        // Convert line endings for proper terminal display
-                        currentTerminal.write(convertToCrlf(text));
-                    }
                 }
             } catch (e) {
                 console.error('[ghostty-shim] Terminal stderr write error:', e);
