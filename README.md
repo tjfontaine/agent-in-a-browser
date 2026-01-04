@@ -25,7 +25,7 @@ Web Agent takes a different approach:
 | Requirement | How Web Agent Solves It |
 |-------------|------------------------|
 | **Zero installation** | Opens in any modern browser |
-| **Full privacy** | API keys stay in your browser (memory-only, never persisted) |
+| **Full privacy** | Config stored locally in OPFS (browser-only, never sent to servers) |
 | **Real tools** | WASM sandbox with shell, file system, TypeScript, HTTP |
 | **Bring your own key** | Direct API calls to Anthropic/OpenAI—no proxy required |
 | **100% open source** | No proprietary sandboxes or execution environments |
@@ -48,7 +48,7 @@ Web Agent takes a different approach:
 |---------|-------------|
 | **Ratatui TUI** | 100% Rust-driven terminal UI via ghostty-web |
 | **Multi-provider support** | Anthropic, OpenAI, and any OpenAI-compatible endpoint |
-| **Bring your own API key** | Keys stored in browser memory only (never persisted) |
+| **Bring your own API key** | Keys stored in browser OPFS (persisted locally, never sent to our servers) |
 | **Persistent history** | Command history saved across sessions |
 | **Real-time steering** | Send messages while the agent is working to adjust its approach |
 
