@@ -19,7 +19,6 @@ runtime/wit/deps/io/
 runtime/wit/deps/random/
 runtime/wit/deps/sockets/
 runtime/wit/deps.lock
-runtime/crates/web-headless-agent/wit/deps/
 
 # Vendored crates
 runtime/vendor/
