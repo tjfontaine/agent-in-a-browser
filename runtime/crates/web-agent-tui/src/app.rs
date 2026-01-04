@@ -140,6 +140,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     /// Add a warning notice to display_items
+    #[allow(dead_code)]
     fn notice_warning(&mut self, text: impl Into<String>) {
         self.display_items
             .push(crate::display::DisplayItem::warning(text));
@@ -839,7 +840,6 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         self.display_items
                             .push(crate::display::DisplayItem::error(text));
                     }
-                    _ => {}
                 },
 
                 // Stream events

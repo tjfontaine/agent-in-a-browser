@@ -6,6 +6,7 @@ members = [
     "runtime/crates/sqlite-module",
     "runtime/crates/ratatui-demo",
     "runtime/crates/web-agent-tui",
+    "runtime/crates/web-headless-agent",
     "runtime/crates/mcp-server-core",
     "runtime/crates/edtui-module",
 ]

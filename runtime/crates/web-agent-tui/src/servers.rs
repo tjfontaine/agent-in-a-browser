@@ -5,7 +5,7 @@
 use crate::bridge::local_tools::{format_tasks_for_display, try_execute_local_tool, Task};
 use crate::bridge::mcp_client::{McpError, ToolDefinition};
 use crate::bridge::remote_mcp_client::RemoteMcpClient;
-use crate::ui::{AuxContent, AuxContentKind, ServerStatus};
+use crate::ui::{AuxContent, AuxContentKind};
 use serde_json::Value;
 
 /// Remote server connection status
@@ -267,7 +267,7 @@ impl ToolCollector {
         F: FnOnce() -> Result<Vec<ToolDefinition>, String>,
     {
         let mut all_tools = Vec::new();
-        let mut local_connected = false;
+        let local_connected;
         let mut local_tool_count = 0;
 
         // 1. Sandbox tools (prefix: "__sandbox__")

@@ -5,7 +5,6 @@
 
 use ratatui::{prelude::*, widgets::*};
 
-use crate::bridge::mcp_client::ToolDefinition;
 use crate::servers::{RemoteServerEntry, ServerConnectionStatus};
 
 /// Server manager wizard view modes

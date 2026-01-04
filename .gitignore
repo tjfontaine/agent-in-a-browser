@@ -19,6 +19,7 @@ runtime/wit/deps/io/
 runtime/wit/deps/random/
 runtime/wit/deps/sockets/
 runtime/wit/deps.lock
+runtime/crates/web-headless-agent/wit/deps/
 
 # Vendored crates
 runtime/vendor/
@@ -61,3 +62,12 @@ frontend/test-results/
 frontend/src/wasm/web-agent-tui/
 frontend/src/wasm/ratatui-demo/
 frontend/src/wasm/edtui-module/
+
+# web-agent-core package generated files
+packages/web-agent-core/dist/
+packages/web-agent-core/wasm/
+packages/web-agent-core/src/wasm/
+packages/web-agent-core/node_modules/
+
+# Generated WIT bindings
+runtime/crates/*/src/bindings.rs

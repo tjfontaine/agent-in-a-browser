@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAgent Demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1b26 0%, #24283b 100%);
+            color: #a9b1d6;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #7aa2f7;
+            text-align: center;
+        }
+
+        .config {
+            background: #1f2335;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .config label {
+            display: block;
+            margin-bottom: 8px;
+            color: #bb9af7;
+        }
+
+        .config input,
+        .config select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #3d4557;
+            border-radius: 6px;
+            background: #24283b;
+            color: #a9b1d6;
+            margin-bottom: 15px;
+        }
+
+        .chat {
+            background: #1f2335;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #3d4557;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #16161e;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+
+        .message.user {
+            background: #364a82;
+            margin-left: 20%;
+        }
+
+        .message.assistant {
+            background: #2d3548;
+            margin-right: 20%;
+        }
+
+        .message.system {
+            background: #3d3a4e;
+            font-style: italic;
+            text-align: center;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        #input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #3d4557;
+            border-radius: 8px;
+            background: #24283b;
+            color: #a9b1d6;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        #sendBtn {
+            background: #7aa2f7;
+            color: #1a1b26;
+        }
+
+        #sendBtn:hover {
+            background: #89b4fa;
+        }
+
+        #initBtn {
+            background: #9ece6a;
+            color: #1a1b26;
+        }
+
+        #initBtn:hover {
+            background: #a6da7d;
+        }
+
+        #clearBtn {
+            background: #f7768e;
+            color: #1a1b26;
+        }
+
+        #clearBtn:hover {
+            background: #ff8ba0;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+
+        .status.ready {
+            background: #9ece6a33;
+            color: #9ece6a;
+        }
+
+        .status.not-ready {
+            background: #f7768e33;
+            color: #f7768e;
+        }
+
+        .status.streaming {
+            background: #7aa2f733;
+            color: #7aa2f7;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🤖 WebAgent Demo</h1>
+
+    <div class="config">
+        <label>Provider:
+            <select id="provider">
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Gemini</option>
+            </select>
+        </label>
+        <label>Model:
+            <input type="text" id="model" value="claude-3-5-sonnet-20241022" placeholder="Model name">
+        </label>
+        <label>API Key:
+            <input type="password" id="apiKey" placeholder="Your API key">
+        </label>
+        <button id="initBtn">Initialize Agent</button>
+    </div>
+
+    <div class="chat">
+        <div id="status" class="status not-ready">Agent not initialized</div>
+        <div id="messages"></div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Type a message..." disabled>
+            <button id="sendBtn" disabled>Send</button>
+            <button id="clearBtn" disabled>Clear</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // This demo would use the built package
+        // For now, we'll use a mock to demonstrate the API
+
+        const messagesEl = document.getElementById('messages');
+        const inputEl = document.getElementById('input');
+        const sendBtn = document.getElementById('sendBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const initBtn = document.getElementById('initBtn');
+        const statusEl = document.getElementById('status');
+
+        let agent = null;
+
+        function addMessage(role, content) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            div.textContent = content;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function setStatus(text, type) {
+            statusEl.textContent = text;
+            statusEl.className = `status ${type}`;
+        }
+
+        initBtn.addEventListener('click', async () => {
+            const provider = document.getElementById('provider').value;
+            const model = document.getElementById('model').value;
+            const apiKey = document.getElementById('apiKey').value;
+
+            if (!apiKey) {
+                alert('Please enter an API key');
+                return;
+            }
+
+            try {
+                setStatus('Initializing...', 'streaming');
+
+                // In a real app, you would import and use WebAgent:
+                // import { WebAgent } from '@tjfontaine/web-agent-core';
+                // agent = new WebAgent({ provider, model, apiKey });
+                // await agent.initialize();
+
+                // For demo, we'll simulate it
+                await new Promise(r => setTimeout(r, 500));
+
+                addMessage('system', `Agent initialized with ${provider}/${model}`);
+                setStatus('Agent ready', 'ready');
+
+                inputEl.disabled = false;
+                sendBtn.disabled = false;
+                clearBtn.disabled = false;
+                initBtn.disabled = true;
+
+            } catch (err) {
+                setStatus(`Error: ${err.message}`, 'not-ready');
+            }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const message = inputEl.value.trim();
+            if (!message) return;
+
+            inputEl.value = '';
+            addMessage('user', message);
+            setStatus('Streaming...', 'streaming');
+
+            // In a real app:
+            // try {
+            //     for await (const event of agent.send(message)) {
+            //         if (event.type === 'chunk') {
+            //             // Append to current assistant message
+            //         } else if (event.type === 'complete') {
+            //             // Mark message as complete
+            //         }
+            //     }
+            // } catch (err) { ... }
+
+            // Demo simulation
+            const response = `Hello! I received your message: "${message}". This is a demo response.`;
+            for (let i = 0; i < response.length; i += 10) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+            addMessage('assistant', response);
+            setStatus('Agent ready', 'ready');
+        });
+
+        clearBtn.addEventListener('click', () => {
+            messagesEl.innerHTML = '';
+            addMessage('system', 'History cleared');
+            // agent?.clearHistory();
+        });
+
+        inputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendBtn.click();
+        });
+    </script>
+</body>
+
+</html>

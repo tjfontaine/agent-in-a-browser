@@ -1,0 +1,47 @@
+[package]
+name = "web-headless-agent"
+version = "0.1.0"
+edition = "2021"
+description = "Headless agent WASM component for embedding in web pages"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# AI Agent framework (wasip2 feature for WASI component model)
+rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
+    "wasip2",
+    "wasm",
+] }
+
+# WASM support with async features for streaming
+wit-bindgen = { version = "0.50", features = ["async", "async-spawn"] }
+wit-bindgen-rt = { version = "0.44", features = ["async"] }
+
+# Serialization for config and AI messages
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP client abstractions for rig-core compatibility
+bytes = "1.5"
+http = "1.0"
+futures = { version = "0.3", default-features = false, features = [
+    "alloc",
+    "executor",
+] }
+
+[package.metadata.component]
+package = "agent:headless"
+
+[package.metadata.component.target]
+path = "wit"
+world = "headless-agent"
+
+[package.metadata.component.target.dependencies]
+"wasi:http" = { path = "wit/deps/http" }
+"wasi:clocks" = { path = "wit/deps/clocks" }
+"wasi:io" = { path = "wit/deps/io" }
+"wasi:random" = { path = "wit/deps/random" }
+"wasi:cli" = { path = "wit/deps/cli" }
+"wasi:filesystem" = { path = "wit/deps/filesystem" }
+"wasi:sockets" = { path = "wit/deps/sockets" }

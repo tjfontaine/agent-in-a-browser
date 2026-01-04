@@ -1,0 +1,39 @@
+{
+    "name": "@tjfontaine/web-agent-core",
+    "version": "0.1.0",
+    "description": "Embeddable AI agent for web applications",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "scripts": {
+        "build": "npm run transpile && tsc",
+        "transpile": "jco transpile wasm/web_headless_agent.wasm -o src/wasm --name headless-agent",
+        "clean": "rm -rf dist src/wasm"
+    },
+    "files": [
+        "dist",
+        "src/wasm"
+    ],
+    "keywords": [
+        "ai",
+        "agent",
+        "wasm",
+        "llm",
+        "anthropic",
+        "openai"
+    ],
+    "author": "Web Agent Contributors",
+    "license": "MIT",
+    "dependencies": {
+        "@bytecodealliance/jco": "^1.8.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0"
+    }
+}

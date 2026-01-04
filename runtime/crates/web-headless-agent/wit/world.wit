@@ -1,0 +1,69 @@
+package agent:headless@0.1.0;
+
+/// Headless agent world - embeddable agent without TUI
+world headless-agent {
+    // HTTP for LLM API calls
+    import wasi:io/error@0.2.4;
+    import wasi:io/poll@0.2.4;
+    import wasi:io/streams@0.2.4;
+    import wasi:http/types@0.2.4;
+    import wasi:http/outgoing-handler@0.2.4;
+    import wasi:clocks/monotonic-clock@0.2.4;
+    import wasi:clocks/wall-clock@0.2.4;
+    import wasi:random/insecure-seed@0.2.4;
+    
+    // Agent configuration
+    record agent-config {
+        provider: string,
+        model: string,
+        api-key: string,
+        base-url: option<string>,
+        preamble: option<string>,
+    }
+    
+    // Message in conversation history
+    record message {
+        role: message-role,
+        content: string,
+    }
+    
+    // Message role
+    enum message-role {
+        user,
+        assistant,
+    }
+    
+    // Tool result data
+    record tool-result-data {
+        name: string,
+        output: string,
+        is-error: bool,
+    }
+    
+    // Agent event variants
+    variant agent-event {
+        stream-start,
+        stream-chunk(string),
+        stream-complete(string),
+        stream-error(string),
+        tool-call(string),
+        tool-result(tool-result-data),
+        ready,
+    }
+    
+    // Agent handle (opaque identifier)
+    type agent-handle = u32;
+    
+    // Agent lifecycle
+    export create: func(config: agent-config) -> result<agent-handle, string>;
+    export destroy: func(handle: agent-handle);
+    
+    // Streaming API
+    export send: func(handle: agent-handle, message: string) -> result<_, string>;
+    export poll: func(handle: agent-handle) -> option<agent-event>;
+    export cancel: func(handle: agent-handle);
+    
+    // History management
+    export get-history: func(handle: agent-handle) -> list<message>;
+    export clear-history: func(handle: agent-handle);
+}
