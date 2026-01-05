@@ -7,6 +7,9 @@ import { test, expect } from '@playwright/test';
  * It tests the worker-based module loading path used when JSPI is not available.
  */
 
+// Skip on non-WebKit browsers - these tests are Safari-specific
+test.skip(({ browserName }) => browserName !== 'webkit', 'Safari-only test');
+
 test.describe('Safari Shim Isolation Debug', () => {
 
     test('debug: worker shim isolation', async ({ page }) => {

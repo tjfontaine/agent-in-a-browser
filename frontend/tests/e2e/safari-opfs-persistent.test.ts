@@ -10,6 +10,9 @@ import path from 'path';
  * The default ephemeral context doesn't support OPFS storage.
  */
 
+// Skip on non-WebKit browsers - these tests are Safari-specific
+base.skip(({ browserName }) => browserName !== 'webkit', 'Safari-only test');
+
 // Create a custom test fixture that uses persistent context
 const test = base.extend<{ persistentPage: Page }>({
     persistentPage: async ({ }, use) => {
