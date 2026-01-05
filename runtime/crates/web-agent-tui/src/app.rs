@@ -1102,77 +1102,6 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                 }
             }
-            Overlay::ModelSelector {
-                selected,
-                provider,
-                fetched_models,
-            } => {
-                // Calculate item count: 1 (refresh) + models
-                let model_count = if let Some(models) = fetched_models.as_ref() {
-                    if models.is_empty() {
-                        1
-                    } else {
-                        models.len()
-                    }
-                } else {
-                    crate::ui::server_manager::get_models_for_provider(provider).len()
-                };
-                let max_items = 1 + model_count; // +1 for refresh option
-
-                match byte {
-                    0x1B => {
-                        // Esc - close overlay
-                        self.overlay = None;
-                    }
-                    0xF0 | 0x6B => {
-                        // Up arrow or 'k'
-                        if *selected > 0 {
-                            *selected -= 1;
-                        }
-                    }
-                    0xF1 | 0x6A => {
-                        // Down arrow or 'j'
-                        if *selected + 1 < max_items {
-                            *selected += 1;
-                        }
-                    }
-                    0x0D => {
-                        // Enter - handle selection
-                        if *selected == 0 {
-                            // Refresh from API - extract data first
-                            let provider_id = provider.clone();
-                            // Need to handle refresh outside of this match
-                            self.handle_model_refresh(&provider_id);
-                        } else {
-                            // Select a model (index - 1 because of refresh option)
-                            let model_idx = *selected - 1;
-
-                            // Use fetched models if available, otherwise static
-                            let (model_id, model_name) = if let Some(models) = fetched_models {
-                                if let Some((id, name)) = models.get(model_idx) {
-                                    (id.clone(), name.clone())
-                                } else {
-                                    return;
-                                }
-                            } else {
-                                let static_models =
-                                    crate::ui::server_manager::get_models_for_provider(provider);
-                                if let Some((id, name)) = static_models.get(model_idx) {
-                                    (id.to_string(), name.to_string())
-                                } else {
-                                    return;
-                                }
-                            };
-
-                            // Update the model
-                            self.set_model(&model_id);
-                            self.notice(format!("Model changed to: {} ({})", model_name, model_id));
-                            self.overlay = None;
-                        }
-                    }
-                    _ => {}
-                }
-            }
 
             Overlay::ProviderSelector { selected } => {
                 use crate::ui::server_manager::{ProviderWizardStep, PROVIDERS};
@@ -1232,6 +1161,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 model_input: prefilled_model,
                                 api_key_input: saved_api_key,
                                 fetched_models: None,
+                                standalone: false,
                             });
                         }
                     }
@@ -1248,6 +1178,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 model_input,
                 api_key_input,
                 fetched_models,
+                standalone,
             } => {
                 use crate::ui::server_manager::{
                     get_models_for_provider, ProviderWizardStep, PROVIDERS,
@@ -1454,8 +1385,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
                         match byte {
                             0x1B => {
-                                // Esc - back to config view
-                                *step = ProviderWizardStep::ProviderConfig;
+                                // Esc - back to config view (or close in standalone mode)
+                                if *standalone {
+                                    self.overlay = None;
+                                } else {
+                                    *step = ProviderWizardStep::ProviderConfig;
+                                }
                             }
                             0xF0 | 0x6B => {
                                 if *selected_model > 0 {
@@ -1507,7 +1442,18 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                 } else if is_custom_selected {
                                     // Custom input - only proceed if not empty
                                     if !model_input.is_empty() {
-                                        *step = ProviderWizardStep::ProviderConfig;
+                                        if *standalone {
+                                            // Clone before setting overlay to None
+                                            let model_to_set = model_input.clone();
+                                            self.overlay = None;
+                                            self.set_model(&model_to_set);
+                                            self.notice(format!(
+                                                "Model changed to: {}",
+                                                model_to_set
+                                            ));
+                                        } else {
+                                            *step = ProviderWizardStep::ProviderConfig;
+                                        }
                                     }
                                 } else {
                                     // Model from list - adjust index for offset
@@ -1518,8 +1464,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         static_models.get(model_idx).map(|(id, _)| id.to_string())
                                     };
                                     if let Some(id) = model_id {
-                                        *model_input = id;
-                                        *step = ProviderWizardStep::ProviderConfig;
+                                        if *standalone {
+                                            // Clone before setting overlay to None
+                                            self.overlay = None;
+                                            self.set_model(&id);
+                                            self.notice(format!("Model changed to: {}", id));
+                                        } else {
+                                            *model_input = id;
+                                            *step = ProviderWizardStep::ProviderConfig;
+                                        }
                                     }
                                 }
                             }
@@ -1617,44 +1570,6 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     // === Model Refresh Methods ===
-
-    /// Handle refreshing the model list from the provider API
-    fn handle_model_refresh(&mut self, provider_id: &str) {
-        use crate::bridge::models_api::fetch_models_for_provider;
-
-        let api_key = self.get_api_key().map(|s| s.to_string());
-        let base_url = self.get_base_url().map(|s| s.to_string());
-
-        if let Some(key) = api_key {
-            self.notice("Fetching models from API...".to_string());
-
-            match fetch_models_for_provider(provider_id, &key, base_url.as_deref()) {
-                Ok(models) => {
-                    let model_names: Vec<(String, String)> =
-                        models.into_iter().map(|m| (m.id, m.name)).collect();
-                    let count = model_names.len();
-
-                    // Update overlay with fetched models
-                    if let Some(Overlay::ModelSelector {
-                        selected,
-                        fetched_models,
-                        ..
-                    }) = &mut self.overlay
-                    {
-                        *fetched_models = Some(model_names);
-                        *selected = 1; // Move to first model
-                    }
-
-                    self.notice(format!("Loaded {} models from API.", count));
-                }
-                Err(e) => {
-                    self.notice_error(format!("Failed to fetch models: {}. Using static list.", e));
-                }
-            }
-        } else {
-            self.notice("No API key set. Using static model list.".to_string());
-        }
-    }
 
     /// Handle model refresh for ProviderWizard overlay
     fn handle_wizard_model_refresh(
@@ -2314,11 +2229,33 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 }
             }
             "/model" => {
-                // Open model selector overlay
-                self.overlay = Some(Overlay::ModelSelector {
-                    selected: 0,
-                    provider: self.agent.config().current_provider().to_string(),
+                // Open model selector overlay (uses ProviderWizard in standalone mode)
+                use crate::ui::server_manager::ProviderWizardStep;
+
+                // Find the index of the current provider
+                let current_provider = self.agent.config().current_provider().to_string();
+                let provider_idx = crate::ui::server_manager::PROVIDERS
+                    .iter()
+                    .position(|(id, _, _)| *id == current_provider)
+                    .unwrap_or(0);
+
+                // Load current settings
+                let settings = self.agent.config().providers.get(&current_provider);
+                let current_model = settings.model.clone();
+                let base_url = settings.base_url.clone().unwrap_or_default();
+                let api_key = settings.api_key.clone().unwrap_or_default();
+
+                self.overlay = Some(Overlay::ProviderWizard {
+                    step: ProviderWizardStep::EditModel,
+                    selected_provider: provider_idx,
+                    selected_api_format: 0,
+                    selected_model: 0,
+                    selected_field: 0,
+                    base_url_input: base_url,
+                    model_input: current_model,
+                    api_key_input: api_key,
                     fetched_models: None,
+                    standalone: true,
                 });
             }
             "/provider" => {

@@ -37,18 +37,12 @@ impl Default for ServerManagerView {
 #[derive(Clone)]
 pub enum Overlay {
     ServerManager(ServerManagerView),
-    /// Model selection overlay
-    ModelSelector {
-        selected: usize,
-        provider: String,
-        /// Models fetched from API (None = not fetched yet, Some([]) = empty/failed)
-        fetched_models: Option<Vec<(String, String)>>,
-    },
     /// Provider selection overlay (simple quick-select)
     ProviderSelector {
         selected: usize,
     },
     /// Provider configuration wizard (multi-step)
+    /// Also used for standalone model selection via /model command
     ProviderWizard {
         step: ProviderWizardStep,
         selected_provider: usize,
@@ -61,6 +55,9 @@ pub enum Overlay {
         api_key_input: String,
         /// Models fetched from API (None = not fetched, Some([]) = empty/failed)
         fetched_models: Option<Vec<(String, String)>>,
+        /// If true, opened from /model command - select model and close on completion
+        /// If false, opened from /provider wizard - return to ProviderConfig on completion
+        standalone: bool,
     },
 }
 
@@ -508,13 +505,6 @@ pub fn render_overlay(
                 }
             }
         },
-        Overlay::ModelSelector {
-            selected,
-            provider,
-            fetched_models,
-        } => {
-            render_model_selector(frame, area, provider, *selected, fetched_models.as_ref());
-        }
         Overlay::ProviderSelector { selected } => {
             render_provider_selector(frame, area, *selected);
         }
@@ -528,6 +518,7 @@ pub fn render_overlay(
             model_input,
             api_key_input,
             fetched_models,
+            standalone: _,
         } => {
             render_provider_wizard(
                 frame,
@@ -608,81 +599,6 @@ pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static st
             ("google/gemini-3-flash", "Gemini 3 Flash"),
         ],
         _ => vec![],
-    }
-}
-
-/// Render model selection overlay
-fn render_model_selector(
-    frame: &mut Frame,
-    area: Rect,
-    provider: &str,
-    selected: usize,
-    fetched_models: Option<&Vec<(String, String)>>,
-) {
-    let popup = centered_rect(55, 60, area);
-    frame.render_widget(Clear, popup);
-
-    // Build items list: Refresh option + models
-    let mut items: Vec<ListItem> = Vec::new();
-
-    // First item: Refresh from API
-    items.push(ListItem::new(Line::from(vec![
-        Span::styled("🔄 ", Style::default().fg(Color::Yellow)),
-        Span::styled("Refresh from API", Style::default().fg(Color::Yellow)),
-    ])));
-
-    // Models: use fetched if available, otherwise static
-    if let Some(models) = fetched_models {
-        if models.is_empty() {
-            items.push(ListItem::new(Span::styled(
-                "  (No models fetched - try refresh)",
-                Style::default().fg(Color::DarkGray),
-            )));
-        } else {
-            for (id, name) in models {
-                items.push(ListItem::new(Line::from(vec![
-                    Span::styled(name.as_str(), Style::default().fg(Color::White)),
-                    Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
-                ])));
-            }
-        }
-    } else {
-        // Static fallback models
-        let static_models = get_models_for_provider(provider);
-        for (id, name) in static_models {
-            items.push(ListItem::new(Line::from(vec![
-                Span::styled(name, Style::default().fg(Color::White)),
-                Span::styled(format!(" ({})", id), Style::default().fg(Color::DarkGray)),
-            ])));
-        }
-    }
-
-    let title = format!("🤖 Select {} Model", provider);
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(title)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        )
-        .highlight_style(
-            Style::default()
-                .add_modifier(Modifier::REVERSED)
-                .fg(Color::Cyan),
-        )
-        .highlight_symbol("▶ ");
-
-    let mut state = ListState::default();
-    state.select(Some(selected));
-    frame.render_stateful_widget(list, popup, &mut state);
-
-    // Hints at bottom
-    let hints = Paragraph::new("↑↓ Navigate │ Enter Select │ Esc Close")
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center);
-    let hint_area = Rect::new(popup.x, popup.y + popup.height, popup.width, 1);
-    if hint_area.y < area.height {
-        frame.render_widget(hints, hint_area);
     }
 }
 

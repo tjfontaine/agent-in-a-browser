@@ -80,13 +80,19 @@ pub fn fetch_openai_models(
 }
 
 /// Fetch models from Anthropic API
-pub fn fetch_anthropic_models(api_key: &str) -> Result<Vec<AvailableModel>, String> {
-    let url = "https://api.anthropic.com/v1/models";
+pub fn fetch_anthropic_models(
+    api_key: &str,
+    base_url: Option<&str>,
+) -> Result<Vec<AvailableModel>, String> {
+    let url = format!(
+        "{}/models",
+        base_url.unwrap_or("https://api.anthropic.com/v1")
+    );
 
     // Anthropic uses x-api-key header instead of Bearer token
     // anthropic-dangerous-direct-browser-access is required for browser CORS
     let response = HttpClient::get_json_with_headers(
-        url,
+        &url,
         &[
             ("x-api-key", api_key),
             ("anthropic-version", "2023-06-01"),
@@ -134,9 +140,13 @@ struct GeminiModelInfo {
 /// Fetch models from Gemini API
 ///
 /// Gemini uses query parameter auth (?key=API_KEY) instead of headers
-pub fn fetch_gemini_models(api_key: &str) -> Result<Vec<AvailableModel>, String> {
+pub fn fetch_gemini_models(
+    api_key: &str,
+    base_url: Option<&str>,
+) -> Result<Vec<AvailableModel>, String> {
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+        "{}/models?key={}",
+        base_url.unwrap_or("https://generativelanguage.googleapis.com/v1beta"),
         api_key
     );
 
@@ -184,8 +194,8 @@ pub fn fetch_models_for_provider(
     base_url: Option<&str>,
 ) -> Result<Vec<AvailableModel>, String> {
     match provider {
-        "anthropic" => fetch_anthropic_models(api_key),
-        "gemini" | "google" => fetch_gemini_models(api_key),
+        "anthropic" => fetch_anthropic_models(api_key, base_url),
+        "gemini" | "google" => fetch_gemini_models(api_key, base_url),
         "openai" | "custom" | _ => fetch_openai_models(api_key, base_url),
     }
 }
