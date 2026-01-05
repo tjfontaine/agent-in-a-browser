@@ -7,29 +7,32 @@
  * 
  * - Chrome with flags: Uses JSPI mode (true lazy loading with async suspension)
  * - Safari/Firefox: Uses Sync mode (eager loading, no async suspension)
+ * 
+ * NOTE: hasJSPI and execution mode detection are now centralized in
+ * @tjfontaine/wasi-shims/execution-mode.js. This module re-exports those
+ * for backward compatibility while adding MCP-specific loading logic.
  */
 
-// JSPI feature detection - Suspending is not yet in TypeScript's lib.dom.d.ts
-// Using a type-safe check that avoids 'any'
-const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown };
+// Re-export from the canonical source of truth
+export {
+    hasJSPI,
+    getExecutionMode,
+    setExecutionMode,
+    isSyncMode,
+    isSyncWorkerMode,
+    canSuspendAsync,
+    type ExecutionMode,
+} from '@tjfontaine/wasi-shims/execution-mode.js';
+
+import { hasJSPI, isSyncWorkerMode } from '@tjfontaine/wasi-shims/execution-mode.js';
+
+// Log the detected mode at startup (for backward compatibility)
+console.log(`[AsyncMode] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
 
 /**
- * Check if the browser supports JSPI (JavaScript Promise Integration)
+ * @deprecated Use isSyncWorkerMode() from @tjfontaine/wasi-shims instead
  */
-// JSPI Check
-export const hasJSPI = typeof webAssembly.Suspending !== 'undefined';
-
-// Worker Mode Check (for Safari)
-// Use a safe check for WorkerGlobalScope
-const isWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
-export const isWorkerMode = !hasJSPI && isWorker;
-
-// Import sync bridge initializers (lazy loaded)
-// These are only needed in worker mode (Safari)
-import * as wasiShims from '@tjfontaine/wasi-shims';
-
-// Log the detected mode at startup
-console.log(`[AsyncMode] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
+export const isWorkerMode = isSyncWorkerMode();
 
 // Type for the incomingHandler interface
 interface IncomingHandler {
@@ -62,17 +65,7 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
             const module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
-            console.log(`[AsyncMode] Loading Sync-mode MCP server... (Worker: ${isWorkerMode})`);
-
-            // In worker mode, we must initialize the sync bridges first
-            if (isWorkerMode) {
-                // Get the shared buffer from the worker init message (stored globally or passed in)
-                // For now, we assume global access or handled by a separate init function
-                // Ideally this should be part of the module loading, but the worker bridge handles it
-
-                // Note: The wasm-worker.ts script initializes the global state directly
-                // This loader is just for the WASM module itself
-            }
+            console.log(`[AsyncMode] Loading Sync-mode MCP server... (Worker: ${isSyncWorkerMode()})`);
 
             const module: McpServerModule = await import('../mcp-server-sync/ts-runtime-mcp.js');
             // With --tla-compat, we must await $init before accessing exports
@@ -103,4 +96,3 @@ export function getIncomingHandler(): IncomingHandler {
 export function isMcpServerLoaded(): boolean {
     return cachedIncomingHandler !== null;
 }
-

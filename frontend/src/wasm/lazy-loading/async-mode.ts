@@ -6,18 +6,26 @@
  * 
  * - Chrome with flags: Uses JSPI mode (true lazy loading with async suspension)
  * - Safari/Firefox: Uses Sync mode (eager loading, no async suspension)
+ * 
+ * NOTE: hasJSPI and execution mode detection are now centralized in
+ * @tjfontaine/wasi-shims/execution-mode.js. This module re-exports those
+ * for backward compatibility while adding frontend-specific MCP loading logic.
  */
 
-// JSPI feature detection - Suspending is not yet in TypeScript's lib.dom.d.ts
-// Using a type-safe check that avoids 'any'
-const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown };
+// Re-export from the canonical source of truth
+export {
+    hasJSPI,
+    getExecutionMode,
+    setExecutionMode,
+    isSyncMode,
+    isSyncWorkerMode,
+    canSuspendAsync,
+    type ExecutionMode,
+} from '@tjfontaine/wasi-shims/execution-mode.js';
 
-/**
- * Check if the browser supports JSPI (JavaScript Promise Integration)
- */
-export const hasJSPI = typeof webAssembly.Suspending !== 'undefined';
+import { hasJSPI, isSyncWorkerMode } from '@tjfontaine/wasi-shims/execution-mode.js';
 
-// Log the detected mode at startup
+// Log the detected mode at startup (for backward compatibility)
 console.log(`[AsyncMode] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
 
 // Type for the incomingHandler interface
@@ -54,7 +62,7 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
             const module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
-            console.log('[AsyncMode] Loading Sync-mode MCP server...');
+            console.log(`[AsyncMode] Loading Sync-mode MCP server... (Worker: ${isSyncWorkerMode()})`);
             // Dynamic import for sync module - use runtime path to prevent Vite from pre-resolving
             // This module may not exist in CI builds (only JSPI mode is transpiled)
             const syncPath = '../mcp-server-sync/ts-runtime-mcp.js';
@@ -91,4 +99,3 @@ export function getIncomingHandler(): IncomingHandler {
 export function isMcpServerLoaded(): boolean {
     return cachedIncomingHandler !== null;
 }
-
