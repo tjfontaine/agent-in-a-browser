@@ -784,21 +784,21 @@ impl<R: PollableRead, W: Write> App<R, W> {
             .map(|m| m.role == crate::agent_core::Role::User && m.content == input)
             .unwrap_or(false);
 
+        // Set state to Streaming BEFORE the potentially blocking HTTP call
+        // so the UI updates immediately (especially important on WebKit/Safari
+        // where XMLHttpRequest is synchronous and can block)
+        self.state = AppState::Streaming;
+
         let result = if last_is_input {
             self.agent.start_stream(input)
         } else {
             self.agent.send(input)
         };
 
-        match result {
-            Ok(_) => {
-                self.state = AppState::Streaming;
-            }
-            Err(e) => {
-                self.display_items
-                    .push(crate::display::DisplayItem::error(e));
-                self.state = AppState::Ready;
-            }
+        if let Err(e) = result {
+            self.display_items
+                .push(crate::display::DisplayItem::error(e));
+            self.state = AppState::Ready;
         }
     }
 
