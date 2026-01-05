@@ -1,5 +1,5 @@
 //! tsx-engine module
-//! 
+//!
 //! Provides tsx/tsc commands via the unix-command WIT interface.
 //! tsx-engine is like ts-node: it transpiles TypeScript and executes it.
 //! Includes Node.js-compatible shims for console, fs, path, Buffer, fetch, etc.
@@ -55,7 +55,7 @@ fn run_tsx(
     let mut code: Option<String> = None;
     let mut file_path: Option<String> = None;
     let mut i = 0;
-    
+
     while i < args.len() {
         match args[i].as_str() {
             "-e" | "--eval" => {
@@ -71,8 +71,14 @@ fn run_tsx(
                 write_to_stream(&stdout, b"Usage: tsx [options] [file]\n");
                 write_to_stream(&stdout, b"  -e, --eval <code>  Evaluate code\n");
                 write_to_stream(&stdout, b"  -h, --help         Show this help\n");
-                write_to_stream(&stdout, b"\nTranspiles TypeScript and executes it (like ts-node).\n");
-                write_to_stream(&stdout, b"Includes: console, fs, path, Buffer, fetch, URL, etc.\n");
+                write_to_stream(
+                    &stdout,
+                    b"\nTranspiles TypeScript and executes it (like ts-node).\n",
+                );
+                write_to_stream(
+                    &stdout,
+                    b"Includes: console, fs, path, Buffer, fetch, URL, etc.\n",
+                );
                 return 0;
             }
             arg if !arg.starts_with('-') => {
@@ -80,7 +86,10 @@ fn run_tsx(
                 i += 1;
             }
             _ => {
-                write_to_stream(&stderr, format!("tsx: unknown option: {}\n", args[i]).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("tsx: unknown option: {}\n", args[i]).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -99,9 +108,15 @@ fn run_tsx(
         }
     } else {
         match read_all_from_stream(&stdin) {
-            Ok(data) => (String::from_utf8_lossy(&data).to_string(), "<stdin>".to_string()),
+            Ok(data) => (
+                String::from_utf8_lossy(&data).to_string(),
+                "<stdin>".to_string(),
+            ),
             Err(e) => {
-                write_to_stream(&stderr, format!("tsx: failed to read stdin: {}\n", e).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("tsx: failed to read stdin: {}\n", e).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -120,15 +135,38 @@ fn run_tsx(
             return 1;
         }
     };
-    
+
     // Step 1.5: Wrap in async IIFE to support top-level await
-    // This allows `await` at the top level of eval'd code
-    let js_code = format!("(async () => {{\n{}\n}})().catch(e => {{ throw e; }})", transpiled);
+    // This allows `await` at the top level of eval'd code.
+    //
+    // IMPORTANT: We capture the result of the last expression and await it if it's a Promise.
+    // This handles the pattern: `async function fn() { ... } fn()` where fn() returns a Promise
+    // that would otherwise be orphaned (not awaited) and thus never executed by QuickJS's event loop.
+    //
+    // The wrapper:
+    // 1. Uses eval() to get the result of the last expression in user code
+    // 2. Checks if result looks like a Promise (has .then method)
+    // 3. If so, awaits it to ensure async function bodies complete
+    //
+    // Note: We escape the transpiled code for embedding in a template string.
+    let escaped_code = transpiled
+        .replace('\\', "\\\\")
+        .replace('`', "\\`")
+        .replace("${", "\\${");
+    let js_code = format!(
+        r#"(async () => {{
+const __result__ = eval(`{}`);
+if (__result__ && typeof __result__.then === 'function') {{
+    await __result__;
+}}
+}})().catch(e => {{ throw e; }})"#,
+        escaped_code
+    );
 
     // Step 2: Execute the JavaScript using QuickJS with full runtime
     // Clear any captured logs from previous executions
     js_modules::console::clear_logs();
-    
+
     match execute_js(&js_code, &source_name, &stdout, &stderr) {
         Ok(output) => {
             // First, write any captured console.log output to stdout
@@ -139,7 +177,7 @@ fn run_tsx(
                     write_to_stream(&stdout, b"\n");
                 }
             }
-            
+
             // Then write the expression result if it's meaningful
             // Skip "undefined", "[object]" (Promise from async IIFE), and empty strings
             if !output.is_empty() && output != "undefined" && output != "[object]" {
@@ -176,7 +214,7 @@ fn run_tsc(
     let mut code: Option<String> = None;
     let mut file_path: Option<String> = None;
     let mut i = 0;
-    
+
     while i < args.len() {
         match args[i].as_str() {
             "-e" | "--eval" => {
@@ -192,7 +230,10 @@ fn run_tsc(
                 write_to_stream(&stdout, b"Usage: tsc [options] [file]\n");
                 write_to_stream(&stdout, b"  -e, --eval <code>  Transpile inline code\n");
                 write_to_stream(&stdout, b"  -h, --help         Show this help\n");
-                write_to_stream(&stdout, b"\nTranspiles TypeScript to JavaScript (no execution).\n");
+                write_to_stream(
+                    &stdout,
+                    b"\nTranspiles TypeScript to JavaScript (no execution).\n",
+                );
                 return 0;
             }
             arg if !arg.starts_with('-') => {
@@ -200,7 +241,10 @@ fn run_tsc(
                 i += 1;
             }
             _ => {
-                write_to_stream(&stderr, format!("tsc: unknown option: {}\n", args[i]).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("tsc: unknown option: {}\n", args[i]).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -221,7 +265,10 @@ fn run_tsc(
         match read_all_from_stream(&stdin) {
             Ok(data) => String::from_utf8_lossy(&data).to_string(),
             Err(e) => {
-                write_to_stream(&stderr, format!("tsc: failed to read stdin: {}\n", e).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("tsc: failed to read stdin: {}\n", e).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -254,7 +301,12 @@ fn transpile(ts_code: &str) -> Result<String, String> {
 }
 
 /// Execute JavaScript using QuickJS with full Node.js-like runtime
-fn execute_js(js_code: &str, source_name: &str, _stdout: &OutputStream, _stderr: &OutputStream) -> Result<String, String> {
+fn execute_js(
+    js_code: &str,
+    source_name: &str,
+    _stdout: &OutputStream,
+    _stderr: &OutputStream,
+) -> Result<String, String> {
     let runtime = AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
     let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
         .map_err(|e| format!("Failed to create context: {}", e))?;
@@ -263,11 +315,12 @@ fn execute_js(js_code: &str, source_name: &str, _stdout: &OutputStream, _stderr:
     futures_lite::future::block_on(context.with(|ctx| {
         js_modules::install_all(&ctx)?;
         Ok::<(), rquickjs::Error>(())
-    })).map_err(|e| format!("Failed to install bindings: {}", e))?;
+    }))
+    .map_err(|e| format!("Failed to install bindings: {}", e))?;
 
     // Set up the resolver and loader for module imports
     futures_lite::future::block_on(
-        runtime.set_loader(resolver::HybridResolver, loader::HybridLoader)
+        runtime.set_loader(resolver::HybridResolver, loader::HybridLoader),
     );
 
     // Execute the code
@@ -278,7 +331,7 @@ fn execute_js(js_code: &str, source_name: &str, _stdout: &OutputStream, _stderr:
             Err(e) => Err(format_js_error(&ctx, e, source_name)),
         }
     }));
-    
+
     // Drive the event loop to completion to resolve any pending Promises
     // This ensures console.log calls inside async code are captured
     futures_lite::future::block_on(runtime.idle());
@@ -307,7 +360,11 @@ fn format_js_value<'a>(_ctx: &rquickjs::Ctx<'a>, val: rquickjs::Value<'a>) -> St
 }
 
 /// Format a JavaScript error with source context
-fn format_js_error<'a>(_ctx: &rquickjs::Ctx<'a>, err: rquickjs::CaughtError<'a>, source_name: &str) -> String {
+fn format_js_error<'a>(
+    _ctx: &rquickjs::Ctx<'a>,
+    err: rquickjs::CaughtError<'a>,
+    source_name: &str,
+) -> String {
     format!("Error in {}: {:?}", source_name, err)
 }
 
