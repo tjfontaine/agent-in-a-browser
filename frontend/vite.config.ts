@@ -21,7 +21,10 @@ export default defineConfig(({ mode }) => ({
         alias: {
             '@': path.resolve(__dirname, './src'),
             // Package resolution for monorepo
-            '@tjfontaine/mcp-wasm-server': path.resolve(__dirname, '../packages/mcp-wasm-server'),
+            // Note: Specific path must come before general path for proper resolution
+            '@tjfontaine/mcp-wasm-server/mcp-server-jspi': path.resolve(__dirname, '../packages/mcp-wasm-server/mcp-server-jspi'),
+            '@tjfontaine/mcp-wasm-server/mcp-server-sync': path.resolve(__dirname, '../packages/mcp-wasm-server/mcp-server-sync'),
+            '@tjfontaine/mcp-wasm-server': path.resolve(__dirname, '../packages/mcp-wasm-server/src/index.ts'),
             '@tjfontaine/wasi-shims': path.resolve(__dirname, '../packages/wasi-shims/src'),
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),
             '@tjfontaine/wasm-vim': path.resolve(__dirname, '../packages/wasm-vim'),
