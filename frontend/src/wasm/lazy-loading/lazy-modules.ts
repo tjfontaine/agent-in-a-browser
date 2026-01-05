@@ -341,25 +341,24 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
 /**
  * Load the edtui-module (vim-style editor)
  * 
- * Requires JSPI for interactive stdin (blocking reads from terminal).
- * Provides vim, vi, and edit commands with file persistence.
+ * Supports both JSPI and sync modes for interactive editing.
+ * In sync mode, uses the WorkerBridge stdin mechanism for keyboard input.
  */
 async function loadEdtuiModule(): Promise<CommandModule> {
-    // Vim editor requires JSPI for stdin to work
-    if (!hasJSPI) {
-        throw new Error(
-            'Vim editor requires JSPI (JavaScript Promise Integration). ' +
-            'Please use Chrome with JSPI enabled.'
-        );
-    }
-
     console.log('[LazyLoader] Loading edtui-module (vim editor)...');
     const startTime = performance.now();
 
+    // Dynamic import based on JSPI support
+    // Safari needs sync variant to avoid WebAssembly.Suspending error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('../../../../packages/wasm-vim/wasm/edtui-module.js') as any;
+    let module: any;
+    if (hasJSPI) {
+        module = await import('@tjfontaine/wasm-vim/wasm/edtui-module.js');
+    } else {
+        module = await import('@tjfontaine/wasm-vim/wasm-sync/edtui-module.js');
+    }
 
-    // Await $init for the JSPI module initialization
+    // Await $init for the module initialization
     if (module.$init) {
         await module.$init;
     }
@@ -367,7 +366,12 @@ async function loadEdtuiModule(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] edtui-module loaded in ${loadTime.toFixed(0)}ms`);
 
-    return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    // Use JSPI wrapper when available since poll-impl.js makes run() async
+    if (hasJSPI) {
+        return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    }
+    // Wrap the sync command interface to provide spawn()
+    return wrapSyncModule(module.command);
 }
 
 /**
@@ -375,24 +379,23 @@ async function loadEdtuiModule(): Promise<CommandModule> {
  * 
  * The main runtime now exports shell:unix/command alongside wasi:http/incoming-handler.
  * This gives the interactive shell access to all 50+ shell commands.
+ * Supports both JSPI and sync modes for interactive shell access.
  */
 async function loadBrushShell(): Promise<CommandModule> {
-    // Interactive shell requires JSPI for stdin to work
-    if (!hasJSPI) {
-        throw new Error(
-            'Interactive shell requires JSPI (JavaScript Promise Integration). ' +
-            'Please use Chrome with JSPI enabled.'
-        );
-    }
-
     console.log('[LazyLoader] Loading interactive shell from MCP server...');
     const startTime = performance.now();
 
-    // Import the JSPI-transpiled MCP server which now exports command
+    // Dynamic import based on JSPI support
+    // Safari needs sync variant to avoid WebAssembly.Suspending error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('../mcp-server-jspi/ts-runtime-mcp.js') as any;
+    let module: any;
+    if (hasJSPI) {
+        module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
+    } else {
+        module = await import('../mcp-server-sync/ts-runtime-mcp.js');
+    }
 
-    // Await $init for the JSPI module initialization
+    // Await $init for the module initialization
     if (module.$init) {
         await module.$init;
     }
@@ -400,9 +403,12 @@ async function loadBrushShell(): Promise<CommandModule> {
     const loadTime = performance.now() - startTime;
     console.log(`[LazyLoader] Interactive shell loaded in ${loadTime.toFixed(0)}ms`);
 
-    // Use JSPI wrapper since run() returns a Promise with async exports
-    // The MCP server exports 'command' for shell:unix/command interface
-    return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    // Use JSPI wrapper when available since poll-impl.js makes run() async
+    if (hasJSPI) {
+        return wrapJspiModule(module.command as unknown as Parameters<typeof wrapJspiModule>[0]);
+    }
+    // Wrap the sync command interface to provide spawn()
+    return wrapSyncModule(module.command);
 }
 
 /**
@@ -524,9 +530,15 @@ export async function initializeForSyncMode(): Promise<void> {
     console.log('[LazyLoader] Sync mode - eager loading all lazy modules...');
     const startTime = performance.now();
 
-    // Load all lazy modules that work in sync mode in parallel
-    // Note: ratatui-demo, edtui-module, brush-shell require JSPI for interactive stdin
-    const moduleNames = ['tsx-engine', 'sqlite-module', 'git-module'];
+    // Load all lazy modules in parallel
+    // All interactive modules now support sync mode via WorkerBridge stdin mechanism
+    const moduleNames = [
+        'tsx-engine',
+        'sqlite-module',
+        'git-module',
+        'edtui-module',   // Vim editor - now supports sync mode
+        'brush-shell',    // Interactive shell - now supports sync mode
+    ];
     await Promise.all(moduleNames.map(name =>
         loadLazyModule(name).catch(err => {
             console.error(`[LazyLoader] Failed to eager load ${name}:`, err);

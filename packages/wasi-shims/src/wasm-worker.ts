@@ -315,6 +315,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                     await opfsShim.initFilesystem();
                     console.log('[WasmWorker] OPFS filesystem ready');
 
+                    // CRITICAL: Pre-load all lazy modules in the worker context
+                    // The worker has its own lazy-modules.ts with an empty loadedModules map.
+                    // We must call initializeForSyncMode() HERE to populate the worker's cache.
+                    console.log('[WasmWorker] Pre-loading all lazy modules...');
+                    const { initializeForSyncMode } = await import('../../../frontend/src/wasm/lazy-loading/lazy-modules.js');
+                    await initializeForSyncMode();
+                    console.log('[WasmWorker] Lazy modules pre-loaded');
+
                     // Set up sync transport handler for MCP requests
                     // Route localhost:3000 MCP requests through Atomics-based sync bridge
                     // Pass isSyncMode=true so wasi-http-impl doesn't use async lazy streams

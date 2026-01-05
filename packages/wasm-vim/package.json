@@ -4,7 +4,9 @@
     "type": "module",
     "main": "./src/index.ts",
     "exports": {
-        ".": "./src/index.ts"
+        ".": "./src/index.ts",
+        "./wasm/*": "./wasm/*",
+        "./wasm-sync/*": "./wasm-sync/*"
     },
     "dependencies": {
         "@tjfontaine/wasm-loader": "*"
