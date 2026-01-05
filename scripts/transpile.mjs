@@ -59,21 +59,34 @@ const ASYNC_IMPORTS = [
 ];
 
 // ============================================================
-// SHIMS - Ghostty by default for terminal integration
+// SHIMS - Use package imports for proper module deduplication
 // ============================================================
-const shims = (prefix) => ({
-    'wasi:cli/*': `${prefix}/ghostty-cli-shim.js#*`,
-    'wasi:clocks/*': `${prefix}/clocks-impl.js#*`,
-    'wasi:filesystem/*': `${prefix}/opfs-filesystem-impl.js#*`,
-    'wasi:io/poll': `${prefix}/poll-impl.js`,
-    'wasi:io/streams': `${prefix}/streams.js`,
+// CRITICAL: Using @tjfontaine/wasi-shims package paths instead of relative paths
+// ensures that Vite properly deduplicates the shim modules. Without this,
+// the worker and transpiled TUI would import different module instances,
+// causing "Not a valid Descriptor resource" instanceof check failures.
+
+// JSPI SHIMS: Uses async opfs-filesystem-impl for JSPI suspension
+const SHIMS = {
+    'wasi:cli/*': '@tjfontaine/wasi-shims/ghostty-cli-shim.js#*',
+    'wasi:clocks/*': '@tjfontaine/wasi-shims/clocks-impl.js#*',
+    'wasi:filesystem/*': '@tjfontaine/wasi-shims/opfs-filesystem-impl.js#*',
+    'wasi:io/poll': '@tjfontaine/wasi-shims/poll-impl.js',
+    'wasi:io/streams': '@tjfontaine/wasi-shims/streams.js',
     'wasi:io/*': '@bytecodealliance/preview2-shim/io#*',
     'wasi:random/*': '@bytecodealliance/preview2-shim/random#*',
     'wasi:sockets/*': '@bytecodealliance/preview2-shim/sockets#*',
-    'wasi:http/types': `${prefix}/wasi-http-impl.js`,
-    'wasi:http/outgoing-handler': `${prefix}/wasi-http-impl.js#outgoingHandler`,
-    'terminal:info/size': `${prefix}/ghostty-cli-shim.js#size`,
-});
+    'wasi:http/types': '@tjfontaine/wasi-shims/wasi-http-impl.js',
+    'wasi:http/outgoing-handler': '@tjfontaine/wasi-shims/wasi-http-impl.js#outgoingHandler',
+    'terminal:info/size': '@tjfontaine/wasi-shims/ghostty-cli-shim.js#size',
+};
+
+// SYNC SHIMS: Uses sync opfs-filesystem-sync-impl for Safari/non-JSPI browsers
+// The sync impl uses Atomics.wait to block while helper worker does OPFS operations
+const SYNC_SHIMS = {
+    ...SHIMS,
+    'wasi:filesystem/*': '@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js#*',
+};
 
 // ============================================================
 // MODULES
@@ -81,44 +94,53 @@ const shims = (prefix) => ({
 const MODULES = {
     'ts-runtime-mcp': {
         wasm: 'ts-runtime-mcp.wasm',
-        jspiOut: `${FRONTEND}/src/wasm/mcp-server-jspi`,
-        syncOut: `${FRONTEND}/src/wasm/mcp-server-sync`,
+        jspiOut: `${PACKAGES}/mcp-wasm-server/mcp-server-jspi`,
+        syncOut: `${PACKAGES}/mcp-wasm-server/mcp-server-sync`,
         shims: {
-            ...shims('../../../../packages/wasi-shims/src'),
-            'mcp:module-loader/loader': '../lazy-loading/module-loader-impl.js'
+            ...SHIMS,
+            'mcp:module-loader/loader': '../../../frontend/src/wasm/lazy-loading/module-loader-impl.js'
         },
         exports: ['wasi:cli/run@0.2.6#run', 'wasi:http/incoming-handler@0.2.4#handle', 'shell:unix/command@0.1.0#run'],
     },
     'tsx-engine': {
         wasm: 'tsx_engine.wasm',
         jspiOut: `${PACKAGES}/wasm-tsx/wasm`,
-        shims: shims('../../wasi-shims/src'),
+        syncOut: `${PACKAGES}/wasm-tsx/wasm-sync`,
+        shims: SHIMS,
         exports: ['shell:unix/command@0.1.0#run'],
     },
     'sqlite-module': {
         wasm: 'sqlite_module.wasm',
         jspiOut: `${PACKAGES}/wasm-sqlite/wasm`,
-        shims: shims('../../wasi-shims/src'),
+        syncOut: `${PACKAGES}/wasm-sqlite/wasm-sync`,
+        shims: SHIMS,
         exports: ['shell:unix/command@0.1.0#run'],
     },
     'ratatui-demo': {
         wasm: 'ratatui_demo.wasm',
         jspiOut: `${PACKAGES}/wasm-ratatui/wasm`,
-        shims: shims('../../wasi-shims/src'),
+        syncOut: `${PACKAGES}/wasm-ratatui/wasm-sync`,
+        shims: SHIMS,
         exports: ['shell:unix/command@0.1.0#run'],
     },
     'edtui-module': {
         wasm: 'edtui_module.wasm',
         jspiOut: `${PACKAGES}/wasm-vim/wasm`,
-        shims: shims('../../wasi-shims/src'),
+        syncOut: `${PACKAGES}/wasm-vim/wasm-sync`,
+        shims: SHIMS,
         exports: ['shell:unix/command@0.1.0#run'],
     },
     'web-agent-tui': {
         wasm: 'web_agent_tui.wasm',
         jspiOut: `${FRONTEND}/src/wasm/web-agent-tui`,
+        syncOut: `${FRONTEND}/src/wasm/web-agent-tui-sync`,
         shims: {
-            ...shims('../../../../packages/wasi-shims/src'),
-            'shell:unix/command@0.1.0': '../mcp-server-jspi/ts-runtime-mcp.js#command'
+            ...SHIMS,
+            'shell:unix/command@0.1.0': '@tjfontaine/mcp-wasm-server/mcp-server-jspi/ts-runtime-mcp.js#command'
+        },
+        syncShims: {
+            ...SYNC_SHIMS,
+            'shell:unix/command@0.1.0': '@tjfontaine/mcp-wasm-server/mcp-server-sync/ts-runtime-mcp.js#command'
         },
         exports: ['run'],
     },
@@ -133,6 +155,8 @@ function build(name, mod, syncMode) {
     const args = ['jco', 'transpile', input, '-o', output];
 
     if (syncMode) {
+        // Sync mode: use synchronous shims that block via Atomics.wait
+        // No --async-imports needed since sync shims don't return Promises
         args.push('--async-mode', 'sync', '--tla-compat');
     } else {
         args.push('--async-mode', 'jspi');
@@ -140,7 +164,16 @@ function build(name, mod, syncMode) {
         for (const exp of (mod.exports || [])) args.push('--async-exports', `'${exp}'`);
     }
 
-    for (const [k, v] of Object.entries(mod.shims)) args.push('--map', `'${k}=${v}'`);
+    // Use SYNC_SHIMS for sync mode to get sync filesystem implementation
+    // Fall back to mod.syncShims, then merge mod.shims with SYNC_SHIMS (SYNC_SHIMS overrides)
+    let shimsToUse;
+    if (syncMode) {
+        // SYNC_SHIMS must come last to override wasi:filesystem/* with the sync version
+        shimsToUse = mod.syncShims || { ...mod.shims, ...SYNC_SHIMS };
+    } else {
+        shimsToUse = mod.shims || SHIMS;
+    }
+    for (const [k, v] of Object.entries(shimsToUse)) args.push('--map', `'${k}=${v}'`);
     args.push('--valid-lifting-optimization', '--name', name.replace(/_/g, '-'));
 
     return { cmd: args.join(' '), output: output.replace(ROOT + '/', '') };

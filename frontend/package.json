@@ -23,7 +23,7 @@
         "transpile:ratatui-demo": "node ../scripts/transpile.mjs ratatui-demo",
         "transpile:edtui-module": "node ../scripts/transpile.mjs edtui-module",
         "transpile:web-agent-tui": "node ../scripts/transpile.mjs web-agent-tui",
-        "transpile:all": "node ../scripts/transpile.mjs",
+        "transpile:all": "node ../scripts/transpile.mjs && node ../scripts/transpile.mjs --sync",
         "clean:wasm": "rm -rf src/wasm/mcp-server-jspi src/wasm/mcp-server-sync src/wasm/tsx-engine src/wasm/sqlite-module src/wasm/ratatui-demo src/wasm/edtui-module src/wasm/web-agent-tui"
     },
     "dependencies": {

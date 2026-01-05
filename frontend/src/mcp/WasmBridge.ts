@@ -34,8 +34,15 @@ export type { JsonRpcRequest, JsonRpcResponse } from './Client';
 /**
  * Intercept and prepare file paths for file operations.
  * Must be called before WASM operations that access files.
+ * Only needed in JSPI mode - sync mode handles files via the helper worker.
  */
 async function prepareFileOperation(body: string): Promise<void> {
+    // In sync mode (non-JSPI), the helper worker handles file access directly
+    // No need to prepare sync handles manually
+    if (!hasJSPI) {
+        return;
+    }
+
     try {
         const parsed = JSON.parse(body);
         // Check if this is a file tool call that needs a sync handle

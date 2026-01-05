@@ -35,9 +35,14 @@ export default defineConfig({
                 },
             },
         },
-        // WebKit (Safari) tests disabled for now due to OPFS not working in Playwright's
-        // ephemeral context. The sync mode code is correct; test in real Safari manually.
-        // See: https://github.com/nicolo-ribaudo/nicolo-nicolo-nicolo/issues/3
+        // WebKit (Safari) - enabled for debugging shim isolation issues
+        // Note: OPFS behavior may differ in Playwright's ephemeral context
+        {
+            name: 'webkit',
+            use: {
+                ...devices['Desktop Safari'],
+            },
+        },
     ],
 
     /* Run local dev server before starting the tests */

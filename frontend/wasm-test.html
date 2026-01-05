@@ -49,7 +49,8 @@
 
     <script type="module">
         // Import sandbox utilities
-        import { initializeSandbox, fetchFromSandbox } from './src/agent/sandbox.ts';
+        // Use fetchFromSandboxSimple for Safari compatibility (MessageChannel fails silently in Safari workers)
+        import { initializeSandbox, fetchFromSandboxSimple } from './src/agent/sandbox.ts';
         // Import OAuth handler to register window.__mcpOAuthHandler for OAuth tests
         import './src/oauth-handler.ts';
 
@@ -73,7 +74,7 @@
                 params
             };
 
-            const response = await fetchFromSandbox('/mcp/message', {
+            const response = await fetchFromSandboxSimple('/mcp/message', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request)
