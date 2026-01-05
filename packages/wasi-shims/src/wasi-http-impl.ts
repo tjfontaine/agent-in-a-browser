@@ -7,22 +7,38 @@ type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 // ============ Transport Interceptor ============
 // Allows routing requests to different backends (e.g., sandbox worker for local MCP)
 
+/**
+ * Transport response shape.
+ */
+type TransportResponse = { status: number; headers: [string, Uint8Array][]; body: Uint8Array };
+
+/**
+ * Transport handler type.
+ * In JSPI mode: returns Promise<TransportResponse> that resolves asynchronously
+ * In sync mode: returns { syncValue: TransportResponse } with already-available data
+ */
 type TransportHandler = (
     method: string,
     url: string,
     headers: Record<string, string>,
     body: Uint8Array | null
-) => Promise<{ status: number; headers: [string, Uint8Array][]; body: Uint8Array }>;
+) => Promise<TransportResponse> | { syncValue: TransportResponse };
 
 let transportHandler: TransportHandler | null = null;
+let syncModeTransport = false;
 
 /**
  * Set a custom transport handler for intercepting HTTP requests.
  * The handler receives (method, url, headers, body) and returns a response.
  * This allows routing requests to web workers instead of making actual HTTP calls.
+ * 
+ * @param handler - The transport handler function
+ * @param isSyncMode - If true, transport returns already-resolved Promise via blockingHttpRequest.
+ *                     This signals that we should NOT use async lazy body streams (Safari can't await).
  */
-export function setTransportHandler(handler: TransportHandler | null): void {
+export function setTransportHandler(handler: TransportHandler | null, isSyncMode = false): void {
     transportHandler = handler;
+    syncModeTransport = isSyncMode;
 }
 
 /**
@@ -900,18 +916,35 @@ export const outgoingHandler = {
         const body = bodyBytes.length > 0 ? bodyBytes : null;
 
         // Check if we should route through transport handler
-        // Use lazy buffer stream pattern - JSPI suspension in blockingRead, not Pollable.block
+        // In JSPI mode (Chrome), we can use lazy body stream with async/await
+        // In sync mode (Safari), transport is blocking so we must handle body synchronously
         if (transportHandler && shouldIntercept(url)) {
             console.log('[http] Routing via transport handler:', method, url);
 
-            // Start the request and create a lazy body stream
-            const responsePromise = transportHandler(method, url, headers, body);
+            // Call the transport handler
+            const result = transportHandler(method, url, headers, body);
+
+            // Check if this is a sync result (Safari mode) or async Promise (JSPI mode)
+            // Sync mode returns { syncValue: TransportResponse } to bypass Promise path
+            if ('syncValue' in result) {
+                console.log('[http] Using sync body path (Safari mode) - direct value');
+                const response = result.syncValue;
+
+                // Pass resolved data directly to FutureIncomingResponse
+                // This uses the sync path (line 685: this._setResult) instead of Promise path
+                return new FutureIncomingResponse({
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body
+                });
+            }
+
+            // Async path for JSPI mode - use lazy body stream with async/await
+            console.log('[http] Using lazy body stream (JSPI mode)');
             const bodyStream = createLazyBufferStream(
-                responsePromise.then(r => r.body)
+                result.then((r: TransportResponse) => r.body)
             );
 
-            // Return sync FutureIncomingResponse with lazy body
-            // Status/headers will be determined when body is first read
             return new FutureIncomingResponse({
                 status: 200, // Default, actual status doesn't matter for MCP JSON-RPC
                 headers: [] as [string, Uint8Array][],
@@ -1074,9 +1107,18 @@ export const outgoingHandler = {
         }
 
         // Fallback to synchronous XMLHttpRequest for HTTP requests (localhost)
-        console.log('[http] Using sync XHR:', method, url);
+        // Treat localhost:3000 as a sentinel address for MCP - rewrite to relative path
+        // XHR will resolve relative URLs against the current origin automatically
+        let xhrUrl = url;
+        if (authority === 'localhost:3000' || authority === '127.0.0.1:3000') {
+            // Just use the path - XHR will resolve against current origin
+            xhrUrl = path;
+            console.log('[http] Using sync XHR (MCP sentinel):', method, url, '->', xhrUrl);
+        } else {
+            console.log('[http] Using sync XHR:', method, url);
+        }
         const xhr = new XMLHttpRequest();
-        xhr.open(method, url, false); // false = synchronous
+        xhr.open(method, xhrUrl, false); // false = synchronous
 
         // Set headers (skip user-agent and host as they cause issues)
         for (const [name, value] of Object.entries(headers)) {
