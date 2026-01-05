@@ -128,33 +128,25 @@ fn run_tsx(
     }
 
     // Step 1: Transpile TypeScript to JavaScript
-    let transpiled = match transpile(&ts_code) {
-        Ok(js) => js,
+    // The transpiler now handles everything at AST level:
+    // - Type stripping
+    // - AwaitLastExpr transform (await last expression for Promise capture)
+    // - WrapInAsyncIife transform (async IIFE with error handling)
+    // - Source map generation (for accurate error line numbers)
+    let transpile_result = match transpiler::transpile(&ts_code) {
+        Ok(result) => result,
         Err(e) => {
             write_to_stream(&stderr, format!("tsx: transpile error: {}\n", e).as_bytes());
             return 1;
         }
     };
 
-    // Step 1.5: Wrap in async IIFE to support top-level await
-    // This allows `await` at the top level of user code.
-    //
-    // The transpiler already transforms the last expression statement to include
-    // `await`, via the AwaitLastExpr AST transform. This handles LLM-generated
-    // patterns like: `async function fn() {...} fn();` where fn() returns a
-    // Promise that would otherwise be orphaned.
-    //
-    // Awaiting a non-Promise value simply returns it, so this is always safe.
-    let js_code = format!(
-        "(async () => {{\n{}\n}})().catch(e => {{ throw e; }})",
-        transpiled
-    );
-
     // Step 2: Execute the JavaScript using QuickJS with full runtime
     // Clear any captured logs from previous executions
     js_modules::console::clear_logs();
 
-    match execute_js(&js_code, &source_name, &stdout, &stderr) {
+    // TODO: Use transpile_result.source_map for error line mapping when implemented
+    match execute_js(&transpile_result.code, &source_name, &stdout, &stderr) {
         Ok(output) => {
             // First, write any captured console.log output to stdout
             let console_output = js_modules::console::get_logs();
@@ -282,9 +274,9 @@ fn run_tsc(
     }
 }
 
-/// Transpile TypeScript to JavaScript using the transpiler module
+/// Transpile TypeScript to JavaScript using the transpiler module (code only, no IIFE)
 fn transpile(ts_code: &str) -> Result<String, String> {
-    transpiler::transpile(ts_code)
+    transpiler::transpile_code_only(ts_code)
 }
 
 /// Execute JavaScript using QuickJS with full Node.js-like runtime

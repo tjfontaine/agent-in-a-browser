@@ -47,6 +47,9 @@ serde_json = "1"
 # Async executor
 futures-lite = "2"
 
+# Source map handling for accurate error line numbers (TODO: implement)
+# sourcemap = "9"
+
 [package.metadata.component]
 package = "shell:unix"
 

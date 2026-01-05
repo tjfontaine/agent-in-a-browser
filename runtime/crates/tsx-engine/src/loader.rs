@@ -29,16 +29,14 @@ impl Loader for HybridLoader {
             }
         } else {
             // Read from WASI filesystem
-            std::fs::read_to_string(path).map_err(|e| {
-                rquickjs::Error::new_loading_message(path, format!("{}", e))
-            })?
+            std::fs::read_to_string(path)
+                .map_err(|e| rquickjs::Error::new_loading_message(path, format!("{}", e)))?
         };
 
-        // Auto-transpile TypeScript
+        // Auto-transpile TypeScript (modules don't need async IIFE wrapping)
         let js_source = if path.ends_with(".ts") || path.ends_with(".tsx") {
-            transpiler::transpile(&source).map_err(|e| {
-                rquickjs::Error::new_loading_message(path, e)
-            })?
+            transpiler::transpile_code_only(&source)
+                .map_err(|e| rquickjs::Error::new_loading_message(path, e))?
         } else {
             source
         };
@@ -100,13 +98,12 @@ pub async fn load_module(path: &str) -> std::result::Result<String, String> {
         fetch_url(path).await?
     } else {
         // Use std::fs for local file access (WASI filesystem)
-        std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read {}: {}", path, e))?
+        std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))?
     };
 
-    // Auto-transpile TypeScript
+    // Auto-transpile TypeScript (modules don't need async IIFE wrapping)
     if path.ends_with(".ts") || path.ends_with(".tsx") {
-        return transpiler::transpile(&source);
+        return transpiler::transpile_code_only(&source);
     }
 
     Ok(source)
