@@ -56,10 +56,24 @@ async function waitForTerminalOutput(page: Page, text: string, timeout = 5000): 
         if (screenText.includes(text)) {
             return;
         }
-        await page.waitForTimeout(200);
+        await page.waitForTimeout(100);
     }
     const finalText = await getTerminalText(page);
     throw new Error(`Timeout waiting for "${text}" in terminal. Current screen:\n${finalText}`);
+}
+
+// Helper to wait for text to disappear from terminal
+async function waitForTextToDisappear(page: Page, text: string, timeout = 5000): Promise<void> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+        const screenText = await getTerminalText(page);
+        if (!screenText.includes(text)) {
+            return;
+        }
+        await page.waitForTimeout(100);
+    }
+    const finalText = await getTerminalText(page);
+    throw new Error(`Timeout waiting for "${text}" to disappear. Current screen:\n${finalText}`);
 }
 
 // Helper to wait for TUI to be ready
@@ -403,17 +417,22 @@ test.describe('Vim Undo/Redo', () => {
         await forceExitVim(page);
     });
 
-    test('u shows undo message', async ({ page }) => {
+    test('u undoes inserted text', async ({ page }) => {
         // First make a change
         await pressKey(page, 'i');
-        await typeInTerminal(page, 'test');
-        await pressKey(page, 'Escape');
+        await waitForTerminalOutput(page, 'INSERT', 3000);
+        await typeInTerminal(page, 'UNDOTEST');
+        // Verify the text was inserted
+        await waitForTerminalOutput(page, 'UNDOTEST', 3000);
 
-        // Undo
+        await pressKey(page, 'Escape');
+        // Wait for NORMAL mode before pressing undo
+        await waitForTerminalOutput(page, 'NORMAL', 3000);
+
+        // Undo - should remove the inserted text
         await pressKey(page, 'u');
-        const text = await getTerminalText(page);
-        // Should show undo message or empty buffer
-        expect(text.toLowerCase()).toMatch(/undo|oldest/i);
+        // Wait for the text to disappear (more robust than fixed delay)
+        await waitForTextToDisappear(page, 'UNDOTEST', 3000);
     });
 });
 
