@@ -1085,6 +1085,7 @@ export const outgoingHandler = {
             const useSyncMode = !hasJSPI || syncModeTransport;
             if (useSyncMode) {
                 console.log('[http] Sync mode: Using sync XHR for HTTPS:', method, url);
+                console.log('[http] Headers to set:', Object.keys(headers), headers);
 
                 const xhr = new XMLHttpRequest();
                 xhr.open(method, fetchUrl, false); // false = synchronous
@@ -1093,6 +1094,7 @@ export const outgoingHandler = {
                 for (const [name, value] of Object.entries(headers)) {
                     if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
                         try {
+                            console.log(`[http] Setting header: ${name} = ${value.substring?.(0, 20) || value}...`);
                             xhr.setRequestHeader(name, value);
                         } catch (e) {
                             console.warn(`[http] Could not set header ${name}:`, e);
@@ -1128,6 +1130,9 @@ export const outgoingHandler = {
                     });
 
                 console.log('[http] Sync XHR complete, status:', xhr.status, 'body len:', responseBody.length);
+                if (xhr.status >= 400) {
+                    console.log('[http] Error response body:', xhr.responseText);
+                }
                 return new FutureIncomingResponse({ status: xhr.status, headers: responseHeaders, body: responseBody });
             }
 

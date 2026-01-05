@@ -1,19 +1,18 @@
 /**
- * WebKit HTTP API Key Test
+ * HTTP API Key Test
  * 
- * Tests HTTP requests with Authorization headers in WebKit's sync mode.
+ * Tests HTTP requests with Authorization headers work correctly.
  * Uses httpbin.org to echo headers and verify API key transmission.
  * 
- * This test is WebKit-only because:
- * 1. WebKit uses sync mode (no JSPI) which has different HTTP handling
- * 2. Safari's SharedArrayBuffer-based sync path needs explicit validation
+ * This test validates both execution paths:
+ * - Chromium: JSPI mode with async fetch
+ * - WebKit: Sync mode with synchronous XMLHttpRequest
  */
 
 import { test, expect } from './webkit-persistent-fixture';
 import type { Page } from '@playwright/test';
 
-// Skip on non-WebKit browsers - this tests Safari-specific sync mode HTTP
-test.skip(({ browserName }) => browserName !== 'webkit', 'WebKit-only HTTP test');
+// No skip - runs on both Chromium and WebKit
 
 // Helper to execute commands through the sandbox worker
 async function shellEval(page: Page, command: string): Promise<{ output: string; success: boolean; error?: string }> {
