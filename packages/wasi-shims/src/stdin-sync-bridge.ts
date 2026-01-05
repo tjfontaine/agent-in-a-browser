@@ -10,6 +10,7 @@
 
 import { STDIN_CONTROL } from './wasm-worker';
 import { setTerminalSize } from './ghostty-cli-shim.js';
+import { setExecutionMode, isSyncWorkerMode } from './execution-mode.js';
 
 // ============================================================
 // STATE (initialized by worker)
@@ -17,7 +18,6 @@ import { setTerminalSize } from './ghostty-cli-shim.js';
 
 let controlArray: Int32Array | null = null;
 let dataArray: Uint8Array | null = null;
-let isWorkerMode = false;
 
 // ============================================================
 // INITIALIZATION
@@ -33,15 +33,17 @@ export function initStdinSyncBridge(
 ): void {
     controlArray = control;
     dataArray = data;
-    isWorkerMode = true;
+    // Set global execution mode to sync-worker
+    setExecutionMode('sync-worker');
     console.log('[StdinSyncBridge] Initialized');
 }
 
 /**
  * Check if we're in worker mode (non-JSPI).
+ * @deprecated Use isSyncWorkerMode() from execution-mode.ts instead
  */
 export function isNonJspiMode(): boolean {
-    return isWorkerMode;
+    return isSyncWorkerMode();
 }
 
 // ============================================================

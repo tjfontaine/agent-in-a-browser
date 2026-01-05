@@ -13,8 +13,9 @@ import { CustomInputStream, CustomOutputStream } from './streams.js';
 // Import terminal context for isatty detection
 import { isTerminalContext } from '@tjfontaine/wasm-loader';
 
-// Import sync bridge for non-JSPI (Safari) worker mode
-import { isNonJspiMode, blockingReadStdin as syncBlockingRead } from './stdin-sync-bridge';
+// Import execution mode detection and sync bridge
+import { isSyncWorkerMode } from './execution-mode.js';
+import { blockingReadStdin as syncBlockingRead } from './stdin-sync-bridge.js';
 
 // Buffer for stdin data from terminal
 const stdinBuffer: Uint8Array[] = [];
@@ -171,8 +172,8 @@ const stdinStream = new CustomInputStream({
 
     // blockingRead: supports both JSPI (async) and sync (worker) modes
     blockingRead(len: bigint): Uint8Array | Promise<Uint8Array> {
-        // In non-JSPI mode (Safari worker), use synchronous blocking
-        if (isNonJspiMode()) {
+        // In sync-worker mode (Safari), use synchronous blocking via Atomics
+        if (isSyncWorkerMode()) {
             return syncBlockingRead(Number(len));
         }
         // In JSPI mode (Chrome/Firefox), use async suspension
