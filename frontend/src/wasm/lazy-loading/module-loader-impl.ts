@@ -11,6 +11,8 @@
 import {
     LAZY_COMMANDS,
     loadLazyModule,
+    getLoadedModuleSync,
+    hasJSPI,
     isInteractiveCommand as isInteractiveCommandImpl,
     setTerminalContext,
     type CommandModule,
@@ -23,7 +25,9 @@ import { poll } from '@bytecodealliance/preview2-shim/io';
 import {
     stdin as ghosttyStdin,
     stdout as ghosttyStdout,
-    stderr as ghosttyStderr
+    stderr as ghosttyStderr,
+    setPipedStreams,
+    clearPipedStreams
 } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
 // Get the Pollable base class from preview2-shim
@@ -43,11 +47,14 @@ export interface TerminalSize {
 
 /**
  * Check if a command should be handled by a lazy module.
- * With JSPI, this can be async and load the module here.
+ * 
+ * IMPORTANT: This function MUST be synchronous because it's called from sync-mode
+ * WASM bindings (Safari/Firefox). The WASM bindings don't await the return value,
+ * so returning a Promise would cause a type error in utf8Encode.
  * 
  * Returns the module name if the command is lazy-loadable.
  */
-export async function getLazyModule(command: string): Promise<string | undefined> {
+export function getLazyModule(command: string): string | undefined {
     const moduleName = LAZY_COMMANDS[command];
     if (moduleName) {
         console.log(`[ModuleLoader] Command '${command}' -> module '${moduleName}'`);
@@ -64,49 +71,97 @@ export async function getLazyModule(command: string): Promise<string | undefined
 
 /**
  * Spawn a lazy command process.
- * With JSPI, this is async and will load the module if needed.
+ * 
+ * DUAL-MODE FUNCTION:
+ * - In JSPI mode (Chrome): Can load modules async, returns Promise<LazyProcess>
+ * - In sync mode (Safari/Firefox): Must return synchronously from cache
+ * 
+ * The WASM bindings handle both cases appropriately - JSPI bindings can await,
+ * sync bindings expect immediate return.
  */
-export async function spawnLazyCommand(
+export function spawnLazyCommand(
     moduleName: string,
     command: string,
     args: string[],
     env: ExecEnv,
-): Promise<LazyProcess> {
-    console.log(`[ModuleLoader] spawnLazyCommand: ${command} (module: ${moduleName})`);
+): LazyProcess | Promise<LazyProcess> {
+    console.log(`[ModuleLoader] spawnLazyCommand: ${command} (module: ${moduleName}, hasJSPI: ${hasJSPI})`);
 
     // Set terminal context to false (piped/buffered mode)
     setTerminalContext(false);
 
-    // Ensure module is loaded (await the async load)
-    const module = await loadLazyModule(moduleName);
-    console.log(`[ModuleLoader] Module '${moduleName}' loaded for command '${command}'`);
+    // First, check if module is already cached (works for both modes)
+    const cachedModule = getLoadedModuleSync(moduleName);
+    if (cachedModule) {
+        console.log(`[ModuleLoader] Module '${moduleName}' retrieved from cache for command '${command}'`);
+        return new LazyProcess(moduleName, command, args, env, cachedModule);
+    }
 
-    return new LazyProcess(moduleName, command, args, env, module);
+    // Module not cached - behavior differs by mode
+    if (hasJSPI) {
+        // JSPI mode: Load the module async and return Promise
+        console.log(`[ModuleLoader] JSPI mode: loading module '${moduleName}' async`);
+        return loadLazyModule(moduleName).then(module => {
+            console.log(`[ModuleLoader] Module '${moduleName}' loaded async for command '${command}'`);
+            return new LazyProcess(moduleName, command, args, env, module);
+        });
+    } else {
+        // Sync mode: Module should have been pre-loaded via initializeForSyncMode()
+        throw new Error(
+            `Module '${moduleName}' not loaded. In sync mode (Safari/Firefox), ` +
+            `ensure initializeForSyncMode() was called during startup.`
+        );
+    }
 }
 
 /**
  * Spawn an interactive command process (for TUI applications).
  * Automatically sets raw mode and configures terminal size.
+ * 
+ * DUAL-MODE: Like spawnLazyCommand, returns sync or Promise based on hasJSPI.
  */
-export async function spawnInteractive(
+export function spawnInteractive(
     moduleName: string,
     command: string,
     args: string[],
     env: ExecEnv,
     size: TerminalSize,
-): Promise<LazyProcess> {
-    console.log(`[ModuleLoader] spawnInteractive: ${command} (module: ${moduleName}, size: ${size.cols}x${size.rows})`);
+): LazyProcess | Promise<LazyProcess> {
+    console.log(`[ModuleLoader] spawnInteractive: ${command} (module: ${moduleName}, size: ${size.cols}x${size.rows}, hasJSPI: ${hasJSPI})`);
 
     // Set terminal context to true (TTY mode)
     setTerminalContext(true);
 
-    const module = await loadLazyModule(moduleName);
-    console.log(`[ModuleLoader] Module '${moduleName}' loaded for interactive command '${command}'`);
+    // Helper to create and start the process
+    const createProcess = (module: CommandModule): LazyProcess => {
+        const process = new LazyProcess(moduleName, command, args, env, module, size);
+        process.setRawMode(true); // Interactive mode starts in raw mode
+        process.execute(); // Start execution immediately for interactive apps
+        return process;
+    };
 
-    const process = new LazyProcess(moduleName, command, args, env, module, size);
-    process.setRawMode(true); // Interactive mode starts in raw mode
-    process.execute(); // Start execution immediately for interactive apps
-    return process;
+    // Try cache first (works for both modes)
+    const cachedModule = getLoadedModuleSync(moduleName);
+    if (cachedModule) {
+        console.log(`[ModuleLoader] Module '${moduleName}' retrieved from cache for interactive command '${command}'`);
+        return createProcess(cachedModule);
+    }
+
+    // Module not cached - behavior differs by mode
+    if (hasJSPI) {
+        // JSPI mode: Load the module async and return Promise
+        console.log(`[ModuleLoader] JSPI mode: loading module '${moduleName}' async for interactive`);
+        return loadLazyModule(moduleName).then(module => {
+            console.log(`[ModuleLoader] Module '${moduleName}' loaded async for interactive command '${command}'`);
+            return createProcess(module);
+        });
+    } else {
+        // Sync mode: Module should have been pre-loaded
+        throw new Error(
+            `Module '${moduleName}' not loaded. In sync mode (Safari/Firefox), ` +
+            `ensure initializeForSyncMode() was called during startup.`
+        );
+    }
 }
 
 /**
@@ -432,9 +487,26 @@ export class LazyProcess {
                 vars: this.env.vars,
             };
 
-            console.log(`[LazyProcess] Calling module.spawn(${this.command}, args=${JSON.stringify(this.args)}, cwd=${execEnv.cwd})`);
+            // Set up piped streams to capture console.log output
+            // This redirects WASI CLI stdout to our buffer instead of the terminal
+            const stdoutWrite = (buf: Uint8Array): bigint => {
+                const text = new TextDecoder().decode(buf);
+                console.log(`[LazyProcess] piped stdout.write(${buf.length} bytes):`, JSON.stringify(text));
+                this.stdoutBuffer.push(new Uint8Array(buf));
+                return BigInt(buf.length);
+            };
+            const stderrWrite = (buf: Uint8Array): bigint => {
+                const text = new TextDecoder().decode(buf);
+                console.log(`[LazyProcess] piped stderr.write(${buf.length} bytes):`, JSON.stringify(text));
+                this.stderrBuffer.push(new Uint8Array(buf));
+                return BigInt(buf.length);
+            };
+            setPipedStreams(stdoutWrite, stderrWrite);
 
-            // Use new spawn/resolve pattern
+            // In sync mode (Safari), wrapSyncModule.spawn() already called run() synchronously
+            // In JSPI mode (Chrome), spawn() returns a handle that needs to be awaited
+            console.log(`[LazyProcess] Calling module.spawn(${this.command}, hasJSPI=${hasJSPI})`);
+
             const handle = this.module.spawn(
                 this.command,
                 this.args,
@@ -444,10 +516,20 @@ export class LazyProcess {
                 stderrStream as never,
             );
 
-            // Wait for command to complete
-            this.exitCode = await handle.resolve();
+            if (hasJSPI) {
+                // JSPI mode: await the async resolution
+                console.log(`[LazyProcess] JSPI MODE: awaiting handle.resolve()`);
+                this.exitCode = await handle.resolve();
+            } else {
+                // Sync mode: execution already completed synchronously, use poll()
+                console.log(`[LazyProcess] SYNC MODE: using handle.poll()`);
+                this.exitCode = handle.poll();
+            }
 
-            console.log(`[LazyProcess] handle.resolve() returned exitCode: ${this.exitCode}`);
+            // Clear piped streams to restore normal terminal mode
+            clearPipedStreams();
+            console.log(`[LazyProcess] exitCode: ${this.exitCode}`);
+
             console.log(`[LazyProcess] stdoutBuffer count: ${this.stdoutBuffer.length}`);
             console.log(`[LazyProcess] stderrBuffer count: ${this.stderrBuffer.length}`);
 
@@ -456,7 +538,9 @@ export class LazyProcess {
             const totalStderr = this.stderrBuffer.reduce((sum: number, c: Uint8Array) => sum + c.length, 0);
             console.log(`[LazyProcess] === EXECUTE END === stdout: ${totalStdout} bytes, stderr: ${totalStderr} bytes, exit: ${this.exitCode}`);
         } catch (error) {
-            console.error(`[LazyProcess] EXCEPTION during module.spawn():`, error);
+            // Always clear piped streams on error
+            clearPipedStreams();
+            console.error(`[LazyProcess] EXCEPTION during module execution:`, error);
             this.stderrBuffer.push(new TextEncoder().encode(
                 `Error: ${error instanceof Error ? error.message : String(error)}\n`
             ));

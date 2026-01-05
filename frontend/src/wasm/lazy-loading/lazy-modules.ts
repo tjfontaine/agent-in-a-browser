@@ -181,8 +181,14 @@ async function loadTsxEngine(): Promise<CommandModule> {
     console.log('[LazyLoader] Loading tsx-engine module...');
     const startTime = performance.now();
 
-    // Dynamic import of the transpiled module (typed)
-    const module: TsxEngineModule = await import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
+    // Dynamic import based on JSPI support
+    // Safari needs sync variant to avoid WebAssembly.Suspending error
+    let module: TsxEngineModule;
+    if (hasJSPI) {
+        module = await import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
+    } else {
+        module = await import('../../../../packages/wasm-tsx/wasm-sync/tsx-engine.js');
+    }
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -207,8 +213,14 @@ async function loadSqliteModule(): Promise<CommandModule> {
     console.log('[LazyLoader] Loading sqlite-module...');
     const startTime = performance.now();
 
-    // Dynamic import of the transpiled module (typed)
-    const module: SqliteModule = await import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
+    // Dynamic import based on JSPI support
+    // Safari needs sync variant to avoid WebAssembly.Suspending error
+    let module: SqliteModule;
+    if (hasJSPI) {
+        module = await import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
+    } else {
+        module = await import('../../../../packages/wasm-sqlite/wasm-sync/sqlite-module.js');
+    }
 
     // With --tla-compat, we must await $init before accessing exports
     if ('$init' in module) {
@@ -512,8 +524,9 @@ export async function initializeForSyncMode(): Promise<void> {
     console.log('[LazyLoader] Sync mode - eager loading all lazy modules...');
     const startTime = performance.now();
 
-    // Load all lazy modules in parallel
-    const moduleNames = ['tsx-engine', 'sqlite-module'];
+    // Load all lazy modules that work in sync mode in parallel
+    // Note: ratatui-demo, edtui-module, brush-shell require JSPI for interactive stdin
+    const moduleNames = ['tsx-engine', 'sqlite-module', 'git-module'];
     await Promise.all(moduleNames.map(name =>
         loadLazyModule(name).catch(err => {
             console.error(`[LazyLoader] Failed to eager load ${name}:`, err);
