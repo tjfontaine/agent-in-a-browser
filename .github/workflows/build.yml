@@ -277,7 +277,7 @@ jobs:
 
       - name: Run E2E tests
         working-directory: frontend
-        run: npm run test:e2e
+        run: npx playwright test --project=chromium
 
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v4
