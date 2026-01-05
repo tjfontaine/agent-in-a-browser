@@ -9,6 +9,7 @@ pub mod encoding;
 pub mod fetch;
 pub mod fs_promises;
 pub mod path;
+pub mod process;
 pub mod url;
 
 // Re-export console log functions for use by the runtime
@@ -19,6 +20,7 @@ use rquickjs::{Ctx, Result};
 /// Install all JavaScript modules on the global context.
 pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
     console::install(ctx)?;
+    process::install(ctx)?; // Install process early so it's available
     path::install(ctx)?;
     fs_promises::install(ctx)?;
     fetch::install(ctx)?;
