@@ -12,14 +12,14 @@
  * - Sync mode (Safari/Firefox): Eager module loading, synchronous execution
  */
 
-import { getIncomingHandler, hasJSPI } from '../wasm/lazy-loading/async-mode.js';
+import { getIncomingHandler, hasJSPI } from './async-mode.js';
 import {
     createIncomingRequest,
     Fields,
     ResponseOutparam,
-    IncomingRequest,
-} from '../wasm/host-shims/wasi-http-impl.js';
-import { prepareFileForSync } from '../wasm/host-shims/opfs-filesystem-impl.js';
+    type IncomingRequest,
+} from '@tjfontaine/wasi-shims';
+import { prepareFileForSync } from '@tjfontaine/wasi-shims';
 
 // Type for WASM response objects
 interface WasmResponse {
@@ -28,8 +28,6 @@ interface WasmResponse {
     _bodyChunks?: Uint8Array[];
 }
 
-// Re-export types for consumers
-export type { JsonRpcRequest, JsonRpcResponse } from './Client';
 
 /**
  * Intercept and prepare file paths for file operations.

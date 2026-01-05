@@ -14,29 +14,6 @@ export { callWasmMcpServerFetch } from './WasmBridge';
 // Export async mode utilities
 export { hasJSPI, loadMcpServer, getIncomingHandler, isMcpServerLoaded } from './async-mode';
 
-// Export lazy module loading
-export {
-    isLazyCommand,
-    getModuleForCommand,
-    loadLazyModule,
-    loadModuleForCommand,
-    getLazyCommandList,
-    isModuleLoaded,
-    getLoadedModuleSync,
-    preloadModule,
-    initializeForSyncMode,
-    LAZY_COMMANDS,
-    type CommandModule,
-    type CommandHandle,
-    type InputStream,
-    type OutputStream,
-    type ExecEnv,
-} from './lazy-modules';
-
-// Export module loader impl
-export {
-    getLazyModule,
-    spawnLazyCommand,
-    spawnInteractive,
-    LazyProcess,
-} from './module-loader-impl';
+// Note: lazy-modules and module-loader-impl are intentionally NOT exported from this package.
+// The frontend uses its own local versions of these files with correct import paths.
+// See: frontend/src/wasm/lazy-loading/lazy-modules.ts
