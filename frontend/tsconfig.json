@@ -18,6 +18,21 @@
         "paths": {
             "@/*": [
                 "./src/*"
+            ],
+            "@tjfontaine/mcp-wasm-server": [
+                "../packages/mcp-wasm-server/src/index.ts"
+            ],
+            "@tjfontaine/mcp-wasm-server/*": [
+                "../packages/mcp-wasm-server/*"
+            ],
+            "@tjfontaine/wasi-shims": [
+                "../packages/wasi-shims/src/index.ts"
+            ],
+            "@tjfontaine/wasi-shims/*": [
+                "../packages/wasi-shims/src/*"
+            ],
+            "@tjfontaine/wasm-vim/*": [
+                "../packages/wasm-vim/*"
             ]
         }
     },

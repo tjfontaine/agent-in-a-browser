@@ -59,15 +59,15 @@ export async function loadMcpServer(): Promise<IncomingHandler> {
     loadingPromise = (async () => {
         if (hasJSPI) {
             console.log('[AsyncMode] Loading JSPI-mode MCP server...');
-            const module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
+            const module = await import('@tjfontaine/mcp-wasm-server/mcp-server-jspi/ts-runtime-mcp.js');
             cachedIncomingHandler = module.incomingHandler as IncomingHandler;
         } else {
             console.log(`[AsyncMode] Loading Sync-mode MCP server... (Worker: ${isSyncWorkerMode()})`);
-            // Dynamic import for sync module - use runtime path to prevent Vite from pre-resolving
-            // This module may not exist in CI builds (only JSPI mode is transpiled)
-            const syncPath = '../mcp-server-sync/ts-runtime-mcp.js';
+            // Dynamic import for sync module - use package path for proper resolution
             try {
-                const module: McpServerModule = await import(/* @vite-ignore */ syncPath);
+                // Type assertion needed because transpiled module has concrete types but we use unknown in our interface
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const module: McpServerModule = await import('@tjfontaine/mcp-wasm-server/mcp-server-sync/ts-runtime-mcp.js') as any;
                 // With --tla-compat, we must await $init before accessing exports
                 if (module.$init) {
                     await module.$init;

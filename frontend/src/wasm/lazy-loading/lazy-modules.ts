@@ -390,9 +390,9 @@ async function loadBrushShell(): Promise<CommandModule> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let module: any;
     if (hasJSPI) {
-        module = await import('../mcp-server-jspi/ts-runtime-mcp.js');
+        module = await import('@tjfontaine/mcp-wasm-server/mcp-server-jspi/ts-runtime-mcp.js');
     } else {
-        module = await import('../mcp-server-sync/ts-runtime-mcp.js');
+        module = await import('@tjfontaine/mcp-wasm-server/mcp-server-sync/ts-runtime-mcp.js');
     }
 
     // Await $init for the module initialization

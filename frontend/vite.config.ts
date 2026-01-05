@@ -21,8 +21,10 @@ export default defineConfig(({ mode }) => ({
         alias: {
             '@': path.resolve(__dirname, './src'),
             // Package resolution for monorepo
+            '@tjfontaine/mcp-wasm-server': path.resolve(__dirname, '../packages/mcp-wasm-server'),
             '@tjfontaine/wasi-shims': path.resolve(__dirname, '../packages/wasi-shims/src'),
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),
+            '@tjfontaine/wasm-vim': path.resolve(__dirname, '../packages/wasm-vim'),
             // Enable packages outside frontend to resolve node polyfills
             'vite-plugin-node-polyfills/shims/buffer': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/buffer'),
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),
