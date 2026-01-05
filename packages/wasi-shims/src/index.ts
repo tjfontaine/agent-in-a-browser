@@ -14,4 +14,19 @@ export * as clocks from './clocks-impl.js';
 export * as terminalInfo from './terminal-info-impl.js';
 
 // Export stream classes
-export { InputStream, OutputStream, ReadyPollable } from './streams';
+export { InputStream, OutputStream, ReadyPollable } from './streams.js';
+
+// Export shims
+export * from './ghostty-cli-shim.js';
+export * from './wasi-http-impl.js';
+export * from './poll-impl.js';
+
+// Export OPFS sync bridge
+export * as opfsSync from './opfs-sync-bridge.js';
+export * from './opfs-filesystem-impl.js';
+
+// Export sync bridges for worker mode
+export * from './stdin-sync-bridge.js';
+export * from './http-sync-bridge.js';
+export * from './worker-bridge.js';
+export * as wasmWorker from './wasm-worker.js';

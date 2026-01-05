@@ -13,6 +13,9 @@ import { CustomInputStream, CustomOutputStream } from './streams.js';
 // Import terminal context for isatty detection
 import { isTerminalContext } from '@tjfontaine/wasm-loader';
 
+// Import sync bridge for non-JSPI (Safari) worker mode
+import { isNonJspiMode, blockingReadStdin as syncBlockingRead } from './stdin-sync-bridge';
+
 // Buffer for stdin data from terminal
 const stdinBuffer: Uint8Array[] = [];
 const stdinWaiters: Array<(data: Uint8Array) => void> = [];
@@ -23,6 +26,32 @@ let currentTerminal: Terminal | null = null;
 // Terminal size (updated on resize)
 let terminalCols = 80;
 let terminalRows = 24;
+
+// Piped mode streams - override default terminal streams for buffered command output
+// When set, console.log/stdout goes to these callbacks instead of terminal
+let pipedStdoutWrite: ((contents: Uint8Array) => bigint) | null = null;
+let pipedStderrWrite: ((contents: Uint8Array) => bigint) | null = null;
+
+/**
+ * Set piped write functions for buffered command output.
+ * Call this before spawning a command that should capture stdout.
+ * Call clearPipedStreams() after command completes.
+ */
+export function setPipedStreams(
+    stdoutWrite: ((contents: Uint8Array) => bigint) | null,
+    stderrWrite: ((contents: Uint8Array) => bigint) | null,
+): void {
+    pipedStdoutWrite = stdoutWrite;
+    pipedStderrWrite = stderrWrite;
+}
+
+/**
+ * Clear piped streams to restore normal terminal mode.
+ */
+export function clearPipedStreams(): void {
+    pipedStdoutWrite = null;
+    pipedStderrWrite = null;
+}
 
 /**
  * Set the terminal that will be used for stdin/stdout
@@ -140,9 +169,14 @@ const stdinStream = new CustomInputStream({
         return chunk.slice(0, n);
     },
 
-    // Async blockingRead for JSPI - suspends WASM until data available
-    async blockingRead(len: bigint): Promise<Uint8Array> {
-        return await readStdin(Number(len));
+    // blockingRead: supports both JSPI (async) and sync (worker) modes
+    blockingRead(len: bigint): Uint8Array | Promise<Uint8Array> {
+        // In non-JSPI mode (Safari worker), use synchronous blocking
+        if (isNonJspiMode()) {
+            return syncBlockingRead(Number(len));
+        }
+        // In JSPI mode (Chrome/Firefox), use async suspension
+        return readStdin(Number(len));
     },
 });
 
@@ -158,21 +192,37 @@ function convertToCrlf(text: string): string {
 // Create stdout stream using our CustomOutputStream
 const stdoutStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
-        if (currentTerminal && contents.length > 0) {
-            try {
-                const text = textDecoder.decode(contents);
-                // Skip empty writes - ghostty-web crashes on empty strings
-                if (text.length > 0) {
-                    // Convert line endings for proper terminal display
-                    currentTerminal.write(convertToCrlf(text));
-                }
-            } catch (e) {
-                // Log what we tried to write when it failed
-                const text = textDecoder.decode(contents);
-                console.error('[ghostty-shim] Terminal write error:', e);
-                console.error('[ghostty-shim] Failed write content:', JSON.stringify(text));
-                console.error('[ghostty-shim] Terminal size:', currentTerminal.cols, 'x', currentTerminal.rows);
+        if (contents.length === 0) {
+            return BigInt(0);
+        }
+
+        // Check for piped mode first - route to buffer instead of terminal
+        if (pipedStdoutWrite) {
+            return pipedStdoutWrite(contents);
+        }
+
+        try {
+            const text = textDecoder.decode(contents);
+            if (text.length === 0) {
+                return BigInt(contents.length);
             }
+
+            // Check if we're in the main thread with direct terminal access
+            if (currentTerminal) {
+                // Direct write to ghostty terminal (JSPI mode)
+                currentTerminal.write(convertToCrlf(text));
+            } else if (typeof self !== 'undefined' && typeof self.postMessage === 'function') {
+                // WasmWorker context (Safari sync mode) - route via postMessage to main thread
+                self.postMessage({
+                    type: 'terminal-output',
+                    data: convertToCrlf(text)
+                });
+            } else {
+                // Fallback: log to console
+                console.log('[stdout] Console fallback:', text);
+            }
+        } catch (e) {
+            console.error('[ghostty-shim] Terminal write error:', e);
         }
         return BigInt(contents.length);
     },
@@ -183,18 +233,25 @@ const stdoutStream = new CustomOutputStream({
 // Create stderr stream (goes to console.log only to avoid corrupting TUI)
 const stderrStream = new CustomOutputStream({
     write(contents: Uint8Array): bigint {
-        if (contents.length > 0) {
-            try {
-                const text = textDecoder.decode(contents);
-                // Skip empty writes
-                if (text.length > 0) {
-                    // Log to browser console for debugging WASM output
-                    // Note: We intentionally don't write to terminal to avoid corrupting the TUI
-                    console.log('[WASM stderr]', text.trimEnd());
-                }
-            } catch (e) {
-                console.error('[ghostty-shim] Terminal stderr write error:', e);
+        if (contents.length === 0) {
+            return BigInt(0);
+        }
+
+        // Check for piped mode first - route to buffer instead of console
+        if (pipedStderrWrite) {
+            return pipedStderrWrite(contents);
+        }
+
+        try {
+            const text = textDecoder.decode(contents);
+            // Skip empty writes
+            if (text.length > 0) {
+                // Log to browser console for debugging WASM output
+                // Note: We intentionally don't write to terminal to avoid corrupting the TUI
+                console.log('[WASM stderr]', text.trimEnd());
             }
+        } catch (e) {
+            console.error('[ghostty-shim] Terminal stderr write error:', e);
         }
         return BigInt(contents.length);
     },

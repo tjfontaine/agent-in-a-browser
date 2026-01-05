@@ -10,7 +10,9 @@
         "./streams.js": "./src/streams.ts",
         "./ghostty-cli-shim.js": "./src/ghostty-cli-shim.ts",
         "./opfs-filesystem-impl.js": "./src/opfs-filesystem-impl.ts",
+        "./opfs-filesystem-sync-impl.js": "./src/opfs-filesystem-sync-impl.ts",
         "./clocks-impl.js": "./src/clocks-impl.js",
+        "./poll-impl.js": "./src/poll-impl.js",
         "./wasi-http-impl.js": "./src/wasi-http-impl.ts",
         "./directory-tree.js": "./src/directory-tree.ts"
     },
