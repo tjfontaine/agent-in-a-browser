@@ -83,11 +83,29 @@ async function initialize(): Promise<void> {
     }
 
     // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
+    // Use the appropriate shim based on JSPI support
     try {
         console.log('[SandboxWorker] Loading filesystem shim...');
-        const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-impl.js');
-        console.log('[SandboxWorker] Calling initFilesystem()...');
-        await initFilesystem();
+        const { hasJSPI } = await import('../wasm/lazy-loading/async-mode.js');
+
+        if (hasJSPI) {
+            // JSPI mode (Chrome): Use async OPFS shim
+            console.log('[SandboxWorker] Using async OPFS shim (JSPI mode)');
+            const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-impl.js');
+            await initFilesystem();
+        } else {
+            // Sync mode (Safari/Firefox): Use sync OPFS shim with SharedArrayBuffer
+            console.log('[SandboxWorker] Using sync OPFS shim (non-JSPI mode)');
+            const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js');
+            await initFilesystem();
+
+            // Also set OPFS root for directory-tree.js (used by git adapter and other async operations)
+            // This allows the git adapter to work with OPFS even in sync mode
+            const { setOpfsRoot } = await import('@tjfontaine/wasi-shims/directory-tree.js');
+            const opfsRoot = await navigator.storage.getDirectory();
+            setOpfsRoot(opfsRoot);
+            console.log('[SandboxWorker] OPFS root set for directory-tree (git compatibility)');
+        }
         console.log('[SandboxWorker] OPFS filesystem shim initialized');
     } catch (e) {
         console.error('[SandboxWorker] Failed to initialize filesystem shim:', e);
@@ -120,8 +138,10 @@ async function initialize(): Promise<void> {
 
 // ============ Message Handler ============
 
-self.onmessage = async (event: MessageEvent) => {
-    console.log('[SandboxWorker] Received message:', event.data.type);
+// CRITICAL: Use addEventListener instead of self.onmessage
+// Safari Workers ignore the onmessage property after async operations during init
+self.addEventListener('message', async (event: MessageEvent) => {
+    console.log('[SandboxWorker] Received message:', event.data?.type || 'NO TYPE');
     const { type, id, ...data } = event.data;
 
     try {
@@ -205,13 +225,81 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             }
 
+            case 'fetch-simple': {
+                // Safari-compatible fetch using request IDs (no MessageChannel ports)
+                console.log('[SandboxWorker] Handling fetch-simple:', data.url, data.method);
+                const { requestId, url, method, headers, body } = data;
+
+                try {
+                    const reqInit: RequestInit = {
+                        method: method || 'GET',
+                        headers: new Headers(headers),
+                    };
+
+                    if (body) {
+                        // Convert array back to Uint8Array
+                        reqInit.body = new Uint8Array(body);
+                    }
+
+                    const request = new Request(url, reqInit);
+
+                    // Call WASM MCP Bridge
+                    const { status, headers: respHeaders, body: respBody } = await callWasmMcpServerFetch(request);
+
+                    // Read full body
+                    const reader = respBody.getReader();
+                    const chunks: Uint8Array[] = [];
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                    }
+                    reader.releaseLock();
+
+                    // Combine chunks
+                    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+                    const fullBody = new Uint8Array(totalLength);
+                    let offset = 0;
+                    for (const chunk of chunks) {
+                        fullBody.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+
+                    // Convert headers to array
+                    const headerEntries: [string, string][] = [];
+                    respHeaders.forEach((val, key) => headerEntries.push([key, val]));
+
+                    // Post response back
+                    self.postMessage({
+                        type: 'fetch-response',
+                        requestId,
+                        payload: {
+                            status,
+                            statusText: status === 200 ? 'OK' : 'Error',
+                            headers: headerEntries,
+                            body: Array.from(fullBody)
+                        }
+                    });
+
+                } catch (error: unknown) {
+                    self.postMessage({
+                        type: 'fetch-response',
+                        requestId,
+                        payload: {
+                            error: error instanceof Error ? error.message : String(error)
+                        }
+                    });
+                }
+                break;
+            }
+
             default:
                 self.postMessage({ type: 'error', id, message: `Unknown message type: ${type}` });
         }
     } catch (e: unknown) {
         self.postMessage({ type: 'error', id, message: e instanceof Error ? e.message : String(e) });
     }
-};
+});
 
 
 

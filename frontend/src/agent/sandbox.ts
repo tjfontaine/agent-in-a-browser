@@ -5,17 +5,42 @@
  */
 
 import { createWorkerFetch } from '../workers/Fetch';
+import { createWorkerFetchSimple } from '../workers/FetchSimple';
 
 // ============ Worker Instance ============
 
+// Create a unique identifier for this module instance
+const moduleId = Math.random().toString(36).substring(7);
+console.log(`[Sandbox] Module loaded, moduleId: ${moduleId}`);
+
 const sandbox = new Worker(new URL('../workers/SandboxWorker.ts', import.meta.url), { type: 'module' });
+console.log(`[Sandbox] Worker created in moduleId: ${moduleId}`);
+
+// Export the raw Worker for debugging
+export { sandbox as sandboxWorker };
 
 // ============ Worker Fetch ============
 
 /**
- * Fetch-like function to communicate with the sandbox worker
+ * Fetch-like function to communicate with the sandbox worker (uses MessageChannel)
+ * Note: MessageChannel port transfer fails silently in Safari workers
  */
 export const fetchFromSandbox = createWorkerFetch(sandbox);
+
+/**
+ * Safari-compatible fetch using request IDs and plain postMessage
+ * Use this in sync mode (Safari/WebKit) where MessageChannel ports don't work
+ */
+export const fetchFromSandboxSimple = createWorkerFetchSimple(sandbox);
+
+/**
+ * Debug function to test if postMessage works directly
+ */
+export function debugPostToSandbox(message: unknown): void {
+    console.log('[Sandbox] Debug postMessage:', message);
+    sandbox.postMessage(message);
+}
+
 
 // ============ Initialization ============
 
