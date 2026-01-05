@@ -121,7 +121,8 @@ impl WrapInAsyncIife {
             ctxt: Default::default(),
         });
 
-        // Build error handler: e => { throw e; }
+        // Build error handler: e => { console.error('Uncaught:', e); throw e; }
+        // We log first because async throws become unhandled rejections that QuickJS ignores
         let catch_handler = Expr::Arrow(ArrowExpr {
             span: DUMMY_SP,
             params: vec![Pat::Ident(BindingIdent {
@@ -130,14 +131,55 @@ impl WrapInAsyncIife {
             })],
             body: Box::new(BlockStmtOrExpr::BlockStmt(BlockStmt {
                 span: DUMMY_SP,
-                stmts: vec![Stmt::Throw(ThrowStmt {
-                    span: DUMMY_SP,
-                    arg: Box::new(Expr::Ident(Ident::new(
-                        "e".into(),
-                        DUMMY_SP,
-                        Default::default(),
-                    ))),
-                })],
+                stmts: vec![
+                    // console.error('Uncaught:', e)
+                    Stmt::Expr(ExprStmt {
+                        span: DUMMY_SP,
+                        expr: Box::new(Expr::Call(CallExpr {
+                            span: DUMMY_SP,
+                            callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
+                                span: DUMMY_SP,
+                                obj: Box::new(Expr::Ident(Ident::new(
+                                    "console".into(),
+                                    DUMMY_SP,
+                                    Default::default(),
+                                ))),
+                                prop: MemberProp::Ident(IdentName::new("error".into(), DUMMY_SP)),
+                            }))),
+                            args: vec![
+                                ExprOrSpread {
+                                    spread: None,
+                                    expr: Box::new(Expr::Lit(swc_ecma_ast::Lit::Str(
+                                        swc_ecma_ast::Str {
+                                            span: DUMMY_SP,
+                                            value: "Uncaught:".into(),
+                                            raw: None,
+                                        },
+                                    ))),
+                                },
+                                ExprOrSpread {
+                                    spread: None,
+                                    expr: Box::new(Expr::Ident(Ident::new(
+                                        "e".into(),
+                                        DUMMY_SP,
+                                        Default::default(),
+                                    ))),
+                                },
+                            ],
+                            type_args: None,
+                            ctxt: Default::default(),
+                        })),
+                    }),
+                    // throw e
+                    Stmt::Throw(ThrowStmt {
+                        span: DUMMY_SP,
+                        arg: Box::new(Expr::Ident(Ident::new(
+                            "e".into(),
+                            DUMMY_SP,
+                            Default::default(),
+                        ))),
+                    }),
+                ],
                 ctxt: Default::default(),
             })),
             is_async: false,

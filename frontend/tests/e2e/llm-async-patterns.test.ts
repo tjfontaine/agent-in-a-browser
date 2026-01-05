@@ -275,6 +275,33 @@ safeOperation()
         expect(result.output).toContain('operation succeeded');
     });
 
+    test('async fetch with try-catch called without await', async ({ page }) => {
+        // CRITICAL: This is the exact pattern that was broken
+        // async fn() { try { await fetch(url) } catch {} } fn();
+        const script = `
+async function fetchWithErrorHandling() {
+    console.log('starting request');
+    try {
+        const response = await fetch('https://httpbin.org/headers');
+        const data = await response.json();
+        console.log('request complete');
+        console.log('has-headers:', Object.keys(data.headers).length > 0);
+    } catch (e) {
+        console.log('error:', e.message);
+    }
+}
+fetchWithErrorHandling()
+`;
+        await writeFile(page, '/test-fetch-trycatch.ts', script);
+        const result = await shellEval(page, 'tsx /test-fetch-trycatch.ts');
+
+        console.log('Result:', result);
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('starting request');
+        expect(result.output).toContain('request complete');
+        expect(result.output).toContain('has-headers: true');
+    });
+
     test('async function with setTimeout simulation', async ({ page }) => {
         // Common pattern for delays (though setTimeout may work differently in WASM)
         const script = `
