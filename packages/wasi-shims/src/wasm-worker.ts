@@ -266,18 +266,6 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             }
             break;
 
-        case 'http-response':
-            // Main thread is providing HTTP response
-            if (controlArray && httpDataArray) {
-                httpDataArray.set(msg.bodyChunk);
-                Atomics.store(controlArray, HTTP_CONTROL.STATUS_CODE, msg.status);
-                Atomics.store(controlArray, HTTP_CONTROL.BODY_LENGTH, msg.bodyChunk.length);
-                Atomics.store(controlArray, HTTP_CONTROL.DONE, msg.done ? 1 : 0);
-                Atomics.store(controlArray, HTTP_CONTROL.RESPONSE_READY, 1);
-                Atomics.notify(controlArray, HTTP_CONTROL.RESPONSE_READY);
-            }
-            break;
-
         case 'run':
             // Start WASM execution
             if (!initialized) {
