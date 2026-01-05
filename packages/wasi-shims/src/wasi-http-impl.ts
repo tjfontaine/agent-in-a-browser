@@ -1,5 +1,7 @@
 // Import stream classes from shared module to avoid duplication
 import { InputStream, OutputStream, ReadyPollable } from './streams';
+// Import JSPI detection for automatic sync mode
+import { hasJSPI } from './execution-mode';
 
 // Type for WASM Result-like return values
 type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
@@ -89,6 +91,7 @@ const CORS_PROXY_DOMAINS = [
     'api.githubcopilot.com',
     'github.com',
     'generativelanguage.googleapis.com',  // Google Gemini API
+    'httpbin.org',  // For E2E testing HTTP headers
 ];
 
 // The CORS proxy endpoint (same origin, different path)
@@ -1074,6 +1077,58 @@ export const outgoingHandler = {
                 console.log('[http] Routing through CORS proxy:', method, url, '->', fetchUrl);
             } else {
                 console.log('[http] Using async fetch (streaming body):', method, url);
+            }
+
+            // In sync mode (Safari/no JSPI), use synchronous XMLHttpRequest instead of async fetch
+            // This is required because WASM can't await promises in non-JSPI environments
+            // Detect automatically: if JSPI is not supported OR explicit syncModeTransport is set
+            const useSyncMode = !hasJSPI || syncModeTransport;
+            if (useSyncMode) {
+                console.log('[http] Sync mode: Using sync XHR for HTTPS:', method, url);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open(method, fetchUrl, false); // false = synchronous
+
+                // Set headers (skip user-agent and host as they cause issues)
+                for (const [name, value] of Object.entries(headers)) {
+                    if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
+                        try {
+                            xhr.setRequestHeader(name, value);
+                        } catch (e) {
+                            console.warn(`[http] Could not set header ${name}:`, e);
+                        }
+                    }
+                }
+
+                // Add proxy auth header for CORS proxy requests
+                if (isProxied) {
+                    xhr.setRequestHeader('X-Agent-Proxy', 'web-agent');
+                }
+
+                // Send request with body
+                const requestBody = body ? new Blob([body as BlobPart]) : null;
+                xhr.send(requestBody);
+
+                // Build response
+                const responseBody = xhr.responseText
+                    ? new TextEncoder().encode(xhr.responseText)
+                    : new Uint8Array(0);
+
+                const responseHeaders: [string, Uint8Array][] = [];
+                xhr.getAllResponseHeaders()
+                    .trim()
+                    .split(/[\r\n]+/)
+                    .forEach((line) => {
+                        const parts = line.split(': ');
+                        const key = parts.shift();
+                        const value = parts.join(': ');
+                        if (key) {
+                            responseHeaders.push([key.toLowerCase(), new TextEncoder().encode(value)]);
+                        }
+                    });
+
+                console.log('[http] Sync XHR complete, status:', xhr.status, 'body len:', responseBody.length);
+                return new FutureIncomingResponse({ status: xhr.status, headers: responseHeaders, body: responseBody });
             }
 
             // Build fetch options
