@@ -10,19 +10,50 @@ type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
 /**
  * Transport response shape.
  */
-type TransportResponse = { status: number; headers: [string, Uint8Array][]; body: Uint8Array };
+export type TransportResponse = { status: number; headers: [string, Uint8Array][]; body: Uint8Array };
+
+/**
+ * Sync transport result marker.
+ * Used in Safari/non-JSPI mode to signal that the response is already available
+ * and should NOT be treated as a Promise (avoids microtask queue deadlock).
+ * 
+ * The $sync discriminant makes this unambiguous - regular objects won't have it.
+ */
+export type SyncTransportResult = { $sync: true; value: TransportResponse };
+
+/**
+ * Async transport result - standard Promise path for JSPI mode.
+ */
+export type AsyncTransportResult = Promise<TransportResponse>;
+
+/**
+ * Combined transport result type.
+ * Handlers return either:
+ * - SyncTransportResult with $sync marker (Safari) - value is immediately available
+ * - AsyncTransportResult Promise (Chrome/JSPI) - await to get response
+ */
+export type TransportResult = SyncTransportResult | AsyncTransportResult;
+
+/**
+ * Type guard to check if a transport result is synchronous (new $sync marker).
+ */
+export function isSyncTransportResult(result: TransportResult | { syncValue: TransportResponse }): result is SyncTransportResult {
+    return typeof result === 'object' && result !== null && '$sync' in result && (result as SyncTransportResult).$sync === true;
+}
 
 /**
  * Transport handler type.
  * In JSPI mode: returns Promise<TransportResponse> that resolves asynchronously
- * In sync mode: returns { syncValue: TransportResponse } with already-available data
+ * In sync mode: returns { $sync: true, value: TransportResponse } with already-available data
+ * 
+ * @deprecated The old { syncValue: ... } pattern is also supported for backward compatibility
  */
 type TransportHandler = (
     method: string,
     url: string,
     headers: Record<string, string>,
     body: Uint8Array | null
-) => Promise<TransportResponse> | { syncValue: TransportResponse };
+) => TransportResult | { syncValue: TransportResponse };
 
 let transportHandler: TransportHandler | null = null;
 let syncModeTransport = false;
@@ -925,13 +956,22 @@ export const outgoingHandler = {
             const result = transportHandler(method, url, headers, body);
 
             // Check if this is a sync result (Safari mode) or async Promise (JSPI mode)
-            // Sync mode returns { syncValue: TransportResponse } to bypass Promise path
-            if ('syncValue' in result) {
-                console.log('[http] Using sync body path (Safari mode) - direct value');
-                const response = result.syncValue;
+            // New pattern: { $sync: true, value: TransportResponse }
+            // Legacy pattern: { syncValue: TransportResponse }
+            if (isSyncTransportResult(result)) {
+                console.log('[http] Using sync body path (Safari mode) - $sync marker');
+                const response = result.value;
+                return new FutureIncomingResponse({
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body
+                });
+            }
 
-                // Pass resolved data directly to FutureIncomingResponse
-                // This uses the sync path (line 685: this._setResult) instead of Promise path
+            // Legacy sync pattern (backward compatibility)
+            if ('syncValue' in result) {
+                console.log('[http] Using sync body path (Safari mode) - legacy syncValue');
+                const response = (result as { syncValue: TransportResponse }).syncValue;
                 return new FutureIncomingResponse({
                     status: response.status,
                     headers: response.headers,
@@ -941,8 +981,9 @@ export const outgoingHandler = {
 
             // Async path for JSPI mode - use lazy body stream with async/await
             console.log('[http] Using lazy body stream (JSPI mode)');
+            const asyncResult = result as AsyncTransportResult;
             const bodyStream = createLazyBufferStream(
-                result.then((r: TransportResponse) => r.body)
+                asyncResult.then((r: TransportResponse) => r.body)
             );
 
             return new FutureIncomingResponse({
