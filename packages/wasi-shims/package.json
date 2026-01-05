@@ -11,6 +11,7 @@
         "./ghostty-cli-shim.js": "./src/ghostty-cli-shim.ts",
         "./opfs-filesystem-impl.js": "./src/opfs-filesystem-impl.ts",
         "./opfs-filesystem-sync-impl.js": "./src/opfs-filesystem-sync-impl.ts",
+        "./execution-mode.js": "./src/execution-mode.ts",
         "./clocks-impl.js": "./src/clocks-impl.js",
         "./poll-impl.js": "./src/poll-impl.js",
         "./wasi-http-impl.js": "./src/wasi-http-impl.ts",

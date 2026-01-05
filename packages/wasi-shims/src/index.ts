@@ -30,3 +30,7 @@ export * from './stdin-sync-bridge.js';
 export * from './http-sync-bridge.js';
 export * from './worker-bridge.js';
 export * as wasmWorker from './wasm-worker.js';
+
+// Export execution mode detection (single source of truth for hasJSPI)
+export * from './execution-mode.js';
+
