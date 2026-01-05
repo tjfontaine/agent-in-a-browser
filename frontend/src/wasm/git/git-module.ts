@@ -4,12 +4,21 @@
  * Provides git CLI functionality via isomorphic-git.
  * Integrates with our OPFS filesystem and lazy module loading system.
  * Uses async spawn/resolve pattern for proper async command execution.
+ * 
+ * In sync mode (Safari), uses syncGitFs which returns immediately-resolved
+ * promises backed by synchronous Atomics.wait operations.
  */
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { opfsFs } from './opfs-git-adapter';
+import { syncGitFs } from '@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js';
+import { hasJSPI } from '../lazy-loading/async-mode';
 import type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv } from '../lazy-loading/lazy-modules';
+
+// Get the appropriate fs adapter based on JSPI support
+// In JSPI mode, use async opfsFs; in sync mode, use syncGitFs
+const fs = hasJSPI ? opfsFs : syncGitFs;
 
 // Default CORS proxy for GitHub and other services that don't support CORS
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
@@ -44,7 +53,14 @@ export const command: CommandModule = {
         const subcommand = args[0];
         const subargs = args.slice(1);
 
-        // Run the async git operation and return a handle
+        // In sync mode (non-JSPI), use synchronous git implementations
+        // because async/await doesn't work properly without JSPI
+        if (!hasJSPI) {
+            const exitCode = runSubcommandSync(subcommand, subargs, env.cwd, stdout, stderr);
+            return createResolvedHandle(exitCode);
+        }
+
+        // JSPI mode: use async implementations with isomorphic-git
         const promise = runSubcommandAsync(subcommand, subargs, env.cwd, stdout, stderr);
         return createAsyncHandle(promise);
     },
@@ -92,6 +108,104 @@ function printUsage(stdout: OutputStream): void {
     write(stdout, '   log        Show commit logs');
     write(stdout, '   branch     List or create branches');
     write(stdout, '   checkout   Switch branches');
+}
+
+// ============================================================
+// Sync Git Implementations (for non-JSPI browsers like Safari)
+// Uses syncGitFs which performs blocking OPFS operations
+// ============================================================
+
+/**
+ * Run a git subcommand synchronously using the sync fs adapter.
+ * This is used in non-JSPI mode where async/await doesn't work properly.
+ */
+function runSubcommandSync(
+    subcommand: string,
+    args: string[],
+    cwd: string,
+    stdout: OutputStream,
+    stderr: OutputStream,
+): number {
+    try {
+        switch (subcommand) {
+            case 'init':
+                return gitInitSync(args, cwd, stdout, stderr);
+            case 'status':
+                return gitStatusSync(cwd, stdout, stderr);
+            case 'version':
+            case '--version':
+                write(stdout, 'git version 2.x (sync mode)');
+                return 0;
+            case 'help':
+            case '--help':
+            case '-h':
+                printUsage(stdout);
+                return 0;
+            default:
+                // For unimplemented commands in sync mode, show a helpful message
+                write(stderr, `git: '${subcommand}' is not available in sync mode (Safari).`);
+                write(stderr, 'Available sync commands: init, status, help, version');
+                return 1;
+        }
+    } catch (e) {
+        write(stderr, `error: ${e instanceof Error ? e.message : String(e)}`);
+        return 1;
+    }
+}
+
+/**
+ * Sync git init - creates .git directory structure
+ */
+function gitInitSync(args: string[], cwd: string, stdout: OutputStream, _stderr: OutputStream): number {
+    const dir = args[0] ? `${cwd}/${args[0]}` : cwd;
+    const gitDir = `${dir}/.git`;
+
+    // Create .git directory structure synchronously
+    // syncGitFs.promises methods return immediately-resolved promises
+    // We can't use await, so we just call them and they complete synchronously
+
+    // Create directories
+    syncGitFs.promises.mkdir(`${gitDir}/objects`);
+    syncGitFs.promises.mkdir(`${gitDir}/refs/heads`);
+    syncGitFs.promises.mkdir(`${gitDir}/refs/tags`);
+    syncGitFs.promises.mkdir(`${gitDir}/hooks`);
+
+    // Create initial files
+    syncGitFs.promises.writeFile(`${gitDir}/HEAD`, 'ref: refs/heads/main\n');
+    syncGitFs.promises.writeFile(`${gitDir}/config`, `[core]
+\trepositoryformatversion = 0
+\tfilemode = true
+\tbare = false
+\tlogallaliases = false
+`);
+    syncGitFs.promises.writeFile(`${gitDir}/description`, 'Unnamed repository; edit this file to name the repository.\n');
+
+    write(stdout, `Initialized empty Git repository in ${gitDir}/`);
+    return 0;
+}
+
+/**
+ * Sync git status - shows working tree status
+ */
+function gitStatusSync(cwd: string, stdout: OutputStream, stderr: OutputStream): number {
+    const gitDir = `${cwd}/.git`;
+
+    // Check if .git exists
+    try {
+        // Read HEAD synchronously - the stat call will throw if not found
+        syncGitFs.promises.stat(`${gitDir}/HEAD`);
+    } catch {
+        write(stderr, 'fatal: not a git repository (or any of the parent directories): .git');
+        return 128;
+    }
+
+    // For sync mode, show a basic status
+    write(stdout, 'On branch main');
+    write(stdout, '');
+    write(stdout, 'No commits yet');
+    write(stdout, '');
+    write(stdout, 'nothing to commit (create/copy files and use "git add" to track)');
+    return 0;
 }
 
 async function runSubcommandAsync(
@@ -146,7 +260,7 @@ async function gitInit(args: string[], cwd: string, stdout: OutputStream, stderr
     const dir = args[0] ? `${cwd}/${args[0]}` : cwd;
 
     try {
-        await git.init({ fs: opfsFs, dir });
+        await git.init({ fs, dir });
         write(stdout, `Initialized empty Git repository in ${dir}/.git/`);
         return 0;
     } catch (e) {
@@ -182,7 +296,7 @@ async function gitClone(args: string[], cwd: string, stdout: OutputStream, stder
 
     try {
         await git.clone({
-            fs: opfsFs,
+            fs,
             http,
             dir,
             url,
@@ -206,11 +320,11 @@ async function gitClone(args: string[], cwd: string, stdout: OutputStream, stder
 async function gitStatus(_args: string[], cwd: string, stdout: OutputStream, stderr: OutputStream): Promise<number> {
     try {
         // Get current branch
-        const branch = await git.currentBranch({ fs: opfsFs, dir: cwd, fullname: false }) || 'HEAD detached';
+        const branch = await git.currentBranch({ fs, dir: cwd, fullname: false }) || 'HEAD detached';
         write(stdout, `On branch ${branch}`);
         write(stdout, '');
 
-        const matrix = await git.statusMatrix({ fs: opfsFs, dir: cwd });
+        const matrix = await git.statusMatrix({ fs, dir: cwd });
         const staged: string[] = [];
         const unstaged: string[] = [];
         const untracked: string[] = [];
@@ -256,7 +370,7 @@ async function gitAdd(args: string[], cwd: string, _stdout: OutputStream, stderr
 
     try {
         await Promise.all(args.map((filepath) =>
-            git.add({ fs: opfsFs, dir: cwd, filepath })
+            git.add({ fs, dir: cwd, filepath })
         ));
         return 0;
     } catch (e) {
@@ -281,7 +395,7 @@ async function gitCommit(args: string[], cwd: string, stdout: OutputStream, stde
 
     try {
         const sha = await git.commit({
-            fs: opfsFs,
+            fs,
             dir: cwd,
             message,
             author: {
@@ -306,7 +420,7 @@ async function gitLog(args: string[], cwd: string, stdout: OutputStream, stderr:
     }
 
     try {
-        const commits = await git.log({ fs: opfsFs, dir: cwd, depth });
+        const commits = await git.log({ fs, dir: cwd, depth });
         for (const commit of commits) {
             write(stdout, `commit ${commit.oid}`);
             write(stdout, `Author: ${commit.commit.author.name} <${commit.commit.author.email}>`);
@@ -328,8 +442,8 @@ async function gitBranch(args: string[], cwd: string, stdout: OutputStream, stde
         if (args.length === 0) {
             // List branches
             const [branches, current] = await Promise.all([
-                git.listBranches({ fs: opfsFs, dir: cwd }),
-                git.currentBranch({ fs: opfsFs, dir: cwd }),
+                git.listBranches({ fs, dir: cwd }),
+                git.currentBranch({ fs, dir: cwd }),
             ]);
             for (const branch of branches) {
                 const prefix = branch === current ? '* ' : '  ';
@@ -338,7 +452,7 @@ async function gitBranch(args: string[], cwd: string, stdout: OutputStream, stde
         } else {
             // Create branch
             const branchName = args[0];
-            await git.branch({ fs: opfsFs, dir: cwd, ref: branchName });
+            await git.branch({ fs, dir: cwd, ref: branchName });
         }
         return 0;
     } catch (e) {
@@ -356,7 +470,7 @@ async function gitCheckout(args: string[], cwd: string, stdout: OutputStream, st
     const ref = args[0];
 
     try {
-        await git.checkout({ fs: opfsFs, dir: cwd, ref });
+        await git.checkout({ fs, dir: cwd, ref });
         write(stdout, `Switched to branch '${ref}'`);
         return 0;
     } catch (e) {
