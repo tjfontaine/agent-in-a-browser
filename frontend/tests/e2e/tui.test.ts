@@ -5,7 +5,8 @@
  * Uses Playwright to test user interactions with the terminal.
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './webkit-persistent-fixture';
+import type { Page } from '@playwright/test';
 
 // Helper to type into the terminal
 async function typeInTerminal(page: Page, text: string): Promise<void> {

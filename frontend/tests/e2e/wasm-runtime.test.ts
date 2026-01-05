@@ -8,7 +8,9 @@
  * These tests verify what actually works in the browser environment.
  */
 
-import { test, expect, Page } from '@playwright/test';
+// Use webkit-persistent-fixture for OPFS support in Safari/WebKit
+import { test, expect } from './webkit-persistent-fixture';
+import type { Page } from '@playwright/test';
 
 // Helper to execute commands through the sandbox worker
 async function shellEval(page: Page, command: string): Promise<{ output: string; success: boolean; error?: string }> {
@@ -225,6 +227,12 @@ test.describe('WASM Async FS (fs.promises)', () => {
             // @ts-expect-error - window.testHarness is set up when ready
             return window.testHarness?.ready === true;
         }, { timeout: 30000 });
+    });
+
+    test('fs.writeFileSync and readFileSync work', async ({ page }) => {
+        const result = await shellEval(page, 'tsx -e "fs.writeFileSync(\\"/sync-test.txt\\", \\"sync content\\"); console.log(fs.readFileSync(\\"/sync-test.txt\\"));"');
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('sync content');
     });
 
     test('fs.promises.writeFile and readFile work', async ({ page }) => {

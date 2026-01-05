@@ -5,7 +5,9 @@
  * Uses Playwright to test user interactions with the editor.
  */
 
-import { test, expect, Page } from '@playwright/test';
+// Use webkit-persistent-fixture for OPFS support in Safari/WebKit
+import { test, expect } from './webkit-persistent-fixture';
+import type { Page } from '@playwright/test';
 
 // Helper to type into the terminal
 async function typeInTerminal(page: Page, text: string): Promise<void> {

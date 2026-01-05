@@ -8,7 +8,8 @@
  * - Token exchange with mocked auth server
  */
 
-import { test, expect } from '@playwright/test';
+// Use webkit-persistent-fixture for OPFS support in Safari/WebKit
+import { test, expect } from './webkit-persistent-fixture';
 
 test.describe('OAuth Infrastructure', () => {
     test.beforeEach(async ({ page }) => {
