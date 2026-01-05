@@ -137,30 +137,17 @@ fn run_tsx(
     };
 
     // Step 1.5: Wrap in async IIFE to support top-level await
-    // This allows `await` at the top level of eval'd code.
+    // This allows `await` at the top level of user code.
     //
-    // IMPORTANT: We capture the result of the last expression and await it if it's a Promise.
-    // This handles the pattern: `async function fn() { ... } fn()` where fn() returns a Promise
-    // that would otherwise be orphaned (not awaited) and thus never executed by QuickJS's event loop.
+    // The transpiler already transforms the last expression statement to include
+    // `await`, via the AwaitLastExpr AST transform. This handles LLM-generated
+    // patterns like: `async function fn() {...} fn();` where fn() returns a
+    // Promise that would otherwise be orphaned.
     //
-    // The wrapper:
-    // 1. Uses eval() to get the result of the last expression in user code
-    // 2. Checks if result looks like a Promise (has .then method)
-    // 3. If so, awaits it to ensure async function bodies complete
-    //
-    // Note: We escape the transpiled code for embedding in a template string.
-    let escaped_code = transpiled
-        .replace('\\', "\\\\")
-        .replace('`', "\\`")
-        .replace("${", "\\${");
+    // Awaiting a non-Promise value simply returns it, so this is always safe.
     let js_code = format!(
-        r#"(async () => {{
-const __result__ = eval(`{}`);
-if (__result__ && typeof __result__.then === 'function') {{
-    await __result__;
-}}
-}})().catch(e => {{ throw e; }})"#,
-        escaped_code
+        "(async () => {{\n{}\n}})().catch(e => {{ throw e; }})",
+        transpiled
     );
 
     // Step 2: Execute the JavaScript using QuickJS with full runtime
