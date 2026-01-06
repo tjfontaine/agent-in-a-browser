@@ -152,18 +152,81 @@
 <span class="kw">const</span> agent = <span class="kw">new</span> WebAgent({
   provider: <span class="str">'anthropic'</span>,
   model: <span class="str">'claude-sonnet-4-20250514'</span>,
-  apiKey: <span class="str">'your-api-key'</span>
+  apiKey: <span class="str">'your-api-key'</span>,
+  maxTurns: 25,  <span class="comment">// optional: limit tool call turns</span>
 });
 
 <span class="comment">// Initialize (loads WASM sandbox)</span>
 <span class="kw">await</span> agent.initialize();
 
-<span class="comment">// Send a message</span>
+<span class="comment">// Streaming mode</span>
 <span class="kw">for await</span> (<span class="kw">const</span> event <span class="kw">of</span> agent.send(<span class="str">'Write a hello world in TypeScript'</span>)) {
   <span class="kw">if</span> (event.type === <span class="str">'chunk'</span>) {
-    console.log(event.content);
+    console.log(event.text);
   }
-}</code></pre>
+}
+
+<span class="comment">// One-shot mode (waits for complete response)</span>
+<span class="kw">const</span> response = <span class="kw">await</span> agent.prompt(<span class="str">'Summarize this file'</span>);
+console.log(response);
+
+<span class="comment">// Clean up when done</span>
+agent.destroy();</code></pre>
+                    </div>
+
+                    <h3>Configuration Options</h3>
+                    <div class="event-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Option</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>provider</code></td>
+                                    <td>string</td>
+                                    <td>AI provider: 'anthropic', 'openai', 'gemini'</td>
+                                </tr>
+                                <tr>
+                                    <td><code>model</code></td>
+                                    <td>string</td>
+                                    <td>Model name (e.g., 'claude-sonnet-4-20250514')</td>
+                                </tr>
+                                <tr>
+                                    <td><code>apiKey</code></td>
+                                    <td>string</td>
+                                    <td>API key for the provider</td>
+                                </tr>
+                                <tr>
+                                    <td><code>baseUrl</code></td>
+                                    <td>string?</td>
+                                    <td>Custom API endpoint URL</td>
+                                </tr>
+                                <tr>
+                                    <td><code>preamble</code></td>
+                                    <td>string?</td>
+                                    <td>Additional text appended to built-in system prompt</td>
+                                </tr>
+                                <tr>
+                                    <td><code>preambleOverride</code></td>
+                                    <td>string?</td>
+                                    <td>Complete replacement for built-in system prompt</td>
+                                </tr>
+                                <tr>
+                                    <td><code>mcpUrl</code></td>
+                                    <td>string?</td>
+                                    <td>MCP sandbox server URL (enables tool calling)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>maxTurns</code></td>
+                                    <td>number?</td>
+                                    <td>Max tool call turns before stopping (default: 25)</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
 
@@ -181,24 +244,90 @@
                             </thead>
                             <tbody>
                                 <tr>
+                                    <td><code>stream-start</code></td>
+                                    <td>Stream has begun</td>
+                                </tr>
+                                <tr>
                                     <td><code>chunk</code></td>
                                     <td>Streaming text content from the model</td>
                                 </tr>
                                 <tr>
-                                    <td><code>tool_use</code></td>
+                                    <td><code>tool-call</code></td>
                                     <td>Agent is invoking a tool (shell, file, etc.)</td>
                                 </tr>
                                 <tr>
-                                    <td><code>tool_result</code></td>
+                                    <td><code>tool-result</code></td>
                                     <td>Result from tool execution</td>
                                 </tr>
                                 <tr>
+                                    <td><code>plan-generated</code></td>
+                                    <td>Agent generated a task plan</td>
+                                </tr>
+                                <tr>
+                                    <td><code>task-start</code></td>
+                                    <td>Agent started a subtask (id, name, description)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>task-update</code></td>
+                                    <td>Progress update for a task (id, status, progress%)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>task-complete</code></td>
+                                    <td>Task finished (id, success, output)</td>
+                                </tr>
+                                <tr>
                                     <td><code>complete</code></td>
-                                    <td>Response finished</td>
+                                    <td>Response finished with final text</td>
+                                </tr>
+                                <tr>
+                                    <td><code>ready</code></td>
+                                    <td>Agent ready for next message</td>
                                 </tr>
                                 <tr>
                                     <td><code>error</code></td>
                                     <td>Error occurred</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3>API Methods</h3>
+                    <div class="event-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Method</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>initialize()</code></td>
+                                    <td>Load WASM module and prepare agent</td>
+                                </tr>
+                                <tr>
+                                    <td><code>send(message)</code></td>
+                                    <td>Stream events via AsyncGenerator</td>
+                                </tr>
+                                <tr>
+                                    <td><code>prompt(message)</code></td>
+                                    <td>One-shot: returns complete response string</td>
+                                </tr>
+                                <tr>
+                                    <td><code>cancel()</code></td>
+                                    <td>Cancel current streaming request</td>
+                                </tr>
+                                <tr>
+                                    <td><code>getHistory()</code></td>
+                                    <td>Get conversation history as Message[]</td>
+                                </tr>
+                                <tr>
+                                    <td><code>clearHistory()</code></td>
+                                    <td>Clear conversation history</td>
+                                </tr>
+                                <tr>
+                                    <td><code>destroy()</code></td>
+                                    <td>Release resources and clean up</td>
                                 </tr>
                             </tbody>
                         </table>

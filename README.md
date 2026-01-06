@@ -139,6 +139,72 @@ graph TB
 | [frontend/](frontend/src/README.md) | TypeScript + Vite | Terminal host + WASM bridge layer |
 | [frontend/src/wasm/](frontend/src/wasm/README.md) | TypeScript | Host bridges connecting WASM to browser APIs |
 
+---
+
+## Embeddable Agent
+
+The `@tjfontaine/web-agent-core` package provides a headless agent you can embed in your own applications:
+
+```bash
+npm install @tjfontaine/web-agent-core
+```
+
+### Basic Usage
+
+```typescript
+import { WebAgent } from '@tjfontaine/web-agent-core';
+
+const agent = new WebAgent({
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-20250514',
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  maxTurns: 25,  // optional: limit tool call iterations
+});
+
+await agent.initialize();
+
+// Streaming mode
+for await (const event of agent.send('Write a hello world in TypeScript')) {
+  if (event.type === 'chunk') process.stdout.write(event.text);
+  if (event.type === 'tool-call') console.log(`\n[Tool: ${event.toolName}]`);
+}
+
+// One-shot mode
+const response = await agent.prompt('Summarize this code');
+console.log(response);
+
+agent.destroy();
+```
+
+### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `provider` | string | 'anthropic', 'openai', 'gemini', or custom |
+| `model` | string | Model name (e.g., 'claude-sonnet-4-20250514') |
+| `apiKey` | string | API key for the provider |
+| `baseUrl` | string? | Custom API endpoint |
+| `preamble` | string? | Text appended to built-in system prompt |
+| `preambleOverride` | string? | Complete replacement for system prompt |
+| `mcpUrl` | string? | MCP sandbox URL for tool calling |
+| `maxTurns` | number? | Max tool iterations (default: 25) |
+
+### Event Types
+
+| Event | Description |
+|-------|-------------|
+| `chunk` | Streaming text from model |
+| `tool-call` | Agent invoking a tool |
+| `tool-result` | Result from tool execution |
+| `task-start` | Agent started a subtask |
+| `task-update` | Progress update |
+| `task-complete` | Task finished |
+| `complete` | Final response |
+| `ready` | Agent ready for next message |
+| `error` | Error occurred |
+
+---
+
 ## Quick Start
 
 ### Prerequisites
