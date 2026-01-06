@@ -22,6 +22,7 @@ pub mod mcp_transport;
 pub mod rig_agent;
 pub mod rig_tools;
 pub mod wasi_completion_model;
+pub mod wasi_http_macro;
 pub mod wasm_async;
 
 // Re-export commonly used items
