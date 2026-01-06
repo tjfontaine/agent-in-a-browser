@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edge Agent Demo - Build with AI</title>
+    <meta name="description" content="Watch AI build real code. Give it a task, see files created, view the output." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="/src/embed-demo.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="demo-header">
+        <div class="header-left">
+            <a href="/" class="logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">edge-agent</span>
+            </a>
+            <span class="header-badge">Demo</span>
+        </div>
+        <div class="header-right">
+            <a href="/" class="header-link">Terminal</a>
+            <a href="https://edge-agent.dev/docs.html" class="header-link" target="_blank">Docs</a>
+            <a href="https://github.com/tjfontaine/agent-in-a-browser" class="header-link" target="_blank">GitHub</a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="demo-main">
+        <!-- Left: Task Panel -->
+        <aside class="task-panel">
+            <!-- Config -->
+            <section class="panel-section">
+                <h2 class="section-title">⚙️ Setup</h2>
+                <div class="form-row">
+                    <select id="provider" class="form-select">
+                        <option value="anthropic">Anthropic</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Gemini</option>
+                    </select>
+                    <input type="text" id="model" value="claude-haiku-4-5-20251001" class="form-input"
+                        placeholder="Model">
+                </div>
+                <input type="password" id="api-key" class="form-input" placeholder="API Key">
+            </section>
+
+            <!-- Mode Toggle -->
+            <section class="panel-section">
+                <h2 class="section-title">🎛️ Mode</h2>
+                <div class="mode-toggle" id="mode-toggle">
+                    <button class="mode-btn active" data-mode="review">
+                        <span class="mode-icon">🔍</span>
+                        <span class="mode-label">Review</span>
+                        <span class="mode-desc">Plan → Approve → Execute</span>
+                    </button>
+                    <button class="mode-btn" data-mode="lucky">
+                        <span class="mode-icon">⚡</span>
+                        <span class="mode-label">Lucky</span>
+                        <span class="mode-desc">Auto-execute</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Task Input -->
+            <section class="panel-section task-section">
+                <h2 class="section-title">🎯 Task</h2>
+                <textarea id="task-input" class="task-input" rows="4"
+                    placeholder="Describe what you want to build...&#10;&#10;Example: Build a calculator in TypeScript with add, subtract, multiply, divide functions"></textarea>
+                <button id="run-btn" class="btn-run">
+                    <span class="btn-icon">▶</span>
+                    <span>Run Task</span>
+                </button>
+            </section>
+
+            <!-- Quick Examples -->
+            <section class="panel-section">
+                <h2 class="section-title">💡 Examples</h2>
+                <div id="examples-list" class="examples-grid">
+                    <!-- Filled by JS -->
+                </div>
+            </section>
+        </aside>
+
+        <!-- Center: Progress & Output -->
+        <div class="work-panel">
+            <!-- Plan Review Panel (shown in Review mode) -->
+            <section class="plan-section" id="plan-section" style="display: none;">
+                <div class="plan-header">
+                    <h2 class="section-title">📋 Generated Plan</h2>
+                    <div class="plan-actions">
+                        <button id="edit-plan-btn" class="btn-secondary">✏️ Edit</button>
+                        <button id="approve-plan-btn" class="btn-primary">✓ Approve & Execute</button>
+                    </div>
+                </div>
+                <div id="plan-content" class="plan-content">
+                    <!-- Plan markdown rendered here -->
+                </div>
+                <textarea id="plan-editor" class="plan-editor" style="display: none;"></textarea>
+            </section>
+
+            <!-- Task Cards (replaces progress stream) -->
+            <section class="tasks-section">
+                <div class="tasks-header">
+                    <h2 class="section-title">📊 Tasks</h2>
+                    <span id="tasks-status" class="tasks-status">Idle</span>
+                </div>
+                <div id="task-cards" class="task-cards">
+                    <div class="tasks-empty">Run a task to see progress</div>
+                </div>
+            </section>
+
+            <!-- Console Output -->
+            <section class="console-section">
+                <div class="console-header">
+                    <span class="console-title">Console Output</span>
+                    <button id="clear-console" class="btn-clear">Clear</button>
+                </div>
+                <div id="console-output" class="console-output">
+                    <span class="console-hint">Output will appear here...</span>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right: Files Panel -->
+        <aside class="files-panel">
+            <section class="panel-section files-section">
+                <h2 class="section-title">📁 Files Created</h2>
+                <div id="files-list" class="files-list">
+                    <div class="files-empty">No files yet</div>
+                </div>
+            </section>
+
+            <!-- File Preview -->
+            <section class="panel-section preview-section">
+                <div class="preview-header">
+                    <h2 class="section-title">📄 Preview</h2>
+                    <span id="preview-filename" class="preview-filename"></span>
+                </div>
+                <pre id="file-preview" class="file-preview"><code>Select a file to preview</code></pre>
+            </section>
+        </aside>
+    </main>
+
+    <script type="module" src="/src/embed-demo.ts"></script>
+</body>
+
+</html>

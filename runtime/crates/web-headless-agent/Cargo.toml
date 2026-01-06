@@ -8,6 +8,9 @@ description = "Headless agent WASM component for embedding in web pages"
 crate-type = ["cdylib"]
 
 [dependencies]
+# Shared agent bridge (traits, events, tool adapters)
+agent-bridge = { path = "../core" }
+
 # AI Agent framework (wasip2 feature for WASI component model)
 rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
     "wasip2",

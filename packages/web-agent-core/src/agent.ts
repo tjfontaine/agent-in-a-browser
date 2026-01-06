@@ -36,7 +36,7 @@ import type {
     AgentEvent as WasmAgentEvent,
     AgentHandle,
     Message as WasmMessage,
-} from './wasm/headless-agent.js';
+} from './wasm/web-headless-agent.js';
 
 // The WASM module will be loaded dynamically
 let wasmModule: WasmModule | null = null;
@@ -57,8 +57,15 @@ interface WasmModule {
 async function loadWasmModule(): Promise<WasmModule> {
     if (wasmModule) return wasmModule;
 
+    // Initialize WASI shims before loading WASM (required for JSPI async operations)
+    console.log('[WebAgent] Initializing WASI shims...');
+    // Use dynamic import with type assertion - Vite resolves this at bundle time
+    const shims = await import('@tjfontaine/wasi-shims') as { initFilesystem: () => Promise<void> };
+    await shims.initFilesystem();
+    console.log('[WebAgent] WASI shims initialized');
+
     // Dynamic import of the jco-transpiled module
-    const mod = await import('./wasm/headless-agent.js');
+    const mod = await import('./wasm/web-headless-agent.js');
     wasmModule = mod as unknown as WasmModule;
     return wasmModule;
 }
@@ -80,6 +87,14 @@ function mapEvent(event: WasmAgentEvent): AgentEvent {
             return { type: 'tool-call', toolName: event.val };
         case 'tool-result':
             return { type: 'tool-result', data: event.val };
+        case 'plan-generated':
+            return { type: 'plan-generated', plan: event.val };
+        case 'task-start':
+            return { type: 'task-start', task: event.val };
+        case 'task-update':
+            return { type: 'task-update', update: event.val };
+        case 'task-complete':
+            return { type: 'task-complete', result: event.val };
         case 'ready':
             return { type: 'ready' };
         default:
@@ -97,6 +112,9 @@ function toWasmConfig(config: AgentConfig): WasmAgentConfig {
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         preamble: config.preamble,
+        preambleOverride: config.preambleOverride,
+        mcpUrl: config.mcpUrl,
+        maxTurns: config.maxTurns,
     };
 }
 
@@ -127,7 +145,7 @@ export class WebAgent {
         if (this._isInitialized) return;
 
         this.wasm = await loadWasmModule();
-        this.handle = this.wasm.create(toWasmConfig(this.config));
+        this.handle = await this.wasm.create(toWasmConfig(this.config));
         this._isInitialized = true;
     }
 
@@ -146,11 +164,11 @@ export class WebAgent {
             throw new Error('Agent not initialized. Call initialize() first.');
         }
 
-        this.wasm.send(this.handle, message);
+        await this.wasm.send(this.handle, message);
 
         // Poll for events
         while (true) {
-            const event = this.wasm.poll(this.handle);
+            const event = await this.wasm.poll(this.handle);
 
             if (!event) {
                 // No event available, wait a bit

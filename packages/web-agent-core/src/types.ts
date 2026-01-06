@@ -16,8 +16,14 @@ export interface AgentConfig {
     apiKey: string;
     /** Optional base URL for custom endpoints */
     baseUrl?: string;
-    /** Optional system prompt / preamble */
+    /** Optional additional text to append to the built-in system preamble */
     preamble?: string;
+    /** Optional complete override of the built-in preamble (mutually exclusive with preamble) */
+    preambleOverride?: string;
+    /** Optional URL for MCP sandbox server (enables tool calling) */
+    mcpUrl?: string;
+    /** Maximum number of tool turns before stopping (default: 25) */
+    maxTurns?: number;
 }
 
 /**
@@ -43,15 +49,50 @@ export interface ToolResultData {
 }
 
 /**
+ * Task information for task-based UI
+ */
+export interface TaskInfo {
+    id: string;
+    name: string;
+    description: string;
+}
+
+/**
+ * Task update for progress tracking
+ */
+export interface TaskUpdateInfo {
+    id: string;
+    status: string;
+    progress?: number; // 0-100
+}
+
+/**
+ * Task completion information
+ */
+export interface TaskCompleteInfo {
+    id: string;
+    success: boolean;
+    output?: string;
+}
+
+/**
  * Events emitted during agent streaming
  */
 export type AgentEvent =
+    // Stream events
     | { type: 'stream-start' }
     | { type: 'chunk'; text: string }
     | { type: 'complete'; text: string }
     | { type: 'error'; error: string }
+    // Tool events
     | { type: 'tool-call'; toolName: string }
     | { type: 'tool-result'; data: ToolResultData }
+    // Task lifecycle events
+    | { type: 'plan-generated'; plan: string }
+    | { type: 'task-start'; task: TaskInfo }
+    | { type: 'task-update'; update: TaskUpdateInfo }
+    | { type: 'task-complete'; result: TaskCompleteInfo }
+    // State
     | { type: 'ready' };
 
 /**
@@ -63,6 +104,9 @@ export interface WasmAgentConfig {
     apiKey: string;
     baseUrl?: string;
     preamble?: string;
+    preambleOverride?: string;
+    mcpUrl?: string;
+    maxTurns?: number;
 }
 
 export interface WasmMessage {
@@ -77,6 +121,11 @@ export type WasmAgentEvent =
     | { tag: 'stream-error'; val: string }
     | { tag: 'tool-call'; val: string }
     | { tag: 'tool-result'; val: { name: string; output: string; isError: boolean } }
+    | { tag: 'plan-generated'; val: string }
+    | { tag: 'task-start'; val: { id: string; name: string; description: string } }
+    | { tag: 'task-update'; val: { id: string; status: string; progress?: number } }
+    | { tag: 'task-complete'; val: { id: string; success: boolean; output?: string } }
     | { tag: 'ready' };
 
 export type AgentHandle = number;
+

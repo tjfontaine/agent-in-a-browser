@@ -18,7 +18,17 @@ world headless-agent {
         model: string,
         api-key: string,
         base-url: option<string>,
+        /// Additional system prompt text to append to the built-in preamble
+        /// Mutually exclusive with preamble-override
         preamble: option<string>,
+        /// Completely replace the built-in preamble with this text
+        /// Mutually exclusive with preamble (if both set, override wins)
+        preamble-override: option<string>,
+        /// URL of the MCP sandbox server (e.g., http://localhost:3000)
+        /// If provided, the agent will have access to sandbox tools
+        mcp-url: option<string>,
+        /// Maximum number of tool turns before stopping (default: 25)
+        max-turns: option<u32>,
     }
     
     // Message in conversation history
@@ -40,14 +50,44 @@ world headless-agent {
         is-error: bool,
     }
     
+    // Task lifecycle records for task-based UI
+    record task-info {
+        id: string,
+        name: string,
+        description: string,
+    }
+    
+    record task-update-info {
+        id: string,
+        status: string,
+        progress: option<u32>,  // 0-100 percentage
+    }
+    
+    record task-complete-info {
+        id: string,
+        success: bool,
+        output: option<string>,
+    }
+    
     // Agent event variants
     variant agent-event {
+        // Stream events
         stream-start,
         stream-chunk(string),
         stream-complete(string),
         stream-error(string),
+        
+        // Tool events
         tool-call(string),
         tool-result(tool-result-data),
+        
+        // Task lifecycle events for task-based UI
+        plan-generated(string),           // plan.md content
+        task-start(task-info),            // task beginning
+        task-update(task-update-info),    // progress update
+        task-complete(task-complete-info), // task done
+        
+        // State
         ready,
     }
     
