@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => ({
             '@tjfontaine/wasi-shims': path.resolve(__dirname, '../packages/wasi-shims/src'),
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),
             '@tjfontaine/wasm-vim': path.resolve(__dirname, '../packages/wasm-vim'),
+            // Use source directly for development (avoid needing `npm run build` for each change)
+            '@tjfontaine/web-agent-core': path.resolve(__dirname, '../packages/web-agent-core/src'),
             // Enable packages outside frontend to resolve node polyfills
             'vite-plugin-node-polyfills/shims/buffer': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/buffer'),
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),

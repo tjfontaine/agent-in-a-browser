@@ -164,11 +164,17 @@ export class WebAgent {
             throw new Error('Agent not initialized. Call initialize() first.');
         }
 
+        console.log('[WebAgent] send() called, initiating WASM send...');
         await this.wasm.send(this.handle, message);
+        console.log('[WebAgent] WASM send() returned, starting poll loop...');
 
         // Poll for events
+        let pollCount = 0;
         while (true) {
+            pollCount++;
+            console.log(`[WebAgent] poll() #${pollCount}...`);
             const event = await this.wasm.poll(this.handle);
+            console.log(`[WebAgent] poll() #${pollCount} returned:`, event);
 
             if (!event) {
                 // No event available, wait a bit
@@ -177,10 +183,12 @@ export class WebAgent {
             }
 
             const mapped = mapEvent(event);
+            console.log(`[WebAgent] Mapped event:`, mapped.type);
             yield mapped;
 
             // Stop polling on terminal events
             if (mapped.type === 'complete' || mapped.type === 'error' || mapped.type === 'ready') {
+                console.log(`[WebAgent] Terminal event, exiting poll loop`);
                 break;
             }
         }

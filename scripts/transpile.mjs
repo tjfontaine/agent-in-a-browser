@@ -190,6 +190,8 @@ function build(name, mod, syncMode) {
 // ============================================================
 // MAIN
 // ============================================================
+import { existsSync, rmSync } from 'fs';
+
 const args = process.argv.slice(2);
 const syncMode = args.includes('--sync');
 const names = args.filter(a => !a.startsWith('--'));
@@ -204,7 +206,22 @@ for (const name of targets) {
         process.exit(1);
     }
 
+    // Check that input WASM exists - fail early with clear error
+    const inputWasm = `${TARGET}/${mod.wasm}`;
+    if (!existsSync(inputWasm)) {
+        console.error(`❌ Missing WASM: ${inputWasm}`);
+        console.error(`   Run: cargo component build -p ${name} --release --target wasm32-wasip2`);
+        process.exit(1);
+    }
+
     const { cmd, output } = build(name, mod, syncMode);
+
+    // Delete output directory to prevent stale files
+    const outputDir = syncMode ? (mod.syncOut || mod.jspiOut.replace('jspi', 'sync')) : mod.jspiOut;
+    if (existsSync(outputDir)) {
+        rmSync(outputDir, { recursive: true, force: true });
+    }
+
     console.log(`📦 ${name} → ${output}`);
 
     try {
