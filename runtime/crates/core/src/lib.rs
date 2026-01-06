@@ -19,6 +19,7 @@ pub mod events;
 pub mod http_transport;
 pub mod local_tools;
 pub mod mcp_transport;
+pub mod remote_mcp_client;
 pub mod rig_agent;
 pub mod rig_tools;
 pub mod wasi_completion_model;
@@ -39,7 +40,10 @@ pub use local_tools::{
     format_tasks_for_display, get_local_tool_definitions, try_execute_local_tool,
     LocalToolDefinition, LocalToolResult, Task, TaskStatus,
 };
-pub use mcp_transport::{McpError, McpTransport, ToolDefinition};
+pub use mcp_transport::{
+    JsonRpcError, JsonRpcResponse, McpError, McpTransport, ToolContent, ToolDefinition, ToolResult,
+};
+pub use remote_mcp_client::RemoteMcpClient;
 pub use rig_agent::{process_stream, EventCollector, StreamEventHandler};
 pub use rig_tools::{build_tool_set, McpToolAdapter};
 pub use wasi_completion_model::{

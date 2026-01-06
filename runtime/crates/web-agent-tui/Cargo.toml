@@ -7,6 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+# Shared agent bridge (MCP client, rig-tools, etc.)
+agent-bridge = { path = "../core" }
+
 # TUI framework - no default features to avoid crossterm
 ratatui = { version = "0.30", default-features = false }
 

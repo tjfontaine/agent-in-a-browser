@@ -34,4 +34,7 @@ export type {
     Message,
     MessageRole,
     ToolResultData,
+    TaskInfo,
+    TaskUpdateInfo,
+    TaskCompleteInfo,
 } from './types.js';

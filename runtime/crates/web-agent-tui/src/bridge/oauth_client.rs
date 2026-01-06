@@ -7,6 +7,7 @@
 //! - PKCE (RFC7636)
 
 use super::http_client::HttpClient;
+use crate::bindings::wasi::http::types::Method;
 use serde::{Deserialize, Serialize};
 
 /// OAuth-related errors
@@ -140,12 +141,12 @@ impl OAuthClient {
         // Try path-specific first, then root
         let url = self.build_well_known_url("oauth-protected-resource");
 
-        let response = HttpClient::request("GET", &url, &[], None)?;
+        let response = HttpClient::request(&url, Method::Get, None, None, None)?;
 
         if response.status == 404 {
             // Try root well-known
             let root_url = self.build_root_well_known_url("oauth-protected-resource");
-            let response = HttpClient::request("GET", &root_url, &[], None)?;
+            let response = HttpClient::request(&root_url, Method::Get, None, None, None)?;
 
             if response.status >= 400 {
                 return Err(OAuthError::MetadataError(format!(
@@ -178,7 +179,7 @@ impl OAuthClient {
         let base = auth_server_url.trim_end_matches('/');
         let url = format!("{}/.well-known/oauth-authorization-server", base);
 
-        let response = HttpClient::request("GET", &url, &[], None)?;
+        let response = HttpClient::request(&url, Method::Get, None, None, None)?;
 
         // Try to parse the response if we got a 200
         if response.status == 200 {
@@ -193,7 +194,7 @@ impl OAuthClient {
         if response.status == 404 || response.status == 200 {
             if let Some(root_base) = extract_origin(base) {
                 let root_url = format!("{}/.well-known/oauth-authorization-server", root_base);
-                let root_response = HttpClient::request("GET", &root_url, &[], None)?;
+                let root_response = HttpClient::request(&root_url, Method::Get, None, None, None)?;
 
                 if root_response.status == 200 {
                     if let Ok(metadata) =
@@ -208,7 +209,7 @@ impl OAuthClient {
         // Try OpenID Connect discovery (path-specific first, then root)
         if response.status == 404 || response.status == 200 {
             let oidc_url = format!("{}/.well-known/openid-configuration", base);
-            let oidc_response = HttpClient::request("GET", &oidc_url, &[], None)?;
+            let oidc_response = HttpClient::request(&oidc_url, Method::Get, None, None, None)?;
 
             if oidc_response.status == 200 {
                 if let Ok(metadata) =
@@ -221,7 +222,8 @@ impl OAuthClient {
             // Try root-level OIDC discovery
             if let Some(root_base) = extract_origin(base) {
                 let root_oidc_url = format!("{}/.well-known/openid-configuration", root_base);
-                let root_oidc_response = HttpClient::request("GET", &root_oidc_url, &[], None)?;
+                let root_oidc_response =
+                    HttpClient::request(&root_oidc_url, Method::Get, None, None, None)?;
 
                 if root_oidc_response.status == 200 {
                     if let Ok(metadata) =
@@ -368,10 +370,11 @@ impl OAuthClient {
         ];
 
         let response = HttpClient::request(
-            "POST",
             &auth_metadata.token_endpoint,
-            &headers,
-            Some(body.as_bytes()),
+            Method::Post,
+            Some(&headers),
+            Some(body.into_bytes()),
+            None,
         )?;
 
         if response.status >= 400 {
@@ -406,10 +409,11 @@ impl OAuthClient {
         ];
 
         let response = HttpClient::request(
-            "POST",
             &auth_metadata.token_endpoint,
-            &headers,
-            Some(body.as_bytes()),
+            Method::Post,
+            Some(&headers),
+            Some(body.into_bytes()),
+            None,
         )?;
 
         if response.status >= 400 {
@@ -481,7 +485,7 @@ pub fn request_oauth_popup(
         url_encode(state),
     );
 
-    let response = HttpClient::request("GET", &popup_url, &[], None)?;
+    let response = HttpClient::request(&popup_url, Method::Get, None, None, None)?;
 
     if response.status >= 400 {
         let error_body = String::from_utf8_lossy(&response.body);

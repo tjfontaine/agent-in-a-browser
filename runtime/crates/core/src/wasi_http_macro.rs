@@ -437,3 +437,461 @@ macro_rules! define_wasi_http_client {
         }
     };
 }
+
+/// Generate a general-purpose HttpClient implementation using the provided WASI bindings paths.
+///
+/// This provides a robust HTTP client for non-LLM tasks (like MCP, OAuth, etc.)
+/// including streaming support, bearer tokens, and simple helper methods.
+///
+/// # Arguments
+///
+/// * `$http_mod` - Path to the http module (e.g., `crate::bindings::wasi::http`)
+/// * `$io_mod` - Path to the io module (e.g., `crate::bindings::wasi::io`)
+#[macro_export]
+macro_rules! define_general_http_client {
+    ($http_mod:path, $io_mod:path) => {
+        // Create local aliases for the modules
+        use $http_mod as wasi_http;
+        use $io_mod as wasi_io;
+
+        use wasi_http::{
+            outgoing_handler,
+            types::{
+                Fields, IncomingBody, Method, OutgoingBody, OutgoingRequest, RequestOptions, Scheme,
+            },
+        };
+        use wasi_io::streams::{InputStream, StreamError};
+        use $crate::http_transport::{
+            HttpBodyStream as BridgeBodyStreamTrait, HttpError as BridgeHttpError,
+            HttpResponse as BridgeHttpResponse, HttpStreamingResponse as BridgeStreamingResponse,
+            HttpTransport as BridgeHttpTransport,
+        };
+
+        /// HTTP response from a request
+        pub struct HttpResponse {
+            pub status: u16,
+            pub body: Vec<u8>,
+        }
+
+        /// Streaming HTTP response
+        pub struct HttpStreamingResponse {
+            pub status: u16,
+            pub stream: HttpBodyStream,
+        }
+
+        /// Stream for reading HTTP response body incrementally
+        pub struct HttpBodyStream {
+            stream: InputStream,
+            _body: IncomingBody, // Keep body alive while streaming
+        }
+
+        impl HttpBodyStream {
+            /// Read next chunk (blocking, returns None when stream ends)
+            pub fn read_chunk(&self, max_size: usize) -> Result<Option<Vec<u8>>, HttpError> {
+                match self.stream.blocking_read(max_size as u64) {
+                    Ok(chunk) => {
+                        if chunk.is_empty() {
+                            Ok(None)
+                        } else {
+                            Ok(Some(chunk))
+                        }
+                    }
+                    Err(StreamError::Closed) => Ok(None),
+                    Err(e) => Err(HttpError::BodyReadFailed(format!("Read error: {:?}", e))),
+                }
+            }
+
+            /// Read until a complete line (ending with \n) is found
+            /// Returns the line including the newline, or None if stream ends
+            pub fn read_line(&self) -> Result<Option<String>, HttpError> {
+                let mut buffer = Vec::new();
+                loop {
+                    match self.stream.blocking_read(1) {
+                        Ok(chunk) => {
+                            if chunk.is_empty() {
+                                // No more data, return what we have
+                                if buffer.is_empty() {
+                                    return Ok(None);
+                                }
+                                return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                            }
+                            buffer.extend_from_slice(&chunk);
+                            if chunk[0] == b'\n' {
+                                return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                            }
+                        }
+                        Err(StreamError::Closed) => {
+                            if buffer.is_empty() {
+                                return Ok(None);
+                            }
+                            return Ok(Some(String::from_utf8_lossy(&buffer).to_string()));
+                        }
+                        Err(e) => {
+                            return Err(HttpError::BodyReadFailed(format!("Read error: {:?}", e)))
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Errors that can occur during HTTP operations
+        #[derive(Debug)]
+        pub enum HttpError {
+            RequestFailed(String),
+            ResponseFailed(String),
+            BodyReadFailed(String),
+        }
+
+        impl std::fmt::Display for HttpError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    HttpError::RequestFailed(msg) => write!(f, "Request failed: {}", msg),
+                    HttpError::ResponseFailed(msg) => write!(f, "Response failed: {}", msg),
+                    HttpError::BodyReadFailed(msg) => write!(f, "Body read failed: {}", msg),
+                }
+            }
+        }
+
+        impl std::error::Error for HttpError {}
+
+        /// WASI HTTP client for making outgoing requests
+        #[derive(Clone, Copy)]
+        pub struct HttpClient;
+
+        impl HttpClient {
+            pub fn new() -> Self {
+                Self
+            }
+
+            /// Make a simple GET request for JSON
+            pub fn get_json(
+                url: &str,
+                token: Option<&str>,
+            ) -> Result<serde_json::Value, HttpError> {
+                let mut headers = vec![];
+                let auth_val;
+                if let Some(t) = token {
+                    auth_val = format!("Bearer {}", t);
+                    headers.push(("Authorization", auth_val.as_str()));
+                }
+
+                let header_slice = if headers.is_empty() {
+                    None
+                } else {
+                    Some(headers.as_slice())
+                };
+
+                let response = Self::request(url, Method::Get, header_slice, None, None)?;
+                if response.status >= 400 {
+                    return Err(HttpError::ResponseFailed(format!(
+                        "HTTP {}",
+                        response.status
+                    )));
+                }
+                serde_json::from_slice(&response.body)
+                    .map_err(|e| HttpError::ResponseFailed(format!("Invalid JSON: {}", e)))
+            }
+
+            /// Make a GET request with headers
+            pub fn get_json_with_headers(
+                url: &str,
+                headers: &[(&str, &str)],
+            ) -> Result<serde_json::Value, HttpError> {
+                let response = Self::request(url, Method::Get, Some(headers), None, None)?;
+                if response.status >= 400 {
+                    return Err(HttpError::ResponseFailed(format!(
+                        "HTTP {}",
+                        response.status
+                    )));
+                }
+                serde_json::from_slice(&response.body)
+                    .map_err(|e| HttpError::ResponseFailed(format!("Invalid JSON: {}", e)))
+            }
+
+            /// Make a POST request with JSON body
+            pub fn post_json(
+                url: &str,
+                body: &serde_json::Value,
+                token: Option<&str>,
+            ) -> Result<serde_json::Value, HttpError> {
+                let body_str = body.to_string();
+                let mut headers = vec![("Content-Type", "application/json")];
+
+                // Create a temporary string ownership for the token header value
+                let auth_val;
+                if let Some(t) = token {
+                    auth_val = format!("Bearer {}", t);
+                    headers.push(("Authorization", &auth_val));
+                }
+
+                let response = Self::request(
+                    url,
+                    Method::Post,
+                    Some(&headers),
+                    Some(body_str.into()),
+                    None,
+                )?;
+
+                if response.status >= 400 {
+                    return Err(HttpError::ResponseFailed(format!(
+                        "HTTP {}",
+                        response.status
+                    )));
+                }
+
+                serde_json::from_slice(&response.body)
+                    .map_err(|e| HttpError::ResponseFailed(format!("Invalid JSON: {}", e)))
+            }
+
+            /// Make a POST request with JSON body and get streaming response
+            pub fn post_json_streaming(
+                url: &str,
+                body: &serde_json::Value,
+                token: Option<&str>,
+            ) -> Result<HttpStreamingResponse, HttpError> {
+                let body_str = body.to_string();
+                let mut headers = vec![("Content-Type", "application/json")];
+
+                let auth_val;
+                if let Some(t) = token {
+                    auth_val = format!("Bearer {}", t);
+                    headers.push(("Authorization", &auth_val));
+                }
+
+                Self::request_streaming(
+                    url,
+                    Method::Post,
+                    Some(&headers),
+                    Some(body_str.into()),
+                    None,
+                )
+            }
+
+            /// Make a full HTTP request
+            pub fn request(
+                url: &str,
+                method: Method,
+                headers: Option<&[(&str, &str)]>,
+                body: Option<Vec<u8>>,
+                _options: Option<RequestOptions>,
+            ) -> Result<HttpResponse, HttpError> {
+                let future = Self::start_request(url, method, headers, body, _options)?;
+
+                // Wait for response
+                let pollable = future.subscribe();
+                pollable.block();
+
+                let response = future
+                    .get()
+                    .ok_or_else(|| HttpError::ResponseFailed("No response".to_string()))?
+                    .map_err(|_| HttpError::ResponseFailed("Response future error".to_string()))?
+                    .map_err(|e| HttpError::ResponseFailed(format!("HTTP error: {:?}", e)))?;
+
+                let status = response.status();
+
+                // Read body
+                let incoming_body = response
+                    .consume()
+                    .map_err(|_| HttpError::ResponseFailed("Failed to consume body".to_string()))?;
+
+                let stream = incoming_body
+                    .stream()
+                    .map_err(|_| HttpError::ResponseFailed("Failed to get stream".to_string()))?;
+
+                let mut result = Vec::new();
+                loop {
+                    match stream.blocking_read(64 * 1024) {
+                        Ok(chunk) => {
+                            if chunk.is_empty() {
+                                break;
+                            }
+                            result.extend_from_slice(&chunk);
+                        }
+                        Err(StreamError::Closed) => break,
+                        Err(e) => {
+                            return Err(HttpError::BodyReadFailed(format!("Read error: {:?}", e)));
+                        }
+                    }
+                }
+
+                Ok(HttpResponse {
+                    status,
+                    body: result,
+                })
+            }
+
+            /// Make a streaming HTTP request
+            pub fn request_streaming(
+                url: &str,
+                method: Method,
+                headers: Option<&[(&str, &str)]>,
+                body: Option<Vec<u8>>,
+                _options: Option<RequestOptions>,
+            ) -> Result<HttpStreamingResponse, HttpError> {
+                let future = Self::start_request(url, method, headers, body, _options)?;
+
+                // Wait for headers
+                let pollable = future.subscribe();
+                pollable.block();
+
+                let response = future
+                    .get()
+                    .ok_or_else(|| HttpError::ResponseFailed("No response".to_string()))?
+                    .map_err(|_| HttpError::ResponseFailed("Response future error".to_string()))?
+                    .map_err(|e| HttpError::ResponseFailed(format!("HTTP error: {:?}", e)))?;
+
+                let status = response.status();
+                let incoming_body = response
+                    .consume()
+                    .map_err(|_| HttpError::ResponseFailed("Failed to consume body".to_string()))?;
+
+                let stream = incoming_body
+                    .stream()
+                    .map_err(|_| HttpError::ResponseFailed("Failed to get stream".to_string()))?;
+
+                Ok(HttpStreamingResponse {
+                    status,
+                    stream: HttpBodyStream {
+                        stream,
+                        _body: incoming_body,
+                    },
+                })
+            }
+
+            /// Helper to start a request
+            fn start_request(
+                url: &str,
+                method: Method,
+                headers: Option<&[(&str, &str)]>,
+                body: Option<Vec<u8>>,
+                _options: Option<RequestOptions>,
+            ) -> Result<wasi_http::types::FutureIncomingResponse, HttpError> {
+                let (scheme, authority, path) = Self::parse_url(url)?;
+
+                let fields = Fields::new();
+                if let Some(hdrs) = headers {
+                    for (k, v) in hdrs {
+                        let _ = fields.append(k, v.as_bytes());
+                    }
+                }
+
+                let request = OutgoingRequest::new(fields);
+                let _ = request.set_method(&method);
+                let _ = request.set_scheme(Some(&scheme));
+                let _ = request.set_authority(Some(&authority));
+                let _ = request.set_path_with_query(Some(&path));
+
+                if let Some(b) = body {
+                    let out_body = request
+                        .body()
+                        .map_err(|_| HttpError::RequestFailed("Failed to get body".to_string()))?;
+                    let stream = out_body.write().map_err(|_| {
+                        HttpError::RequestFailed("Failed to get body stream".to_string())
+                    })?;
+                    stream.blocking_write_and_flush(&b).map_err(|e| {
+                        HttpError::RequestFailed(format!("Body write failed: {:?}", e))
+                    })?;
+                    drop(stream);
+                    OutgoingBody::finish(out_body, None).map_err(|e| {
+                        HttpError::RequestFailed(format!("Body finish failed: {:?}", e))
+                    })?;
+                }
+
+                let options = RequestOptions::new();
+                let future = outgoing_handler::handle(request, Some(options))
+                    .map_err(|e| HttpError::RequestFailed(format!("Handle failed: {:?}", e)))?;
+
+                Ok(future)
+            }
+
+            fn parse_url(url: &str) -> Result<(Scheme, String, String), HttpError> {
+                let (scheme_str, rest) = if url.starts_with("https://") {
+                    ("https", &url[8..])
+                } else if url.starts_with("http://") {
+                    ("http", &url[7..])
+                } else {
+                    return Err(HttpError::RequestFailed("Invalid URL scheme".to_string()));
+                };
+
+                let scheme = if scheme_str == "https" {
+                    Scheme::Https
+                } else {
+                    Scheme::Http
+                };
+
+                let (authority, path) = if let Some(slash_pos) = rest.find('/') {
+                    (rest[..slash_pos].to_string(), rest[slash_pos..].to_string())
+                } else {
+                    (rest.to_string(), "/".to_string())
+                };
+
+                Ok((scheme, authority, path))
+            }
+        }
+
+        impl BridgeBodyStreamTrait for HttpBodyStream {
+            fn read_chunk(&mut self, max_size: usize) -> Result<Option<Vec<u8>>, BridgeHttpError> {
+                self.read_chunk(max_size)
+                    .map_err(|e| BridgeHttpError::BodyReadFailed(e.to_string()))
+            }
+
+            fn read_line(&mut self) -> Result<Option<String>, BridgeHttpError> {
+                self.read_line()
+                    .map_err(|e| BridgeHttpError::BodyReadFailed(e.to_string()))
+            }
+        }
+
+        impl BridgeHttpTransport for HttpClient {
+            fn get(
+                &self,
+                url: &str,
+                headers: &[(&str, &str)],
+            ) -> Result<BridgeHttpResponse, BridgeHttpError> {
+                let res = Self::request(url, Method::Get, Some(headers), None, None)
+                    .map_err(|e| BridgeHttpError::SendFailed(e.to_string()))?;
+                Ok(BridgeHttpResponse {
+                    status: res.status,
+                    body: res.body,
+                })
+            }
+
+            fn post(
+                &self,
+                url: &str,
+                headers: &[(&str, &str)],
+                body: &[u8],
+            ) -> Result<BridgeHttpResponse, BridgeHttpError> {
+                // Ensure body is Vec<u8> (owned) for request
+                let res =
+                    Self::request(url, Method::Post, Some(headers), Some(body.to_vec()), None)
+                        .map_err(|e| BridgeHttpError::SendFailed(e.to_string()))?;
+                Ok(BridgeHttpResponse {
+                    status: res.status,
+                    body: res.body,
+                })
+            }
+
+            fn post_streaming(
+                &self,
+                url: &str,
+                headers: &[(&str, &str)],
+                body: &[u8],
+            ) -> Result<BridgeStreamingResponse<Box<dyn BridgeBodyStreamTrait>>, BridgeHttpError>
+            {
+                let res = Self::request_streaming(
+                    url,
+                    Method::Post,
+                    Some(headers),
+                    Some(body.to_vec()),
+                    None,
+                )
+                .map_err(|e| BridgeHttpError::SendFailed(e.to_string()))?;
+
+                Ok(BridgeStreamingResponse {
+                    status: res.status,
+                    stream: Box::new(res.stream),
+                })
+            }
+        }
+    };
+}

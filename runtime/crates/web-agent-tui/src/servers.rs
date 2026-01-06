@@ -2,10 +2,11 @@
 //!
 //! Handles MCP server connections, tool collection, and routing.
 
+use crate::bridge::http_client::HttpClient;
 use crate::bridge::local_tools::{format_tasks_for_display, try_execute_local_tool, Task};
 use crate::bridge::mcp_client::{McpError, ToolDefinition};
-use crate::bridge::remote_mcp_client::RemoteMcpClient;
 use crate::ui::{AuxContent, AuxContentKind};
+use agent_bridge::RemoteMcpClient;
 use serde_json::Value;
 
 /// Remote server connection status
@@ -233,7 +234,7 @@ impl ServerManager {
         } else {
             format!("https://{}", server.url)
         };
-        let mut client = RemoteMcpClient::new(&url, server.bearer_token.clone());
+        let mut client = RemoteMcpClient::new(HttpClient, &url, server.bearer_token.clone());
         client.connect()
     }
 

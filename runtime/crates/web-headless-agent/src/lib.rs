@@ -86,60 +86,101 @@ fn build_tool_server(
 }
 
 /// Default system preamble for the headless agent
-const DEFAULT_PREAMBLE: &str = r#"You are an autonomous coding agent that completes tasks by writing and executing code.
+const DEFAULT_PREAMBLE: &str = r##"You are an autonomous coding agent that completes tasks by writing and executing code.
+
+# Conversation Protocol
+
+Your interactions follow a structured protocol using ACTION markers. The user controls which phase you are in.
+
+## [ACTION: PLAN]
+
+When you see this marker, the user is asking you to CREATE A PLAN:
+1. Analyze the user's request (included after the marker)
+2. Write a detailed implementation plan to `/plan.md` with:
+   - Goal summary
+   - Step-by-step implementation plan
+   - Expected outputs/deliverables
+3. Respond with: "Plan written to /plan.md. Awaiting approval to execute."
+4. STOP - do NOT write any code or execute anything yet
+
+## [ACTION: EXECUTE]
+
+When you see this marker, the user has APPROVED your plan:
+1. Read `/plan.md` to load your implementation plan
+2. Execute each step in order, using the sandbox tools
+3. After completing ALL steps, report results
+4. Confirm with: "✓ Task complete"
 
 # CRITICAL RULES
 
-1. COMPLETE THE ENTIRE TASK - do NOT stop after one step
-2. After each tool call, CONTINUE to the next step immediately
-3. When a plan has multiple steps, execute ALL of them
+1. In PLAN phase: ONLY write /plan.md, nothing else
+2. In EXECUTE phase: ALWAYS read /plan.md first
+3. COMPLETE THE ENTIRE TASK - do NOT stop after one step
+4. After each tool call, CONTINUE to the next step immediately
 
-# Environment
+# Sandbox Environment
 
-You are running in a browser-based sandbox with:
-- OPFS filesystem (persistent storage)
-- tsx (TypeScript/JavaScript executor)
-- HTTP fetch support
+You are running in a browser-based OPFS (Origin Private File System) sandbox.
 
-# Available Tools
+## Available Tools
 
-- write_file: Write content to a file
-- read_file: Read file contents
-- run_command: Execute shell commands
+### File Operations
+- `write_file(path, content)` - Write content to a file
+- `read_file(path)` - Read file contents
+- `list(path)` - List directory contents
+- `grep(pattern, path)` - Search for patterns in files
 
-# TypeScript Execution (tsx)
+### Code Execution
+- `run_command(command)` - Execute shell commands
 
-ALWAYS prefer single-file TypeScript for tasks. The tsx engine supports:
+All paths are relative to the OPFS root (e.g., `/plan.md`, `/src/app.ts`).
+
+## Shell Commands (run_command)
+
+The shell supports:
+- `tsx script.ts` - Execute TypeScript/JavaScript
+- `cat`, `ls`, `mkdir`, `rm`, `cp`, `mv` - File operations
+- `echo`, `grep`, `sed` - Text processing
+
+## TypeScript Execution (tsx)
+
+ALWAYS prefer single-file TypeScript. The tsx engine supports:
 
 ```typescript
-// Direct execution - run with: tsx script.ts
-console.log("Hello");  // Built-in console
-await fetch(url);      // Built-in fetch
-
-// ESM imports work:
-import { z } from 'zod';  // Auto-fetches from esm.sh
+console.log("Hello");      // Built-in console
+await fetch(url);          // Built-in fetch
+import { z } from 'zod';   // Auto-fetches from esm.sh CDN
 ```
 
-## Build Pattern
+### Build Pattern
 
 For TypeScript projects, build into a SINGLE FILE:
-1. Write a single .ts file with all code
-2. Run it with: run_command "tsx myfile.ts"
-3. DO NOT create package.json or tsconfig.json unless specifically asked
+1. Write all code to a single `.ts` file
+2. Run with: `run_command("tsx myfile.ts")`
+3. DO NOT create package.json or tsconfig.json unless asked
 
-## Example Workflow
+# Example Workflows
 
-Task: "Build a calculator"
-Step 1: write_file → calculator.ts (complete implementation + tests)
-Step 2: run_command → "tsx calculator.ts"
-Step 3: Report results
+## Planning Phase
 
-# Task Completion
+User: [ACTION: PLAN]
+Build a calculator that adds two numbers
 
-- Execute ALL steps in order
-- Show results after running code
-- Confirm completion: "✓ Task complete"
-"#;
+You:
+1. Call write_file to create /plan.md with your implementation plan
+2. Respond: "Plan written to /plan.md. Awaiting approval to execute."
+3. STOP - do not continue
+
+## Execution Phase
+
+User: [ACTION: EXECUTE]
+
+You:
+1. Call read_file to load /plan.md
+2. Call write_file to create calculator.ts with the implementation
+3. Call run_command with "tsx calculator.ts" to run and verify
+4. Respond: "Task complete. Calculator written and tested successfully."
+"##;
 
 /// Agent with tools (uses multi_turn for tool loop)
 enum AgentWithTools {
@@ -170,6 +211,10 @@ struct HeadlessAgent {
     events: std::collections::VecDeque<AgentEvent>,
     is_streaming: bool,
     max_turns: usize,
+    /// Active stream for event-driven polling (like TUI)
+    active_stream: Option<agent_bridge::ActiveStream>,
+    /// Track last tool activity for event emission
+    last_tool_activity: Option<String>,
 }
 
 impl HeadlessAgent {
@@ -275,6 +320,8 @@ impl HeadlessAgent {
             events: std::collections::VecDeque::new(),
             is_streaming: false,
             max_turns,
+            active_stream: None,
+            last_tool_activity: None,
         })
     }
 
@@ -303,41 +350,52 @@ impl HeadlessAgent {
             })
             .collect();
 
-        // Execute the agent - collect events separately to avoid borrow issues
-        let (response, tool_events) = match &self.provider {
-            AgentProvider::WithTools { agent, .. } => {
-                run_agent_with_tools(agent, message, history, self.max_turns)
-            }
+        // Create the active stream (but don't block on it)
+        let active_stream = match &self.provider {
+            AgentProvider::WithTools { agent, .. } => Some(create_active_stream_with_tools(
+                agent,
+                message,
+                history,
+                self.max_turns,
+            )),
             AgentProvider::Simple(agent) => {
+                // For simple agents, we still block since they don't need tool loops
                 let result = run_simple_agent(agent, message);
-                (result, Vec::new())
+                match result {
+                    Ok(text) => {
+                        self.events.push_back(AgentEvent::StreamChunk(text.clone()));
+                        self.events
+                            .push_back(AgentEvent::StreamComplete(text.clone()));
+                        self.messages.push(Message {
+                            role: MessageRole::Assistant,
+                            content: text,
+                        });
+                    }
+                    Err(e) => {
+                        self.events.push_back(AgentEvent::StreamError(e));
+                    }
+                }
+                self.is_streaming = false;
+                self.events.push_back(AgentEvent::Ready);
+                None
             }
         };
 
-        // Emit collected events
-        for event in tool_events {
-            self.events.push_back(event);
-        }
-
-        match response {
-            Ok(text) => {
-                self.events.push_back(AgentEvent::StreamChunk(text.clone()));
-                self.events
-                    .push_back(AgentEvent::StreamComplete(text.clone()));
-                self.messages.push(Message {
-                    role: MessageRole::Assistant,
-                    content: text,
-                });
-            }
-            Err(e) => {
-                self.events.push_back(AgentEvent::StreamError(e));
-            }
-        }
-
-        self.is_streaming = false;
-        self.events.push_back(AgentEvent::Ready);
-
+        self.active_stream = active_stream;
         Ok(())
+    }
+
+    /// Planning phase - sends user request with [ACTION: PLAN] marker
+    /// Agent should analyze and write /plan.md, then stop and wait for approval
+    fn plan(&mut self, user_request: &str) -> Result<(), String> {
+        let message = format!("[ACTION: PLAN]\n{}", user_request);
+        self.send(&message)
+    }
+
+    /// Execution phase - sends [ACTION: EXECUTE] marker
+    /// Agent should read /plan.md and execute all steps
+    fn execute(&mut self) -> Result<(), String> {
+        self.send("[ACTION: EXECUTE]")
     }
 }
 
@@ -349,13 +407,13 @@ use agent_bridge::wasm_block_on;
 
 // NOTE: HeadlessEventHandler moved to agent_bridge - this code now uses ActiveStream
 
-fn run_agent_with_tools(
+fn create_active_stream_with_tools(
     agent: &AgentWithTools,
     message: &str,
     history: Vec<RigMessage>,
     max_turns: usize,
-) -> (Result<String, String>, Vec<AgentEvent>) {
-    use agent_bridge::{erase_stream, ActiveStream, PollResult};
+) -> agent_bridge::ActiveStream {
+    use agent_bridge::erase_stream;
     use std::future::IntoFuture;
 
     // Create the connecting future based on agent type
@@ -383,44 +441,8 @@ fn run_agent_with_tools(
         }
     };
 
-    // Create ActiveStream and poll it to completion
-    let mut active_stream = ActiveStream::from_future(connect_future);
-    let mut events = Vec::new();
-
-    // Poll loop - this properly handles the multi-turn iterations
-    loop {
-        // poll_once() is synchronous - it uses noop_waker internally
-        let poll_result = active_stream.poll_once();
-
-        match poll_result {
-            PollResult::Chunk => {
-                // Emit progressive events as we get chunks
-                // The buffer accumulates content
-            }
-            PollResult::Pending => {
-                // Yield briefly to allow async work to progress
-                std::thread::sleep(std::time::Duration::from_millis(1));
-                continue;
-            }
-            PollResult::Complete => {
-                break;
-            }
-            PollResult::Error(e) => {
-                return (Err(e.clone()), events);
-            }
-        }
-    }
-
-    // Get the final content from the buffer
-    let buffer = active_stream.buffer();
-    let content = buffer.get_content();
-
-    // Check for any tool activity that occurred
-    if let Some(activity) = buffer.get_tool_activity() {
-        events.push(AgentEvent::ToolCall(activity));
-    }
-
-    (Ok(content), events)
+    // Create and return the ActiveStream (don't poll it here)
+    agent_bridge::ActiveStream::from_future(connect_future)
 }
 
 fn run_simple_agent(agent: &SimpleAgent, message: &str) -> Result<String, String> {
@@ -436,12 +458,77 @@ fn run_simple_agent(agent: &SimpleAgent, message: &str) -> Result<String, String
 
 impl HeadlessAgent {
     fn poll(&mut self) -> Option<AgentEvent> {
-        self.events.pop_front()
+        use agent_bridge::PollResult;
+
+        // First, return any queued events
+        if let Some(event) = self.events.pop_front() {
+            return Some(event);
+        }
+
+        // If we have an active stream, poll it
+        if let Some(stream) = &mut self.active_stream {
+            let result = stream.poll_once();
+
+            // Check for tool activity updates (like TUI does)
+            let activity = stream.buffer().get_tool_activity();
+            if activity != self.last_tool_activity {
+                if let Some(act) = &activity {
+                    // Tool call started
+                    self.events.push_back(AgentEvent::ToolCall(act.clone()));
+                } else if let Some(last) = &self.last_tool_activity {
+                    // Tool call finished
+                    self.events
+                        .push_back(AgentEvent::ToolResult(bindings::ToolResultData {
+                            name: last.clone(),
+                            output: "Done".to_string(),
+                            is_error: false,
+                        }));
+                }
+                self.last_tool_activity = activity;
+            }
+
+            match result {
+                PollResult::Chunk => {
+                    let content = stream.buffer().get_content();
+                    self.events.push_back(AgentEvent::StreamChunk(content));
+                }
+                PollResult::Pending => {
+                    // Still pending - JS will call poll() again
+                    // Don't block or sleep, just return None
+                }
+                PollResult::Complete => {
+                    let content = stream.buffer().get_content();
+                    self.events
+                        .push_back(AgentEvent::StreamChunk(content.clone()));
+                    self.events
+                        .push_back(AgentEvent::StreamComplete(content.clone()));
+                    self.messages.push(Message {
+                        role: MessageRole::Assistant,
+                        content,
+                    });
+                    self.is_streaming = false;
+                    self.active_stream = None;
+                    self.events.push_back(AgentEvent::Ready);
+                }
+                PollResult::Error(e) => {
+                    self.events.push_back(AgentEvent::StreamError(e));
+                    self.is_streaming = false;
+                    self.active_stream = None;
+                    self.events.push_back(AgentEvent::Ready);
+                }
+            }
+
+            // Return any event we just pushed
+            return self.events.pop_front();
+        }
+
+        None
     }
 
     fn cancel(&mut self) {
         if self.is_streaming {
             self.is_streaming = false;
+            self.active_stream = None;
             self.events.clear();
             self.events.push_back(AgentEvent::Ready);
         }
@@ -494,6 +581,26 @@ impl Guest for HeadlessAgentComponent {
                 agent.cancel();
             }
         });
+    }
+
+    fn plan(handle: AgentHandle, message: String) -> Result<(), String> {
+        with_storage(|s| {
+            if let Some(agent) = s.get_mut(handle) {
+                agent.plan(&message)
+            } else {
+                Err("Invalid agent handle".to_string())
+            }
+        })
+    }
+
+    fn execute(handle: AgentHandle) -> Result<(), String> {
+        with_storage(|s| {
+            if let Some(agent) = s.get_mut(handle) {
+                agent.execute()
+            } else {
+                Err("Invalid agent handle".to_string())
+            }
+        })
     }
 
     fn get_history(handle: AgentHandle) -> Vec<Message> {

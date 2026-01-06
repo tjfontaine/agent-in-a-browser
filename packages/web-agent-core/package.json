@@ -12,8 +12,8 @@
         }
     },
     "scripts": {
-        "build": "npm run transpile && tsc",
-        "transpile": "jco transpile wasm/web_headless_agent.wasm -o src/wasm --name headless-agent",
+        "build": "npm run transpile && tsc && cp -r src/wasm dist/",
+        "transpile": "node ../../scripts/transpile.mjs web-headless-agent",
         "clean": "rm -rf dist src/wasm"
     },
     "files": [
@@ -31,9 +31,10 @@
     "author": "Web Agent Contributors",
     "license": "MIT",
     "dependencies": {
-        "@bytecodealliance/jco": "^1.8.0"
+        "@tjfontaine/wasi-shims": "workspace:*"
     },
     "devDependencies": {
+        "@bytecodealliance/jco": "^1.8.0",
         "typescript": "^5.0.0"
     }
 }

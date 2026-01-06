@@ -47,16 +47,8 @@ pub fn fetch_openai_models(
     let response =
         HttpClient::get_json(&url, Some(api_key)).map_err(|e| format!("HTTP error: {}", e))?;
 
-    if response.status != 200 {
-        return Err(format!(
-            "API returned status {}: {}",
-            response.status,
-            String::from_utf8_lossy(&response.body)
-        ));
-    }
-
-    let models_response: OpenAIModelsResponse = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let models_response: OpenAIModelsResponse =
+        serde_json::from_value(response).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Filter to only completion/chat models (exclude embeddings, whisper, dall-e, etc.)
     let models: Vec<AvailableModel> = models_response
@@ -101,16 +93,8 @@ pub fn fetch_anthropic_models(
     )
     .map_err(|e| format!("HTTP error: {}", e))?;
 
-    if response.status != 200 {
-        return Err(format!(
-            "API returned status {}: {}",
-            response.status,
-            String::from_utf8_lossy(&response.body)
-        ));
-    }
-
-    let models_response: AnthropicModelsResponse = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let models_response: AnthropicModelsResponse =
+        serde_json::from_value(response).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     let models: Vec<AvailableModel> = models_response
         .data
@@ -154,16 +138,8 @@ pub fn fetch_gemini_models(
     let response =
         HttpClient::get_json_with_headers(&url, &[]).map_err(|e| format!("HTTP error: {}", e))?;
 
-    if response.status != 200 {
-        return Err(format!(
-            "API returned status {}: {}",
-            response.status,
-            String::from_utf8_lossy(&response.body)
-        ));
-    }
-
-    let models_response: GeminiModelsResponse = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let models_response: GeminiModelsResponse =
+        serde_json::from_value(response).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Filter to generative models only
     let models: Vec<AvailableModel> = models_response

@@ -187,6 +187,12 @@ export default defineConfig(({ mode }) => ({
     },
     build: {
         target: 'esnext',
+        rollupOptions: {
+            input: {
+                main: 'index.html',
+                'embed-demo': 'embed-demo.html',
+            },
+        },
     },
     preview: {
         headers: {

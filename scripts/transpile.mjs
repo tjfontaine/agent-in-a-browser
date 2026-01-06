@@ -144,6 +144,14 @@ const MODULES = {
         },
         exports: ['run'],
     },
+    'web-headless-agent': {
+        wasm: 'web_headless_agent.wasm',
+        jspiOut: `${PACKAGES}/web-agent-core/src/wasm`,
+        syncOut: `${PACKAGES}/web-agent-core/src/wasm-sync`,
+        shims: SHIMS,
+        // All exported functions that may suspend need --async-exports for JSPI
+        exports: ['create', 'send', 'poll'],
+    },
 };
 
 // ============================================================

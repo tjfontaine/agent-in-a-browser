@@ -69,7 +69,7 @@ pub trait HttpTransport {
         url: &str,
         headers: &[(&str, &str)],
         body: &[u8],
-    ) -> Result<Box<dyn HttpBodyStream>, HttpError>;
+    ) -> Result<HttpStreamingResponse<Box<dyn HttpBodyStream>>, HttpError>;
 }
 
 /// Stream for reading HTTP response body incrementally

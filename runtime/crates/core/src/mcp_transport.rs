@@ -4,14 +4,52 @@
 //! WASM component. This allows the same agent logic to work with different
 //! MCP backends (local sandbox, remote servers).
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Tool definition from MCP
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// MCP tool result content
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToolContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: Option<String>,
+}
+
+/// MCP tool result
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResult {
+    pub content: Vec<ToolContent>,
+    pub is_error: Option<bool>,
+}
+
+/// JSON-RPC response wrapper
+#[derive(Debug, Deserialize)]
+pub struct JsonRpcResponse<T> {
+    #[allow(dead_code)]
+    pub jsonrpc: String,
+    #[allow(dead_code)]
+    pub id: Option<Value>,
+    pub result: Option<T>,
+    pub error: Option<JsonRpcError>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JsonRpcError {
+    #[allow(dead_code)]
+    pub code: i32,
+    pub message: String,
 }
 
 /// Error type for MCP operations
@@ -25,6 +63,18 @@ pub enum McpError {
     ToolNotFound(String),
     /// Tool execution error
     ToolExecutionError(String),
+    /// HTTP error
+    HttpError(String),
+    /// JSON error
+    JsonError(String),
+    /// RPC error
+    RpcError(String),
+    /// Not initialized
+    NotInitialized,
+    /// Lock error
+    LockError,
+    /// OAuth authentication required - contains server URL for OAuth flow
+    OAuthRequired(String),
 }
 
 impl std::fmt::Display for McpError {
@@ -34,11 +84,27 @@ impl std::fmt::Display for McpError {
             McpError::ProtocolError(e) => write!(f, "Protocol error: {}", e),
             McpError::ToolNotFound(name) => write!(f, "Tool not found: {}", name),
             McpError::ToolExecutionError(e) => write!(f, "Tool execution error: {}", e),
+            McpError::HttpError(e) => write!(f, "HTTP error: {}", e),
+            McpError::JsonError(e) => write!(f, "JSON error: {}", e),
+            McpError::RpcError(msg) => write!(f, "RPC error: {}", msg),
+            McpError::NotInitialized => write!(f, "MCP client not initialized"),
+            McpError::LockError => write!(f, "Failed to acquire lock"),
+            McpError::OAuthRequired(url) => write!(f, "OAuth required for {}", url),
         }
     }
 }
 
 impl std::error::Error for McpError {}
+
+// Make McpError Send + Sync
+unsafe impl Send for McpError {}
+unsafe impl Sync for McpError {}
+
+impl From<serde_json::Error> for McpError {
+    fn from(e: serde_json::Error) -> Self {
+        McpError::JsonError(e.to_string())
+    }
+}
 
 /// MCP transport trait for tool execution
 ///

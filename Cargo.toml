@@ -2,6 +2,7 @@
 members = [
     "runtime",
     "runtime/runtime-macros",
+    "runtime/crates/core",
     "runtime/crates/tsx-engine",
     "runtime/crates/sqlite-module",
     "runtime/crates/ratatui-demo",

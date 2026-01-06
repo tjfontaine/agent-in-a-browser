@@ -103,6 +103,15 @@ world headless-agent {
     export poll: func(handle: agent-handle) -> option<agent-event>;
     export cancel: func(handle: agent-handle);
     
+    // Plan/Execute workflow
+    /// Planning phase - sends user request with "plan" action
+    /// Agent should analyze and write /plan.md, then stop and wait for approval
+    export plan: func(handle: agent-handle, message: string) -> result<_, string>;
+    
+    /// Execution phase - sends "execute" action
+    /// Agent should read /plan.md and execute all steps
+    export execute: func(handle: agent-handle) -> result<_, string>;
+    
     // History management
     export get-history: func(handle: agent-handle) -> list<message>;
     export clear-history: func(handle: agent-handle);

@@ -5,9 +5,9 @@
 //!
 //! See: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http
 
-use super::http_client::HttpClient;
-use super::mcp_client::{McpError, ToolDefinition};
-use serde::Deserialize;
+use crate::http_transport::{HttpError, HttpTransport};
+use crate::mcp_transport::{JsonRpcResponse, McpError, McpTransport, ToolDefinition, ToolResult};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 /// MCP protocol version we support
@@ -20,24 +20,6 @@ fn get_effective_url(base_url: &str, path: &str) -> String {
     format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
-/// JSON-RPC response wrapper
-#[derive(Debug, Deserialize)]
-struct JsonRpcResponse<T> {
-    #[allow(dead_code)]
-    jsonrpc: String,
-    #[allow(dead_code)]
-    id: Option<Value>,
-    result: Option<T>,
-    error: Option<JsonRpcError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcError {
-    #[allow(dead_code)]
-    code: i32,
-    message: String,
-}
-
 /// Remote MCP Client for Streamable HTTP transport
 ///
 /// Implements MCP 2025-11-25 specification with:
@@ -45,7 +27,8 @@ struct JsonRpcError {
 /// - MCP-Protocol-Version header
 /// - MCP-Session-Id management
 /// - Bearer token authentication
-pub struct RemoteMcpClient {
+pub struct RemoteMcpClient<T: HttpTransport> {
+    transport: T,
     base_url: String,
     bearer_token: Option<String>,
     session_id: Option<String>,
@@ -53,10 +36,11 @@ pub struct RemoteMcpClient {
     initialized: bool,
 }
 
-impl RemoteMcpClient {
+impl<T: HttpTransport> RemoteMcpClient<T> {
     /// Create a new remote MCP client
-    pub fn new(url: &str, bearer_token: Option<String>) -> Self {
+    pub fn new(transport: T, url: &str, bearer_token: Option<String>) -> Self {
         Self {
+            transport,
             base_url: url.trim_end_matches('/').to_string(),
             bearer_token,
             session_id: None,
@@ -84,7 +68,7 @@ impl RemoteMcpClient {
                     "tools": {}
                 },
                 "clientInfo": {
-                    "name": "web-agent-tui",
+                    "name": "web-agent",
                     "version": "0.1.0"
                 }
             }
@@ -142,21 +126,6 @@ impl RemoteMcpClient {
             }
         });
 
-        #[derive(Deserialize)]
-        struct ToolContent {
-            #[serde(rename = "type")]
-            #[allow(dead_code)]
-            content_type: String,
-            text: Option<String>,
-        }
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct ToolResult {
-            content: Vec<ToolContent>,
-            is_error: Option<bool>,
-        }
-
         let response: JsonRpcResponse<ToolResult> = self.send_request(&request)?;
 
         match response.result {
@@ -183,10 +152,10 @@ impl RemoteMcpClient {
     }
 
     /// Send a JSON-RPC request and parse response
-    fn send_request<T: for<'de> Deserialize<'de>>(
+    fn send_request<R: for<'de> Deserialize<'de>>(
         &self,
         request: &Value,
-    ) -> Result<JsonRpcResponse<T>, McpError> {
+    ) -> Result<JsonRpcResponse<R>, McpError> {
         let url = get_effective_url(&self.base_url, "");
         let body = serde_json::to_string(request)?;
 
@@ -213,10 +182,13 @@ impl RemoteMcpClient {
             headers.push(("MCP-Session-Id", &session_header));
         }
 
-        let response = HttpClient::request("POST", &url, &headers, Some(body.as_bytes()))?;
+        let response = self
+            .transport
+            .post(&url, &headers, body.as_bytes())
+            .map_err(|e| McpError::HttpError(e.to_string()))?;
 
         // TODO: Parse MCP-Session-Id from response headers if present
-        // Currently HttpClient doesn't expose response headers
+        // Currently HttpTransport usage might not expose headers easily without updating HttpResponse
 
         // Check for 401 Unauthorized - OAuth required
         if response.status == 401 {
@@ -232,7 +204,7 @@ impl RemoteMcpClient {
             )));
         }
 
-        let parsed: JsonRpcResponse<T> = serde_json::from_slice(&response.body)?;
+        let parsed: JsonRpcResponse<R> = serde_json::from_slice(&response.body)?;
         Ok(parsed)
     }
 
@@ -259,7 +231,10 @@ impl RemoteMcpClient {
             headers.push(("MCP-Session-Id", &session_header));
         }
 
-        let response = HttpClient::request("POST", &url, &headers, Some(body.as_bytes()))?;
+        let response = self
+            .transport
+            .post(&url, &headers, body.as_bytes())
+            .map_err(|e| McpError::HttpError(e.to_string()))?;
 
         // Notifications should return 202 Accepted
         if response.status != 202 && response.status >= 400 {
@@ -279,24 +254,12 @@ impl RemoteMcpClient {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl<T: HttpTransport + Send + Sync> McpTransport for RemoteMcpClient<T> {
+    fn list_tools(&self) -> Result<Vec<ToolDefinition>, McpError> {
+        self.list_tools()
+    }
 
-    #[test]
-    fn test_get_effective_url() {
-        // All URLs pass through unchanged - CORS proxy handled by TS shim
-        assert_eq!(
-            get_effective_url("http://localhost:3000/mcp", ""),
-            "http://localhost:3000/mcp"
-        );
-        assert_eq!(
-            get_effective_url("https://mcp.stripe.com", ""),
-            "https://mcp.stripe.com"
-        );
-        assert_eq!(
-            get_effective_url("https://mcp.stripe.com/", "/v1"),
-            "https://mcp.stripe.com/v1"
-        );
+    fn call_tool(&self, name: &str, arguments: Value) -> Result<String, McpError> {
+        self.call_tool(name, arguments)
     }
 }

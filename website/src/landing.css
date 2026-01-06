@@ -560,6 +560,19 @@ pre {
   color: var(--color-accent-green);
 }
 
+.feature-link {
+  display: inline-block;
+  margin-top: var(--space-md);
+  color: var(--color-accent-blue);
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: color var(--transition-fast);
+}
+
+.feature-link:hover {
+  color: var(--color-accent-cyan);
+}
+
 /* ============================================
    Capabilities Section
    ============================================ */
