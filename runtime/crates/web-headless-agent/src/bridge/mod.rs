@@ -6,5 +6,3 @@ pub mod http_client;
 pub mod mcp_client;
 pub mod wasi_completion_model;
 pub mod wasi_http_adapter;
-
-pub use mcp_client::SandboxMcpClient;

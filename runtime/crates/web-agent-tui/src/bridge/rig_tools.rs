@@ -9,6 +9,7 @@ use rig::wasm_compat::WasmBoxedFuture;
 use serde_json::Value;
 
 use super::mcp_client::{McpClient, ToolDefinition as McpToolDefinition};
+use agent_bridge::LocalToolDefinition;
 
 /// Wrapper for an MCP tool that implements rig-core's `ToolDyn` trait.
 ///
@@ -78,8 +79,8 @@ impl ToolDyn for McpToolAdapter {
 ///
 /// Local tools don't need network calls - they update UI state directly.
 pub struct LocalToolAdapter {
-    /// Tool definition
-    definition: McpToolDefinition,
+    /// Tool definition from agent_bridge
+    definition: LocalToolDefinition,
 }
 
 impl LocalToolAdapter {

@@ -13,7 +13,7 @@ mod bindings;
 
 use bindings::Guest;
 use rig::agent::Agent;
-use rig::completion::{Chat, Message as RigMessage, Prompt};
+use rig::completion::{Message as RigMessage, Prompt};
 use rig::streaming::StreamingChat;
 use rig::tool::server::ToolServer;
 use std::future::IntoFuture;

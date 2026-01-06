@@ -17,9 +17,11 @@
 pub mod active_stream;
 pub mod events;
 pub mod http_transport;
+pub mod local_tools;
 pub mod mcp_transport;
 pub mod rig_agent;
 pub mod rig_tools;
+pub mod wasi_completion_model;
 pub mod wasm_async;
 
 // Re-export commonly used items
@@ -32,7 +34,15 @@ pub use events::{AgentEvent, FileInfo, TaskInfo, TaskResult, ToolResultData};
 pub use http_transport::{
     HttpBodyStream, HttpError, HttpResponse, HttpStreamingResponse, HttpTransport,
 };
+pub use local_tools::{
+    format_tasks_for_display, get_local_tool_definitions, try_execute_local_tool,
+    LocalToolDefinition, LocalToolResult, Task, TaskStatus,
+};
 pub use mcp_transport::{McpError, McpTransport, ToolDefinition};
 pub use rig_agent::{process_stream, EventCollector, StreamEventHandler};
 pub use rig_tools::{build_tool_set, McpToolAdapter};
+pub use wasi_completion_model::{
+    create_anthropic_client, create_gemini_client, create_openai_client, AnthropicClient,
+    AnthropicModel, GeminiClient, GeminiModel, OpenAIClient, OpenAIModel,
+};
 pub use wasm_async::wasm_block_on;
