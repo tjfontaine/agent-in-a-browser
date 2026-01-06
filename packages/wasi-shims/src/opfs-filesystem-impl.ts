@@ -874,6 +874,19 @@ class Descriptor {
                 }
 
                 if (isDirectory) {
+                    // Close all sync handles for files under this directory
+                    // to avoid NoModificationAllowedError during recursive removal
+                    const pathPrefix = path + '/';
+                    for (const [handlePath, handle] of syncHandleCache) {
+                        if (handlePath === path || handlePath.startsWith(pathPrefix)) {
+                            try {
+                                handle.close();
+                            } catch (e) {
+                                console.warn('[opfs-fs] Failed to close handle during recursive delete:', handlePath, e);
+                            }
+                            syncHandleCache.delete(handlePath);
+                        }
+                    }
                     await parentDir.removeEntry(name, { recursive: true });
                 } else {
                     await parentDir.removeEntry(name);
