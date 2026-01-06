@@ -8,7 +8,7 @@
     "frontend"
   ],
   "scripts": {
-    "build:packages": "npm run build --workspace=@tjfontaine/wasm-loader && npm run build --workspace=@tjfontaine/web-agent-core",
+    "build:packages": "npm run build --workspace=@tjfontaine/wasm-loader && npm run build --workspace=@tjfontaine/wasi-shims && npm run build --workspace=@tjfontaine/web-agent-core",
     "build": "npm run build:wasm && npm run build:frontend",
     "build:wasm": "cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml",
     "build:frontend": "cd frontend && npm run build",
