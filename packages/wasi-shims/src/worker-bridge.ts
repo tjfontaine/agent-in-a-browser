@@ -7,7 +7,7 @@
  */
 
 import type { Terminal } from 'ghostty-web';
-import { STDIN_CONTROL, HTTP_CONTROL } from './wasm-worker';
+import { STDIN_CONTROL, HTTP_CONTROL } from './worker-constants';
 
 // ============================================================
 // TYPES

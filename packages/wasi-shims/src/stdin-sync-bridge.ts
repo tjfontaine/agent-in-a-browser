@@ -8,7 +8,7 @@
  * Pattern mirrors opfs-sync-bridge.ts for filesystem operations.
  */
 
-import { STDIN_CONTROL } from './wasm-worker';
+import { STDIN_CONTROL } from './worker-constants';
 import { setTerminalSize } from './ghostty-cli-shim.js';
 import { setExecutionMode, isSyncWorkerMode } from './execution-mode.js';
 

@@ -8,7 +8,7 @@
  * Pattern mirrors opfs-sync-bridge.ts for filesystem operations.
  */
 
-import { HTTP_CONTROL } from './wasm-worker';
+import { HTTP_CONTROL } from './worker-constants';
 
 // ============================================================
 // STATE (initialized by worker)
