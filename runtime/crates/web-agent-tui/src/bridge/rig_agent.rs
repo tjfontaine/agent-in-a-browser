@@ -196,11 +196,13 @@ impl ActiveStream {
     ///
     /// The `history` parameter contains previous conversation messages that
     /// provide context for the current prompt.
+    /// The `max_turns` parameter controls how many tool-calling turns are allowed.
     pub fn start(
         agent: &RigAgent,
         message: &str,
         history: Vec<RigMessage>,
         initial_content: Option<String>,
+        max_turns: usize,
     ) -> Self {
         use futures::StreamExt;
         use std::future::IntoFuture;
@@ -218,7 +220,7 @@ impl ActiveStream {
             AgentType::Anthropic(agent) => {
                 let future = agent
                     .stream_chat(&message, history)
-                    .multi_turn(5)
+                    .multi_turn(max_turns)
                     .into_future();
                 // Wrap in a future that maps the stream to erased items
                 let erased_future: ErasedConnectFuture = Box::pin(async move {
@@ -232,7 +234,7 @@ impl ActiveStream {
             AgentType::OpenAI(agent) => {
                 let future = agent
                     .stream_chat(&message, history)
-                    .multi_turn(5)
+                    .multi_turn(max_turns)
                     .into_future();
                 let erased_future: ErasedConnectFuture = Box::pin(async move {
                     let stream = future.await;
@@ -245,7 +247,7 @@ impl ActiveStream {
             AgentType::Gemini(agent) => {
                 let future = agent
                     .stream_chat(&message, history)
-                    .multi_turn(5)
+                    .multi_turn(max_turns)
                     .into_future();
                 let erased_future: ErasedConnectFuture = Box::pin(async move {
                     let stream = future.await;

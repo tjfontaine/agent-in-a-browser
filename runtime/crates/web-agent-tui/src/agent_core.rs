@@ -299,7 +299,8 @@ impl AgentCore {
             .collect();
 
         // Start stream
-        let active_stream = ActiveStream::start(agent, input, history, None);
+        let max_turns = self.config.ui.max_turns;
+        let active_stream = ActiveStream::start(agent, input, history, None, max_turns);
 
         self.active_stream = Some(active_stream);
         self.emit(AgentEvent::StreamStart);
@@ -399,5 +400,4 @@ impl AgentCore {
 
         tools
     }
-
 }

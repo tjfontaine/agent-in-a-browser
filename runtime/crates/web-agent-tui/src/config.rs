@@ -148,6 +148,10 @@ pub struct UiConfig {
 
     #[serde(default = "default_aux_panel")]
     pub aux_panel: bool,
+
+    /// Maximum tool-calling turns per message (default: 25)
+    #[serde(default = "default_max_turns")]
+    pub max_turns: usize,
 }
 
 impl Default for UiConfig {
@@ -155,6 +159,7 @@ impl Default for UiConfig {
         Self {
             theme: default_theme(),
             aux_panel: default_aux_panel(),
+            max_turns: default_max_turns(),
         }
     }
 }
@@ -165,6 +170,10 @@ fn default_theme() -> String {
 
 fn default_aux_panel() -> bool {
     true
+}
+
+fn default_max_turns() -> usize {
+    25
 }
 
 impl Config {
