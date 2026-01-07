@@ -24,7 +24,7 @@ use bindings::Guest;
 pub use agent_core::{AgentCore, Message, Role, ServerStatus};
 pub use app::App;
 pub use backend::WasiBackend;
-pub use display::{DisplayItem, NoticeKind, ToolStatus};
+pub use display::{DisplayItem, NoticeKind, TimelineEntry, ToolStatus};
 pub use events::{AgentEvent, AgentState};
 
 // Re-export poll API for use in App

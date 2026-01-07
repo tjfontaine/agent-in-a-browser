@@ -80,7 +80,7 @@ impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
         // Messages
         MessagesWidget::new(
             self.app.agent.messages(),
-            &self.app.display_items,
+            &self.app.timeline,
             self.app.state,
         )
         .render(chunks[0], buf);

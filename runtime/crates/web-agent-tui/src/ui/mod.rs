@@ -51,7 +51,7 @@ pub fn render_ui(
     input: &str,
     cursor_pos: usize,
     messages: &[Message],
-    display_items: &[crate::display::DisplayItem],
+    timeline: &[crate::display::TimelineEntry],
     aux_content: &AuxContent,
     server_status: &ServerStatus,
     model_name: &str,
@@ -87,7 +87,7 @@ pub fn render_ui(
             input,
             cursor_pos,
             messages,
-            display_items,
+            timeline,
         );
         render_aux_panel(frame, h_chunks[1], aux_content, server_status);
     } else {
@@ -100,7 +100,7 @@ pub fn render_ui(
             input,
             cursor_pos,
             messages,
-            display_items,
+            timeline,
         );
     }
 
@@ -131,7 +131,7 @@ fn render_main_panel(
     input: &str,
     cursor_pos: usize,
     messages: &[Message],
-    display_items: &[crate::display::DisplayItem],
+    timeline: &[crate::display::TimelineEntry],
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -142,10 +142,7 @@ fn render_main_panel(
         .split(area);
 
     // Messages
-    frame.render_widget(
-        MessagesWidget::new(messages, display_items, state),
-        chunks[0],
-    );
+    frame.render_widget(MessagesWidget::new(messages, timeline, state), chunks[0]);
 
     // Input Box
     let mut cursor_state = None;
@@ -175,7 +172,7 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.input.text(),
         app.input.cursor_pos(),
         app.agent.messages(),
-        &app.display_items,
+        &app.timeline,
         &app.aux_content,
         &app.server_status,
         app.agent.model(),

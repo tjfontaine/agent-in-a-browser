@@ -3,6 +3,8 @@
 //! These items are transient UI content that should never be sent to the API.
 //! Inspired by Codex's `HistoryCell` trait pattern.
 
+use crate::agent_core::{Message, Role};
+
 /// Display-only item (never sent to API)
 #[derive(Clone, Debug)]
 pub enum DisplayItem {
@@ -97,5 +99,53 @@ impl DisplayItem {
                 format!("{} {}", prefix, text)
             }
         }
+    }
+}
+
+/// Unified timeline entry for chronological display
+/// Combines API-bound messages and display-only items in order received
+#[derive(Clone, Debug)]
+pub enum TimelineEntry {
+    /// User or assistant message (also sent to API)
+    Message(Message),
+    /// Display-only item (UI-only, never sent to API)
+    Display(DisplayItem),
+}
+
+impl TimelineEntry {
+    /// Create a user message timeline entry
+    pub fn user_message(content: impl Into<String>) -> Self {
+        TimelineEntry::Message(Message {
+            role: Role::User,
+            content: content.into(),
+        })
+    }
+
+    /// Create an assistant message timeline entry
+    pub fn assistant_message(content: impl Into<String>) -> Self {
+        TimelineEntry::Message(Message {
+            role: Role::Assistant,
+            content: content.into(),
+        })
+    }
+
+    /// Create an info notice timeline entry
+    pub fn info(text: impl Into<String>) -> Self {
+        TimelineEntry::Display(DisplayItem::info(text))
+    }
+
+    /// Create a warning notice timeline entry
+    pub fn warning(text: impl Into<String>) -> Self {
+        TimelineEntry::Display(DisplayItem::warning(text))
+    }
+
+    /// Create an error notice timeline entry
+    pub fn error(text: impl Into<String>) -> Self {
+        TimelineEntry::Display(DisplayItem::error(text))
+    }
+
+    /// Create a tool activity timeline entry
+    pub fn tool_activity(tool_name: impl Into<String>) -> Self {
+        TimelineEntry::Display(DisplayItem::tool_activity(tool_name))
     }
 }

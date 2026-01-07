@@ -15,6 +15,8 @@ async function typeInTerminal(page: Page, text: string): Promise<void> {
         // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
+    // Wait for focus to be fully established (helps with WebKit timing)
+    await page.waitForTimeout(100);
     await page.keyboard.type(text, { delay: 50 });
 }
 
@@ -24,6 +26,8 @@ async function pressKey(page: Page, key: string): Promise<void> {
         // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
+    // Wait for focus to be fully established (helps with WebKit timing)
+    await page.waitForTimeout(50);
     await page.keyboard.press(key);
 }
 

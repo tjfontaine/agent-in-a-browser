@@ -61,8 +61,8 @@ pub struct App<R: PollableRead, W: Write> {
     cancelled: bool,
     /// Current overlay (modal popup)
     pub(crate) overlay: Option<Overlay>,
-    /// Display-only items (tool activity, notices) - never sent to API
-    pub(crate) display_items: Vec<crate::display::DisplayItem>,
+    /// Unified timeline: messages and display items in chronological order
+    pub(crate) timeline: Vec<crate::display::TimelineEntry>,
 
     /// The Core Agent logic
     pub(crate) agent: AgentCore,
@@ -126,30 +126,58 @@ impl<R: PollableRead, W: Write> App<R, W> {
             },
             cancelled: false,
             overlay: None,
-            display_items: vec![crate::display::DisplayItem::info(
+            timeline: vec![crate::display::TimelineEntry::info(
                 "Welcome to Agent in a Browser! Type /help for commands.",
             )],
             agent,
         }
     }
 
-    /// Add an info notice to display_items (UI-only, never sent to API)
+    /// Add an info notice to timeline (UI-only, never sent to API)
     fn notice(&mut self, text: impl Into<String>) {
-        self.display_items
-            .push(crate::display::DisplayItem::info(text));
+        self.timeline
+            .push(crate::display::TimelineEntry::info(text));
     }
 
-    /// Add a warning notice to display_items
+    /// Add a warning notice to timeline
     #[allow(dead_code)]
     fn notice_warning(&mut self, text: impl Into<String>) {
-        self.display_items
-            .push(crate::display::DisplayItem::warning(text));
+        self.timeline
+            .push(crate::display::TimelineEntry::warning(text));
     }
 
-    /// Add an error notice to display_items
+    /// Add an error notice to timeline
     fn notice_error(&mut self, text: impl Into<String>) {
-        self.display_items
-            .push(crate::display::DisplayItem::error(text));
+        self.timeline
+            .push(crate::display::TimelineEntry::error(text));
+    }
+
+    /// Add a user message to both agent history and timeline
+    fn add_user_message(&mut self, content: &str) {
+        self.agent.add_user_message(content);
+        self.timeline
+            .push(crate::display::TimelineEntry::user_message(content));
+    }
+
+    /// Add an assistant message to both agent history and timeline
+    fn add_assistant_message(&mut self, content: &str) {
+        self.agent.add_assistant_message(content);
+        self.timeline
+            .push(crate::display::TimelineEntry::assistant_message(content));
+    }
+
+    /// Update the last assistant message in both agent history and timeline
+    #[allow(dead_code)]
+    fn update_last_assistant(&mut self, content: &str) {
+        self.agent.update_last_assistant(content);
+        // Update the last assistant message in the timeline
+        if let Some(last) = self.timeline.last_mut() {
+            if let crate::display::TimelineEntry::Message(ref mut msg) = last {
+                if msg.role == crate::Role::Assistant {
+                    msg.content = content.to_string();
+                }
+            }
+        }
     }
 
     /// Main run loop
@@ -294,7 +322,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
         let model_name = self.agent.model().to_string();
         let overlay = self.overlay.clone();
-        let display_items = self.display_items.clone();
+        let display_items = self.timeline.clone();
 
         let _ = self.terminal.draw(|frame| {
             render_ui(
@@ -462,8 +490,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x04 => {
                 if self.mode == Mode::Shell {
                     self.mode = Mode::Agent;
-                    self.display_items
-                        .push(crate::display::DisplayItem::info("Exiting shell mode."));
+                    self.timeline
+                        .push(crate::display::TimelineEntry::info("Exiting shell mode."));
                 } else {
                     self.should_quit = true;
                 }
@@ -473,7 +501,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x0E => {
                 if self.mode != Mode::Agent {
                     self.mode = Mode::Agent;
-                    self.display_items.push(crate::display::DisplayItem::info(
+                    self.timeline.push(crate::display::TimelineEntry::info(
                         "Switched to normal mode.",
                     ));
                 }
@@ -483,11 +511,11 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x10 => {
                 if self.mode == Mode::Plan {
                     self.mode = Mode::Agent;
-                    self.display_items
-                        .push(crate::display::DisplayItem::info("Exiting plan mode."));
+                    self.timeline
+                        .push(crate::display::TimelineEntry::info("Exiting plan mode."));
                 } else if self.mode != Mode::Shell {
                     self.mode = Mode::Plan;
-                    self.display_items.push(crate::display::DisplayItem::info(
+                    self.timeline.push(crate::display::TimelineEntry::info(
                         "Entering plan mode. Type 'go' to execute plan, or /mode normal to exit.",
                     ));
                 }
@@ -525,7 +553,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 self.state = AppState::Ready;
                 self.pending_message = None;
                 self.input.clear();
-                self.display_items.push(crate::display::DisplayItem::info(
+                self.timeline.push(crate::display::TimelineEntry::info(
                     "API key entry cancelled.",
                 ));
             }
@@ -586,8 +614,9 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 // set_api_key saves to config and invalidates agent
                 self.set_api_key(&input);
 
-                self.display_items
-                    .push(crate::display::DisplayItem::info("API key set and saved."));
+                self.timeline.push(crate::display::TimelineEntry::info(
+                    "API key set and saved.",
+                ));
                 self.state = AppState::Ready;
 
                 // If we have a pending message, send it now
@@ -653,20 +682,20 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Execute a shell command via MCP shell_eval
     fn execute_shell_command(&mut self, command: &str) {
         // Show the command with shell prompt
-        self.agent.add_user_message(&format!("$ {}", command));
+        self.add_user_message(&format!("$ {}", command));
 
         // Handle shell-local commands
         if command.trim() == "exit" {
             self.mode = Mode::Agent;
-            self.display_items
-                .push(crate::display::DisplayItem::info("Exiting shell mode."));
+            self.timeline
+                .push(crate::display::TimelineEntry::info("Exiting shell mode."));
             return;
         }
 
         if command.trim() == "clear" {
             self.agent.clear_messages();
-            self.display_items.clear();
-            self.display_items.push(crate::display::DisplayItem::info(
+            self.timeline.clear();
+            self.timeline.push(crate::display::TimelineEntry::info(
                 "Shell mode - type 'exit' or ^D to return",
             ));
             return;
@@ -696,11 +725,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 };
 
                 // Use Assistant role for tool output since we don't have Tool/System roles in AgentCore
-                self.agent.add_assistant_message(&display);
+                self.add_assistant_message(&display);
             }
             Err(e) => {
-                self.display_items
-                    .push(crate::display::DisplayItem::error(format!("Error: {}", e)));
+                self.timeline
+                    .push(crate::display::TimelineEntry::error(format!(
+                        "Error: {}",
+                        e
+                    )));
             }
         }
 
@@ -719,8 +751,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
         // Check for API key
         if !self.agent.has_api_key() {
-            self.agent.add_user_message(input);
-            self.display_items.push(crate::display::DisplayItem::info(
+            self.add_user_message(input);
+            self.timeline.push(crate::display::TimelineEntry::info(
                 "Please set your API key to proceed.",
             ));
             self.pending_message = Some(input.to_string());
@@ -767,8 +799,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     self.agent.set_rig_agent(agent);
                 }
                 Err(e) => {
-                    self.display_items
-                        .push(crate::display::DisplayItem::error(e.to_string()));
+                    self.timeline
+                        .push(crate::display::TimelineEntry::error(e.to_string()));
                     self.state = AppState::Ready;
                     return;
                 }
@@ -796,8 +828,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         };
 
         if let Err(e) = result {
-            self.display_items
-                .push(crate::display::DisplayItem::error(e));
+            self.timeline.push(crate::display::TimelineEntry::error(e));
             self.state = AppState::Ready;
         }
     }
@@ -823,34 +854,55 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     self.state = AppState::Ready;
                 }
                 crate::events::AgentEvent::StreamCancelled => {
-                    self.display_items
-                        .push(crate::display::DisplayItem::warning("Streaming cancelled."));
+                    self.timeline.push(crate::display::TimelineEntry::warning(
+                        "Streaming cancelled.",
+                    ));
                     self.state = AppState::Ready;
                 }
                 crate::events::AgentEvent::Notice { text, kind } => match kind {
                     crate::display::NoticeKind::Info => {
-                        self.display_items
-                            .push(crate::display::DisplayItem::info(text));
+                        self.timeline
+                            .push(crate::display::TimelineEntry::info(text));
                     }
                     crate::display::NoticeKind::Warning => {
-                        self.display_items
-                            .push(crate::display::DisplayItem::warning(text));
+                        self.timeline
+                            .push(crate::display::TimelineEntry::warning(text));
                     }
                     crate::display::NoticeKind::Error => {
-                        self.display_items
-                            .push(crate::display::DisplayItem::error(text));
+                        self.timeline
+                            .push(crate::display::TimelineEntry::error(text));
                     }
                 },
 
                 // Stream events
-                crate::events::AgentEvent::StreamStart => {}
-                crate::events::AgentEvent::StreamChunk { .. } => {
-                    // Handled by agent state
+                crate::events::AgentEvent::StreamStart => {
+                    // Add empty assistant message to timeline for streaming
+                    self.timeline
+                        .push(crate::display::TimelineEntry::assistant_message(""));
                 }
-                crate::events::AgentEvent::StreamComplete { .. } => {}
+                crate::events::AgentEvent::StreamChunk { text } => {
+                    // Update the last assistant message in the timeline
+                    if let Some(last) = self.timeline.last_mut() {
+                        if let crate::display::TimelineEntry::Message(ref mut msg) = last {
+                            if msg.role == crate::Role::Assistant {
+                                msg.content = text;
+                            }
+                        }
+                    }
+                }
+                crate::events::AgentEvent::StreamComplete { final_text } => {
+                    // Update the last assistant message with final content
+                    if let Some(last) = self.timeline.last_mut() {
+                        if let crate::display::TimelineEntry::Message(ref mut msg) = last {
+                            if msg.role == crate::Role::Assistant {
+                                msg.content = final_text;
+                            }
+                        }
+                    }
+                }
                 crate::events::AgentEvent::StreamError { error } => {
-                    self.display_items
-                        .push(crate::display::DisplayItem::error(error));
+                    self.timeline
+                        .push(crate::display::TimelineEntry::error(error));
                     self.state = AppState::Ready;
                 }
 
@@ -860,13 +912,17 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     status: _,
                 } => {
                     // Only show Calling status for now
-                    self.display_items
-                        .push(crate::display::DisplayItem::tool_activity(tool_name));
+                    self.timeline
+                        .push(crate::display::TimelineEntry::tool_activity(tool_name));
                 }
                 crate::events::AgentEvent::ToolResult { .. } => {}
 
                 // Message events
-                crate::events::AgentEvent::UserMessage { .. } => {}
+                crate::events::AgentEvent::UserMessage { content } => {
+                    // Add user message to timeline
+                    self.timeline
+                        .push(crate::display::TimelineEntry::user_message(content));
+                }
             }
         }
     }
@@ -1434,7 +1490,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                         );
                                     } else {
                                         // No API key - redirect to API key entry
-                                        self.display_items.push(crate::display::DisplayItem::info(
+                                        self.timeline.push(crate::display::TimelineEntry::info(
                                             "Please enter an API key first.",
                                         ));
                                         *step = ProviderWizardStep::EditApiKey;
@@ -1511,7 +1567,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     );
                                 } else {
                                     // No API key - redirect to API key entry
-                                    self.display_items.push(crate::display::DisplayItem::info(
+                                    self.timeline.push(crate::display::TimelineEntry::info(
                                         "Please enter an API key first.",
                                     ));
                                     *step = ProviderWizardStep::EditApiKey;

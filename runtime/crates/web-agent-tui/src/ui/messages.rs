@@ -4,20 +4,20 @@ use ratatui::{
 };
 
 use crate::app::AppState;
-use crate::display::DisplayItem;
+use crate::display::{DisplayItem, TimelineEntry};
 use crate::{Message, Role};
 
 pub struct MessagesWidget<'a> {
     pub messages: &'a [Message],
-    pub display_items: &'a [DisplayItem],
+    pub timeline: &'a [TimelineEntry],
     pub state: AppState,
 }
 
 impl<'a> MessagesWidget<'a> {
-    pub fn new(messages: &'a [Message], display_items: &'a [DisplayItem], state: AppState) -> Self {
+    pub fn new(messages: &'a [Message], timeline: &'a [TimelineEntry], state: AppState) -> Self {
         Self {
             messages,
-            display_items,
+            timeline,
             state,
         }
     }
@@ -28,46 +28,51 @@ impl<'a> Widget for MessagesWidget<'a> {
         let inner_width = area.width.saturating_sub(4) as usize; // Account for borders + prefix
         let visible_height = area.height.saturating_sub(2) as usize;
 
-        // Build wrapped lines with styling
+        // Build wrapped lines with styling from the unified timeline
         let mut lines: Vec<Line> = Vec::new();
 
-        for msg in self.messages {
-            let (prefix, style) = match msg.role {
-                Role::User => (
-                    "› ",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Role::Assistant => ("◆ ", Style::default().fg(Color::Green)),
-            };
+        // Render timeline entries in chronological order (unified messages + display items)
+        for entry in self.timeline {
+            match entry {
+                TimelineEntry::Message(msg) => {
+                    let (prefix, style) = match msg.role {
+                        Role::User => (
+                            "› ",
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Role::Assistant => ("◆ ", Style::default().fg(Color::Green)),
+                    };
 
-            // Word-wrap the content manually for better control
-            let wrapped = wrap_text(&msg.content, inner_width.saturating_sub(2));
+                    // Word-wrap the content manually for better control
+                    let wrapped = wrap_text(&msg.content, inner_width.saturating_sub(2));
 
-            for (i, line_text) in wrapped.iter().enumerate() {
-                let line_prefix = if i == 0 { prefix } else { "  " };
-                lines.push(Line::from(vec![
-                    Span::styled(line_prefix, style),
-                    Span::styled(line_text.clone(), style.remove_modifier(Modifier::BOLD)),
-                ]));
+                    for (i, line_text) in wrapped.iter().enumerate() {
+                        let line_prefix = if i == 0 { prefix } else { "  " };
+                        lines.push(Line::from(vec![
+                            Span::styled(line_prefix, style),
+                            Span::styled(line_text.clone(), style.remove_modifier(Modifier::BOLD)),
+                        ]));
+                    }
+                }
+                TimelineEntry::Display(display_item) => {
+                    let text = display_item.display_text();
+                    let style = match display_item {
+                        DisplayItem::ToolActivity { .. } => Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::ITALIC),
+                        DisplayItem::Notice { kind, .. } => match kind {
+                            crate::display::NoticeKind::Info => Style::default().fg(Color::Blue),
+                            crate::display::NoticeKind::Warning => {
+                                Style::default().fg(Color::Yellow)
+                            }
+                            crate::display::NoticeKind::Error => Style::default().fg(Color::Red),
+                        },
+                    };
+                    lines.push(Line::from(Span::styled(text, style)));
+                }
             }
-        }
-
-        // Render display items (tool activity, notices) - these are UI-only
-        for display_item in self.display_items {
-            let text = display_item.display_text();
-            let style = match display_item {
-                DisplayItem::ToolActivity { .. } => Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::ITALIC),
-                DisplayItem::Notice { kind, .. } => match kind {
-                    crate::display::NoticeKind::Info => Style::default().fg(Color::Blue),
-                    crate::display::NoticeKind::Warning => Style::default().fg(Color::Yellow),
-                    crate::display::NoticeKind::Error => Style::default().fg(Color::Red),
-                },
-            };
-            lines.push(Line::from(Span::styled(text, style)));
         }
 
         // Add processing indicator
