@@ -569,7 +569,7 @@ async function runTask() {
                 provider,
                 model,
                 apiKey,
-                mcpUrl: 'http://localhost:3000/mcp',
+                mcpServers: [{ url: 'http://localhost:3000/mcp', name: 'sandbox' }],
             });
             console.log('[EmbedDemo] Initializing agent...');
             await agent.initialize();
