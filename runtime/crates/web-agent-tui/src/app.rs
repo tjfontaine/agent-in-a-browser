@@ -915,7 +915,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     self.timeline
                         .push(crate::display::TimelineEntry::tool_activity(tool_name));
                 }
-                crate::events::AgentEvent::ToolResult { .. } => {}
+                crate::events::AgentEvent::ToolResult {
+                    tool_name,
+                    result,
+                    is_error,
+                } => {
+                    self.timeline
+                        .push(crate::display::TimelineEntry::tool_result(
+                            tool_name, result, is_error,
+                        ));
+                }
 
                 // Message events
                 crate::events::AgentEvent::UserMessage { content } => {

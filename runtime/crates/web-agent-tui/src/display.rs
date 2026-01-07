@@ -15,6 +15,15 @@ pub enum DisplayItem {
         /// Status of the tool call
         status: ToolStatus,
     },
+    /// Tool result indicator
+    ToolResult {
+        /// Tool name
+        tool_name: String,
+        /// Result preview (truncated)
+        result: String,
+        /// Whether result was an error
+        is_error: bool,
+    },
     /// System notice (warnings, info, errors)
     Notice {
         /// Notice text
@@ -90,6 +99,22 @@ impl DisplayItem {
                 };
                 format!("{} Calling {}...", icon, tool_name)
             }
+            DisplayItem::ToolResult {
+                tool_name,
+                result,
+                is_error,
+            } => {
+                let icon = if *is_error { "❌" } else { "✅" };
+                // Truncate result for display
+                let preview = if result.len() > 100 {
+                    format!("{}...", &result[..100])
+                } else {
+                    result.clone()
+                };
+                // Replace newlines with spaces for compact display
+                let preview = preview.replace('\n', " ");
+                format!("{} {}: {}", icon, tool_name, preview)
+            }
             DisplayItem::Notice { text, kind } => {
                 let prefix = match kind {
                     NoticeKind::Info => "ℹ️",
@@ -147,5 +172,18 @@ impl TimelineEntry {
     /// Create a tool activity timeline entry
     pub fn tool_activity(tool_name: impl Into<String>) -> Self {
         TimelineEntry::Display(DisplayItem::tool_activity(tool_name))
+    }
+
+    /// Create a tool result timeline entry
+    pub fn tool_result(
+        tool_name: impl Into<String>,
+        result: impl Into<String>,
+        is_error: bool,
+    ) -> Self {
+        TimelineEntry::Display(DisplayItem::ToolResult {
+            tool_name: tool_name.into(),
+            result: result.into(),
+            is_error,
+        })
     }
 }

@@ -62,6 +62,13 @@ impl<'a> Widget for MessagesWidget<'a> {
                         DisplayItem::ToolActivity { .. } => Style::default()
                             .fg(Color::Magenta)
                             .add_modifier(Modifier::ITALIC),
+                        DisplayItem::ToolResult { is_error, .. } => {
+                            if *is_error {
+                                Style::default().fg(Color::Red)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            }
+                        }
                         DisplayItem::Notice { kind, .. } => match kind {
                             crate::display::NoticeKind::Info => Style::default().fg(Color::Blue),
                             crate::display::NoticeKind::Warning => {

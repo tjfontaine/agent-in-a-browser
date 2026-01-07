@@ -47,7 +47,7 @@ where
                 StreamItem::ToolCall { name } => {
                     handler.on_tool_call(&name);
                 }
-                StreamItem::ToolResult => {
+                StreamItem::ToolResult { .. } => {
                     handler.on_tool_result();
                 }
                 StreamItem::Final => {

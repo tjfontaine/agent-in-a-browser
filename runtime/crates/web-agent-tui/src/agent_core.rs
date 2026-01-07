@@ -337,12 +337,18 @@ impl AgentCore {
                     status: ToolStatus::Calling,
                 });
             } else {
-                // Activity cleared - tool finished
-                if let Some(last) = &self.last_tool_activity {
-                    // We assume success if cleared without error
+                // Activity cleared - check if we have a tool result
+                if let Some((tool_name, result, is_error)) = stream.buffer().take_tool_result() {
+                    self.emit(AgentEvent::ToolResult {
+                        tool_name,
+                        result,
+                        is_error,
+                    });
+                } else if let Some(last) = &self.last_tool_activity {
+                    // Fallback if no result stored (shouldn't happen)
                     self.emit(AgentEvent::ToolResult {
                         tool_name: last.clone(),
-                        result: "Done".to_string(), // Simplified
+                        result: "Done".to_string(),
                         is_error: false,
                     });
                 }

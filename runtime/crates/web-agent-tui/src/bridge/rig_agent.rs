@@ -36,6 +36,8 @@ pub struct StreamingBuffer {
     error: Arc<Mutex<Option<String>>>,
     /// Current tool activity (tool being called)
     tool_activity: Arc<Mutex<Option<String>>>,
+    /// Last tool result (tool_name, result, is_error)
+    last_tool_result: Arc<Mutex<Option<(String, String, bool)>>>,
 }
 
 impl StreamingBuffer {
@@ -47,6 +49,7 @@ impl StreamingBuffer {
             cancelled: Arc::new(AtomicBool::new(false)),
             error: Arc::new(Mutex::new(None)),
             tool_activity: Arc::new(Mutex::new(None)),
+            last_tool_result: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -107,6 +110,21 @@ impl StreamingBuffer {
     pub fn get_tool_activity(&self) -> Option<String> {
         self.tool_activity.lock().ok().and_then(|a| a.clone())
     }
+
+    /// Set last tool result (tool_name, result, is_error)
+    pub fn set_tool_result(&self, result: Option<(String, String, bool)>) {
+        if let Ok(mut tr) = self.last_tool_result.lock() {
+            *tr = result;
+        }
+    }
+
+    /// Get and clear last tool result
+    pub fn take_tool_result(&self) -> Option<(String, String, bool)> {
+        self.last_tool_result
+            .lock()
+            .ok()
+            .and_then(|mut tr| tr.take())
+    }
 }
 
 impl Default for StreamingBuffer {
@@ -144,7 +162,11 @@ pub enum StreamItem {
     /// Tool call in progress
     ToolCall { name: String },
     /// Tool result received
-    ToolResult,
+    ToolResult {
+        tool_name: String,
+        result: String,
+        is_error: bool,
+    },
     /// Final response
     Final,
     /// Other content we don't handle
@@ -155,7 +177,8 @@ impl StreamItem {
     /// Convert from any MultiTurnStreamItem<R> - erases the R type
     fn from_multi_turn<R>(item: rig::agent::MultiTurnStreamItem<R>) -> Self {
         use rig::agent::MultiTurnStreamItem;
-        use rig::streaming::StreamedAssistantContent;
+        use rig::message::ToolResultContent;
+        use rig::streaming::{StreamedAssistantContent, StreamedUserContent};
 
         match item {
             MultiTurnStreamItem::StreamAssistantItem(content) => match content {
@@ -166,7 +189,27 @@ impl StreamItem {
                 StreamedAssistantContent::Final(_) => StreamItem::Final,
                 _ => StreamItem::Other,
             },
-            MultiTurnStreamItem::StreamUserItem(_) => StreamItem::ToolResult,
+            MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult(tr)) => {
+                // Extract text from tool result content
+                let result_text = tr
+                    .content
+                    .iter()
+                    .filter_map(|c| match c {
+                        ToolResultContent::Text(text) => Some(text.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                // Check if result looks like an error
+                let is_error = result_text.contains("error")
+                    || result_text.contains("Error")
+                    || result_text.contains("ERROR");
+                StreamItem::ToolResult {
+                    tool_name: tr.id.clone(),
+                    result: result_text,
+                    is_error,
+                }
+            }
             MultiTurnStreamItem::FinalResponse(_) => StreamItem::Final,
             _ => StreamItem::Other, // Handle any future variants
         }
@@ -305,7 +348,16 @@ impl ActiveStream {
                                 self.buffer
                                     .set_tool_activity(Some(format!("🔧 Calling {}...", name)));
                             }
-                            StreamItem::ToolResult | StreamItem::Final | StreamItem::Other => {
+                            StreamItem::ToolResult {
+                                tool_name,
+                                result,
+                                is_error,
+                            } => {
+                                self.buffer
+                                    .set_tool_result(Some((tool_name, result, is_error)));
+                                self.buffer.set_tool_activity(None);
+                            }
+                            StreamItem::Final | StreamItem::Other => {
                                 self.buffer.set_tool_activity(None);
                             }
                         }
