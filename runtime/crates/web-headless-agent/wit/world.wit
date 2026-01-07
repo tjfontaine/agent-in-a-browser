@@ -13,6 +13,15 @@ world headless-agent {
     import wasi:random/insecure-seed@0.2.4;
     
     // Agent configuration
+    
+    // MCP server configuration for remote tool servers
+    record mcp-server-config {
+        /// URL of the MCP server (e.g., http://localhost:3000)
+        url: string,
+        /// Optional friendly name for the server (for logging/debugging)
+        name: option<string>,
+    }
+    
     record agent-config {
         provider: string,
         model: string,
@@ -24,9 +33,9 @@ world headless-agent {
         /// Completely replace the built-in preamble with this text
         /// Mutually exclusive with preamble (if both set, override wins)
         preamble-override: option<string>,
-        /// URL of the MCP sandbox server (e.g., http://localhost:3000)
-        /// If provided, the agent will have access to sandbox tools
-        mcp-url: option<string>,
+        /// List of MCP servers to connect to
+        /// All tools from all servers are aggregated into one tool set
+        mcp-servers: option<list<mcp-server-config>>,
         /// Maximum number of tool turns before stopping (default: 25)
         max-turns: option<u32>,
     }

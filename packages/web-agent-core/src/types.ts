@@ -5,6 +5,16 @@
  */
 
 /**
+ * MCP server configuration
+ */
+export interface McpServerConfig {
+    /** URL of the MCP server */
+    url: string;
+    /** Optional friendly name for the server */
+    name?: string;
+}
+
+/**
  * Agent configuration
  */
 export interface AgentConfig {
@@ -20,8 +30,8 @@ export interface AgentConfig {
     preamble?: string;
     /** Optional complete override of the built-in preamble (mutually exclusive with preamble) */
     preambleOverride?: string;
-    /** Optional URL for MCP sandbox server (enables tool calling) */
-    mcpUrl?: string;
+    /** List of MCP servers to connect to (enables tool calling) */
+    mcpServers?: McpServerConfig[];
     /** Maximum number of tool turns before stopping (default: 25) */
     maxTurns?: number;
 }
@@ -98,6 +108,11 @@ export type AgentEvent =
 /**
  * Internal WASM module types (from jco transpilation)
  */
+export interface WasmMcpServerConfig {
+    url: string;
+    name?: string;
+}
+
 export interface WasmAgentConfig {
     provider: string;
     model: string;
@@ -105,7 +120,7 @@ export interface WasmAgentConfig {
     baseUrl?: string;
     preamble?: string;
     preambleOverride?: string;
-    mcpUrl?: string;
+    mcpServers?: WasmMcpServerConfig[];
     maxTurns?: number;
 }
 

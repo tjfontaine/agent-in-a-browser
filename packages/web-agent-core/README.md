@@ -70,6 +70,7 @@ Create a new agent instance.
 - `config.apiKey` - API key
 - `config.baseUrl` - Optional custom base URL
 - `config.preamble` - Optional system prompt
+- `config.mcpServers` - Optional array of MCP servers: `[{url, name?}]`
 
 ### `agent.initialize(): Promise<void>`
 

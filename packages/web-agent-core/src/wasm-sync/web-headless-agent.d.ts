@@ -1,4 +1,8 @@
 // world root:component/root
+export interface McpServerConfig {
+  url: string,
+  name?: string,
+}
 export interface AgentConfig {
   provider: string,
   model: string,
@@ -6,7 +10,7 @@ export interface AgentConfig {
   baseUrl?: string,
   preamble?: string,
   preambleOverride?: string,
-  mcpUrl?: string,
+  mcpServers?: Array<McpServerConfig>,
   maxTurns?: number,
 }
 /**

@@ -113,7 +113,7 @@ function toWasmConfig(config: AgentConfig): WasmAgentConfig {
         baseUrl: config.baseUrl,
         preamble: config.preamble,
         preambleOverride: config.preambleOverride,
-        mcpUrl: config.mcpUrl,
+        mcpServers: config.mcpServers?.map(s => ({ url: s.url, name: s.name })),
         maxTurns: config.maxTurns,
     };
 }

@@ -76,11 +76,21 @@ where
 
 use bindings::{AgentConfig, AgentEvent, AgentHandle, Message, MessageRole};
 
-/// Build tool server using agent_bridge's McpToolAdapter
+/// Build tool server aggregating tools from multiple MCP clients
 fn build_tool_server(
-    mcp_client: Arc<SandboxMcpClient>,
+    mcp_clients: Vec<Arc<SandboxMcpClient>>,
 ) -> Result<rig::tool::server::ToolServerHandle, String> {
-    let tool_set = agent_bridge::build_tool_set(mcp_client)?;
+    let mut tool_set = rig::tool::ToolSet::default();
+
+    // Aggregate tools from all MCP servers
+    for client in mcp_clients {
+        // Get tools from this client and add them individually
+        let tools = agent_bridge::McpToolAdapter::from_transport(client)?;
+        for tool in tools {
+            tool_set.add_tool(tool);
+        }
+    }
+
     let handle = ToolServer::new().add_tools(tool_set).run();
     Ok(handle)
 }
@@ -198,10 +208,7 @@ enum SimpleAgent {
 
 /// The agent can either have tools or not
 enum AgentProvider {
-    WithTools {
-        agent: AgentWithTools,
-        mcp_client: Arc<SandboxMcpClient>,
-    },
+    WithTools(AgentWithTools),
     Simple(SimpleAgent),
 }
 
@@ -235,52 +242,89 @@ impl HeadlessAgent {
 
         let max_turns = config.max_turns.unwrap_or(25) as usize;
 
-        // Check if we have MCP tools
-        let provider = if let Some(mcp_url) = config.mcp_url.as_ref() {
-            // Create MCP client
-            let mcp_client = Arc::new(SandboxMcpClient::new(mcp_url));
+        // Check if we have MCP servers
+        let provider = if let Some(servers) = config.mcp_servers.as_ref() {
+            if servers.is_empty() {
+                // Empty list - create simple agent without tools
+                let agent = match config.provider.as_str() {
+                    "anthropic" => {
+                        let client = create_anthropic_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = AnthropicModel::with_model(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .build();
+                        SimpleAgent::Anthropic(agent)
+                    }
+                    "gemini" | "google" => {
+                        let client = create_gemini_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = GeminiModel::new(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .build();
+                        SimpleAgent::Gemini(agent)
+                    }
+                    _ => {
+                        let client = create_openai_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = OpenAIModel::new(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .build();
+                        SimpleAgent::OpenAI(agent)
+                    }
+                };
+                AgentProvider::Simple(agent)
+            } else {
+                // Create MCP clients for all servers
+                let mcp_clients: Vec<Arc<SandboxMcpClient>> = servers
+                    .iter()
+                    .map(|server| Arc::new(SandboxMcpClient::new(&server.url)))
+                    .collect();
 
-            // Build tool server
-            let tool_handle = build_tool_server(mcp_client.clone())
-                .map_err(|e| format!("Failed to build tool server: {}", e))?;
+                // Build tool server with aggregated tools from all servers
+                let tool_handle = build_tool_server(mcp_clients)
+                    .map_err(|e| format!("Failed to build tool server: {}", e))?;
 
-            let agent = match config.provider.as_str() {
-                "anthropic" => {
-                    let client = create_anthropic_client(&config.api_key, base_url)
-                        .map_err(|e| e.to_string())?;
-                    let model = AnthropicModel::with_model(client, &config.model);
-                    let agent = rig::agent::AgentBuilder::new(model)
-                        .preamble(&preamble)
-                        .tool_server_handle(tool_handle)
-                        .build();
-                    AgentWithTools::Anthropic(agent)
-                }
-                "gemini" | "google" => {
-                    let client = create_gemini_client(&config.api_key, base_url)
-                        .map_err(|e| e.to_string())?;
-                    let model = GeminiModel::new(client, &config.model);
-                    let agent = rig::agent::AgentBuilder::new(model)
-                        .preamble(&preamble)
-                        .tool_server_handle(tool_handle)
-                        .build();
-                    AgentWithTools::Gemini(agent)
-                }
-                _ => {
-                    // Default to OpenAI-compatible
-                    let client = create_openai_client(&config.api_key, base_url)
-                        .map_err(|e| e.to_string())?;
-                    let model = OpenAIModel::new(client, &config.model);
-                    let agent = rig::agent::AgentBuilder::new(model)
-                        .preamble(&preamble)
-                        .tool_server_handle(tool_handle)
-                        .build();
-                    AgentWithTools::OpenAI(agent)
-                }
-            };
+                let agent = match config.provider.as_str() {
+                    "anthropic" => {
+                        let client = create_anthropic_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = AnthropicModel::with_model(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .tool_server_handle(tool_handle)
+                            .build();
+                        AgentWithTools::Anthropic(agent)
+                    }
+                    "gemini" | "google" => {
+                        let client = create_gemini_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = GeminiModel::new(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .tool_server_handle(tool_handle)
+                            .build();
+                        AgentWithTools::Gemini(agent)
+                    }
+                    _ => {
+                        // Default to OpenAI-compatible
+                        let client = create_openai_client(&config.api_key, base_url)
+                            .map_err(|e| e.to_string())?;
+                        let model = OpenAIModel::new(client, &config.model);
+                        let agent = rig::agent::AgentBuilder::new(model)
+                            .preamble(&preamble)
+                            .tool_server_handle(tool_handle)
+                            .build();
+                        AgentWithTools::OpenAI(agent)
+                    }
+                };
 
-            AgentProvider::WithTools { agent, mcp_client }
+                AgentProvider::WithTools(agent)
+            }
         } else {
-            // No MCP URL - create simple agent without tools
+            // No MCP servers - create simple agent without tools
             let agent = match config.provider.as_str() {
                 "anthropic" => {
                     let client = create_anthropic_client(&config.api_key, base_url)
@@ -356,7 +400,7 @@ impl HeadlessAgent {
 
         // Create the active stream (but don't block on it)
         let active_stream = match &self.provider {
-            AgentProvider::WithTools { agent, .. } => Some(create_active_stream_with_tools(
+            AgentProvider::WithTools(agent) => Some(create_active_stream_with_tools(
                 agent,
                 message,
                 history,

@@ -3608,7 +3608,7 @@ let exports1Create;
 function create(arg0) {
   if (!_initialized) throwUninitialized();
   var ptr0 = realloc0(0, 0, 4, 80);
-  var {provider: v1_0, model: v1_1, apiKey: v1_2, baseUrl: v1_3, preamble: v1_4, preambleOverride: v1_5, mcpUrl: v1_6, maxTurns: v1_7 } = arg0;
+  var {provider: v1_0, model: v1_1, apiKey: v1_2, baseUrl: v1_3, preamble: v1_4, preambleOverride: v1_5, mcpServers: v1_6, maxTurns: v1_7 } = arg0;
   var ptr2 = utf8Encode(v1_0, realloc0, memory0);
   var len2 = utf8EncodedLen;
   dataView(memory0).setUint32(ptr0 + 4, len2, true);
@@ -3654,22 +3654,42 @@ function create(arg0) {
     dataView(memory0).setUint32(ptr0 + 56, len9, true);
     dataView(memory0).setUint32(ptr0 + 52, ptr9, true);
   }
-  var variant12 = v1_6;
-  if (variant12 === null || variant12=== undefined) {
+  var variant16 = v1_6;
+  if (variant16 === null || variant16=== undefined) {
     dataView(memory0).setInt8(ptr0 + 60, 0, true);
   } else {
-    const e = variant12;
+    const e = variant16;
     dataView(memory0).setInt8(ptr0 + 60, 1, true);
-    var ptr11 = utf8Encode(e, realloc0, memory0);
-    var len11 = utf8EncodedLen;
-    dataView(memory0).setUint32(ptr0 + 68, len11, true);
-    dataView(memory0).setUint32(ptr0 + 64, ptr11, true);
+    var vec15 = e;
+    var len15 = vec15.length;
+    var result15 = realloc0(0, 0, 4, len15 * 20);
+    for (let i = 0; i < vec15.length; i++) {
+      const e = vec15[i];
+      const base = result15 + i * 20;var {url: v11_0, name: v11_1 } = e;
+      var ptr12 = utf8Encode(v11_0, realloc0, memory0);
+      var len12 = utf8EncodedLen;
+      dataView(memory0).setUint32(base + 4, len12, true);
+      dataView(memory0).setUint32(base + 0, ptr12, true);
+      var variant14 = v11_1;
+      if (variant14 === null || variant14=== undefined) {
+        dataView(memory0).setInt8(base + 8, 0, true);
+      } else {
+        const e = variant14;
+        dataView(memory0).setInt8(base + 8, 1, true);
+        var ptr13 = utf8Encode(e, realloc0, memory0);
+        var len13 = utf8EncodedLen;
+        dataView(memory0).setUint32(base + 16, len13, true);
+        dataView(memory0).setUint32(base + 12, ptr13, true);
+      }
+    }
+    dataView(memory0).setUint32(ptr0 + 68, len15, true);
+    dataView(memory0).setUint32(ptr0 + 64, result15, true);
   }
-  var variant13 = v1_7;
-  if (variant13 === null || variant13=== undefined) {
+  var variant17 = v1_7;
+  if (variant17 === null || variant17=== undefined) {
     dataView(memory0).setInt8(ptr0 + 72, 0, true);
   } else {
-    const e = variant13;
+    const e = variant17;
     dataView(memory0).setInt8(ptr0 + 72, 1, true);
     dataView(memory0).setInt32(ptr0 + 76, toUint32(e), true);
   }
@@ -3682,17 +3702,17 @@ function create(arg0) {
   const _wasm_call_currentTaskID = startCurrentTask(0, false, 'exports1Create');
   const ret = exports1Create(ptr0);
   endCurrentTask(0);
-  let variant15;
+  let variant19;
   if (dataView(memory0).getUint8(ret + 0, true)) {
-    var ptr14 = dataView(memory0).getUint32(ret + 4, true);
-    var len14 = dataView(memory0).getUint32(ret + 8, true);
-    var result14 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr14, len14));
-    variant15= {
+    var ptr18 = dataView(memory0).getUint32(ret + 4, true);
+    var len18 = dataView(memory0).getUint32(ret + 8, true);
+    var result18 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr18, len18));
+    variant19= {
       tag: 'err',
-      val: result14
+      val: result18
     };
   } else {
-    variant15= {
+    variant19= {
       tag: 'ok',
       val: dataView(memory0).getInt32(ret + 4, true) >>> 0
     };
@@ -3703,7 +3723,7 @@ function create(arg0) {
     async: false,
     postReturn: true
   });
-  const retCopy = variant15;
+  const retCopy = variant19;
   
   let cstate = getOrCreateAsyncState(0);
   cstate.mayLeave = false;
