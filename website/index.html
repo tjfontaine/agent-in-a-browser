@@ -227,6 +227,57 @@
         </div>
     </section>
 
+    <!-- How It Works Section -->
+    <section class="how-it-works" id="architecture">
+        <div class="how-it-works-container">
+            <div class="section-header">
+                <h2 class="section-title">How It Works</h2>
+                <p class="section-subtitle">Three components, one powerful agent</p>
+            </div>
+
+            <div class="architecture-grid">
+                <div class="arch-component">
+                    <div class="arch-icon">🖥️</div>
+                    <h3>Ratatui TUI</h3>
+                    <p>A terminal interface written in Rust, compiled to WASM. Renders via ghostty-web with full
+                        keyboard support.</p>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-component">
+                    <div class="arch-icon">🤖</div>
+                    <h3>Agent Layer</h3>
+                    <p>Multi-turn agent built with Rig. Supports Anthropic, OpenAI, Gemini, and any OpenAI-compatible
+                        endpoint.</p>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-component">
+                    <div class="arch-icon">📦</div>
+                    <h3>Browser Sandbox</h3>
+                    <p>WASI P2 runtime with MCP server. Files persist in OPFS. TypeScript compiles via SWC and executes
+                        in QuickJS.</p>
+                </div>
+            </div>
+
+            <div class="architecture-detail">
+                <div class="detail-card">
+                    <h4>The TypeScript Pipeline</h4>
+                    <div class="pipeline">
+                        <span class="pipeline-step ts">weather.ts</span>
+                        <span class="pipeline-arrow">→</span>
+                        <span class="pipeline-step swc">SWC</span>
+                        <span class="pipeline-arrow">→</span>
+                        <span class="pipeline-step js">JavaScript</span>
+                        <span class="pipeline-arrow">→</span>
+                        <span class="pipeline-step qjs">QuickJS</span>
+                        <span class="pipeline-arrow">→</span>
+                        <span class="pipeline-step out">Output</span>
+                    </div>
+                    <p class="detail-note">Write TypeScript, the agent compiles and runs it—all in your browser.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Capabilities Section -->
     <section class="capabilities">
         <div class="capabilities-container">
@@ -277,6 +328,53 @@
                         <h4>HTTP Requests</h4>
                         <p>curl and fetch() with full network access</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- MCP Bridge Section -->
+    <section class="mcp-bridge" id="mcp-bridge">
+        <div class="mcp-bridge-container">
+            <div class="section-header">
+                <h2 class="section-title">Connect External Agents</h2>
+                <p class="section-subtitle">Use the browser sandbox with any MCP-compatible agent</p>
+            </div>
+
+            <div class="bridge-content">
+                <div class="bridge-diagram">
+                    <div class="bridge-node external">
+                        <span class="node-icon">🖥️</span>
+                        <span class="node-label">Claude Code</span>
+                        <span class="node-detail">or any MCP client</span>
+                    </div>
+                    <div class="bridge-connector">
+                        <span class="connector-line"></span>
+                        <span class="connector-label">stdio → WebSocket</span>
+                    </div>
+                    <div class="bridge-node bridge">
+                        <span class="node-icon">🌉</span>
+                        <span class="node-label">MCP Bridge</span>
+                        <span class="node-detail">tools/mcp-bridge</span>
+                    </div>
+                    <div class="bridge-connector">
+                        <span class="connector-line"></span>
+                        <span class="connector-label">WebSocket</span>
+                    </div>
+                    <div class="bridge-node browser">
+                        <span class="node-icon">🌐</span>
+                        <span class="node-label">Browser Sandbox</span>
+                        <span class="node-detail">agent.edge-agent.dev</span>
+                    </div>
+                </div>
+
+                <div class="bridge-info">
+                    <p>Run Claude Code with all built-in tools disabled, and let it execute commands in your browser
+                        sandbox via MCP.</p>
+                    <div class="code-block">
+                        <code>claude --mcp-config mcp.json --disable-tool bash --disable-tool computer ...</code>
+                    </div>
+                    <a href="/docs.html#mcp-bridge" class="feature-link">Learn how to set up the bridge →</a>
                 </div>
             </div>
         </div>

@@ -102,6 +102,24 @@ We use a dual-build approach to provide cross-browser support for async module l
 
 The runtime detects JSPI support via `typeof WebAssembly?.Suspending !== 'undefined'` and loads the appropriate MCP server variant (`mcp-server-jspi/` or `mcp-server-sync/`).
 
+### The Story: Why This Exists
+
+> "I was nerd-sniped into: *Why can't an agent in the browser just write dynamic code and execute it?*"
+
+The core innovation here is the TypeScript execution pipeline that runs entirely in WASM:
+
+```text
+weather.ts → SWC (transpile) → JavaScript → QuickJS (execute) → Output
+```
+
+The agent writes TypeScript, says `tsx code.ts`, and the sandbox:
+
+1. **Compiles** TypeScript to JavaScript using [SWC](https://swc.rs/) (compiled to WASM)
+2. **Executes** the JavaScript using [QuickJS](https://bellard.org/quickjs/) (compiled to WASM via [rquickjs](https://github.com/nickelc/rquickjs))
+3. **Returns** stdout/stderr to the agent
+
+All of this happens in the browser. No server round-trip. No cloud sandbox. Just WASM.
+
 ---
 
 ## Architecture
@@ -385,6 +403,53 @@ The WASM runtime provides these tools to the AI agent:
 | `task_write` | Write task list for user visibility |
 
 Shell commands include a full busybox-style suite: `tsx`, `tsc`, `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `xargs`, `diff`, `git`, `sqlite3`, and more.
+
+## MCP Bridge: External Agent Integration
+
+Want to use an external agent (like Claude Code) with the browser sandbox? The MCP Bridge exposes the sandbox as an MCP server over WebSocket:
+
+```text
+External Agent → stdio → MCP Bridge → WebSocket → Browser Sandbox
+```
+
+### Setup
+
+```bash
+# Start the bridge
+cd tools/mcp-bridge
+npm install && npm start
+
+# Bridge listens on ws://localhost:9999
+```
+
+Then open [agent.edge-agent.dev/mcp-bridge.html](https://agent.edge-agent.dev/mcp-bridge.html) and connect to the bridge.
+
+### Claude Code Configuration
+
+Create an `mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "browser-sandbox": {
+      "command": "npx",
+      "args": ["tsx", "tools/mcp-bridge/index.ts"]
+    }
+  }
+}
+```
+
+Run Claude Code with built-in tools disabled:
+
+```bash
+claude --mcp-config mcp.json \
+  --disable-tool bash --disable-tool computer \
+  --disable-tool edit --disable-tool glob \
+  --disable-tool grep --disable-tool ls \
+  --disable-tool read --disable-tool write
+```
+
+See [tools/mcp-bridge/](tools/mcp-bridge/) for more details.
 
 ## Docker
 

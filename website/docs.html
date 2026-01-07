@@ -65,6 +65,13 @@
                         <li><a href="#stack">Technology Stack</a></li>
                     </ul>
                 </div>
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Advanced</h4>
+                    <ul class="sidebar-links">
+                        <li><a href="#mcp-bridge">MCP Bridge</a></li>
+                        <li><a href="#claude-code">Claude Code Integration</a></li>
+                    </ul>
+                </div>
             </nav>
         </aside>
 
@@ -423,6 +430,93 @@ agent.destroy();</code></pre>
                             <h4>Deployment</h4>
                             <code>Cloudflare Workers</code>
                             <code>Cloudflare Pages</code>
+                        </div>
+                    </div>
+                </section>
+
+                <hr>
+
+                <section id="mcp-bridge">
+                    <h2>MCP Bridge</h2>
+                    <p>
+                        The MCP Bridge allows external agents (like Claude Code) to use the browser sandbox
+                        as their tool provider. This means you can run any MCP-compatible agent locally while
+                        executing all commands in the browser's secure WASM sandbox.
+                    </p>
+
+                    <h3>How It Works</h3>
+                    <div class="architecture-flow">
+                        <p>
+                            <strong>External Agent</strong> → <code>stdio</code> →
+                            <strong>MCP Bridge</strong> → <code>WebSocket</code> →
+                            <strong>Browser Sandbox</strong>
+                        </p>
+                    </div>
+
+                    <h3>Quick Start</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                        </div>
+                        <pre><code><span class="comment"># Clone and start the bridge</span>
+cd tools/mcp-bridge
+npm install
+npm start
+
+<span class="comment"># Bridge listens on ws://localhost:9999</span></code></pre>
+                    </div>
+
+                    <p>
+                        Then open <a
+                            href="https://agent.edge-agent.dev/mcp-bridge.html">agent.edge-agent.dev/mcp-bridge.html</a>
+                        in your browser and connect to the bridge.
+                    </p>
+                </section>
+
+                <section id="claude-code">
+                    <h2>Claude Code Integration</h2>
+                    <p>
+                        You can run Claude Code with all built-in tools disabled, forcing it to use
+                        the browser sandbox via MCP.
+                    </p>
+
+                    <h3>Configuration</h3>
+                    <p>Create an <code>mcp.json</code> file:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>mcp.json</span>
+                        </div>
+                        <pre><code>{
+  "mcpServers": {
+    "browser-sandbox": {
+      "command": "npx",
+      "args": ["tsx", "tools/mcp-bridge/index.ts"]
+    }
+  }
+}</code></pre>
+                    </div>
+
+                    <h3>Running Claude Code</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                        </div>
+                        <pre><code>claude --mcp-config mcp.json \
+  --disable-tool bash \
+  --disable-tool computer \
+  --disable-tool edit \
+  --disable-tool glob \
+  --disable-tool grep \
+  --disable-tool ls \
+  --disable-tool read \
+  --disable-tool write</code></pre>
+                    </div>
+
+                    <div class="callout">
+                        <div class="callout-icon">💡</div>
+                        <div class="callout-content">
+                            <strong>Pro Tip:</strong> This setup lets you use any MCP-compatible agent
+                            with the browser sandbox—not just Claude Code.
                         </div>
                     </div>
                 </section>
