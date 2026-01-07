@@ -8,7 +8,7 @@ use ratatui::prelude::*;
 use std::io::Write;
 
 use crate::app::App;
-use crate::ui::panels::AuxPanelWidget;
+
 use crate::ui::{InputBoxWidget, MessagesWidget, StatusBarWidget};
 
 /// Widget wrapper for rendering the entire App UI
@@ -24,9 +24,6 @@ impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
 
 impl<'a, R: PollableRead, W: Write> Widget for AppWidget<'a, R, W> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Check if we have enough width for split layout (min 80 cols)
-        let use_split = area.width >= 80;
-
         // Split into main area and status bar
         let v_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -36,20 +33,8 @@ impl<'a, R: PollableRead, W: Write> Widget for AppWidget<'a, R, W> {
             ])
             .split(area);
 
-        if use_split {
-            // Horizontal split: main (70%) | aux (30%)
-            let h_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .split(v_chunks[0]);
-
-            self.render_main_panel(h_chunks[0], buf);
-            AuxPanelWidget::new(&self.app.aux_content, &self.app.server_status)
-                .render(h_chunks[1], buf);
-        } else {
-            // Single column layout for narrow terminals
-            self.render_main_panel(v_chunks[0], buf);
-        }
+        // Always use single column layout, hiding the aux panel
+        self.render_main_panel(v_chunks[0], buf);
 
         // Status bar
         StatusBarWidget::new(
