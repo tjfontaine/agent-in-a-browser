@@ -193,6 +193,7 @@ export default defineConfig(({ mode }) => ({
             input: {
                 main: 'index.html',
                 'embed-demo': 'embed-demo.html',
+                'mcp-bridge': 'mcp-bridge.html',
             },
         },
     },
