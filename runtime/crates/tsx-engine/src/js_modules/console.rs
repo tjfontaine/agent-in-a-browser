@@ -55,7 +55,6 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     // console.log
     let log_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
         let output = format_args_to_string(&args.0);
-        eprintln!("[console.log] {}", output);
         CAPTURED_LOGS.with(|logs| logs.borrow_mut().push(output));
     })?;
     console.set("log", log_fn)?;
@@ -63,7 +62,6 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     // console.error
     let error_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
         let output = format!("ERROR: {}", format_args_to_string(&args.0));
-        eprintln!("[console.error] {}", output);
         CAPTURED_LOGS.with(|logs| logs.borrow_mut().push(output));
     })?;
     console.set("error", error_fn)?;
@@ -71,7 +69,6 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     // console.warn
     let warn_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
         let output = format!("WARN: {}", format_args_to_string(&args.0));
-        eprintln!("[console.warn] {}", output);
         CAPTURED_LOGS.with(|logs| logs.borrow_mut().push(output));
     })?;
     console.set("warn", warn_fn)?;
@@ -79,7 +76,6 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     // console.info
     let info_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
         let output = format_args_to_string(&args.0);
-        eprintln!("[console.info] {}", output);
         CAPTURED_LOGS.with(|logs| logs.borrow_mut().push(output));
     })?;
     console.set("info", info_fn)?;
