@@ -1,611 +1,440 @@
 /**
- * Embed Demo - Task-Based AI Automation
+ * Embed Demo - Live "Full Stack" Editor
  * 
- * Shows the WebAgent as a build tool, not a chatbot.
- * Focus on: Plan → Approve → Execute (Review mode) or auto-execute (Lucky mode)
+ * Demonstrates the WebAgent as a generic backend runtime.
+ * The generated frontend (HTML) calls back into the Agent (WASM) to execute code.
  */
 
 import './embed-demo.css';
-import { WebAgent, type AgentEvent, type TaskInfo } from '@tjfontaine/web-agent-core';
+import { WebAgent, type AgentEvent } from '@tjfontaine/web-agent-core';
 import { initializeSandbox, fetchFromSandbox } from './agent/sandbox';
 import { setTransportHandler } from '@tjfontaine/wasi-shims';
 
 console.log('[EmbedDemo] Module loaded');
 
+// --- Configuration ---
 
-// NOTE: The agent now has a built-in system preamble in Rust (DEFAULT_PREAMBLE)
-// Use `preamble` config option to ADD to it, or `preambleOverride` to replace entirely
+const SYSTEM_PROMPT = `
+You are an expert Full Stack Developer building a live web application in the browser.
+Uniquely, you can use YOURSELF as the backend server.
 
-// Example tasks
-const EXAMPLES: Record<string, { icon: string; title: string; task: string }> = {
-    calculator: {
-        icon: '🧮',
-        title: 'Calculator',
-        task: 'Build a TypeScript calculator with add, subtract, multiply, divide. Test it.',
-    },
-    fizzbuzz: {
-        icon: '🎯',
-        title: 'FizzBuzz',
-        task: 'Implement FizzBuzz in TypeScript for 1-20. Run it and show output.',
-    },
-    api: {
-        icon: '🌐',
-        title: 'API Call',
-        task: 'Fetch a joke from https://official-joke-api.appspot.com/random_joke and display it.',
-    },
-    json: {
-        icon: '📋',
-        title: 'JSON Parser',
-        task: 'Create a function that parses and pretty-prints JSON. Test with sample data.',
-    },
-};
+The user wants you to build an app that runs logic (TypeScript, Database, etc.).
+You have two roles:
+1.  **Backend Developer**: Write scripts (e.g., 'backend.ts', 'db.js') that perform the heavy lifting.
+2.  **Frontend Developer**: Write 'index.html' that calls these scripts using the special 'window.agent.exec()' function.
 
-// State
+### The "Agent as Backend" Bridge
+The frontend you create can execute commands in your shell using:
+\`\`\`javascript
+const result = await window.agent.exec('tsx backend.ts some_arg');
+\`\`\`
+Use this for:
+- Heavy calculation (Python/TS scripts).
+- Database queries (sqlite3).
+- File system operations (cat, ls).
+
+### Instructions
+1.  **Plan**: Decide what backend scripts you need and how the UI will call them.
+2.  **Implementation**:
+    - Write the backend script first (e.g., 'logic.ts').
+    - Verify it works by running it yourself: \`tsx logic.ts test\`.
+    - Write the 'index.html' (and css/js) that uses \`window.agent.exec\` to call your script.
+3.  **Execution**:
+    - If the user sends a message starting with "EXECUTE_BACKEND_COMMAND:", DO NOT CHAT.
+    - IMMEDIATELY run the requested command using 'run_command'.
+    - THEN STOP.
+
+### Constraints
+- For the UI, use standard HTML/CSS.
+- For the Backend, use 'tsx' (TypeScript), 'sqlite3', or standard unix tools.
+- External UI libs: Use CDNs (e.g., Chart.js from cdnjs).
+- DO NOT use 'npm install'.
+`;
+
+const SCENARIOS = [
+    {
+        icon: '🔢',
+        title: 'Prime Finder',
+        prompt: 'Build a "Prime Number Finder". \n1. Create a efficient backend script "primes.ts" that takes a number and checks if it is prime. \n2. Create a frontend that asks for a number, calls "tsx primes.ts <num>", and displays the result.'
+    },
+    {
+        icon: '🗄️',
+        title: 'SQLite Manager',
+        prompt: 'Create a SQLite Manager. \n1. Initialize a "data.db" with a "users" table (id, name, email) and some dummy data. \n2. Create a UI that allows me to type a SQL query, executes it via "sqlite3 data.db <query>", and displays the results in a table.'
+    },
+    {
+        icon: '🐍',
+        title: 'Python (via Wasm)',
+        prompt: 'Can you run Python? Create a script "calc.py" that prints the factorial of a number argument. Then build a UI to use it.'
+    }
+];
+
+// --- State ---
 let agent: WebAgent | null = null;
 let isRunning = false;
-let mode: 'review' | 'lucky' = 'review';
-let currentPlan: string = '';
-let streamingText: string = '';
-const createdFiles = new Map<string, string>();
-const tasks = new Map<string, { info: TaskInfo; status: 'pending' | 'running' | 'done' | 'error'; startTime?: number; output?: string }>();
+let fileCache = new Map<string, string>();
 
-// DOM refs
-let taskInput: HTMLTextAreaElement;
-let runBtn: HTMLButtonElement;
-let consoleOutput: HTMLElement;
-let filesList: HTMLElement;
-let filePreview: HTMLElement;
-let previewFilename: HTMLElement;
-let taskCards: HTMLElement;
-let tasksStatus: HTMLElement;
-let planSection: HTMLElement;
-let planContent: HTMLElement;
-let planEditor: HTMLTextAreaElement;
-let editPlanBtn: HTMLButtonElement;
-let approvePlanBtn: HTMLButtonElement;
 
-/**
- * Initialize
- */
-function init() {
-    taskInput = document.getElementById('task-input') as HTMLTextAreaElement;
-    runBtn = document.getElementById('run-btn') as HTMLButtonElement;
-    consoleOutput = document.getElementById('console-output')!;
-    filesList = document.getElementById('files-list')!;
-    filePreview = document.getElementById('file-preview')!;
-    previewFilename = document.getElementById('preview-filename')!;
-    taskCards = document.getElementById('task-cards')!;
-    tasksStatus = document.getElementById('tasks-status')!;
-    planSection = document.getElementById('plan-section')!;
-    planContent = document.getElementById('plan-content')!;
-    planEditor = document.getElementById('plan-editor') as HTMLTextAreaElement;
-    editPlanBtn = document.getElementById('edit-plan-btn') as HTMLButtonElement;
-    approvePlanBtn = document.getElementById('approve-plan-btn') as HTMLButtonElement;
+// --- UI Classes ---
 
-    // Provider -> model mapping
-    const providerSelect = document.getElementById('provider') as HTMLSelectElement;
-    const modelInput = document.getElementById('model') as HTMLInputElement;
-    providerSelect.addEventListener('change', () => {
-        const models: Record<string, string> = {
-            anthropic: 'claude-haiku-4-5-20251001',
-            openai: 'gpt-4o',
-            gemini: 'gemini-2.0-flash',
-        };
-        modelInput.value = models[providerSelect.value] || 'gpt-4o';
-    });
+class LogManager {
+    private logEl: HTMLElement;
+    private termEl: HTMLElement;
+    private statusEl: HTMLElement;
 
-    // Mode toggle
-    const modeToggle = document.getElementById('mode-toggle')!;
-    modeToggle.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            modeToggle.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            mode = btn.getAttribute('data-mode') as 'review' | 'lucky';
-            console.log('[EmbedDemo] Mode changed to:', mode);
-        });
-    });
-
-    // Examples
-    const examplesList = document.getElementById('examples-list')!;
-    for (const [, ex] of Object.entries(EXAMPLES)) {
-        const btn = document.createElement('button');
-        btn.className = 'example-chip';
-        btn.innerHTML = `${ex.icon} ${ex.title}`;
-        btn.addEventListener('click', () => {
-            taskInput.value = ex.task;
-            taskInput.focus();
-        });
-        examplesList.appendChild(btn);
+    constructor() {
+        this.logEl = document.getElementById('activity-log')!;
+        this.termEl = document.getElementById('terminal-output')!;
+        this.statusEl = document.getElementById('terminal-status')!;
     }
 
-    // Run button
-    runBtn.addEventListener('click', runTask);
+    add(text: string, type: 'user' | 'agent' | 'error' | 'success' = 'agent') {
+        const div = document.createElement('div');
+        div.className = `log-item ${type}`;
+        div.textContent = text;
+        this.logEl.appendChild(div);
+        this.logEl.scrollTop = this.logEl.scrollHeight;
+    }
 
-    // Ctrl+Enter to run
-    taskInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            runTask();
+    term(text: string, type: 'cmd' | 'out' | 'err' = 'out') {
+        const div = document.createElement('div');
+        // explicit class mapping to match css
+        const typeClass = type === 'cmd' ? 'term-cmd' : type === 'err' ? 'term-err' : 'term-out';
+        div.className = `term-line ${typeClass}`;
+        div.textContent = text;
+        this.termEl.appendChild(div);
+        this.termEl.scrollTop = this.termEl.scrollHeight;
+    }
+
+    status(text: string) {
+        this.statusEl.textContent = text;
+    }
+}
+
+class LivePreview {
+    private iframe: HTMLIFrameElement;
+    private toast: HTMLElement;
+
+    constructor() {
+        this.iframe = document.getElementById('preview-frame') as HTMLIFrameElement;
+        this.toast = document.getElementById('toast')!;
+        this.render('', '', ''); // Init
+
+        document.getElementById('refresh-preview')?.addEventListener('click', () => this.refresh());
+        document.getElementById('open-new-tab')?.addEventListener('click', () => this.openNewTab());
+
+        // Setup Bridge Receiver in Parent
+        window.addEventListener('message', this.handleMessage.bind(this));
+    }
+
+    private async handleMessage(event: MessageEvent) {
+        if (!agent) return;
+
+        if (event.data?.type === 'agent_exec') {
+            const { id, cmd } = event.data;
+            logger.add(`UI Request: ${cmd}`, 'user');
+            logger.status('⚡ Backend Active');
+
+            try {
+                // Execute on Agent
+                let output = '';
+                const prompt = `EXECUTE_BACKEND_COMMAND: ${cmd}`;
+
+                // We use a specific loop to process this "backend" request
+                // We don't want to log everything to the main chat log to keep it clean,
+                // but we DO want to show it in the terminal.
+                for await (const e of agent.send(prompt)) {
+                    if (e.type === 'tool-result' && e.data.name === 'run_command') {
+                        output += (e.data.isError ? e.data.output : e.data.output) || '';
+                        if (e.data.isError) logger.term(e.data.output, 'err');
+                        else logger.term(e.data.output, (e.data.isError ? 'err' : 'out'));
+                    }
+                    if (e.type === 'tool-call') {
+                        logger.term(`$ BE: ${e.toolName}`, 'cmd');
+                    }
+                }
+
+                // Send response back to Iframe
+                if (this.iframe.contentWindow) {
+                    this.iframe.contentWindow.postMessage({
+                        type: 'agent_result',
+                        id,
+                        success: true,
+                        result: output.trim()
+                    }, '*');
+                }
+                logger.status('Idle');
+
+            } catch (err: any) {
+                console.error('Agent Exec Error:', err);
+                if (this.iframe.contentWindow) {
+                    this.iframe.contentWindow.postMessage({
+                        type: 'agent_result',
+                        id,
+                        success: false,
+                        error: err.toString()
+                    }, '*');
+                }
+            }
         }
-    });
+    }
 
-    // Clear console
-    document.getElementById('clear-console')!.addEventListener('click', () => {
-        consoleOutput.innerHTML = '<span class="console-hint">Output will appear here...</span>';
-    });
+    update(filename: string, content: string) {
+        fileCache.set(filename, content);
+        this.refresh();
+        this.showToast(`Updated ${filename}`);
+    }
 
-    // Plan edit
-    editPlanBtn.addEventListener('click', togglePlanEdit);
-    approvePlanBtn.addEventListener('click', approvePlan);
-}
+    refresh() {
+        const html = fileCache.get('index.html') || '<!-- Waiting for index.html... -->';
+        const css = fileCache.get('style.css') || '';
+        const js = fileCache.get('script.js') || '';
+        this.render(html, css, js);
+    }
 
-/**
- * Toggle plan edit mode
- */
-function togglePlanEdit() {
-    const isEditing = planEditor.style.display !== 'none';
-    if (isEditing) {
-        // Save edits
-        currentPlan = planEditor.value;
-        planContent.innerHTML = formatPlan(currentPlan);
-        planEditor.style.display = 'none';
-        planContent.style.display = 'block';
-        editPlanBtn.textContent = '✏️ Edit';
-    } else {
-        // Enter edit mode
-        planEditor.value = currentPlan;
-        planEditor.style.display = 'block';
-        planContent.style.display = 'none';
-        editPlanBtn.textContent = '💾 Save';
+    private render(html: string, css: string, js: string) {
+        const doc = this.iframe.contentDocument;
+        if (!doc) return;
+
+        //Client-side Shim for the Agent Bridge
+        const agentShim = `
+            window.agent = {
+                exec: function(cmd) {
+                    return new Promise((resolve, reject) => {
+                        const id = Math.random().toString(36).substring(7);
+                        const handle = (e) => {
+                            if (e.data?.type === 'agent_result' && e.data.id === id) {
+                                window.removeEventListener('message', handle);
+                                if (e.data.success) resolve(e.data.result);
+                                else reject(new Error(e.data.error));
+                            }
+                        };
+                        window.addEventListener('message', handle);
+                        window.parent.postMessage({ type: 'agent_exec', id, cmd }, '*');
+                    });
+                }
+            };
+        `;
+
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    /* Base styles for demo apps */
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
+                    ${css}
+                </style>
+                <script>
+                    ${agentShim}
+                </script>
+            </head>
+            <body>
+                ${html}
+                <script>
+                    try {
+                        ${js}
+                    } catch (e) {
+                        document.body.innerHTML += '<div style="color:red; margin-top:20px">Script Error: ' + e.message + '</div>';
+                    }
+                </script>
+            </body>
+            </html>
+        `);
+        doc.close();
+    }
+
+    private showToast(msg: string) {
+        this.toast.textContent = msg;
+        this.toast.classList.remove('hidden');
+        setTimeout(() => this.toast.classList.add('hidden'), 3000);
+    }
+
+    private openNewTab() {
+        // Warning: new tab won't have the bridge access because 'window.parent' is lost
+        alert("Note: Agent Bridge features won't work in a detached tab.");
+        const html = fileCache.get('index.html') || '';
+        const css = fileCache.get('style.css') || '';
+        const js = fileCache.get('script.js') || '';
+
+        const fullContent = `<html><head><style>${css}</style></head><body>${html}<script>/* Agent Bridge Missing */ \n ${js}</script></body></html>`;
+        const blob = new Blob([fullContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
     }
 }
 
-/**
- * Format plan markdown to HTML
- */
-function formatPlan(planMd: string): string {
-    // Simple markdown-like formatting
-    const lines = planMd.split('\n').filter(l => l.trim());
-    const items = lines.map((line) => {
-        const cleaned = line.replace(/^[\d]+\.\s*/, '').replace(/^[-*]\s*/, '');
-        return `<li>${escapeHtml(cleaned)}</li>`;
-    }).join('');
-    return `<ol>${items}</ol>`;
-}
+// --- Main Logic ---
 
-/**
- * Approve plan and execute
- */
-async function approvePlan() {
-    planSection.style.display = 'none';
-    setTasksStatus('Executing...', 'running');
-    streamingText = '';
+const logger = new LogManager();
+const preview = new LivePreview();
 
-    // Clear old streaming card, create execution card
-    const oldCard = document.getElementById('streaming-card');
-    if (oldCard) oldCard.remove();
+async function init() {
+    // Buttons
+    const runBtn = document.getElementById('run-btn') as HTMLButtonElement;
+    const taskInput = document.getElementById('task-input') as HTMLTextAreaElement;
 
-    if (agent) {
-        log('Plan approved, executing...', 'info');
+    // Scenarios
+    const list = document.getElementById('examples-list')!;
+    if (list) {
+        list.innerHTML = ''; // clear loading state
+        SCENARIOS.forEach(sc => {
+            const btn = document.createElement('button');
+            btn.className = 'example-chip';
+            btn.innerHTML = `${sc.icon} ${sc.title}`;
+            btn.onclick = () => {
+                taskInput.value = sc.prompt;
+                taskInput.focus();
+            };
+            list.appendChild(btn);
+        });
+    }
+
+    // Run Handler
+    const handleRun = async () => {
+        const text = taskInput.value.trim();
+        if (!text || isRunning) return;
+
+        // Config
+        const provider = (document.getElementById('provider') as HTMLSelectElement).value;
+        const apiKey = (document.getElementById('api-key') as HTMLInputElement).value;
+
+        if (!apiKey) {
+            logger.add('Please enter an API Key first.', 'error');
+            return;
+        }
+
+        isRunning = true;
+        runBtn.disabled = true;
+        logger.add(text, 'user');
+        taskInput.value = '';
 
         try {
-            // Send execution message with the plan context - be very explicit
-            const execMessage = `You MUST implement the ENTIRE plan below. Execute each step in order using the available tools.
-
-CRITICAL: Do NOT stop after the first step. Continue calling tools until ALL steps are complete.
-
-Available tools: write_file, run_command, read_file
-
-For each step:
-1. Call the appropriate tool (write_file to create files, run_command to execute)
-2. Move to the next step immediately after the tool completes
-3. Continue until ALL steps are done
-
-Plan to implement:
-${currentPlan}
-
-BEGIN IMPLEMENTATION NOW - start with step 1 and continue through all steps.`;
-
-            for await (const event of agent.send(execMessage)) {
-                handleEvent(event);
+            if (!agent) {
+                await initAgent(provider, apiKey);
             }
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            log(`Execution error: ${msg}`, 'error');
-            setTasksStatus('Failed', 'error');
+
+            logger.add('Agent working...', 'agent');
+
+            // Build full prompt
+            const prompt = text;
+
+            for await (const event of agent!.send(prompt)) {
+                await handleEvent(event);
+            }
+
+            logger.add('Task complete.', 'success');
+
+        } catch (e: any) {
+            logger.add(`Error: ${e.message}`, 'error');
+        } finally {
+            isRunning = false;
+            runBtn.disabled = false;
+        }
+    };
+
+    runBtn.onclick = handleRun;
+    taskInput.onkeydown = (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            handleRun();
+        }
+    };
+}
+
+async function initAgent(provider: string, apiKey: string) {
+    logger.add('Initializing environment...', 'agent');
+
+    // Sandbox
+    await initializeSandbox();
+
+    // Transport
+    setTransportHandler(async (method, url, headers, body) => {
+        const path = new URL(url).pathname;
+        const fetchOptions: RequestInit = { method, headers };
+        if (body) fetchOptions.body = new Blob([body as BlobPart]);
+
+        const res = await fetchFromSandbox(path, fetchOptions);
+        const resBody = new Uint8Array(await res.arrayBuffer());
+        const resHeaders: [string, Uint8Array][] = [];
+        res.headers.forEach((v, k) => resHeaders.push([k.toLowerCase(), new TextEncoder().encode(v)]));
+
+        return { status: res.status, headers: resHeaders, body: resBody };
+    });
+
+    // Agent
+    // Auto-select model based on provider
+    const models: Record<string, string> = {
+        anthropic: 'claude-haiku-4-5-20251001',
+        openai: 'o3-mini', // "Fast" option
+        gemini: 'gemini-2.0-flash',
+    };
+    const model = models[provider] || 'gpt-4o';
+
+    agent = new WebAgent({
+        provider,
+        model,
+        apiKey,
+        preambleOverride: SYSTEM_PROMPT,
+        mcpServers: [{ url: 'http://localhost:3000/mcp', name: 'sandbox' }],
+        maxTurns: 50 // Need many turns for verifying backend scripts and iterative coding
+    });
+
+    await agent.initialize();
+    logger.add(`Agent ready (${provider}/${model}).`, 'success');
+}
+
+/**
+ * Handle incoming agent events (during main loop)
+ */
+async function handleEvent(event: AgentEvent) {
+
+    if (event.type === 'tool-call') {
+        const toolName = event.toolName;
+        // Arguments are NOT available in this event type
+        if (toolName !== 'write_file') {
+            logger.term(`Running ${toolName}...`, 'out');
+        } else {
+            logger.term(`Writing file...`, 'out'); // We don't know name yet
+        }
+    }
+
+    if (event.type === 'tool-result') {
+        if (event.data.isError) {
+            logger.term(`Error: ${event.data.output}`, 'err');
+        } else if (event.data.name === 'run_command') {
+            logger.term(event.data.output, 'out');
+        } else if (event.data.name === 'write_file') {
+            // SYNC FILES!
+            // We just wrote a file. We don't know WHICH one from the event args (missing),
+            // but we can assume we should sync the project files.
+            logger.term(event.data.output, 'out');
+            await syncProjectFiles();
         }
     }
 }
 
-/**
- * Add/update a task card
- */
-function addOrUpdateTaskCard(id: string, name: string, status: 'pending' | 'running' | 'done' | 'error', statusText?: string, output?: string) {
-    let card = document.getElementById(`task-${id}`);
-
-    const icon = status === 'done' ? '✓' : status === 'running' ? '⏳' : status === 'error' ? '✗' : '○';
-    const timeText = tasks.get(id)?.startTime ? `${((Date.now() - tasks.get(id)!.startTime!) / 1000).toFixed(1)}s` : '';
-
-    if (!card) {
-        // Remove empty state
-        const empty = taskCards.querySelector('.tasks-empty');
-        if (empty) empty.remove();
-
-        card = document.createElement('div');
-        card.id = `task-${id}`;
-        card.className = `task-card ${status}`;
-        taskCards.appendChild(card);
-    } else {
-        card.className = `task-card ${status}`;
-    }
-
-    card.innerHTML = `
-        <div class="task-card-header">
-            <div class="task-card-title">
-                <span class="task-card-icon">${icon}</span>
-                <span class="task-card-name">${escapeHtml(name)}</span>
-            </div>
-            <span class="task-card-time">${timeText}</span>
-        </div>
-        <div class="task-card-body">
-            <div class="task-card-status">${statusText || ''}</div>
-            ${output ? `<div class="task-card-output">→ ${escapeHtml(output)}</div>` : ''}
-        </div>
-    `;
-
-    taskCards.scrollTop = taskCards.scrollHeight;
-}
-
-/**
- * Set tasks section status
- */
-function setTasksStatus(text: string, type: 'idle' | 'running' | 'done' | 'error' = 'idle') {
-    tasksStatus.textContent = text;
-    tasksStatus.className = `tasks-status ${type}`;
-}
-
-/**
- * Add to console
- */
-function log(text: string, type: 'info' | 'output' | 'error' = 'info') {
-    const hint = consoleOutput.querySelector('.console-hint');
-    if (hint) hint.remove();
-
-    const line = document.createElement('div');
-    line.className = `console-line ${type}`;
-    line.textContent = text;
-    consoleOutput.appendChild(line);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-}
-
-/**
- * Track a created file
- */
-function trackFile(filename: string, content: string) {
-    createdFiles.set(filename, content);
-    updateFilesList();
-}
-
-/**
- * Update the files list
- */
-function updateFilesList() {
-    if (createdFiles.size === 0) {
-        filesList.innerHTML = '<div class="files-empty">No files yet</div>';
-        return;
-    }
-
-    filesList.innerHTML = '';
-    for (const [filename] of createdFiles) {
-        const item = document.createElement('div');
-        item.className = 'file-item';
-        item.innerHTML = `
-            <span class="file-icon">${getFileIcon(filename)}</span>
-            <span class="file-name">${filename}</span>
-        `;
-        item.addEventListener('click', () => previewFile(filename));
-        filesList.appendChild(item);
-    }
-}
-
-/**
- * Preview a file
- */
-function previewFile(filename: string) {
-    const content = createdFiles.get(filename);
-    if (content) {
-        previewFilename.textContent = filename;
-        filePreview.innerHTML = `<code>${escapeHtml(content)}</code>`;
-    }
-}
-
-/**
- * Get file icon
- */
-function getFileIcon(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    switch (ext) {
-        case 'ts': case 'tsx': return '📘';
-        case 'js': case 'jsx': return '📒';
-        case 'json': return '📋';
-        case 'md': return '📝';
-        default: return '📄';
-    }
-}
-
-/**
- * Display streaming content in the task cards area
- */
-function displayStreamingContent(text: string) {
-    // Clear empty state
-    const empty = taskCards.querySelector('.tasks-empty');
-    if (empty) empty.remove();
-
-    // Get or create streaming card
-    let card = document.getElementById('streaming-card');
-    if (!card) {
-        card = document.createElement('div');
-        card.id = 'streaming-card';
-        card.className = 'task-card running';
-        taskCards.appendChild(card);
-    }
-
-    // Simple markdown rendering
-    const html = text
-        .replace(/^# (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h4>$1</h4>')
-        .replace(/^(\d+)\. \*\*(.+?)\*\*/gm, '<div class="task-step"><span class="step-num">$1.</span> <strong>$2</strong></div>')
-        .replace(/^ {3}- (.+)$/gm, '<div class="task-substep">• $1</div>')
-        .replace(/\n/g, '<br>');
-
-    card.innerHTML = `
-        <div class="task-card-header">
-            <div class="task-card-title">
-                <span class="task-card-icon">⏳</span>
-                <span class="task-card-name">Generating Plan</span>
-            </div>
-        </div>
-        <div class="task-card-body streaming-output">${html}</div>
-    `;
-
-    taskCards.scrollTop = taskCards.scrollHeight;
-}
-
-/**
- * Escape HTML
- */
-function escapeHtml(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/**
- * Handle an agent event
- */
-function handleEvent(event: AgentEvent) {
-    console.log('[EmbedDemo] Event:', event);
-
-    switch (event.type) {
-        case 'plan-generated':
-            if (mode === 'review') {
-                currentPlan = event.plan;
-                planContent.innerHTML = formatPlan(event.plan);
-                planSection.style.display = 'block';
-                setTasksStatus('Awaiting approval', 'idle');
-            } else {
-                log('Plan generated, auto-executing...', 'info');
-            }
-            break;
-
-        case 'task-start':
-            tasks.set(event.task.id, {
-                info: event.task,
-                status: 'running',
-                startTime: Date.now()
-            });
-            addOrUpdateTaskCard(event.task.id, event.task.name, 'running', event.task.description);
-            break;
-
-        case 'task-update': {
-            const taskUpdate = tasks.get(event.update.id);
-            if (taskUpdate) {
-                addOrUpdateTaskCard(event.update.id, taskUpdate.info.name, 'running', event.update.status);
-            }
-            break;
-        }
-
-        case 'task-complete': {
-            const taskComplete = tasks.get(event.result.id);
-            if (taskComplete) {
-                taskComplete.status = event.result.success ? 'done' : 'error';
-                taskComplete.output = event.result.output;
-                addOrUpdateTaskCard(
-                    event.result.id,
-                    taskComplete.info.name,
-                    event.result.success ? 'done' : 'error',
-                    event.result.success ? 'Complete' : 'Failed',
-                    event.result.output
-                );
-            }
-            break;
-        }
-
-        case 'tool-call': {
-            log(`Calling tool: ${event.toolName}`, 'info');
-            // Add a tool execution card
-            const toolId = `tool-${Date.now()}`;
-            addOrUpdateTaskCard(toolId, `🔧 ${event.toolName}`, 'running', 'Executing...');
-            break;
-        }
-
-        case 'tool-result': {
-            if (event.data.isError) {
-                log(`Tool error: ${event.data.output}`, 'error');
-            } else {
-                log(`Tool ${event.data.name}: success`, 'info');
-            }
-
-            // Try to update the most recent running tool card
-            const runningCards = taskCards.querySelectorAll('.task-card.running');
-            const lastCard = runningCards[runningCards.length - 1];
-            if (lastCard) {
-                lastCard.className = event.data.isError ? 'task-card error' : 'task-card done';
-                const icon = lastCard.querySelector('.task-card-icon');
-                if (icon) icon.textContent = event.data.isError ? '✗' : '✓';
-                const status = lastCard.querySelector('.task-card-status');
-                if (status) status.textContent = event.data.isError ? 'Error' : 'Done';
-            }
-
-            // Check if tool created a file
-            if (event.data.name === 'write_file' && event.data.output) {
-                try {
-                    const result = JSON.parse(event.data.output);
-                    if (result.path) {
-                        trackFile(result.path, result.content || '');
-                    }
-                } catch {
-                    // Not JSON, try to extract filename from output
-                    const match = event.data.output.match(/wrote to (.+)/i);
-                    if (match) {
-                        trackFile(match[1].trim(), '');
-                    }
+async function syncProjectFiles() {
+    // Attempt to fetch standard files from sandbox
+    const files = ['index.html', 'style.css', 'script.js'];
+    for (const f of files) {
+        try {
+            const res = await fetchFromSandbox(f);
+            if (res.ok) {
+                const text = await res.text();
+                // Check if changed? For now just blindly update cache
+                if (fileCache.get(f) !== text) {
+                    preview.update(f, text);
                 }
             }
-            break;
+        } catch (e) {
+            // ignore missing files
         }
-
-        case 'chunk':
-            // Accumulate streaming text and display in task cards
-            streamingText += event.text;
-            displayStreamingContent(streamingText);
-            break;
-
-        case 'complete':
-            // Show final plan in review mode
-            if (mode === 'review' && streamingText.includes('Plan')) {
-                currentPlan = streamingText;
-                planContent.innerHTML = formatPlan(streamingText);
-                planSection.style.display = 'block';
-            }
-            setTasksStatus('Complete', 'done');
-            break;
-
-        case 'error':
-            log(`Error: ${event.error}`, 'error');
-            setTasksStatus('Failed', 'error');
-            break;
-
-        case 'ready':
-            setTasksStatus('Complete', 'done');
-            break;
     }
 }
 
-/**
- * Run the task
- */
-async function runTask() {
-    const task = taskInput.value.trim();
-    if (!task || isRunning) return;
-
-    const provider = (document.getElementById('provider') as HTMLSelectElement).value;
-    const model = (document.getElementById('model') as HTMLInputElement).value;
-    const apiKey = (document.getElementById('api-key') as HTMLInputElement).value;
-
-    if (!apiKey) {
-        setTasksStatus('Enter API key', 'error');
-        return;
-    }
-
-    isRunning = true;
-    runBtn.disabled = true;
-    taskCards.innerHTML = '';
-    tasks.clear();
-    streamingText = '';
-    planSection.style.display = 'none';
-    setTasksStatus('Initializing...', 'running');
-
-    try {
-        // Initialize agent if needed
-        if (!agent) {
-            // Initialize sandbox worker first
-            console.log('[EmbedDemo] Initializing sandbox...');
-            await initializeSandbox();
-            console.log('[EmbedDemo] Sandbox ready');
-
-            // Set up transport handler to route MCP requests to sandbox (same as TUI)
-            setTransportHandler(async (method, url, headers, body) => {
-                // Extract path from URL (e.g., /mcp/message from http://localhost:3000/mcp/message)
-                const urlObj = new URL(url);
-                const path = urlObj.pathname;
-
-                console.log('[EmbedDemo] MCP transport:', method, path);
-
-                // Build fetch options
-                const fetchOptions: RequestInit = { method, headers };
-                if (body) {
-                    fetchOptions.body = new Blob([body as BlobPart]);
-                }
-
-                // Route through sandbox worker
-                const response = await fetchFromSandbox(path, fetchOptions);
-
-                // Convert response
-                const responseBody = new Uint8Array(await response.arrayBuffer());
-                const responseHeaders: [string, Uint8Array][] = [];
-                response.headers.forEach((value, name) => {
-                    responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
-                });
-
-                return {
-                    status: response.status,
-                    headers: responseHeaders,
-                    body: responseBody,
-                };
-            });
-            console.log('[EmbedDemo] MCP transport handler configured');
-
-            console.log('[EmbedDemo] Creating WebAgent', { provider, model, apiKey: '***' });
-            agent = new WebAgent({
-                provider,
-                model,
-                apiKey,
-                mcpServers: [{ url: 'http://localhost:3000/mcp', name: 'sandbox' }],
-            });
-            console.log('[EmbedDemo] Initializing agent...');
-            await agent.initialize();
-            console.log('[EmbedDemo] Agent initialized successfully');
-        }
-
-        // Prepare task with mode-specific preamble
-        const preamble = mode === 'review'
-            ? 'Create a numbered plan for this task. Format as:\n1. **Step name** - description\n2. **Step name** - description\n\nBe concise. After showing the plan, stop and wait for approval.'
-            : 'Execute this task step by step. Show progress as you work.';
-
-        const fullTask = `${preamble}\n\nTask: ${task}`;
-
-        setTasksStatus('Working...', 'running');
-
-        console.log('[EmbedDemo] Sending task to agent');
-        for await (const event of agent.send(fullTask)) {
-            handleEvent(event);
-        }
-        console.log('[EmbedDemo] Task complete');
-
-        if (mode !== 'review' || tasks.size > 0) {
-            setTasksStatus('Complete', 'done');
-        }
-
-    } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log(`Error: ${msg}`, 'error');
-        setTasksStatus('Failed', 'error');
-    } finally {
-        isRunning = false;
-        runBtn.disabled = false;
-    }
-}
-
-// Initialize on DOM ready
+// Boot
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
