@@ -1705,6 +1705,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     let tool_count = tools.len();
                     self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connected;
                     self.agent.remote_servers_mut()[idx].tools = tools;
+                    // Force agent reinit to include new tools in system prompt
+                    self.agent.invalidate_agent();
                     self.notice(format!(
                         "Connected to '{}'. {} tools available.",
                         server_name, tool_count
@@ -1738,6 +1740,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Connected;
                                     self.agent.remote_servers_mut()[idx].tools = tools;
+                                    // Force agent reinit to include new tools in system prompt
+                                    self.agent.invalidate_agent();
                                     self.notice(format!(
                                         "Connected to '{}'. {} tools available.",
                                         server_name, tool_count
@@ -1808,6 +1812,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     let name = self.agent.remote_servers_mut()[idx].name.clone();
                     self.agent.remote_servers_mut()[idx].status = ServerConnectionStatus::Connected;
                     self.agent.remote_servers_mut()[idx].tools = tools;
+                    // Force agent reinit to include new tools in system prompt
+                    self.agent.invalidate_agent();
                     self.notice(format!(
                         "Connected to '{}'. {} tools available.",
                         name, tool_count
@@ -1851,6 +1857,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                     self.agent.remote_servers_mut()[idx].status =
                                         ServerConnectionStatus::Connected;
                                     self.agent.remote_servers_mut()[idx].tools = tools;
+                                    // Force agent reinit to include new tools in system prompt
+                                    self.agent.invalidate_agent();
                                     self.notice(format!(
                                         "Connected to '{}'. {} tools available.",
                                         name, tool_count
@@ -1921,6 +1929,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                         self.agent.remote_servers_mut()[idx].status =
                             ServerConnectionStatus::Connected;
                         self.agent.remote_servers_mut()[idx].tools = tools;
+                        // Force agent reinit to include new tools in system prompt
+                        self.agent.invalidate_agent();
                         connected += 1;
                     }
                     Err(McpError::OAuthRequired(_)) => {
@@ -2222,6 +2232,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                                 self.agent.remote_servers_mut()[idx].status =
                                                     ServerConnectionStatus::Connected;
                                                 self.agent.remote_servers_mut()[idx].tools = tools;
+                                                // Force agent reinit to include new tools in system prompt
+                                                self.agent.invalidate_agent();
                                                 self.notice(format!(
                                                     "Connected to '{}'. {} tools available.",
                                                     name, tool_count

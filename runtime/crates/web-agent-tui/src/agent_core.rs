@@ -179,6 +179,12 @@ impl AgentCore {
         let _ = self.config.save();
     }
 
+    /// Force agent re-initialization on next message
+    /// Call this when available tools change (MCP server added/removed/connected)
+    pub fn invalidate_agent(&mut self) {
+        self.rig_agent = None;
+    }
+
     /// Get mutable config
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.config
