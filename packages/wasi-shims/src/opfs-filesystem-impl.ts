@@ -42,6 +42,7 @@ import {
     deleteSymlink,
     deleteSymlinksUnderPath
 } from './symlink-store';
+import { hasJSPI } from './execution-mode';
 
 // Global buffer cache for files being written via streams without sync handles.
 // This persists data across writeViaStream() calls since each call creates a new OutputStream.
@@ -989,10 +990,14 @@ export async function initFilesystem(): Promise<void> {
         setOpfsRoot(root);
         console.log('[opfs-fs] OPFS root acquired');
 
-        // Initialize bridge
-        await initHelperWorker();
-
-        console.log('[opfs-fs] Helper worker ready, loading symlinks...');
+        // JSPI mode uses async OPFS operations directly - no need for SharedArrayBuffer sync bridge
+        if (!hasJSPI) {
+            // Initialize sync bridge for non-JSPI environments (Safari/Firefox)
+            await initHelperWorker();
+            console.log('[opfs-fs] Helper worker ready, loading symlinks...');
+        } else {
+            console.log('[opfs-fs] JSPI mode - using async OPFS operations directly');
+        }
 
         // Load symlinks from IndexedDB into cache
         await loadSymlinksIntoCache();

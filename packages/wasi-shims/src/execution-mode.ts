@@ -90,5 +90,13 @@ export function canSuspendAsync(): boolean {
     return hasJSPI;
 }
 
-// Log at startup
-console.log(`[ExecutionMode] JSPI: ${hasJSPI ? 'YES' : 'NO'}, Mode: ${_currentMode}`);
+/**
+ * Check if the current context is cross-origin isolated.
+ * Required for SharedArrayBuffer to be available.
+ */
+export function isCrossOriginIsolated(): boolean {
+    return typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated === true;
+}
+
+// Log at startup with full context
+console.log(`[ExecutionMode] JSPI: ${hasJSPI ? 'YES' : 'NO'}, Mode: ${_currentMode}, CrossOriginIsolated: ${isCrossOriginIsolated() ? 'YES' : 'NO'}`);

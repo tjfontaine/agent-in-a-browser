@@ -8,7 +8,13 @@ account_id = "687f8b8c824af34922f7bb4d1776f1a7"
 routes = [{ pattern = "agent.edge-agent.dev", custom_domain = true }]
 
 # Static assets configuration - serve from frontend/dist
-assets = { directory = "frontend/dist", binding = "ASSETS", html_handling = "auto-trailing-slash" }
+# run_worker_first = true ensures Worker code runs for ALL requests
+# This is required for the Worker to add COOP/COEP headers for SharedArrayBuffer
+[assets]
+directory = "frontend/dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+run_worker_first = true
 
 # Observability configuration for better logging
 [observability]

@@ -87,11 +87,40 @@ export function getDataArray(): Uint8Array | null {
 }
 
 /**
+ * Check if SharedArrayBuffer is available in the current context.
+ * Requires cross-origin isolation (COOP/COEP headers).
+ */
+export function isSharedArrayBufferAvailable(): boolean {
+    // Check if we're in a cross-origin isolated context
+    // This is the proper way to detect SAB availability per MDN
+    if (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) {
+        return typeof SharedArrayBuffer !== 'undefined';
+    }
+
+    // Fallback: try to detect SAB directly (some environments don't have crossOriginIsolated)
+    return typeof SharedArrayBuffer !== 'undefined';
+}
+
+/**
  * Initialize the helper worker and shared memory.
  * Returns a promise that resolves when the helper is ready.
+ * 
+ * This is only used in non-JSPI mode (Safari/Firefox) where we need
+ * synchronous blocking via Atomics.wait().
  */
 export async function initHelperWorker(): Promise<void> {
     if (helperReady) return;
+
+    // Verify SharedArrayBuffer is available before attempting to use it
+    if (!isSharedArrayBufferAvailable()) {
+        const isCOI = typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : 'undefined';
+        console.error('[opfs-sync-bridge] SharedArrayBuffer not available.', {
+            crossOriginIsolated: isCOI,
+            sharedArrayBufferType: typeof SharedArrayBuffer,
+            hint: 'Ensure COOP/COEP headers are set: Cross-Origin-Opener-Policy: same-origin, Cross-Origin-Embedder-Policy: require-corp'
+        });
+        throw new Error('SharedArrayBuffer not available - cross-origin isolation required');
+    }
 
     // Create shared buffer for communication with helper worker
     // 64KB should be plenty for directory listings
