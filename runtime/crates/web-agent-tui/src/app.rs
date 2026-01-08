@@ -135,6 +135,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
     /// Add an info notice to timeline (UI-only, never sent to API)
     fn notice(&mut self, text: impl Into<String>) {
+        let text = text.into();
         self.timeline
             .push(crate::display::TimelineEntry::info(text));
     }
@@ -837,16 +838,16 @@ impl<R: PollableRead, W: Write> App<R, W> {
     /// Called on each tick while in Streaming state.
     /// Uses poll-once pattern to allow UI updates between chunks.
     fn poll_stream(&mut self) {
-        if self.state != AppState::Streaming {
-            return;
+        // Only poll the actual stream if streaming
+        if self.state == AppState::Streaming {
+            self.agent.poll_stream();
+
+            if !self.agent.is_streaming() {
+                self.state = AppState::Ready;
+            }
         }
 
-        self.agent.poll_stream();
-
-        if !self.agent.is_streaming() {
-            self.state = AppState::Ready;
-        }
-
+        // Always process events (they may be queued from outside streaming)
         while let Some(event) = self.agent.pop_event() {
             match event {
                 crate::events::AgentEvent::StateChange { .. } => {}
@@ -920,6 +921,35 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     result,
                     is_error,
                 } => {
+                    // Update aux panel with tool output
+                    // Special handling for task_write to show formatted task list
+                    if tool_name == "task_write" {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result) {
+                            if let Some(tasks) = parsed.get("tasks") {
+                                if let Ok(task_list) =
+                                    serde_json::from_value::<Vec<crate::bridge::local_tools::Task>>(
+                                        tasks.clone(),
+                                    )
+                                {
+                                    self.aux_content = AuxContent {
+                                        kind: AuxContentKind::TaskList,
+                                        title: "Tasks".to_string(),
+                                        content:
+                                            crate::bridge::local_tools::format_tasks_for_display(
+                                                &task_list,
+                                            ),
+                                    };
+                                }
+                            }
+                        }
+                    } else {
+                        self.aux_content = AuxContent {
+                            kind: AuxContentKind::ToolOutput,
+                            title: format!("Tool: {}", tool_name),
+                            content: result.clone(),
+                        };
+                    }
+
                     self.timeline
                         .push(crate::display::TimelineEntry::tool_result(
                             tool_name, result, is_error,

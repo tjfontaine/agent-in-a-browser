@@ -270,7 +270,6 @@ impl ActiveStream {
     pub fn poll_once(&mut self) -> PollResult {
         // Check if cancelled
         if self.buffer.is_cancelled() {
-            eprintln!("[ActiveStream] Cancelled, returning Complete");
             self.buffer.set_complete();
             return PollResult::Complete;
         }
@@ -285,31 +284,20 @@ impl ActiveStream {
         }
 
         let (result, transition) = match &mut self.state {
-            ActiveStreamState::Connecting(future) => {
-                eprintln!("[ActiveStream] State: Connecting");
-                match future.as_mut().poll(&mut cx) {
-                    Poll::Ready(stream) => {
-                        eprintln!("[ActiveStream] Connecting -> Ready, transitioning");
-                        (PollResult::Pending, Transition::ToStreaming(stream))
-                    }
-                    Poll::Pending => {
-                        eprintln!("[ActiveStream] Connecting -> Pending");
-                        (PollResult::Pending, Transition::None)
-                    }
-                }
-            }
+            ActiveStreamState::Connecting(future) => match future.as_mut().poll(&mut cx) {
+                Poll::Ready(stream) => (PollResult::Pending, Transition::ToStreaming(stream)),
+                Poll::Pending => (PollResult::Pending, Transition::None),
+            },
             ActiveStreamState::Streaming(stream) => {
                 let result = match stream.as_mut().poll_next(&mut cx) {
                     Poll::Ready(Some(Ok(item))) => {
                         // Process the type-erased item
                         match item {
                             StreamItem::Text(text) => {
-                                eprintln!("[ActiveStream] Text: {} bytes", text.len());
                                 self.buffer.set_tool_activity(None);
                                 self.buffer.append(&text);
                             }
                             StreamItem::ToolCall { name } => {
-                                eprintln!("[ActiveStream] ToolCall: {}", name);
                                 self.buffer
                                     .set_tool_activity(Some(format!("🔧 Calling {}...", name)));
                             }
@@ -318,41 +306,30 @@ impl ActiveStream {
                                 result,
                                 is_error,
                             } => {
-                                eprintln!(
-                                    "[ActiveStream] ToolResult received: {} bytes",
-                                    result.len()
-                                );
                                 // Store the tool result for agent_core to emit
                                 self.buffer
                                     .set_tool_result(Some((tool_name, result, is_error)));
                                 self.buffer.set_tool_activity(None);
                             }
                             StreamItem::Final => {
-                                eprintln!("[ActiveStream] Final received");
                                 self.buffer.set_tool_activity(None);
                             }
                             StreamItem::Other => {
-                                eprintln!("[ActiveStream] Other received");
                                 self.buffer.set_tool_activity(None);
                             }
                         }
                         PollResult::Chunk
                     }
                     Poll::Ready(Some(Err(e))) => {
-                        eprintln!("[ActiveStream] Error: {}", e);
                         self.buffer.set_error(e.to_string());
                         self.buffer.set_complete();
                         PollResult::Error(e.to_string())
                     }
                     Poll::Ready(None) => {
-                        eprintln!("[ActiveStream] Stream ended (None)");
                         self.buffer.set_complete();
                         PollResult::Complete
                     }
-                    Poll::Pending => {
-                        eprintln!("[ActiveStream] Stream Pending");
-                        PollResult::Pending
-                    }
+                    Poll::Pending => PollResult::Pending,
                 };
                 (result, Transition::None)
             }
@@ -360,7 +337,6 @@ impl ActiveStream {
 
         // Apply state transition if needed
         if let Transition::ToStreaming(stream) = transition {
-            eprintln!("[ActiveStream] Transitioning to Streaming state");
             self.state = ActiveStreamState::Streaming(stream);
         }
 

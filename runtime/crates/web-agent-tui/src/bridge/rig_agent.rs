@@ -38,6 +38,8 @@ pub struct StreamingBuffer {
     tool_activity: Arc<Mutex<Option<String>>>,
     /// Last tool result (tool_name, result, is_error)
     last_tool_result: Arc<Mutex<Option<(String, String, bool)>>>,
+    /// Pending tool name from ToolCall (used when ToolResult arrives)
+    pending_tool_name: Arc<Mutex<Option<String>>>,
 }
 
 impl StreamingBuffer {
@@ -50,6 +52,7 @@ impl StreamingBuffer {
             error: Arc::new(Mutex::new(None)),
             tool_activity: Arc::new(Mutex::new(None)),
             last_tool_result: Arc::new(Mutex::new(None)),
+            pending_tool_name: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -345,16 +348,28 @@ impl ActiveStream {
                                 self.buffer.append(&text);
                             }
                             StreamItem::ToolCall { name } => {
+                                // Track the tool name for when ToolResult arrives
+                                if let Ok(mut pending) = self.buffer.pending_tool_name.lock() {
+                                    *pending = Some(name.clone());
+                                }
                                 self.buffer
                                     .set_tool_activity(Some(format!("🔧 Calling {}...", name)));
                             }
                             StreamItem::ToolResult {
-                                tool_name,
+                                tool_name: _,
                                 result,
                                 is_error,
                             } => {
+                                // Use pending tool name if available (the actual tool name)
+                                let actual_name = self
+                                    .buffer
+                                    .pending_tool_name
+                                    .lock()
+                                    .ok()
+                                    .and_then(|mut n| n.take())
+                                    .unwrap_or_else(|| "unknown".to_string());
                                 self.buffer
-                                    .set_tool_result(Some((tool_name, result, is_error)));
+                                    .set_tool_result(Some((actual_name, result, is_error)));
                                 self.buffer.set_tool_activity(None);
                             }
                             StreamItem::Final | StreamItem::Other => {

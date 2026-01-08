@@ -510,23 +510,16 @@ impl HeadlessAgent {
 
         // First, return any queued events
         if let Some(event) = self.events.pop_front() {
-            eprintln!("[headless poll] Returning queued event");
             return Some(event);
         }
 
         // If we have an active stream, poll it
         if let Some(stream) = &mut self.active_stream {
-            eprintln!("[headless poll] Polling active stream...");
             let result = stream.poll_once();
-            eprintln!("[headless poll] poll_once returned: {:?}", result);
 
             // Check for tool activity updates (like TUI does)
             let activity = stream.buffer().get_tool_activity();
             if activity != self.last_tool_activity {
-                eprintln!(
-                    "[headless poll] Tool activity changed: {:?} -> {:?}",
-                    self.last_tool_activity, activity
-                );
                 if let Some(act) = &activity {
                     // Tool call started
                     self.events.push_back(AgentEvent::ToolCall(act.clone()));
@@ -545,17 +538,14 @@ impl HeadlessAgent {
             match result {
                 PollResult::Chunk => {
                     let content = stream.buffer().get_content();
-                    eprintln!("[headless poll] Chunk: {} bytes", content.len());
                     self.events.push_back(AgentEvent::StreamChunk(content));
                 }
                 PollResult::Pending => {
-                    eprintln!("[headless poll] Pending - returning None");
                     // Still pending - JS will call poll() again
                     // Don't block or sleep, just return None
                 }
                 PollResult::Complete => {
                     let content = stream.buffer().get_content();
-                    eprintln!("[headless poll] Complete! {} bytes", content.len());
                     self.events
                         .push_back(AgentEvent::StreamChunk(content.clone()));
                     self.events
@@ -569,7 +559,6 @@ impl HeadlessAgent {
                     self.events.push_back(AgentEvent::Ready);
                 }
                 PollResult::Error(e) => {
-                    eprintln!("[headless poll] Error: {}", e);
                     self.events.push_back(AgentEvent::StreamError(e));
                     self.is_streaming = false;
                     self.active_stream = None;
@@ -581,7 +570,6 @@ impl HeadlessAgent {
             return self.events.pop_front();
         }
 
-        eprintln!("[headless poll] No active stream, returning None");
         None
     }
 
