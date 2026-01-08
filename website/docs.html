@@ -80,8 +80,10 @@
             <article class="docs-article">
                 <h1 id="overview">Edge Agent Documentation</h1>
                 <p class="lead">
-                    Edge Agent is a fully browser-native AI coding assistant. This documentation covers
-                    both using the hosted terminal and embedding the agent in your own applications.
+                    I was "nerd-sniped" into asking: <em>Why can't an agent in the browser just write dynamic code and
+                        execute it?</em>
+                    <br><br>
+                    Edge Agent is the answer: a fully browser-native AI coding assistant with a real WASM sandbox.
                 </p>
 
                 <section id="quick-start">
@@ -135,13 +137,23 @@
 
                 <section id="installation">
                     <h2>Installation</h2>
-                    <p>To embed Edge Agent in your own application:</p>
+                    <div class="callout">
+                        <div class="callout-icon">🚧</div>
+                        <div class="callout-content">
+                            <strong>Note:</strong> Edge Agent packages are not yet published to npm.
+                            You currently need to build from source.
+                        </div>
+                    </div>
+                    <p>To embed Edge Agent, clone the repository and link the package:</p>
 
                     <div class="code-block">
                         <div class="code-header">
-                            <span>npm</span>
+                            <span>Terminal</span>
                         </div>
-                        <pre><code>npm install @tjfontaine/web-agent-core</code></pre>
+                        <pre><code>git clone https://github.com/tjfontaine/agent-in-a-browser.git
+cd agent-in-a-browser
+npm install
+npm run build</code></pre>
                     </div>
                 </section>
 
