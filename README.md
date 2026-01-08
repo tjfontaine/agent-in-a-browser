@@ -1,525 +1,120 @@
-# Agent in a Browser
+# Edge Agent
 
-*✨ Lovingly vibed with [Antigravity](https://antigravity.google) ✨*
+*✨ Vibed with [Antigravity](https://antigravity.google) ✨*
 
-**🚀 Try it now: [agent.edge-agent.dev](https://agent.edge-agent.dev)** — hosted on Cloudflare Workers (static assets only, no backend processing)
-
-A fully browser-native AI coding assistant. No server required for execution—just your API key and a browser.
-
-## What This Is & Why It Exists
-
-**Agent in a Browser** is an autonomous AI agent that runs entirely in your browser. It provides a terminal-based interface where you can converse with AI models (Anthropic Claude, OpenAI GPT, or any OpenAI-compatible endpoint) and give them real tools to work with: a file system, shell commands, TypeScript execution, HTTP requests, and more.
-
-### The Problem
-
-Most AI coding assistants require either:
-
-- **Cloud-hosted sandboxes** (privacy concerns, latency, cost)
-- **Local installation** (friction, system dependencies, platform limitations)
-- **Proprietary runtimes** (vendor lock-in, closed-source execution environments)
-
-### The Solution
-
-Web Agent takes a different approach:
-
-| Requirement | How Web Agent Solves It |
-|-------------|------------------------|
-| **Zero installation** | Opens in any modern browser |
-| **Full privacy** | Config stored locally in OPFS (browser-only, never sent to servers) |
-| **Real tools** | WASM sandbox with shell, file system, TypeScript, HTTP |
-| **Bring your own key** | Direct API calls to Anthropic/OpenAI—no proxy required |
-| **100% open source** | No proprietary sandboxes or execution environments |
-| **Works offline** | Once loaded, the sandbox runs without network (except LLM calls) |
-
-### What You Can Do
-
-- Ask the AI to write code, and it can actually **run** it in the sandbox
-- Persist files across sessions using the browser's [Origin Private File System (OPFS)](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
-- Use 50+ Unix-like shell commands: `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `diff`, `sort`, `wc`, and more
-- Execute TypeScript/JavaScript with ESM imports (auto-resolved from [esm.sh](https://esm.sh) CDN)
-- Make HTTP requests from within scripts (`fetch()` available)
-- Use git commands: `git init`, `git add`, `git commit`, `git status`, `git log`, `git diff`
-- Run SQLite databases with `sqlite3`
-- Queue messages while the agent is working, with real-time "steering" support
-
-### Terminal Interface Features
-
-| Feature | Description |
-|---------|-------------|
-| **Ratatui TUI** | 100% Rust-driven terminal UI via ghostty-web |
-| **Multi-provider support** | Anthropic, OpenAI, and any OpenAI-compatible endpoint |
-| **Bring your own API key** | Keys stored in browser OPFS (persisted locally, never sent to our servers) |
-| **Persistent history** | Command history saved across sessions |
-| **Real-time steering** | Send messages while the agent is working to adjust its approach |
-
-### Key Design Principles
-
-1. **Browser-First**: All execution happens in a WASM sandbox running in a Web Worker. No server-side code execution.
-2. **OSS-Only Stack**: Rust + WASI P2 for the sandbox, Ratatui for TUI, QuickJS for JS execution, SWC for TypeScript transpilation.
-3. **MCP Native**: Tools are exposed via [Model Context Protocol](https://spec.modelcontextprotocol.io/), making the architecture extensible and standardized.
-4. **Security by Isolation**: The sandbox cannot access your real file system or make unauthorized network requests.
-5. **Multi-Provider**: Designed for "bring your own key"—works with Anthropic, OpenAI, or any OpenAI-compatible API.
-
-### Why WASI Preview 2?
-
-We chose [WASI Preview 2](https://github.com/WebAssembly/WASI/blob/main/preview2/README.md) (the Component Model) over WASI Preview 1 or raw WASM for several reasons:
-
-| Aspect | WASI P1 | WASI P2 (Component Model) |
-|--------|---------|---------------------------|
-| **Interface Design** | POSIX-like, monolithic | Modular, composable interfaces |
-| **HTTP Support** | Not standardized | `wasi:http` with typed requests/responses |
-| **Async I/O** | `poll_oneoff` (limited) | First-class `Pollable` resources |
-| **Type Safety** | C-style ABI | WIT-defined strongly-typed interfaces |
-| **Future-Proofing** | Legacy, frozen | Active development, ecosystem growth |
-
-**Specific benefits for this project:**
-
-- **`wasi:http/incoming-handler`**: The WASM component exports an HTTP handler, making it trivially callable via POST requests from JavaScript. No custom FFI needed.
-- **`wasi:filesystem`**: Standard file operations that we bridge to OPFS via TypeScript shims. The interface is well-defined and testable.
-- **Component composition**: We can potentially add more WASM components (e.g., image processing, crypto) without changing the host integration.
-- **`jco transpile`**: The [jco](https://github.com/bytecodealliance/jco) toolchain transpiles WASI P2 components to ES modules with automatic host bindings.
-
-The tradeoff is complexity: WASI P2 requires custom JavaScript shims for browser APIs (OPFS, sync XHR) since there's no native browser WASI runtime yet. We implemented these in `frontend/src/wasm/`, including:
-
-- **Lazy OPFS loading**: Directory contents are scanned on-demand using a helper worker and `SharedArrayBuffer` + `Atomics.wait()` for true synchronous blocking. Only the root directory is scanned at startup.
-- **Transport routing**: HTTP requests from the TUI are routed through the sandbox worker to the MCP server.
-- **Custom Pollables**: Clock and I/O pollables with busy-wait implementations for the browser environment.
-
-### Browser Compatibility & Async Modes
-
-We use a dual-build approach to provide cross-browser support for async module loading:
-
-| Browser | Async Mode | Module Loading Strategy |
-|---------|------------|-------------------------|
-| **Chrome** | JSPI (JavaScript Promise Integration) | Lazy loading with WebAssembly stack switching |
-| **Safari** | Sync | Eager loading at startup |
-| **Firefox** | Sync | Eager loading at startup |
-
-**How it works:**
-
-- **JSPI mode** (Chrome): Uses experimental `WebAssembly.Suspending` and `WebAssembly.promising` APIs. Modules load on-demand when first used, with the WASM call stack suspended until loading completes.
-- **Sync mode** (Safari/Firefox): All lazy modules are pre-loaded during initialization. No async suspension needed.
-
-The runtime detects JSPI support via `typeof WebAssembly?.Suspending !== 'undefined'` and loads the appropriate MCP server variant (`mcp-server-jspi/` or `mcp-server-sync/`).
-
-### The Story: Why This Exists
-
-> "I was nerd-sniped into: *Why can't an agent in the browser just write dynamic code and execute it?*"
-
-The core innovation here is the TypeScript execution pipeline that runs entirely in WASM:
-
-```text
-weather.ts → SWC (transpile) → JavaScript → QuickJS (execute) → Output
-```
-
-The agent writes TypeScript, says `tsx code.ts`, and the sandbox:
-
-1. **Compiles** TypeScript to JavaScript using [SWC](https://swc.rs/) (compiled to WASM)
-2. **Executes** the JavaScript using [QuickJS](https://bellard.org/quickjs/) (compiled to WASM via [rquickjs](https://github.com/nickelc/rquickjs))
-3. **Returns** stdout/stderr to the agent
-
-All of this happens in the browser. No server round-trip. No cloud sandbox. Just WASM.
+**[→ Try it now](https://agent.edge-agent.dev)** | [Docs](https://edge-agent.dev/docs.html)
 
 ---
 
-## Architecture
+## The Story
+
+I was nerd-sniped into: *Why can't an agent in the browser just write dynamic code and execute it?*
+
+Most "browser agents" are just chat interfaces calling cloud APIs. Edge Agent is different. It includes a full WASM-based runtime that compiles and executes TypeScript natively in your browser tab. No server round-trips. No external sandbox.
+
+---
+
+## FAQ
+
+### What actually is this?
+
+It's a full-stack agent environment running in WebAssembly, consisting of three parts:
+
+1. **Ratatui TUI**: A terminal interface written in Rust, compiled to WASM. It supports full keyboard navigation, mouse events, and resizing.
+2. **Agent Layer**: A multi-turn agent driven by [Rig](https://github.com/0xPlaygrounds/rig), supporting Anthropic, OpenAI, and Gemini.
+3. **Browser Sandbox**: A WASI Preview 2 runtime that provides a virtual file system (OPFS), shell ecosystem, and code execution.
 
 ```mermaid
-graph TB
-    subgraph Browser["Browser Environment"]
-        Terminal["ghostty-web\n(WebGL Terminal)"]
+graph TD
+    subgraph Browser
+        TUI[Ratatui TUI]
+        Agent[Agent Layer]
+        Sandbox[WASI Sandbox]
         
-        subgraph MainThread["Main Thread"]
-            TuiLoader["tui-loader.ts"]
-            RatatuiWasm["web-agent-tui.wasm\n(Ratatui TUI)"]
-        end
-        
-        subgraph Worker["Web Worker"]
-            WASM["ts-runtime-mcp.wasm\n(MCP Server)"]
-            Bridges["Host Bridges\n(TS → OPFS)"]
-        end
+        TUI -->|User Input| Agent
+        Agent -->|Tools| Sandbox
+        Sandbox -->|Result| Agent
+        Agent -->|Response| TUI
     end
-    
-    LLM["LLM API\n(Anthropic/OpenAI)"]
-    
-    Terminal --> TuiLoader
-    TuiLoader --> RatatuiWasm
-    RatatuiWasm -->|"shell:unix/command"| WASM
-    WASM --> Bridges
-    RatatuiWasm -->|"HTTP"| LLM
 ```
 
-**Components:**
+### How does it run code?
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| [runtime/](runtime/README.md) | Rust + WASI P2 | WASM MCP server with TypeScript execution |
-| [frontend/](frontend/src/README.md) | TypeScript + Vite | Terminal host + WASM bridge layer |
-| [frontend/src/wasm/](frontend/src/wasm/README.md) | TypeScript | Host bridges connecting WASM to browser APIs |
+That's the "nerd-sniped" part. We built a pipeline entirely in WASM:
 
----
+```mermaid
+graph LR
+    TS[weather.ts] -->|SWC| JS[JavaScript]
+    JS -->|QuickJS| Out[stdout]
+```
 
-## Embeddable Agent
+When the agent (or you) runs `tsx script.ts`, the runtime transpiles it on the fly using SWC and executes it in an embedded QuickJS engine.
 
-The `@tjfontaine/web-agent-core` package provides a headless agent you can embed in your own applications:
+### What can the shell do?
+
+It's not a toy shell. It supports:
+
+- **Core utils**: `ls`, `cd`, `cat`, `grep`, `cp`, `mv`, `rm`
+- **Development**: `tsx` (TypeScript), `git` (via isomorphic-git), `sqlite3`
+- **Interactive features**: Tab completion, history (persisted to OPFS), reverse search (`Ctrl+R`)
+
+### Can I connect to external tools?
+
+Yes. While the agent runs in the browser, it can connect to local or remote [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) servers.
+
+We also provide an **MCP Bridge** that lets *external* agents (like Claude Code) use the browser sandbox as their backend:
 
 ```bash
-npm install @tjfontaine/web-agent-core
+cd tools/mcp-bridge && npm start
+# Then point Claude Code to ws://localhost:9999
 ```
 
-### Basic Usage
+This effectively turns your browser tab into a secure, local sandbox for any AI agent.
+
+### Can I embed this in my app?
+
+Yes. The core logic is structured as a package, `@tjfontaine/web-agent-core`, though currently you must build from source.
 
 ```typescript
 import { WebAgent } from '@tjfontaine/web-agent-core';
 
+// 1. Initialize
 const agent = new WebAgent({
   provider: 'anthropic',
-  model: 'claude-sonnet-4-20250514',
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-  maxTurns: 25,  // optional: limit tool call iterations
+  model: 'claude-3-5-sonnet-20241022',
+  apiKey: 'sk-...'
 });
-
 await agent.initialize();
 
-// Streaming mode
-for await (const event of agent.send('Write a hello world in TypeScript')) {
-  if (event.type === 'chunk') process.stdout.write(event.text);
-  if (event.type === 'tool-call') console.log(`\n[Tool: ${event.toolName}]`);
+// 2. Chat with tools
+for await (const event of agent.send('Write a script to fetch weather')) {
+  if (event.type === 'chunk') console.log(event.text);
+  if (event.type === 'tool-call') console.log('Executing:', event.toolName);
 }
-
-// One-shot mode
-const response = await agent.prompt('Summarize this code');
-console.log(response);
-
-agent.destroy();
 ```
 
-### Configuration Options
+### How does it handle async operations in WASM?
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `provider` | string | 'anthropic', 'openai', 'gemini', or custom |
-| `model` | string | Model name (e.g., 'claude-sonnet-4-20250514') |
-| `apiKey` | string | API key for the provider |
-| `baseUrl` | string? | Custom API endpoint |
-| `preamble` | string? | Text appended to built-in system prompt |
-| `preambleOverride` | string? | Complete replacement for system prompt |
-| `mcpUrl` | string? | MCP sandbox URL for tool calling |
-| `maxTurns` | number? | Max tool iterations (default: 25) |
+We support two modes depending on browser capabilities:
 
-### Event Types
-
-| Event | Description |
-|-------|-------------|
-| `chunk` | Streaming text from model |
-| `tool-call` | Agent invoking a tool |
-| `tool-result` | Result from tool execution |
-| `task-start` | Agent started a subtask |
-| `task-update` | Progress update |
-| `task-complete` | Task finished |
-| `complete` | Final response |
-| `ready` | Agent ready for next message |
-| `error` | Error occurred |
+- **JSPI (JavaScript Promise Integration)**: Used in Chrome/Edge. Allows WASM to suspend execution while waiting for async browser APIs (like `fetch` or `OPFS`).
+- **Asyncify / Sync Shim**: Used in Safari/Firefox. Uses a synchronous worker bridge to handle I/O without native stack switching.
 
 ---
-
-## Quick Start
-
-### Prerequisites
-
-- Rust 1.83+ with `wasm32-wasip2` target
-- Node.js 20+
-- Docker (optional)
-
-```bash
-# Install Rust tooling
-rustup target add wasm32-wasip2
-cargo install cargo-component wit-deps-cli cargo-watch
-
-# Install dependencies
-npm install
-
-# Build everything
-npm run build
-
-# Development with hot reload
-npm run dev
-```
-
-This starts:
-
-- WASM component rebuild on Rust changes (via `cargo watch`)
-- Frontend dev server on <http://localhost:3000>
-
-## Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Build WASM component + frontend |
-| `npm run build:wasm` | Build WASM component only |
-| `npm run build:frontend` | Build frontend only |
-| `npm run dev` | Hot reload for WASM + frontend |
-| `npm run dev:wasm` | Watch Rust changes only |
-| `npm run dev:frontend` | Frontend dev server only |
-| `npm run clean` | Clean all build artifacts |
-| `npm test` | Run Rust tests |
-
-### Frontend-specific Commands
-
-```bash
-cd frontend
-
-# Transpile all WASM components to ES modules
-npm run transpile:all
-
-# Transpile individual components (if needed)
-npm run transpile:component      # Main MCP server (both JSPI and sync)
-npm run transpile:tsx-engine     # TypeScript execution module
-npm run transpile:sqlite-module  # SQLite database module
-npm run transpile:web-agent-tui  # Ratatui TUI
-
-# Clean generated WASM bindings
-npm run clean:wasm
-```
-
-### Modular WASM Architecture
-
-Heavy modules are lazy-loaded on first use to reduce initial load time:
-
-| Module | Commands | Loaded When |
-|--------|----------|-------------|
-| `mcp-server-jspi/` | Most shell commands (Chrome) | Startup |
-| `mcp-server-sync/` | Most shell commands (Safari/Firefox) | Startup |
-| `tsx-engine/` | `tsx`, `tsc` | First TypeScript execution* |
-| `sqlite-module/` | `sqlite3` | First database operation* |
-| `edtui-module/` | `vim`, `vi`, `edit` | First editor invocation* |
-| `ratatui-demo/` | `counter`, `tui-demo`, `ansi-demo` | First demo invocation* |
-| `web-agent-tui/` | TUI application | Startup |
-
-*In Sync mode, these are pre-loaded at startup for browsers without JSPI support.
-
-## Project Structure
-
-```text
-web-agent/
-├── Cargo.toml               # Rust workspace root
-├── package.json             # npm scripts orchestration
-│
-├── runtime/                 # ← Rust WASM MCP server
-│   ├── README.md            # Detailed architecture docs
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── main.rs          # HTTP handler + MCP dispatch
-│   │   ├── mcp_server.rs    # JSON-RPC types
-│   │   └── shell/           # Shell command implementation
-│   ├── wit/                 # WASI interface definitions
-│   │   ├── world.wit        # Component world (pure WASI)
-│   │   └── deps/            # WASI dependencies
-│   └── crates/              # ← Modular WASM components
-│       ├── tsx-engine/      # TypeScript/TSX execution (lazy-loaded)
-│       ├── sqlite-module/   # SQLite database (lazy-loaded)
-│       ├── edtui-module/    # Vim-style editor (lazy-loaded)
-│       ├── ratatui-demo/    # TUI demo commands (lazy-loaded)
-│       ├── web-agent-tui/   # Ratatui TUI application
-│       └── web-headless-agent/  # Headless agent WASM component
-│
-├── frontend/                # ← Browser UI + agent
-│   ├── package.json
-│   ├── src/
-│   │   ├── main-tui.ts      # Entry point
-│   │   ├── README.md        # Frontend architecture docs
-│   │   ├── agent/
-│   │   │   └── sandbox.ts   # Sandbox worker management
-│   │   ├── mcp/
-│   │   │   ├── Client.ts    # MCP type definitions
-│   │   │   └── WasmBridge.ts # WASM MCP bridge
-│   │   ├── workers/
-│   │   │   └── SandboxWorker.ts
-│   │   └── wasm/            # ← Host bridges + generated code
-│   │       ├── README.md    # Bridge layer docs
-│   │       ├── tui-loader.ts  # ghostty + Ratatui integration
-│   │       ├── async-mode.ts  # JSPI detection & dynamic loading
-│   │       ├── mcp-server-jspi/ # JSPI mode (Chrome)
-│   │       ├── mcp-server-sync/ # Sync mode (Safari/Firefox)
-│   │       ├── tsx-engine/  # jco-transpiled TSX module (generated)
-│   │       ├── sqlite-module/ # jco-transpiled SQLite (generated)
-│   │       ├── web-agent-tui/ # jco-transpiled TUI (generated)
-│   │       ├── lazy-modules.ts # On-demand module loading
-│   │       ├── opfs-filesystem-impl.ts
-│   │       └── wasi-http-impl.ts
-│   └── vite.config.ts
-│
-├── packages/                # ← Standalone npm packages
-│   ├── web-agent-core/      # Embeddable agent TypeScript API
-│   ├── wasm-loader/         # Core module registration system
-│   ├── wasm-modules/        # Aggregator for all module metadata
-│   ├── wasm-tsx/            # TSX engine metadata
-│   ├── wasm-sqlite/         # SQLite module metadata
-│   ├── wasm-ratatui/        # Ratatui demo metadata
-│   ├── wasm-vim/            # Vim editor metadata
-│   ├── wasi-shims/          # Shared WASI shims
-│   ├── opfs-wasi-fs/        # OPFS filesystem implementation
-│   ├── wasi-http-handler/   # HTTP handler implementation
-│   ├── mcp-wasm-server/     # MCP runtime with lazy loading
-│   └── browser-mcp-runtime/ # Meta-package for easy setup
-│
-└── worker/                  # Cloudflare worker (static serving)
-    └── index.js
-```
-
-### Standalone Packages
-
-The `packages/` directory contains npm packages designed for independent consumption:
-
-| Package | Purpose |
-|---------|---------|
-| `@tjfontaine/web-agent-core` | Embeddable agent with streaming API |
-| `@tjfontaine/wasm-loader` | Core module registration system for lazy-loaded WASM commands |
-| `@tjfontaine/wasm-modules` | Aggregator that re-exports all module metadata |
-| `@tjfontaine/wasm-tsx` | TSX/TypeScript engine metadata (`tsx`, `tsc`) |
-| `@tjfontaine/wasm-sqlite` | SQLite module metadata (`sqlite3`) |
-| `@tjfontaine/wasm-ratatui` | Ratatui TUI demo metadata (`counter`, `tui-demo`) |
-| `@tjfontaine/wasm-vim` | Vim editor metadata (`vim`, `vi`, `edit`) |
-| `@tjfontaine/wasi-shims` | Shared WASI shims (clocks, streams, terminal) |
-| `@tjfontaine/opfs-wasi-fs` | OPFS-backed WASI filesystem |
-| `@tjfontaine/wasi-http-handler` | Fetch-based WASI HTTP handler |
-| `@tjfontaine/mcp-wasm-server` | MCP runtime with JSPI detection |
-| `@tjfontaine/browser-mcp-runtime` | Meta-package for one-line setup |
-
-> **Design Pattern**: The `wasm-*` packages export only metadata (command names + modes). The consuming application provides the loader function to avoid Rollup bundling issues with dynamic WASM imports.
-
-## MCP Tools
-
-The WASM runtime provides these tools to the AI agent:
-
-| Tool | Description |
-|------|-------------|
-| `shell_eval` | Evaluate shell commands (tsx, ls, cat, curl, etc.) |
-| `read_file` | Read file from virtual filesystem (OPFS) |
-| `write_file` | Write file to virtual filesystem |
-| `list` | List directory contents |
-| `grep` | Search for patterns in files |
-| `edit_file` | Find and replace text in files |
-| `task_write` | Write task list for user visibility |
-
-Shell commands include a full busybox-style suite: `tsx`, `tsc`, `ls`, `cat`, `grep`, `sed`, `find`, `curl`, `jq`, `xargs`, `diff`, `git`, `sqlite3`, and more.
-
-## MCP Bridge: External Agent Integration
-
-Want to use an external agent (like Claude Code) with the browser sandbox? The MCP Bridge exposes the sandbox as an MCP server over WebSocket:
-
-```text
-External Agent → stdio → MCP Bridge → WebSocket → Browser Sandbox
-```
-
-### Setup
-
-```bash
-# Start the bridge
-cd tools/mcp-bridge
-npm install && npm start
-
-# Bridge listens on ws://localhost:9999
-```
-
-Then open [agent.edge-agent.dev/mcp-bridge.html](https://agent.edge-agent.dev/mcp-bridge.html) and connect to the bridge.
-
-### Claude Code Configuration
-
-Create an `mcp.json` file:
-
-```json
-{
-  "mcpServers": {
-    "browser-sandbox": {
-      "command": "npx",
-      "args": ["tsx", "tools/mcp-bridge/index.ts"]
-    }
-  }
-}
-```
-
-Run Claude Code with built-in tools disabled:
-
-```bash
-claude --mcp-config mcp.json \
-  --disable-tool bash --disable-tool computer \
-  --disable-tool edit --disable-tool glob \
-  --disable-tool grep --disable-tool ls \
-  --disable-tool read --disable-tool write
-```
-
-See [tools/mcp-bridge/](tools/mcp-bridge/) for more details.
-
-## Docker
 
 ### Development
 
 ```bash
-docker-compose up
+# Install dependencies
+npm install
+
+# Build WASM and packages
+npm run build
+
+# Start dev server
+npm run dev
 ```
 
-Features:
-
-- Hot reload for all services
-- `cargo watch` for WASM rebuilds
-- Volume mounts for live code changes
-
-### Production
-
-```bash
-docker-compose -f docker-compose.prod.yml up
-
-# Or build standalone
-docker build -t web-agent .
-docker run -p 8080:8080 web-agent
-```
-
-Multi-stage build: rust-builder → frontend-builder → production
-
-## Testing
-
-```bash
-# All Rust tests
-cargo test --workspace
-
-# Specific package
-cargo test -p ts-runtime-mcp
-
-# Frontend unit tests
-cd frontend && npm test
-
-# Frontend E2E tests (Playwright)
-cd frontend && npm run test:e2e
-
-# Validate WASM component
-wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
-```
-
-## Troubleshooting
-
-### Rust build fails
-
-```bash
-rustup update
-rustup target add wasm32-wasip2
-cargo install cargo-component wit-deps-cli --locked
-```
-
-### jco transpile fails
-
-```bash
-npm install -g @bytecodealliance/jco@latest
-```
-
-### Docker build is slow
-
-Use BuildKit:
-
-```bash
-DOCKER_BUILDKIT=1 docker build -t web-agent .
-```
-
-## License
+### License
 
 MIT
