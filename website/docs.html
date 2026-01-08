@@ -83,7 +83,10 @@
                     I was "nerd-sniped" into asking: <em>Why can't an agent in the browser just write dynamic code and
                         execute it?</em>
                     <br><br>
-                    Edge Agent is the answer: a fully browser-native AI coding assistant with a real WASM sandbox.
+                    <strong>Edge Agent is the answer.</strong> Instead of relying on full cloud VMs (high latency, not
+                    yours) or tedious local installs (complex maintenance),
+                    Edge Agent is primed out of the box. A fully browser-native AI coding assistant with a real WASM
+                    sandbox.
                 </p>
 
                 <section id="quick-start">
@@ -492,37 +495,19 @@ npm start
                         the browser sandbox via MCP.
                     </p>
 
-                    <h3>Configuration</h3>
-                    <p>Create an <code>mcp.json</code> file:</p>
-                    <div class="code-block">
-                        <div class="code-header">
-                            <span>mcp.json</span>
-                        </div>
-                        <pre><code>{
-  "mcpServers": {
-    "browser-sandbox": {
-      "command": "npx",
-      "args": ["tsx", "tools/mcp-bridge/index.ts"]
-    }
-  }
-}</code></pre>
-                    </div>
-
-                    <h3>Running Claude Code</h3>
+                    <h3>One-Liner Execution</h3>
+                    <p>You don't need a config file. Run Claude Code directly with the bridge (ensure the bridge is
+                        running first):</p>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Terminal</span>
                         </div>
-                        <pre><code>claude --mcp-config mcp.json \
-  --disable-tool bash \
-  --disable-tool computer \
-  --disable-tool edit \
-  --disable-tool glob \
-  --disable-tool grep \
-  --disable-tool ls \
-  --disable-tool read \
-  --disable-tool write</code></pre>
+                        <pre><code>claude --tools "" \
+--mcp-config '{"mcpServers": {"browser-sandbox": {"type": "http", "url": "http://localhost:3050/mcp"}}}'</code></pre>
                     </div>
+
+                    <p>This disables all default tools (<code>--tools ""</code>) and injects the browser sandbox as the
+                        sole tool provider.</p>
 
                     <div class="callout">
                         <div class="callout-icon">💡</div>

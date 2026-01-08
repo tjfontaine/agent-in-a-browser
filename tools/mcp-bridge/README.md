@@ -29,34 +29,15 @@ Then open [agent.edge-agent.dev/mcp-bridge.html](https://agent.edge-agent.dev/mc
 
 ## Claude Code Integration
 
-### 1. Create MCP config
+### One-Liner
 
-Create a file `mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "browser-sandbox": {
-      "command": "npx",
-      "args": ["tsx", "tools/mcp-bridge/index.ts"]
-    }
-  }
-}
-```
-
-### 2. Run Claude Code with disabled tools
+Run Claude Code with all built-in tools disabled, forcing it to use the browser sandbox:
 
 ```bash
-claude --mcp-config mcp.json \
-  --disable-tool bash \
-  --disable-tool computer \
-  --disable-tool edit \
-  --disable-tool glob \
-  --disable-tool grep \
-  --disable-tool ls \
-  --disable-tool read \
-  --disable-tool write
+claude --tools "" --mcp-config '{"mcpServers": {"browser-sandbox": {"type": "http", "url": "http://localhost:3050/mcp"}}}'
 ```
+
+This works because the bridge exposes a standard MCP HTTP endpoint compatible with Claude's config.
 
 This forces Claude to use the browser sandbox for all file and shell operations.
 

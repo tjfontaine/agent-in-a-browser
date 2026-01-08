@@ -10,7 +10,13 @@
 
 I was nerd-sniped into: *Why can't an agent in the browser just write dynamic code and execute it?*
 
-Most "browser agents" are just chat interfaces calling cloud APIs. Edge Agent is different. It includes a full WASM-based runtime that compiles and executes TypeScript natively in your browser tab. No server round-trips. No external sandbox.
+Everything else is either:
+
+* **Fully in the Cloud**: A web UI calling a VM. High latency, privacy concerns, and it's not really *yours*.
+* **Locally Installed**: Tedious setup, complex dependencies, and risk to your local machine.
+
+**Edge Agent is different.** It's primed out of the box. If you can visit the page, you can get the value.
+It runs a full WASM-based runtime that compiles and executes TypeScript natively in your browser tab. Safe, private, and instant. No server round-trips. No external sandbox.
 
 ---
 
@@ -54,9 +60,9 @@ When the agent (or you) runs `tsx script.ts`, the runtime transpiles it on the f
 
 It's not a toy shell. It supports:
 
-- **Core utils**: `ls`, `cd`, `cat`, `grep`, `cp`, `mv`, `rm`
-- **Development**: `tsx` (TypeScript), `git` (via isomorphic-git), `sqlite3`
-- **Interactive features**: Tab completion, history (persisted to OPFS), reverse search (`Ctrl+R`)
+* **Core utils**: `ls`, `cd`, `cat`, `grep`, `cp`, `mv`, `rm`
+* **Development**: `tsx` (TypeScript), `git` (via isomorphic-git), `sqlite3`
+* **Interactive features**: Tab completion, history (persisted to OPFS), reverse search (`Ctrl+R`)
 
 ### Can I connect to external tools?
 
@@ -66,7 +72,8 @@ We also provide an **MCP Bridge** that lets *external* agents (like Claude Code)
 
 ```bash
 cd tools/mcp-bridge && npm start
-# Then point Claude Code to ws://localhost:9999
+# Then run Claude Code:
+claude --tools "" --mcp-config '{"mcpServers": {"browser-sandbox": {"type": "http", "url": "http://localhost:3050/mcp"}}}'
 ```
 
 This effectively turns your browser tab into a secure, local sandbox for any AI agent.
@@ -97,8 +104,8 @@ for await (const event of agent.send('Write a script to fetch weather')) {
 
 We support two modes depending on browser capabilities:
 
-- **JSPI (JavaScript Promise Integration)**: Used in Chrome/Edge. Allows WASM to suspend execution while waiting for async browser APIs (like `fetch` or `OPFS`).
-- **Asyncify / Sync Shim**: Used in Safari/Firefox. Uses a synchronous worker bridge to handle I/O without native stack switching.
+* **JSPI (JavaScript Promise Integration)**: Used in Chrome/Edge. Allows WASM to suspend execution while waiting for async browser APIs (like `fetch` or `OPFS`).
+* **Asyncify / Sync Shim**: Used in Safari/Firefox. Uses a synchronous worker bridge to handle I/O without native stack switching.
 
 ---
 

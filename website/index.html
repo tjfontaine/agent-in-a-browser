@@ -64,7 +64,8 @@
                 I was "nerd-sniped" into asking: <em>Why can't an agent in the browser just write dynamic code and
                     execute it?</em>
                 <br><br>
-                So we built it. No server round-trips. No external sandbox. Just WASM.
+                Edge Agent is primed out of the box. No cloud VMs. No tedious local install. Just visit the page and get
+                value.
             </p>
             <div class="hero-actions">
                 <a href="https://agent.edge-agent.dev" class="btn btn-primary">
@@ -219,10 +220,10 @@
                 <!-- Zero Install -->
                 <div class="feature-card">
                     <div class="feature-icon">✨</div>
-                    <h3 class="feature-title">Zero Install</h3>
+                    <h3 class="feature-title">Primed Out of the Box</h3>
                     <p class="feature-desc">
-                        Opens in any modern browser. No downloads, no dependencies,
-                        no friction. Works offline once loaded.
+                        Other agents require cloud VMs or complex local toolchains.
+                        Edge Agent just works. Visit the page, enter your key, and you have a full runtime.
                     </p>
                 </div>
             </div>
@@ -374,7 +375,7 @@
                     <p>Run Claude Code with all built-in tools disabled, and let it execute commands in your browser
                         sandbox via MCP.</p>
                     <div class="code-block">
-                        <code>claude --mcp-config mcp.json --disable-tool bash --disable-tool computer ...</code>
+                        <code>claude --tools "" --mcp-config '{"mcpServers": {"browser-sandbox": {"type": "http", "url": "http://localhost:3050/mcp"}}}'</code>
                     </div>
                     <a href="/docs.html#mcp-bridge" class="feature-link">Learn how to set up the bridge →</a>
                 </div>
