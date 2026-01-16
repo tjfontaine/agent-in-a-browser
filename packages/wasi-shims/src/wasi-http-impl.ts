@@ -2,6 +2,8 @@
 import { InputStream, OutputStream, ReadyPollable } from './streams';
 // Import JSPI detection for automatic sync mode
 import { hasJSPI } from './execution-mode';
+// Import HuggingFace transformers.js transport for local LLM inference
+import { isWebLLMUrl, handleWebLLMRequest } from './hf-transport.js';
 
 // Type for WASM Result-like return values
 type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
@@ -74,13 +76,187 @@ export function setTransportHandler(handler: TransportHandler | null, isSyncMode
     syncModeTransport = isSyncMode;
 }
 
+// ============ Streaming Transport Handler ============
+// For streaming HTTP responses chunk-by-chunk in sync mode (Safari)
+
+/**
+ * Streaming HTTP chunk result.
+ */
+export interface StreamingHttpChunk {
+    status: number;           // HTTP status (only valid on first chunk)
+    headers: [string, Uint8Array][]; // Response headers (only valid on first chunk)
+    chunk: Uint8Array;        // Body chunk data
+    done: boolean;            // True if this is the last chunk (EOF)
+}
+
+/**
+ * Streaming transport handler type - yields chunks as generator.
+ */
+type StreamingTransportHandler = (
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: Uint8Array | null
+) => Generator<StreamingHttpChunk, void, unknown>;
+
+let streamingTransportHandler: StreamingTransportHandler | null = null;
+
+/**
+ * Set a streaming transport handler for chunk-by-chunk HTTP responses.
+ * Used in sync mode (Safari) to enable streaming without JSPI.
+ */
+export function setStreamingTransportHandler(handler: StreamingTransportHandler | null): void {
+    streamingTransportHandler = handler;
+}
+
+/**
+ * Create an InputStream that reads from a streaming transport generator.
+ * Each blockingRead() call pulls the next chunk via the generator.
+ * This enables streaming HTTP responses in sync mode (Safari).
+ */
+export function createSyncStreamingInputStream(
+    generator: Generator<StreamingHttpChunk, void, unknown>
+): unknown {
+    let currentChunk: Uint8Array = new Uint8Array(0);
+    let offset = 0;
+    let done = false;
+    let firstChunkMeta: { status: number; headers: [string, Uint8Array][] } | null = null;
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            // Non-blocking read - return buffered data or empty
+            if (offset < currentChunk.length) {
+                const n = Math.min(Number(len), currentChunk.length - offset);
+                const result = currentChunk.slice(offset, offset + n);
+                offset += n;
+                return result;
+            }
+            return new Uint8Array(0);
+        },
+
+        blockingRead(len: bigint): Uint8Array {
+            // If we have buffered data, return that first
+            if (offset < currentChunk.length) {
+                const n = Math.min(Number(len), currentChunk.length - offset);
+                const result = currentChunk.slice(offset, offset + n);
+                offset += n;
+                return result;
+            }
+
+            // If stream is done, return empty
+            if (done) {
+                return new Uint8Array(0);
+            }
+
+            // Get next chunk from generator (this blocks via Atomics.wait in worker)
+            const next = generator.next();
+            if (next.done) {
+                done = true;
+                return new Uint8Array(0);
+            }
+
+            const chunkResult = next.value;
+
+            // Store first chunk metadata for headers/status
+            if (firstChunkMeta === null) {
+                firstChunkMeta = { status: chunkResult.status, headers: chunkResult.headers };
+            }
+
+            if (chunkResult.done && chunkResult.chunk.length === 0) {
+                done = true;
+                return new Uint8Array(0);
+            }
+
+            // Set current chunk and return first portion
+            currentChunk = chunkResult.chunk;
+            offset = 0;
+            done = chunkResult.done && chunkResult.chunk.length === 0;
+
+            const n = Math.min(Number(len), currentChunk.length);
+            const result = currentChunk.slice(0, n);
+            offset = n;
+            return result;
+        }
+    });
+}
+
+/**
+ * Create an InputStream from a streaming generator when the first chunk has already been extracted.
+ * This is used when we need to pull status/headers from the first chunk before creating the stream.
+ */
+export function createSyncStreamingInputStreamFromChunks(
+    firstChunkData: Uint8Array | null,
+    firstChunkDone: boolean,
+    generator: Generator<StreamingHttpChunk, void, unknown>
+): unknown {
+    let currentChunk: Uint8Array = firstChunkData || new Uint8Array(0);
+    let offset = 0;
+    let done = firstChunkDone && (firstChunkData === null || firstChunkData.length === 0);
+    let firstChunkConsumed = false;
+
+    return new InputStream({
+        read(len: bigint): Uint8Array {
+            // Non-blocking read - return buffered data or empty
+            if (offset < currentChunk.length) {
+                const n = Math.min(Number(len), currentChunk.length - offset);
+                const result = currentChunk.slice(offset, offset + n);
+                offset += n;
+                return result;
+            }
+            return new Uint8Array(0);
+        },
+
+        blockingRead(len: bigint): Uint8Array {
+            // If we have buffered data, return that first
+            if (offset < currentChunk.length) {
+                const n = Math.min(Number(len), currentChunk.length - offset);
+                const result = currentChunk.slice(offset, offset + n);
+                offset += n;
+                return result;
+            }
+
+            // If stream is done, return empty
+            if (done) {
+                return new Uint8Array(0);
+            }
+
+            // Mark first chunk as consumed (it was pre-extracted for headers)
+            firstChunkConsumed = true;
+
+            // Get next chunk from generator (this blocks via Atomics.wait in worker)
+            const next = generator.next();
+            if (next.done) {
+                done = true;
+                return new Uint8Array(0);
+            }
+
+            const chunkResult = next.value;
+
+            if (chunkResult.done && chunkResult.chunk.length === 0) {
+                done = true;
+                return new Uint8Array(0);
+            }
+
+            // Set current chunk and return first portion
+            currentChunk = chunkResult.chunk;
+            offset = 0;
+            done = chunkResult.done && chunkResult.chunk.length === 0;
+
+            const n = Math.min(Number(len), currentChunk.length);
+            const result = currentChunk.slice(0, n);
+            offset = n;
+            return result;
+        }
+    });
+}
+
 /**
  * Check if a URL should be intercepted by the transport handler.
  * Returns true for localhost MCP endpoints.
  */
 function shouldIntercept(url: string): boolean {
-    // Intercept localhost MCP calls
-    return url.includes('localhost') && url.includes('/mcp');
+    // Intercept localhost MCP calls and WebLLM local inference
+    return (url.includes('localhost') && url.includes('/mcp')) || isWebLLMUrl(url);
 }
 
 // ============ CORS Proxy Configuration ============
@@ -949,51 +1125,112 @@ export const outgoingHandler = {
         const bodyBytes = request.getBodyBytes();
         const body = bodyBytes.length > 0 ? bodyBytes : null;
 
-        // Check if we should route through transport handler
-        // In JSPI mode (Chrome), we can use lazy body stream with async/await
-        // In sync mode (Safari), transport is blocking so we must handle body synchronously
-        if (transportHandler && shouldIntercept(url)) {
-            console.log('[http] Routing via transport handler:', method, url);
+        // Route WebLLM requests to local inference engine
+        if (isWebLLMUrl(url)) {
+            console.log('[http] Routing to WebLLM:', method, url);
 
-            // Call the transport handler
-            const result = transportHandler(method, url, headers, body);
+            // WebLLM always uses async path (requires model loading)
+            const webllmPromise = handleWebLLMRequest(method, url, headers, body);
 
-            // Check if this is a sync result (Safari mode) or async Promise (JSPI mode)
-            // New pattern: { $sync: true, value: TransportResponse }
-            // Legacy pattern: { syncValue: TransportResponse }
-            if (isSyncTransportResult(result)) {
-                console.log('[http] Using sync body path (Safari mode) - $sync marker');
-                const response = result.value;
-                return new FutureIncomingResponse({
-                    status: response.status,
-                    headers: response.headers,
-                    body: response.body
-                });
-            }
-
-            // Legacy sync pattern (backward compatibility)
-            if ('syncValue' in result) {
-                console.log('[http] Using sync body path (Safari mode) - legacy syncValue');
-                const response = (result as { syncValue: TransportResponse }).syncValue;
-                return new FutureIncomingResponse({
-                    status: response.status,
-                    headers: response.headers,
-                    body: response.body
-                });
-            }
-
-            // Async path for JSPI mode - use lazy body stream with async/await
-            console.log('[http] Using lazy body stream (JSPI mode)');
-            const asyncResult = result as AsyncTransportResult;
+            // Use lazy body stream for streaming responses
             const bodyStream = createLazyBufferStream(
-                asyncResult.then((r: TransportResponse) => r.body)
+                webllmPromise.then((r) => r.body)
             );
 
-            return new FutureIncomingResponse({
-                status: 200, // Default, actual status doesn't matter for MCP JSON-RPC
-                headers: [] as [string, Uint8Array][],
-                bodyStream: bodyStream
-            });
+            // Return async response with lazy body stream
+            return new FutureIncomingResponse(
+                webllmPromise.then((r) => ({
+                    status: r.status,
+                    headers: r.headers,
+                    bodyStream: bodyStream
+                }))
+            );
+        }
+
+        // Check if we should route through transport handler
+        // Prefer streaming transport handler over legacy sync transport
+        if (shouldIntercept(url)) {
+            console.log('[http] Intercepting request:', method, url);
+
+            // Use streaming transport handler if available (enables true streaming)
+            if (streamingTransportHandler) {
+                console.log('[http] Using streaming transport handler');
+
+                // Create streaming generator
+                const generator = streamingTransportHandler(method, url, headers, body);
+
+                // Get first chunk to extract status/headers
+                const firstResult = generator.next();
+                if (firstResult.done) {
+                    // Empty response
+                    return new FutureIncomingResponse({
+                        status: 200,
+                        headers: [],
+                        body: new Uint8Array(0)
+                    });
+                }
+
+                const firstChunk = firstResult.value;
+                const status = firstChunk.status;
+                const responseHeaders = firstChunk.headers;
+
+                // Create streaming body that yields remaining chunks
+                const bodyStream = createSyncStreamingInputStreamFromChunks(
+                    firstChunk.done ? null : firstChunk.chunk,
+                    firstChunk.done,
+                    generator
+                );
+
+                console.log('[http] Streaming response: status=', status);
+                return new FutureIncomingResponse({
+                    status,
+                    headers: responseHeaders,
+                    bodyStream
+                });
+            }
+
+            // Fallback to legacy transport handler
+            if (transportHandler) {
+                console.log('[http] Routing via legacy transport handler:', method, url);
+
+                // Call the transport handler
+                const result = transportHandler(method, url, headers, body);
+
+                // Check if this is a sync result (Safari mode) or async Promise (JSPI mode)
+                if (isSyncTransportResult(result)) {
+                    console.log('[http] Using sync body path - $sync marker');
+                    const response = result.value;
+                    return new FutureIncomingResponse({
+                        status: response.status,
+                        headers: response.headers,
+                        body: response.body
+                    });
+                }
+
+                // Legacy sync pattern
+                if ('syncValue' in result) {
+                    console.log('[http] Using sync body path - legacy syncValue');
+                    const response = (result as { syncValue: TransportResponse }).syncValue;
+                    return new FutureIncomingResponse({
+                        status: response.status,
+                        headers: response.headers,
+                        body: response.body
+                    });
+                }
+
+                // Async path for JSPI mode - use lazy body stream with async/await
+                console.log('[http] Using lazy body stream (JSPI mode)');
+                const asyncResult = result as AsyncTransportResult;
+                const bodyStream = createLazyBufferStream(
+                    asyncResult.then((r: TransportResponse) => r.body)
+                );
+
+                return new FutureIncomingResponse({
+                    status: 200,
+                    headers: [] as [string, Uint8Array][],
+                    bodyStream: bodyStream
+                });
+            }
         }
 
         // Handle OAuth popup requests from WASM
@@ -1079,12 +1316,52 @@ export const outgoingHandler = {
                 console.log('[http] Using async fetch (streaming body):', method, url);
             }
 
-            // In sync mode (Safari/no JSPI), use synchronous XMLHttpRequest instead of async fetch
+            // In sync mode (Safari/no JSPI), use streaming transport if available
             // This is required because WASM can't await promises in non-JSPI environments
             // Detect automatically: if JSPI is not supported OR explicit syncModeTransport is set
             const useSyncMode = !hasJSPI || syncModeTransport;
             if (useSyncMode) {
-                console.log('[http] Sync mode: Using sync XHR for HTTPS:', method, url);
+                console.log('[http] Sync mode detected for HTTPS:', method, url);
+
+                // Check if streaming transport handler is available (registered by Worker)
+                if (streamingTransportHandler) {
+                    console.log('[http] Using streaming transport handler for HTTPS');
+
+                    // Create streaming generator
+                    const generator = streamingTransportHandler(method, fetchUrl, headers, body);
+
+                    // Get first chunk to extract status/headers
+                    const firstResult = generator.next();
+                    if (firstResult.done) {
+                        // Empty response
+                        return new FutureIncomingResponse({
+                            status: 200,
+                            headers: [],
+                            body: new Uint8Array(0)
+                        });
+                    }
+
+                    const firstChunk = firstResult.value;
+                    const status = firstChunk.status;
+                    const responseHeaders = firstChunk.headers;
+
+                    // Create streaming body that yields remaining chunks
+                    const bodyStream = createSyncStreamingInputStreamFromChunks(
+                        firstChunk.done ? null : firstChunk.chunk,
+                        firstChunk.done,
+                        generator
+                    );
+
+                    console.log('[http] Streaming response: status=', status);
+                    return new FutureIncomingResponse({
+                        status,
+                        headers: responseHeaders,
+                        bodyStream
+                    });
+                }
+
+                // Fallback to XHR if no streaming handler
+                console.log('[http] No streaming handler, falling back to sync XHR for HTTPS:', method, url);
                 console.log('[http] Headers to set:', Object.keys(headers), headers);
 
                 const xhr = new XMLHttpRequest();
@@ -1210,16 +1487,56 @@ export const outgoingHandler = {
         // Fallback to synchronous XMLHttpRequest for HTTP requests (localhost)
         // Treat localhost:3000 as a sentinel address for MCP - rewrite to relative path
         // XHR will resolve relative URLs against the current origin automatically
-        let xhrUrl = url;
+        let localUrl = url;
         if (authority === 'localhost:3000' || authority === '127.0.0.1:3000') {
-            // Just use the path - XHR will resolve against current origin
-            xhrUrl = path;
-            console.log('[http] Using sync XHR (MCP sentinel):', method, url, '->', xhrUrl);
+            // Just use the path for relative resolution
+            localUrl = path;
+            console.log('[http] HTTP request (MCP sentinel):', method, url, '->', localUrl);
         } else {
-            console.log('[http] Using sync XHR:', method, url);
+            console.log('[http] HTTP request:', method, url);
         }
+
+        // Check if streaming transport handler is available (registered by Worker)
+        if (streamingTransportHandler) {
+            console.log('[http] Using streaming transport handler for HTTP localhost');
+
+            // Create streaming generator
+            const generator = streamingTransportHandler(method, localUrl, headers, body);
+
+            // Get first chunk to extract status/headers
+            const firstResult = generator.next();
+            if (firstResult.done) {
+                // Empty response
+                return new FutureIncomingResponse({
+                    status: 200,
+                    headers: [],
+                    body: new Uint8Array(0)
+                });
+            }
+
+            const firstChunk = firstResult.value;
+            const status = firstChunk.status;
+            const responseHeaders = firstChunk.headers;
+
+            // Create streaming body that yields remaining chunks
+            const bodyStream = createSyncStreamingInputStreamFromChunks(
+                firstChunk.done ? null : firstChunk.chunk,
+                firstChunk.done,
+                generator
+            );
+
+            console.log('[http] Streaming HTTP response: status=', status);
+            return new FutureIncomingResponse({
+                status,
+                headers: responseHeaders,
+                bodyStream
+            });
+        }
+
+        // Fallback to XHR if no streaming handler
+        console.log('[http] No streaming handler, falling back to sync XHR');
         const xhr = new XMLHttpRequest();
-        xhr.open(method, xhrUrl, false); // false = synchronous
+        xhr.open(method, localUrl, false); // false = synchronous
 
         // Set headers (skip user-agent and host as they cause issues)
         for (const [name, value] of Object.entries(headers)) {

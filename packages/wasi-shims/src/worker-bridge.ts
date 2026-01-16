@@ -265,12 +265,13 @@ export class WorkerBridge {
     }
 
     /**
-     * Handle HTTP request from worker.
+     * Handle HTTP request from worker with streaming response.
+     * Streams body chunks via SharedArrayBuffer as they arrive from fetch.
      */
     private async handleHttpRequest(msg: WorkerHttpRequestMessage): Promise<void> {
         try {
-            let status: number;
-            let bodyArray: Uint8Array;
+            let response: Response;
+            let useStreaming = true;
 
             // Check if this is an MCP request that should go through the transport handler
             const isMcpRequest = this.mcpTransport &&
@@ -279,48 +280,137 @@ export class WorkerBridge {
 
             if (isMcpRequest && this.mcpTransport) {
                 console.log('[WorkerBridge] Routing MCP request via transport:', msg.method, msg.url);
-                const response = await this.mcpTransport(
+                // MCP transport doesn't support streaming yet - use legacy path
+                const transportResponse = await this.mcpTransport(
                     msg.method,
                     msg.url,
                     msg.headers,
                     msg.body ? new Uint8Array(msg.body) : null
                 );
-                status = response.status;
-                bodyArray = response.body;
-            } else {
-                // Direct fetch for non-MCP requests
-                const response = await fetch(msg.url, {
-                    method: msg.method,
-                    headers: msg.headers,
-                    body: msg.body ? new Uint8Array(msg.body) : undefined
-                });
-                const body = await response.arrayBuffer();
-                status = response.status;
-                bodyArray = new Uint8Array(body);
+                // Send as single chunk for MCP requests (legacy compatible)
+                this.sendHttpChunk(transportResponse.status, [], transportResponse.body, true);
+                return;
             }
 
-            // Copy response to shared buffer
-            if (bodyArray.length > HTTP_BUFFER_SIZE) {
-                console.warn('[WorkerBridge] HTTP response too large, truncating');
-            }
-            this.httpDataArray.set(bodyArray.slice(0, HTTP_BUFFER_SIZE));
+            // Direct fetch with streaming for non-MCP requests
+            response = await fetch(msg.url, {
+                method: msg.method,
+                headers: msg.headers,
+                body: msg.body ? new Uint8Array(msg.body) : undefined
+            });
 
-            // Set response metadata
-            Atomics.store(this.controlArray, HTTP_CONTROL.STATUS_CODE, status);
-            Atomics.store(this.controlArray, HTTP_CONTROL.BODY_LENGTH, Math.min(bodyArray.length, HTTP_BUFFER_SIZE));
-            Atomics.store(this.controlArray, HTTP_CONTROL.DONE, 1);
-            Atomics.store(this.controlArray, HTTP_CONTROL.RESPONSE_READY, 1);
-            Atomics.notify(this.controlArray, HTTP_CONTROL.RESPONSE_READY);
+            // Extract headers
+            const responseHeaders: [string, string][] = [];
+            response.headers.forEach((value, name) => {
+                responseHeaders.push([name, value]);
+            });
+
+            // Send headers first via postMessage (variable-length data)
+            this.worker?.postMessage({
+                type: 'http-headers',
+                status: response.status,
+                headers: responseHeaders
+            });
+
+            // Check if we can stream the response body
+            if (!response.body) {
+                // No body - signal done immediately
+                console.log('[WorkerBridge] HTTP response has no body, signaling done');
+                this.sendHttpChunk(response.status, [], new Uint8Array(0), true);
+                return;
+            }
+
+            // Stream body chunks directly to worker as they arrive
+            console.log('[WorkerBridge] Streaming HTTP response body...');
+            const reader = response.body.getReader();
+            let totalBytes = 0;
+
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+
+                    if (done || !value || value.length === 0) {
+                        // Signal EOF - empty chunk with done=true
+                        this.sendHttpChunk(response.status, [], new Uint8Array(0), true);
+                        console.log('[WorkerBridge] HTTP streaming complete, total bytes:', totalBytes);
+                        break;
+                    }
+
+                    // Handle chunks larger than buffer size by splitting
+                    let offset = 0;
+                    while (offset < value.length) {
+                        const chunkSize = Math.min(value.length - offset, HTTP_BUFFER_SIZE);
+                        const chunk = value.slice(offset, offset + chunkSize);
+
+                        // Send this chunk (done=false since more data may follow)
+                        this.sendHttpChunk(response.status, [], chunk, false);
+
+                        // Wait for worker to consume this chunk before sending next
+                        await this.waitForChunkConsumption();
+
+                        offset += chunkSize;
+                        totalBytes += chunkSize;
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+            }
 
         } catch (err) {
             console.error('[WorkerBridge] HTTP request failed:', err);
-            // Signal error (status 0)
-            Atomics.store(this.controlArray, HTTP_CONTROL.STATUS_CODE, 0);
-            Atomics.store(this.controlArray, HTTP_CONTROL.BODY_LENGTH, 0);
-            Atomics.store(this.controlArray, HTTP_CONTROL.DONE, 1);
-            Atomics.store(this.controlArray, HTTP_CONTROL.RESPONSE_READY, 1);
-            Atomics.notify(this.controlArray, HTTP_CONTROL.RESPONSE_READY);
+            // Signal error (status 0, empty body, done)
+            this.sendHttpChunk(0, [], new Uint8Array(0), true);
         }
+    }
+
+    /**
+     * Send an HTTP chunk to the worker via SharedArrayBuffer.
+     */
+    private sendHttpChunk(
+        status: number,
+        _headers: [string, string][],
+        chunk: Uint8Array,
+        done: boolean
+    ): void {
+        // Copy chunk to shared buffer
+        if (chunk.length > 0) {
+            this.httpDataArray.set(chunk.slice(0, HTTP_BUFFER_SIZE));
+        }
+
+        // Set metadata in control array
+        Atomics.store(this.controlArray, HTTP_CONTROL.STATUS_CODE, status);
+        Atomics.store(this.controlArray, HTTP_CONTROL.BODY_LENGTH, Math.min(chunk.length, HTTP_BUFFER_SIZE));
+        Atomics.store(this.controlArray, HTTP_CONTROL.DONE, done ? 1 : 0);
+        Atomics.store(this.controlArray, HTTP_CONTROL.RESPONSE_READY, 1);
+        Atomics.notify(this.controlArray, HTTP_CONTROL.RESPONSE_READY);
+
+        console.log(`[WorkerBridge] Sent HTTP chunk: ${chunk.length} bytes, done=${done}`);
+    }
+
+    /**
+     * Wait for the worker to consume the current chunk.
+     * Uses Atomics.waitAsync for non-blocking wait on main thread.
+     */
+    private async waitForChunkConsumption(): Promise<void> {
+        // Wait for worker to signal it consumed the chunk
+        // Use polling since Atomics.waitAsync may not be available everywhere
+        const maxWait = 30000; // 30 second timeout
+        const pollInterval = 1;
+        let waited = 0;
+
+        while (waited < maxWait) {
+            const consumed = Atomics.load(this.controlArray, HTTP_CONTROL.CHUNK_CONSUMED);
+            if (consumed === 1) {
+                // Reset the flag for next chunk
+                Atomics.store(this.controlArray, HTTP_CONTROL.CHUNK_CONSUMED, 0);
+                return;
+            }
+            // Yield to event loop briefly
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            waited += pollInterval;
+        }
+
+        console.warn('[WorkerBridge] Timeout waiting for chunk consumption');
     }
 
     /**

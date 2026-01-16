@@ -19,10 +19,12 @@ export const STDIN_CONTROL = {
 // Control array layout for HTTP operations (separate region)
 export const HTTP_CONTROL = {
     REQUEST_READY: 4,    // Worker signals HTTP request
-    RESPONSE_READY: 5,   // Main thread signals response ready
+    RESPONSE_READY: 5,   // Main thread signals response ready (chunk available)
     STATUS_CODE: 6,      // HTTP status code
-    BODY_LENGTH: 7,      // Length of body chunk
-    DONE: 8,             // Response complete
+    BODY_LENGTH: 7,      // Length of body chunk in buffer
+    DONE: 8,             // Response complete (no more chunks)
+    CHUNK_CONSUMED: 9,   // Worker signals it consumed chunk, ready for next
+    HEADERS_READY: 10,   // Main thread signals headers are available
 };
 
 // Buffer layout
@@ -65,9 +67,21 @@ export interface WorkerResizeMessage {
     rows: number;
 }
 
+/**
+ * Message to send HTTP response headers separately during streaming.
+ * Headers are variable-length and sent via postMessage, not SharedArrayBuffer.
+ */
+export interface WorkerHttpHeadersMessage {
+    type: 'http-headers';
+    status: number;
+    headers: [string, string][];
+}
+
 export type WorkerMessage =
     | WorkerInitMessage
     | WorkerRunMessage
     | WorkerInputMessage
     | WorkerHttpResponseMessage
+    | WorkerHttpHeadersMessage
     | WorkerResizeMessage;
+

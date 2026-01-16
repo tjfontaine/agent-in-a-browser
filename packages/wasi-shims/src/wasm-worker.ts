@@ -25,6 +25,7 @@ export type {
     WorkerRunMessage,
     WorkerInputMessage,
     WorkerHttpResponseMessage,
+    WorkerHttpHeadersMessage,
     WorkerResizeMessage,
     WorkerMessage,
 } from './worker-constants.js';
@@ -45,6 +46,9 @@ let controlArray: Int32Array | null = null;
 let stdinDataArray: Uint8Array | null = null;
 let httpDataArray: Uint8Array | null = null;
 let initialized = false;
+
+// Pending HTTP response headers (sent via postMessage, stored here for streaming)
+let pendingHttpHeaders: { status: number; headers: [string, string][] } | null = null;
 
 // ============================================================
 // INITIALIZATION
@@ -173,6 +177,106 @@ export function blockingHttpRequest(
     return { status, headers: [], body: responseBody };
 }
 
+/**
+ * Result type for streaming HTTP response chunks.
+ */
+export interface HttpStreamChunk {
+    status: number;           // HTTP status (only valid on first chunk)
+    headers: [string, string][]; // Response headers (only valid on first chunk)
+    chunk: Uint8Array;        // Body chunk data
+    done: boolean;            // True if this is the last chunk (EOF)
+}
+
+/**
+ * Streaming HTTP request using a generator pattern.
+ * Yields chunks as they arrive from the main thread.
+ * Blocks via Atomics.wait() on each chunk.
+ * 
+ * @param method HTTP method
+ * @param url Request URL
+ * @param headers Request headers
+ * @param body Request body (optional)
+ * @yields HttpStreamChunk for each chunk of response data
+ */
+export function* blockingHttpRequestStreaming(
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: Uint8Array | null
+): Generator<HttpStreamChunk, void, unknown> {
+    if (!controlArray || !httpDataArray) {
+        throw new Error('Worker not initialized');
+    }
+
+    // Clear any pending headers from previous request
+    pendingHttpHeaders = null;
+
+    // Send request to main thread
+    self.postMessage({
+        type: 'http-request',
+        method,
+        url,
+        headers,
+        body: body ? Array.from(body) : null
+    });
+
+    // Signal request is ready
+    Atomics.store(controlArray, HTTP_CONTROL.REQUEST_READY, 1);
+    console.log('[WasmWorker] Streaming HTTP request started:', method, url);
+
+    let isFirst = true;
+
+    while (true) {
+        // Wait for next chunk (or headers on first iteration)
+        const waitResult = Atomics.wait(controlArray, HTTP_CONTROL.RESPONSE_READY, 0, 60000);
+
+        if (waitResult === 'timed-out') {
+            console.error('[WasmWorker] HTTP streaming timed out');
+            Atomics.store(controlArray, HTTP_CONTROL.REQUEST_READY, 0);
+            yield { status: 0, headers: [], chunk: new Uint8Array(0), done: true };
+            return;
+        }
+
+        // Read chunk info from shared buffer
+        const status = isFirst ? Atomics.load(controlArray, HTTP_CONTROL.STATUS_CODE) : 0;
+        const chunkLen = Atomics.load(controlArray, HTTP_CONTROL.BODY_LENGTH);
+        const isDone = Atomics.load(controlArray, HTTP_CONTROL.DONE) === 1;
+
+        // Copy chunk data
+        const chunk = httpDataArray.slice(0, chunkLen);
+
+        // Get headers from pending (sent via postMessage) on first chunk
+        const responseHeaders = isFirst && pendingHttpHeaders ? pendingHttpHeaders.headers : [];
+
+        // Reset response ready flag
+        Atomics.store(controlArray, HTTP_CONTROL.RESPONSE_READY, 0);
+
+        // Signal we consumed this chunk (so main thread can send next)
+        Atomics.store(controlArray, HTTP_CONTROL.CHUNK_CONSUMED, 1);
+        Atomics.notify(controlArray, HTTP_CONTROL.CHUNK_CONSUMED);
+
+        console.log(`[WasmWorker] Streaming chunk: ${chunkLen} bytes, done=${isDone}`);
+
+        yield {
+            status: isFirst ? (pendingHttpHeaders?.status ?? status) : 0,
+            headers: responseHeaders,
+            chunk,
+            done: isDone
+        };
+
+        if (isDone) {
+            break;
+        }
+
+        isFirst = false;
+    }
+
+    // Clean up
+    Atomics.store(controlArray, HTTP_CONTROL.REQUEST_READY, 0);
+    pendingHttpHeaders = null;
+    console.log('[WasmWorker] Streaming HTTP request complete');
+}
+
 // ============================================================
 // MESSAGE HANDLER
 // ============================================================
@@ -214,7 +318,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             break;
 
         case 'http-response':
-            // Main thread is providing HTTP response
+            // Main thread is providing HTTP response (legacy full-buffer or streaming chunk)
             if (controlArray && httpDataArray) {
                 httpDataArray.set(msg.bodyChunk);
                 Atomics.store(controlArray, HTTP_CONTROL.STATUS_CODE, msg.status);
@@ -222,6 +326,20 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                 Atomics.store(controlArray, HTTP_CONTROL.DONE, msg.done ? 1 : 0);
                 Atomics.store(controlArray, HTTP_CONTROL.RESPONSE_READY, 1);
                 Atomics.notify(controlArray, HTTP_CONTROL.RESPONSE_READY);
+            }
+            break;
+
+        case 'http-headers':
+            // Main thread is sending HTTP response headers (for streaming mode)
+            // Store them for the streaming generator to pick up
+            pendingHttpHeaders = {
+                status: msg.status,
+                headers: msg.headers
+            };
+            // Signal headers are ready (in case generator is waiting)
+            if (controlArray) {
+                Atomics.store(controlArray, HTTP_CONTROL.HEADERS_READY, 1);
+                Atomics.notify(controlArray, HTTP_CONTROL.HEADERS_READY);
             }
             break;
 
@@ -273,7 +391,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                     // Set up sync transport handler for MCP requests
                     // Route localhost:3000 MCP requests through Atomics-based sync bridge
                     // Pass isSyncMode=true so wasi-http-impl doesn't use async lazy streams
-                    const { setTransportHandler } = await import('./wasi-http-impl.js');
+                    const { setTransportHandler, setStreamingTransportHandler } = await import('./wasi-http-impl.js');
+
+                    // Legacy sync transport handler (for backwards compatibility)
                     setTransportHandler((method, url, headers, body) => {
                         // This handler is called for localhost MCP requests
                         // Use blockingHttpRequest which blocks via Atomics.wait
@@ -288,7 +408,22 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                             }
                         };
                     }, true); // isSyncMode = true - don't use async lazy streams
-                    console.log('[WasmWorker] Sync MCP transport handler registered');
+
+                    // NEW: Streaming transport handler - yields chunks instead of buffering
+                    // This enables true streaming for LLM responses in Safari
+                    setStreamingTransportHandler(function* (method, url, headers, body) {
+                        // Delegate to the streaming generator
+                        const generator = blockingHttpRequestStreaming(method, url, headers, body);
+                        for (const chunk of generator) {
+                            yield {
+                                status: chunk.status,
+                                headers: chunk.headers.map(([k, v]) => [k, new TextEncoder().encode(v)] as [string, Uint8Array]),
+                                chunk: chunk.chunk,
+                                done: chunk.done
+                            };
+                        }
+                    });
+                    console.log('[WasmWorker] Sync MCP transport handler registered (with streaming support)');
 
                     // Await $init for sync module initialization
                     if (tuiModule.$init) {
