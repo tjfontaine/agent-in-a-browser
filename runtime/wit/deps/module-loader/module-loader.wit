@@ -85,4 +85,14 @@ interface loader {
   /// This queries the module registry to determine if a command should use
   /// spawn-interactive vs spawn-lazy-command
   is-interactive-command: func(command: string) -> bool;
+
+  /// Spawn a command in an isolated Web Worker (interruptible).
+  /// Unlike spawn-lazy-command, this spawns ANY command (lazy or built-in)
+  /// in its own Worker, enabling true interrupt via Worker.terminate().
+  /// The Worker automatically loads the appropriate module.
+  spawn-worker-command: func(
+    command: string,
+    args: list<string>,
+    env: exec-env,
+  ) -> lazy-process;
 }

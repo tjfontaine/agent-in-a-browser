@@ -52,6 +52,7 @@ const ASYNC_IMPORTS = [
     // MCP loader
     'mcp:module-loader/loader#get-lazy-module',
     'mcp:module-loader/loader#spawn-lazy-command',
+    'mcp:module-loader/loader#spawn-worker-command',
     'mcp:module-loader/loader#spawn-interactive',
     'mcp:module-loader/loader#[method]lazy-process.try-wait',
     // Shell

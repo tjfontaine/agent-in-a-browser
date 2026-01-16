@@ -12,6 +12,7 @@ import {
     LAZY_COMMANDS,
     loadLazyModule,
     getLoadedModuleSync,
+    getModuleForCommand,
     hasJSPI,
     isInteractiveCommand as isInteractiveCommandImpl,
     setTerminalContext,
@@ -558,4 +559,301 @@ export class LazyProcess {
         }
         return result;
     }
+}
+
+// ============================================================
+// WORKER-BASED COMMAND EXECUTION (for interruptible commands)
+// ============================================================
+
+// Inline types and constants to avoid cross-package imports
+// that cause Vite's worker-import-meta-url plugin to pull in full dependency tree
+const CMD_CONTROL = {
+    REQUEST_READY: 0,
+    RESPONSE_READY: 1,
+    DATA_LENGTH: 2,
+    EOF: 3,
+};
+
+const CMD_BUFFER_LAYOUT = {
+    CONTROL_SIZE: 64,
+    DATA_OFFSET: 64,
+    DATA_SIZE: 64 * 1024,
+};
+
+interface CommandSpawnMessage {
+    type: 'spawn';
+    command: string;
+    args: string[];
+    env: ExecEnv;
+    sharedBuffer: SharedArrayBuffer;
+    moduleUrl: string;
+}
+
+interface CommandOutputMessage { type: 'stdout' | 'stderr'; data: Uint8Array; }
+interface CommandExitMessage { type: 'exit'; code: number; }
+interface CommandReadyMessage { type: 'ready'; }
+interface CommandErrorMessage { type: 'error'; message: string; }
+interface CommandStdinRequestMessage { type: 'stdin-request'; }
+
+type CommandWorkerOutMessage =
+    | CommandOutputMessage
+    | CommandExitMessage
+    | CommandReadyMessage
+    | CommandErrorMessage
+    | CommandStdinRequestMessage;
+
+/**
+ * Get the import URL for a module name (for Worker context).
+ * Inline function to avoid cross-bundle export issues with Vite Workers.
+ */
+function getModuleUrl(moduleName: string): string {
+    const urls: Record<string, string> = {
+        'tsx-engine': hasJSPI
+            ? '@tjfontaine/wasm-tsx/wasm/tsx-engine.js'
+            : '@tjfontaine/wasm-tsx/wasm-sync/tsx-engine.js',
+        'sqlite-module': hasJSPI
+            ? '@tjfontaine/wasm-sqlite/wasm/sqlite-module.js'
+            : '@tjfontaine/wasm-sqlite/wasm-sync/sqlite-module.js',
+        'edtui-module': hasJSPI
+            ? '@tjfontaine/wasm-vim/wasm/edtui-module.js'
+            : '@tjfontaine/wasm-vim/wasm-sync/edtui-module.js',
+        'ratatui-demo': hasJSPI
+            ? '@tjfontaine/wasm-ratatui/wasm/ratatui-demo.js'
+            : '@tjfontaine/wasm-ratatui/wasm-sync/ratatui-demo.js',
+    };
+    const url = urls[moduleName];
+    if (!url) {
+        throw new Error(`No module URL for: ${moduleName}`);
+    }
+    return url;
+}
+
+/**
+ * WorkerProcess - Runs a command in an isolated Web Worker.
+ * Supports true interrupt via Worker.terminate().
+ * 
+ * This is a frontend-specific wrapper that spawns the Worker from
+ * the mcp-wasm-server package's zero-import entry point.
+ */
+class WorkerProcess {
+    private worker: Worker | null = null;
+    private sharedBuffer: SharedArrayBuffer;
+    private controlArray: Int32Array;
+    private dataArray: Uint8Array;
+
+    private stdoutBuffer: Uint8Array[] = [];
+    private stderrBuffer: Uint8Array[] = [];
+    private stdinPendingBuffer: Uint8Array[] = [];  // Buffer for stdin waiting to be sent
+    private exitCode: number | undefined = undefined;
+    private ready = false;
+    private readyPromise: Promise<void>;
+    private readyResolve!: () => void;
+    private exitPromise: Promise<number>;
+    private exitResolve!: (code: number) => void;
+
+    constructor(
+        private command: string,
+        private args: string[],
+        private env: ExecEnv,
+    ) {
+        this.sharedBuffer = new SharedArrayBuffer(CMD_BUFFER_LAYOUT.CONTROL_SIZE + CMD_BUFFER_LAYOUT.DATA_SIZE);
+        this.controlArray = new Int32Array(this.sharedBuffer, 0, 16);
+        this.dataArray = new Uint8Array(this.sharedBuffer, CMD_BUFFER_LAYOUT.DATA_OFFSET, CMD_BUFFER_LAYOUT.DATA_SIZE);
+
+        this.readyPromise = new Promise(resolve => { this.readyResolve = resolve; });
+        this.exitPromise = new Promise(resolve => { this.exitResolve = resolve; });
+    }
+
+    async start(): Promise<void> {
+        // Create Worker from frontend-local self-contained entry point
+        this.worker = new Worker(
+            new URL('./command-worker.ts', import.meta.url),
+            { type: 'module' }
+        );
+
+        this.worker.onmessage = (event: MessageEvent<CommandWorkerOutMessage>) => {
+            const msg = event.data;
+            switch (msg.type) {
+                case 'ready':
+                    this.ready = true;
+                    this.readyResolve();
+                    break;
+                case 'stdout':
+                    this.stdoutBuffer.push(new Uint8Array(msg.data));
+                    break;
+                case 'stderr':
+                    this.stderrBuffer.push(new Uint8Array(msg.data));
+                    break;
+                case 'exit':
+                    this.exitCode = msg.code;
+                    this.exitResolve(msg.code);
+                    // Cleanup Worker
+                    if (this.worker) {
+                        this.worker.terminate();
+                        this.worker = null;
+                    }
+                    break;
+                case 'error':
+                    console.error('[WorkerProcess] Error:', msg.message);
+                    break;
+                case 'stdin-request':
+                    // Worker is blocked on Atomics.wait for stdin
+                    // Send any buffered stdin data
+                    this.flushStdinToWorker();
+                    break;
+            }
+        };
+
+        this.worker.onerror = (error) => {
+            console.error('[WorkerProcess] Worker error:', error);
+            this.exitCode = 1;
+            this.exitResolve(1);
+        };
+
+        // Resolve the module URL for this command
+        const moduleName = getModuleForCommand(this.command);
+        if (!moduleName) {
+            throw new Error(`Unknown command for Worker: ${this.command}`);
+        }
+        const moduleUrl = getModuleUrl(moduleName);
+
+        const spawnMsg: CommandSpawnMessage = {
+            type: 'spawn',
+            command: this.command,
+            args: this.args,
+            env: this.env,
+            sharedBuffer: this.sharedBuffer,
+            moduleUrl,
+        };
+        this.worker.postMessage(spawnMsg);
+
+        await this.readyPromise;
+    }
+
+    // LazyProcess interface methods
+    getReadyPollable() {
+        return new BasePollable();
+    }
+
+    isReady(): boolean {
+        return this.ready;
+    }
+
+    writeStdin(data: Uint8Array): bigint {
+        if (!this.worker || this.exitCode !== undefined) return BigInt(0);
+
+        // Add to pending buffer
+        this.stdinPendingBuffer.push(new Uint8Array(data));
+
+        // Try to flush to Worker if it's waiting
+        this.flushStdinToWorker();
+
+        return BigInt(data.length);
+    }
+
+    /**
+     * Flush pending stdin to Worker via SharedArrayBuffer.
+     * Worker will be unblocked if it's waiting on Atomics.wait.
+     */
+    private flushStdinToWorker(): void {
+        if (this.stdinPendingBuffer.length === 0) {
+            return;
+        }
+
+        // Combine all pending data
+        const totalLength = this.stdinPendingBuffer.reduce((sum, buf) => sum + buf.length, 0);
+        const combined = new Uint8Array(Math.min(totalLength, CMD_BUFFER_LAYOUT.DATA_SIZE));
+        let offset = 0;
+
+        while (this.stdinPendingBuffer.length > 0 && offset < combined.length) {
+            const chunk = this.stdinPendingBuffer[0];
+            const remaining = combined.length - offset;
+
+            if (chunk.length <= remaining) {
+                combined.set(chunk, offset);
+                offset += chunk.length;
+                this.stdinPendingBuffer.shift();
+            } else {
+                combined.set(chunk.slice(0, remaining), offset);
+                this.stdinPendingBuffer[0] = chunk.slice(remaining);
+                offset += remaining;
+            }
+        }
+
+        // Write to SharedArrayBuffer
+        this.dataArray.set(combined);
+        Atomics.store(this.controlArray, CMD_CONTROL.DATA_LENGTH, offset);
+        Atomics.store(this.controlArray, CMD_CONTROL.RESPONSE_READY, 1);
+        Atomics.notify(this.controlArray, CMD_CONTROL.RESPONSE_READY);
+    }
+
+    closeStdin(): void {
+        if (!this.worker) return;
+        Atomics.store(this.controlArray, CMD_CONTROL.EOF, 1);
+        Atomics.notify(this.controlArray, CMD_CONTROL.RESPONSE_READY);
+        this.worker.postMessage({ type: 'stdin', data: new Uint8Array(0), eof: true });
+    }
+
+    readStdout(maxBytes: bigint): Uint8Array {
+        return this.drainBuffer(this.stdoutBuffer, Number(maxBytes));
+    }
+
+    readStderr(maxBytes: bigint): Uint8Array {
+        return this.drainBuffer(this.stderrBuffer, Number(maxBytes));
+    }
+
+    tryWait(): number | undefined {
+        return this.exitCode;
+    }
+
+    setRawMode(_enabled: boolean): void {
+        // Worker commands don't support raw mode
+    }
+
+    sendSignal(signum: number): void {
+        if (signum === 2 && this.worker) { // SIGINT
+            this.worker.terminate();
+            this.exitCode = 130;
+            this.exitResolve(130);
+        }
+    }
+
+    private drainBuffer(buffer: Uint8Array[], maxBytes: number): Uint8Array {
+        const chunks: Uint8Array[] = [];
+        let bytesRead = 0;
+        while (buffer.length > 0 && bytesRead < maxBytes) {
+            const chunk = buffer[0];
+            const remaining = maxBytes - bytesRead;
+            if (chunk.length <= remaining) {
+                chunks.push(buffer.shift()!);
+                bytesRead += chunk.length;
+            } else {
+                chunks.push(chunk.slice(0, remaining));
+                buffer[0] = chunk.slice(remaining);
+                bytesRead += remaining;
+            }
+        }
+        const result = new Uint8Array(bytesRead);
+        let offset = 0;
+        for (const chunk of chunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return result;
+    }
+}
+
+/**
+ * Spawn a command in an isolated Web Worker (interruptible).
+ * Uses Worker.terminate() for true SIGINT-like interrupt (exit code 130).
+ */
+export async function spawnWorkerCommand(
+    command: string,
+    args: string[],
+    env: ExecEnv,
+): Promise<LazyProcess> {
+    console.log(`[ModuleLoader] spawnWorkerCommand: ${command}`);
+    const workerProcess = new WorkerProcess(command, args, env);
+    await workerProcess.start();
+    return workerProcess as unknown as LazyProcess;
 }

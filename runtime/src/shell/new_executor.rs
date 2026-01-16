@@ -628,13 +628,10 @@ async fn execute_simple(
                     }
                 }
             } else {
-                // Batch command - use spawn_lazy_command with buffered I/O
-                let process = loader::spawn_lazy_command(
-                    &module_name,
-                    &expanded_name,
-                    &expanded_args,
-                    &exec_env,
-                );
+                // Batch command - use spawn_worker_command for interruptible execution
+                // This spawns the command in an isolated Web Worker, enabling ^C via Worker.terminate()
+                let process =
+                    loader::spawn_worker_command(&expanded_name, &expanded_args, &exec_env);
 
                 // Wait for the module to be loaded before writing stdin
                 // Get the ready pollable and block on it
