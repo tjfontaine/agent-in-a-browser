@@ -38,9 +38,9 @@ import { metadata as vimMetadata } from '@tjfontaine/wasm-vim';
 import * as gitModule from '../git/git-module.js';
 
 // Import types for internal use (these modules are still loaded by our loaders for now)
-type TsxEngineModule = typeof import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
-type SqliteModule = typeof import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
-type _RatatuiDemoModule = typeof import('../../../../packages/wasm-ratatui/wasm/ratatui-demo.js');
+type TsxEngineModule = typeof import('@tjfontaine/wasm-tsx/wasm/tsx-engine.js');
+type SqliteModule = typeof import('@tjfontaine/wasm-sqlite/wasm/sqlite-module.js');
+type _RatatuiDemoModule = typeof import('@tjfontaine/wasm-ratatui/wasm/ratatui-demo.js');
 
 // Re-export types from wasm-loader for consumers
 export type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv };
@@ -186,9 +186,9 @@ async function loadTsxEngine(): Promise<CommandModule> {
     // Safari needs sync variant to avoid WebAssembly.Suspending error
     let module: TsxEngineModule;
     if (hasJSPI) {
-        module = await import('../../../../packages/wasm-tsx/wasm/tsx-engine.js');
+        module = await import('@tjfontaine/wasm-tsx/wasm/tsx-engine.js');
     } else {
-        module = await import('../../../../packages/wasm-tsx/wasm-sync/tsx-engine.js');
+        module = await import('@tjfontaine/wasm-tsx/wasm-sync/tsx-engine.js');
     }
 
     // With --tla-compat, we must await $init before accessing exports
@@ -218,9 +218,9 @@ async function loadSqliteModule(): Promise<CommandModule> {
     // Safari needs sync variant to avoid WebAssembly.Suspending error
     let module: SqliteModule;
     if (hasJSPI) {
-        module = await import('../../../../packages/wasm-sqlite/wasm/sqlite-module.js');
+        module = await import('@tjfontaine/wasm-sqlite/wasm/sqlite-module.js');
     } else {
-        module = await import('../../../../packages/wasm-sqlite/wasm-sync/sqlite-module.js');
+        module = await import('@tjfontaine/wasm-sqlite/wasm-sync/sqlite-module.js');
     }
 
     // With --tla-compat, we must await $init before accessing exports
@@ -323,7 +323,7 @@ async function loadRatatuiDemo(): Promise<CommandModule> {
 
     // Dynamic import of the JSPI-transpiled module
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('../../../../packages/wasm-ratatui/wasm/ratatui-demo.js') as any;
+    const module = await import('@tjfontaine/wasm-ratatui/wasm/ratatui-demo.js') as any;
 
     // Await $init for the JSPI module initialization
     if (module.$init) {
