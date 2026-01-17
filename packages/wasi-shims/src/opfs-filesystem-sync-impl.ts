@@ -251,7 +251,23 @@ function resolvePath(base: string, subpath: string): string {
 // WASI CLASSES (Sync versions)
 // ============================================================
 
-class DirectoryEntryStream {
+/**
+ * IMPORTANT: Singleton Pattern for JCO Resource Validation
+ * 
+ * JCO-generated trampolines use `instanceof` checks to validate WASI resources.
+ * When modules are loaded multiple times (e.g., by different bundler entry points),
+ * each module instance gets its own class constructor, causing instanceof to fail.
+ * 
+ * We use Symbol.for() to create global singleton class references that persist
+ * across all module loads. This ensures all code references the same class prototype.
+ * 
+ * FUTURE: Consider implementing a full shared module registry pattern.
+ * 
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/for
+ */
+
+// DirectoryEntryStream - sync version
+class _DirectoryEntryStreamSync {
     private idx = 0;
     private entries: Array<[string, TreeEntry]>;
 
@@ -267,7 +283,16 @@ class DirectoryEntryStream {
     }
 }
 
-export class Descriptor {
+// Singleton registration via Symbol.for
+const DIRECTORY_ENTRY_STREAM_SYNC_KEY = Symbol.for('wasi:DirectoryEntryStream:sync');
+if (!(globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_SYNC_KEY]) {
+    (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_SYNC_KEY] = _DirectoryEntryStreamSync;
+}
+const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_SYNC_KEY] as typeof _DirectoryEntryStreamSync;
+type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
+
+// Descriptor - sync version
+class _DescriptorSync {
     private path: string;
     private treeEntry: TreeEntry;
     private isRoot: boolean;
@@ -613,6 +638,14 @@ export class Descriptor {
         return { upper: BigInt(0), lower: BigInt(0) };
     }
 }
+
+// Singleton registration via Symbol.for
+const DESCRIPTOR_SYNC_KEY = Symbol.for('wasi:Descriptor:sync');
+if (!(globalThis as Record<symbol, unknown>)[DESCRIPTOR_SYNC_KEY]) {
+    (globalThis as Record<symbol, unknown>)[DESCRIPTOR_SYNC_KEY] = _DescriptorSync;
+}
+const Descriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_SYNC_KEY] as typeof _DescriptorSync;
+type Descriptor = InstanceType<typeof Descriptor>;
 
 export function filesystemErrorCode(_error: unknown): string | undefined {
     return undefined;

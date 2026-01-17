@@ -53,7 +53,26 @@ const fileBufferCache = new Map<string, Uint8Array>();
 // WASI TYPES & CLASSES
 // ============================================================
 
-class DirectoryEntryStream {
+/**
+ * IMPORTANT: Singleton Pattern for JCO Resource Validation
+ * 
+ * JCO-generated trampolines use `instanceof` checks to validate WASI resources.
+ * When modules are loaded multiple times (e.g., by different bundler entry points),
+ * each module instance gets its own class constructor, causing instanceof to fail.
+ * 
+ * We use Symbol.for() to create global singleton class references that persist
+ * across all module loads. This ensures all code references the same class prototype.
+ * 
+ * FUTURE: Consider implementing a full shared module registry pattern:
+ * - Create a central registry that holds all WASI resource constructors
+ * - Register classes once on first load, retrieve on subsequent loads
+ * - This would provide better encapsulation and debugging capabilities
+ * 
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/for
+ */
+
+// DirectoryEntryStream - defined as internal class, exported via Symbol.for singleton
+class _DirectoryEntryStream {
     private idx = 0;
     private entries: Array<[string, TreeEntry]>;
 
@@ -77,7 +96,16 @@ class DirectoryEntryStream {
     }
 }
 
-class Descriptor {
+// Singleton registration via Symbol.for - ensures same class across all module loads
+const DIRECTORY_ENTRY_STREAM_KEY = Symbol.for('wasi:DirectoryEntryStream');
+if (!(globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_KEY]) {
+    (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_KEY] = _DirectoryEntryStream;
+}
+const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_KEY] as typeof _DirectoryEntryStream;
+type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
+
+// Descriptor - defined as internal class, exported via Symbol.for singleton
+class _Descriptor {
     private path: string;
     private treeEntry: TreeEntry;
     private isRoot: boolean;
@@ -903,6 +931,14 @@ class Descriptor {
     metadataHash() { return { upper: BigInt(0), lower: BigInt(0) }; }
     metadataHashAt() { return { upper: BigInt(0), lower: BigInt(0) }; }
 }
+
+// Singleton registration via Symbol.for - ensures same class across all module loads
+const DESCRIPTOR_KEY = Symbol.for('wasi:Descriptor');
+if (!(globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY]) {
+    (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] = _Descriptor;
+}
+const Descriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] as typeof _Descriptor;
+type Descriptor = InstanceType<typeof Descriptor>;
 
 // ============================================================
 // ASYNC HANDLE MANAGEMENT
