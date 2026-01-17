@@ -86,6 +86,12 @@ interface loader {
   /// spawn-interactive vs spawn-lazy-command
   is-interactive-command: func(command: string) -> bool;
 
+  /// Check if JSPI (JavaScript Promise Integration) is available.
+  /// When true, the runtime can use async/await for suspension, and 
+  /// spawn-lazy-command should be preferred over spawn-worker-command
+  /// to avoid module duplication issues in isolated Worker contexts.
+  has-jspi: func() -> bool;
+
   /// Spawn a command in an isolated Web Worker (interruptible).
   /// Unlike spawn-lazy-command, this spawns ANY command (lazy or built-in)
   /// in its own Worker, enabling true interrupt via Worker.terminate().

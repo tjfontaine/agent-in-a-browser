@@ -176,6 +176,15 @@ export function isInteractiveCommand(command: string): boolean {
 }
 
 /**
+ * Check if JSPI (JavaScript Promise Integration) is available.
+ * When true, spawn-lazy-command should be preferred over spawn-worker-command
+ * to avoid module duplication issues in isolated Worker contexts.
+ */
+export function hasJspi(): boolean {
+    return hasJSPI;
+}
+
+/**
  * ReadyPollable - A pollable that is immediately ready since module is already loaded.
  */
 class ReadyPollable extends BasePollable {
@@ -604,28 +613,37 @@ type CommandWorkerOutMessage =
 
 /**
  * Get the import URL for a module name (for Worker context).
- * Inline function to avoid cross-bundle export issues with Vite Workers.
+ * 
+ * Workers can't use bare module specifiers. We use Vite's /@fs/ endpoint
+ * which serves files from the filesystem with absolute paths.
+ * This only works in development mode - in production, these modules
+ * would be bundled differently.
  */
 function getModuleUrl(moduleName: string): string {
-    const urls: Record<string, string> = {
-        'tsx-engine': hasJSPI
-            ? '@tjfontaine/wasm-tsx/wasm/tsx-engine.js'
-            : '@tjfontaine/wasm-tsx/wasm-sync/tsx-engine.js',
-        'sqlite-module': hasJSPI
-            ? '@tjfontaine/wasm-sqlite/wasm/sqlite-module.js'
-            : '@tjfontaine/wasm-sqlite/wasm-sync/sqlite-module.js',
-        'edtui-module': hasJSPI
-            ? '@tjfontaine/wasm-vim/wasm/edtui-module.js'
-            : '@tjfontaine/wasm-vim/wasm-sync/edtui-module.js',
-        'ratatui-demo': hasJSPI
-            ? '@tjfontaine/wasm-ratatui/wasm/ratatui-demo.js'
-            : '@tjfontaine/wasm-ratatui/wasm-sync/ratatui-demo.js',
-    };
-    const url = urls[moduleName];
-    if (!url) {
-        throw new Error(`No module URL for: ${moduleName}`);
+    // Vite's /@fs/ prefix allows serving files from absolute paths
+    // The packages are in the workspace root's packages/ directory
+    const pkgBase = '/@fs/Users/tjfontaine/Development/web-agent/packages';
+
+    switch (moduleName) {
+        case 'tsx-engine':
+            return hasJSPI
+                ? `${pkgBase}/wasm-tsx/wasm/tsx-engine.js`
+                : `${pkgBase}/wasm-tsx/wasm-sync/tsx-engine.js`;
+        case 'sqlite-module':
+            return hasJSPI
+                ? `${pkgBase}/wasm-sqlite/wasm/sqlite-module.js`
+                : `${pkgBase}/wasm-sqlite/wasm-sync/sqlite-module.js`;
+        case 'edtui-module':
+            return hasJSPI
+                ? `${pkgBase}/wasm-vim/wasm/edtui-module.js`
+                : `${pkgBase}/wasm-vim/wasm-sync/edtui-module.js`;
+        case 'ratatui-demo':
+            return hasJSPI
+                ? `${pkgBase}/wasm-ratatui/wasm/ratatui-demo.js`
+                : `${pkgBase}/wasm-ratatui/wasm-sync/ratatui-demo.js`;
+        default:
+            throw new Error(`No module URL for: ${moduleName}`);
     }
-    return url;
 }
 
 /**
@@ -855,5 +873,8 @@ export async function spawnWorkerCommand(
     console.log(`[ModuleLoader] spawnWorkerCommand: ${command}`);
     const workerProcess = new WorkerProcess(command, args, env);
     await workerProcess.start();
+    // Set prototype to LazyProcess so JCO's instanceof check passes
+    // JCO validates: `if (!(ret instanceof LazyProcess))` at the trampoline
+    Object.setPrototypeOf(workerProcess, LazyProcess.prototype);
     return workerProcess as unknown as LazyProcess;
 }
