@@ -98,7 +98,9 @@ function mapEvent(event: WasmAgentEvent): AgentEvent {
         case 'ready':
             return { type: 'ready' };
         default:
-            throw new Error(`Unknown event type: ${JSON.stringify(event)}`);
+            // Handle any unknown events gracefully (e.g., new events not yet mapped)
+            console.warn(`[WebAgent] Unknown event type:`, event);
+            return { type: 'ready' }; // Fallback to ready
     }
 }
 

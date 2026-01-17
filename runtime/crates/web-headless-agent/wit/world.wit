@@ -78,6 +78,14 @@ world headless-agent {
         output: option<string>,
     }
     
+    // Model loading progress for local LLM providers (e.g., WebLLM)
+    record model-loading-progress {
+        /// Human-readable progress text (e.g., "Downloading model weights...")
+        text: string,
+        /// Progress percentage (0.0 to 1.0)
+        progress: f32,
+    }
+    
     // Agent event variants
     variant agent-event {
         // Stream events
@@ -95,6 +103,9 @@ world headless-agent {
         task-start(task-info),            // task beginning
         task-update(task-update-info),    // progress update
         task-complete(task-complete-info), // task done
+        
+        // Model loading events (for local LLM providers like WebLLM)
+        model-loading(model-loading-progress),
         
         // State
         ready,

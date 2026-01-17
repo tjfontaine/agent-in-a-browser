@@ -37,6 +37,9 @@ const ASYNC_IMPORTS = [
     // Polling - required for HTTP response waiting
     `wasi:io/poll@${V}#[method]pollable.block`,
     `wasi:io/poll@${V}#poll`,
+    // HTTP - future-incoming-response.get() is async to allow JSPI suspension
+    // This allows callers that busy-wait on get() to properly suspend
+    `wasi:http/types@0.2.4#[method]future-incoming-response.get`,
     // Filesystem
     `wasi:filesystem/types@${V}#[method]descriptor.read`,
     `wasi:filesystem/types@${V}#[method]descriptor.write`,

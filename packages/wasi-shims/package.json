@@ -36,6 +36,7 @@
         "vitest": "^4.0.0"
     },
     "dependencies": {
+        "@huggingface/transformers": "^3.0.0",
         "@tjfontaine/wasm-loader": "*",
         "ghostty-web": "^0.4.0"
     },

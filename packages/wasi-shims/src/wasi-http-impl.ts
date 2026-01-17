@@ -858,21 +858,41 @@ class AsyncPollable extends BasePollable {
 
     constructor(promise: Promise<void>) {
         super();
+        console.log('[AsyncPollable] constructor called');
         this._promise = promise;
         promise.then(() => {
+            console.log('[AsyncPollable] promise resolved, setting ready=true');
             this._ready = true;
-        }).catch(() => {
+        }).catch((err) => {
+            console.log('[AsyncPollable] promise rejected:', err);
             this._ready = true; // Ready on error too
         });
     }
 
     ready(): boolean {
+        console.log('[AsyncPollable] ready() called, returning:', this._ready);
         return this._ready;
     }
 
     async block(): Promise<void> {
+        console.log('[AsyncPollable] block() called, awaiting promise...');
         await this._promise;
+        console.log('[AsyncPollable] block() completed');
     }
+}
+
+/**
+ * Symbol to identify FutureIncomingResponse instances across module boundaries.
+ * Using Symbol.for() ensures the same symbol is used even with module duplication.
+ */
+const FUTURE_INCOMING_RESPONSE_SYMBOL = Symbol.for('wasi-http:FutureIncomingResponse');
+
+/**
+ * Check if an object is a FutureIncomingResponse.
+ * Uses Symbol-based check that survives module duplication.
+ */
+export function isFutureIncomingResponse(obj: unknown): obj is FutureIncomingResponse {
+    return typeof obj === 'object' && obj !== null && (obj as Record<symbol, boolean>)[FUTURE_INCOMING_RESPONSE_SYMBOL] === true;
 }
 
 /**
@@ -886,6 +906,9 @@ type ResolvedResponse = { status: number; headers: [string, Uint8Array][]; body:
 type StreamingResponse = { status: number; headers: [string, Uint8Array][]; bodyStream: unknown };
 
 export class FutureIncomingResponse {
+    // Symbol marker for cross-module instanceof check
+    readonly [FUTURE_INCOMING_RESPONSE_SYMBOL] = true;
+
     private _result: WasmResult<IncomingResponse> | null = null;
     private _promise: Promise<void> | null = null;
     private _pollable: AsyncPollable | ReadyPollable;
@@ -927,18 +950,32 @@ export class FutureIncomingResponse {
     }
 
     subscribe(): unknown {
+        console.log('[FutureIncomingResponse] subscribe() called, returning pollable:', this._pollable);
         return this._pollable;
     }
 
     /**
      * Get the response. Returns:
-     * - undefined: not ready
+     * - undefined: not ready (sync mode only - in JSPI mode we await)
      * - { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } }: success
      * - { tag: 'ok', val: { tag: 'err', val: ErrorCode } }: HTTP error
+     * 
+     * In JSPI mode, this method is async and will block until the response is ready.
+     * This allows callers that don't properly use subscribe() + block() to still work.
      */
-    get(): { tag: 'ok', val: WasmResult<IncomingResponse> } | undefined {
+    async get(): Promise<{ tag: 'ok', val: WasmResult<IncomingResponse> } | undefined> {
+        console.log('[FutureIncomingResponse] get() called, result:', this._result ? 'ready' : 'not ready');
+
+        // If we have a pending promise, await it to let JSPI suspend
+        // This is the key fix: callers spinning on get() will suspend here
+        if (this._result === null && this._promise) {
+            console.log('[FutureIncomingResponse] get() awaiting promise...');
+            await this._promise;
+            console.log('[FutureIncomingResponse] get() promise resolved');
+        }
+
         if (this._result === null) {
-            return undefined; // Not ready
+            return undefined; // Not ready (shouldn't happen after await above)
         }
         return { tag: 'ok', val: this._result };
     }
@@ -1481,7 +1518,12 @@ export const outgoingHandler = {
 
             // Return async FutureIncomingResponse that await the fetch
             // JSPI will suspend on Pollable.block() until fetch completes
-            return new FutureIncomingResponse(fetchPromise);
+            const result = new FutureIncomingResponse(fetchPromise);
+            console.log('[http] Returning FutureIncomingResponse:',
+                'constructor:', result.constructor.name,
+                'instanceof:', result instanceof FutureIncomingResponse,
+                'symbolCheck:', isFutureIncomingResponse(result));
+            return result;
         }
 
         // Fallback to synchronous XMLHttpRequest for HTTP requests (localhost)

@@ -63,6 +63,9 @@ export function getOpfsRoot(): FileSystemDirectoryHandle | null {
 
 // ============ Initialization ============
 
+// Promise to track ongoing initialization, preventing concurrent calls
+let initializationPromise: Promise<void> | null = null;
+
 async function initialize(): Promise<void> {
     console.log('[SandboxWorker] initialize() called, initialized:', initialized);
     if (initialized) {
@@ -70,70 +73,81 @@ async function initialize(): Promise<void> {
         return;
     }
 
+    // Prevent concurrent initialization - return existing promise if in progress
+    if (initializationPromise) {
+        console.log('[SandboxWorker] Initialization already in progress, waiting...');
+        return initializationPromise;
+    }
+
     console.log('[SandboxWorker] Starting initialization...');
 
-    // Initialize OPFS root handle (for legacy helpers)
-    try {
-        console.log('[SandboxWorker] Acquiring OPFS handle...');
-        opfsRoot = await navigator.storage.getDirectory();
-        console.log('[SandboxWorker] OPFS handle acquired');
-    } catch (e) {
-        console.error('[SandboxWorker] Failed to acquire OPFS handle:', e);
-        throw e;
-    }
-
-    // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
-    // Use the appropriate shim based on JSPI support
-    try {
-        console.log('[SandboxWorker] Loading filesystem shim...');
-        const { hasJSPI } = await import('../wasm/lazy-loading/async-mode.js');
-
-        if (hasJSPI) {
-            // JSPI mode (Chrome): Use async OPFS shim
-            console.log('[SandboxWorker] Using async OPFS shim (JSPI mode)');
-            const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-impl.js');
-            await initFilesystem();
-        } else {
-            // Sync mode (Safari/Firefox): Use sync OPFS shim with SharedArrayBuffer
-            console.log('[SandboxWorker] Using sync OPFS shim (non-JSPI mode)');
-            const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js');
-            await initFilesystem();
-
-            // Also set OPFS root for directory-tree.js (used by git adapter and other async operations)
-            // This allows the git adapter to work with OPFS even in sync mode
-            const { setOpfsRoot } = await import('@tjfontaine/wasi-shims/directory-tree.js');
-            const opfsRoot = await navigator.storage.getDirectory();
-            setOpfsRoot(opfsRoot);
-            console.log('[SandboxWorker] OPFS root set for directory-tree (git compatibility)');
+    // Create and store the initialization promise immediately to prevent concurrent calls
+    initializationPromise = (async () => {
+        // Initialize OPFS root handle (for legacy helpers)
+        try {
+            console.log('[SandboxWorker] Acquiring OPFS handle...');
+            opfsRoot = await navigator.storage.getDirectory();
+            console.log('[SandboxWorker] OPFS handle acquired');
+        } catch (e) {
+            console.error('[SandboxWorker] Failed to acquire OPFS handle:', e);
+            throw e;
         }
-        console.log('[SandboxWorker] OPFS filesystem shim initialized');
-    } catch (e) {
-        console.error('[SandboxWorker] Failed to initialize filesystem shim:', e);
-        throw e;
-    }
 
-    // Load MCP server WASM module (JSPI or Sync mode based on browser support)
-    try {
-        console.log('[SandboxWorker] Loading MCP server module...');
-        await loadMcpServer();
-        console.log('[SandboxWorker] MCP server module loaded');
-    } catch (e) {
-        console.error('[SandboxWorker] Failed to load MCP server:', e);
-        throw e;
-    }
+        // Initialize OPFS filesystem shim - scans OPFS and populates in-memory tree
+        // Use the appropriate shim based on JSPI support
+        try {
+            console.log('[SandboxWorker] Loading filesystem shim...');
+            const { hasJSPI } = await import('../wasm/lazy-loading/async-mode.js');
 
-    // In Sync mode (Safari/Firefox), eager-load all lazy modules now
-    // In JSPI mode (Chrome), this is a no-op and modules load on-demand
-    try {
-        console.log('[SandboxWorker] Initializing lazy modules for sync mode...');
-        await initializeForSyncMode();
-        console.log('[SandboxWorker] Lazy modules initialized');
-    } catch (e) {
-        console.error('[SandboxWorker] Failed to initialize lazy modules:', e);
-        throw e;
-    }
+            if (hasJSPI) {
+                // JSPI mode (Chrome): Use async OPFS shim
+                console.log('[SandboxWorker] Using async OPFS shim (JSPI mode)');
+                const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-impl.js');
+                await initFilesystem();
+            } else {
+                // Sync mode (Safari/Firefox): Use sync OPFS shim with SharedArrayBuffer
+                console.log('[SandboxWorker] Using sync OPFS shim (non-JSPI mode)');
+                const { initFilesystem } = await import('@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js');
+                await initFilesystem();
 
-    initialized = true;
+                // Also set OPFS root for directory-tree.js (used by git adapter and other async operations)
+                // This allows the git adapter to work with OPFS even in sync mode
+                const { setOpfsRoot } = await import('@tjfontaine/wasi-shims/directory-tree.js');
+                const opfsRoot = await navigator.storage.getDirectory();
+                setOpfsRoot(opfsRoot);
+                console.log('[SandboxWorker] OPFS root set for directory-tree (git compatibility)');
+            }
+            console.log('[SandboxWorker] OPFS filesystem shim initialized');
+        } catch (e) {
+            console.error('[SandboxWorker] Failed to initialize filesystem shim:', e);
+            throw e;
+        }
+
+        // Load MCP server WASM module (JSPI or Sync mode based on browser support)
+        try {
+            console.log('[SandboxWorker] Loading MCP server module...');
+            await loadMcpServer();
+            console.log('[SandboxWorker] MCP server module loaded');
+        } catch (e) {
+            console.error('[SandboxWorker] Failed to load MCP server:', e);
+            throw e;
+        }
+
+        // In Sync mode (Safari/Firefox), eager-load all lazy modules now
+        // In JSPI mode (Chrome), this is a no-op and modules load on-demand
+        try {
+            console.log('[SandboxWorker] Initializing lazy modules for sync mode...');
+            await initializeForSyncMode();
+            console.log('[SandboxWorker] Lazy modules initialized');
+        } catch (e) {
+            console.error('[SandboxWorker] Failed to initialize lazy modules:', e);
+            throw e;
+        }
+
+        initialized = true;
+    })();
+
+    return initializationPromise;
 }
 
 // ============ Message Handler ============

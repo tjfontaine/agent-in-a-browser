@@ -86,6 +86,16 @@ export interface TaskCompleteInfo {
 }
 
 /**
+ * Model loading progress (for local LLM providers like WebLLM)
+ */
+export interface ModelLoadingProgress {
+    /** Human-readable progress text */
+    text: string;
+    /** Progress percentage (0.0 to 1.0) */
+    progress: number;
+}
+
+/**
  * Events emitted during agent streaming
  */
 export type AgentEvent =
@@ -102,6 +112,8 @@ export type AgentEvent =
     | { type: 'task-start'; task: TaskInfo }
     | { type: 'task-update'; update: TaskUpdateInfo }
     | { type: 'task-complete'; result: TaskCompleteInfo }
+    // Model loading events (for local LLM providers like WebLLM)
+    | { type: 'model-loading'; progress: ModelLoadingProgress }
     // State
     | { type: 'ready' };
 
@@ -140,6 +152,7 @@ export type WasmAgentEvent =
     | { tag: 'task-start'; val: { id: string; name: string; description: string } }
     | { tag: 'task-update'; val: { id: string; status: string; progress?: number } }
     | { tag: 'task-complete'; val: { id: string; success: boolean; output?: string } }
+    | { tag: 'model-loading'; val: { text: string; progress: number } }
     | { tag: 'ready' };
 
 export type AgentHandle = number;
