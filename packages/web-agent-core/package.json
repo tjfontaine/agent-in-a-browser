@@ -31,7 +31,7 @@
     "author": "Web Agent Contributors",
     "license": "MIT",
     "dependencies": {
-        "@tjfontaine/wasi-shims": "*"
+        "@tjfontaine/wasi-shims": "workspace:*"
     },
     "devDependencies": {
         "@bytecodealliance/jco": "^1.8.0",

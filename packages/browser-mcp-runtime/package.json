@@ -17,10 +17,10 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "@tjfontaine/opfs-wasi-fs": "^0.1.0",
-        "@tjfontaine/wasi-http-handler": "^0.1.0",
-        "@tjfontaine/wasi-shims": "^0.1.0",
-        "@tjfontaine/mcp-wasm-server": "^0.1.0"
+        "@tjfontaine/opfs-wasi-fs": "workspace:*",
+        "@tjfontaine/wasi-http-handler": "workspace:*",
+        "@tjfontaine/wasi-shims": "workspace:*",
+        "@tjfontaine/mcp-wasm-server": "workspace:*"
     },
     "devDependencies": {
         "typescript": "^5.7.0",

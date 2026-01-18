@@ -21,9 +21,9 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "@tjfontaine/opfs-wasi-fs": "^0.1.0",
-        "@tjfontaine/wasi-http-handler": "^0.1.0",
-        "@tjfontaine/wasi-shims": "^0.1.0"
+        "@tjfontaine/opfs-wasi-fs": "workspace:*",
+        "@tjfontaine/wasi-http-handler": "workspace:*",
+        "@tjfontaine/wasi-shims": "workspace:*"
     },
     "peerDependencies": {
         "@bytecodealliance/preview2-shim": "^0.17.0"

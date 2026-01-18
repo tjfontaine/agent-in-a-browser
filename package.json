@@ -3,24 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "frontend"
-  ],
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "build:packages": "npm run build --workspace=@tjfontaine/wasm-loader && npm run build --workspace=@tjfontaine/wasi-shims && npm run build --workspace=@tjfontaine/web-agent-core",
-    "build": "npm run build:wasm && npm run build:frontend",
+    "build:packages": "pnpm --filter @tjfontaine/wasm-loader --filter @tjfontaine/wasi-shims --filter @tjfontaine/web-agent-core run build",
+    "build": "pnpm run build:wasm && pnpm run build:frontend",
     "build:wasm": "cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml",
-    "build:frontend": "cd frontend && npm run build",
+    "build:frontend": "pnpm --filter web-agent-frontend run build",
     "dev:wasm": "cargo watch -w runtime/src -s 'cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml'",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev": "concurrently -n wasm,frontend -c yellow,cyan 'npm:dev:wasm' 'npm:dev:frontend'",
-    "clean": "cargo clean && cd frontend && rm -rf dist src/wasm/mcp-server",
+    "dev:frontend": "pnpm --filter web-agent-frontend run dev",
+    "dev": "concurrently -n wasm,frontend -c yellow,cyan 'pnpm:dev:wasm' 'pnpm:dev:frontend'",
+    "clean": "cargo clean && pnpm --filter web-agent-frontend exec rm -rf dist src/wasm/mcp-server",
     "test": "cargo test --workspace",
     "docker:build": "docker build -t web-agent .",
     "docker:run": "docker run -p 8080:8080 web-agent"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "turbo": "^2.5.3"
   }
 }

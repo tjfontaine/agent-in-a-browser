@@ -8,10 +8,10 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
-        "@tjfontaine/wasm-loader": "*",
-        "@tjfontaine/wasm-tsx": "*",
-        "@tjfontaine/wasm-sqlite": "*",
-        "@tjfontaine/wasm-ratatui": "*",
-        "@tjfontaine/wasm-vim": "*"
+        "@tjfontaine/wasm-loader": "workspace:*",
+        "@tjfontaine/wasm-tsx": "workspace:*",
+        "@tjfontaine/wasm-sqlite": "workspace:*",
+        "@tjfontaine/wasm-ratatui": "workspace:*",
+        "@tjfontaine/wasm-vim": "workspace:*"
     }
 }

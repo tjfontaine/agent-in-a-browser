@@ -9,6 +9,6 @@
         "./wasm-sync/*": "./wasm-sync/*"
     },
     "dependencies": {
-        "@tjfontaine/wasm-loader": "*"
+        "@tjfontaine/wasm-loader": "workspace:*"
     }
 }
