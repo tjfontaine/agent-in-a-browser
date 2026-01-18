@@ -8,6 +8,11 @@
         "./wasm/*": "./wasm/*",
         "./wasm-sync/*": "./wasm-sync/*"
     },
+    "scripts": {
+        "transpile": "node ../../scripts/transpile.mjs tsx-engine",
+        "transpile:sync": "node ../../scripts/transpile.mjs tsx-engine --sync",
+        "clean": "rm -rf wasm wasm-sync"
+    },
     "dependencies": {
         "@tjfontaine/wasm-loader": "workspace:*"
     }

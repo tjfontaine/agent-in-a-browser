@@ -89,3 +89,6 @@ website/node_modules/
 
 # Turbo
 .turbo
+
+# pnpm store
+.pnpm-store

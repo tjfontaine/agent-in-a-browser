@@ -17,7 +17,9 @@
     ],
     "scripts": {
         "build": "tsc",
-        "clean": "rm -rf dist",
+        "transpile": "node ../../scripts/transpile.mjs ts-runtime-mcp",
+        "transpile:sync": "node ../../scripts/transpile.mjs ts-runtime-mcp --sync",
+        "clean": "rm -rf dist mcp-server-jspi mcp-server-sync",
         "test": "vitest run"
     },
     "dependencies": {

@@ -1,0 +1,89 @@
+# Local CI Testing Workflow
+# Run this with: act -j local-ci -W .github/workflows/local-ci.yml
+# Or just: act push (to test the main build.yml)
+
+name: Local CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [local-test]
+
+jobs:
+  local-ci:
+    name: Test CI Locally
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime
+          cache-on-failure: true
+
+      - name: Turbo Cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - name: Cache Cargo Install
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: cargo-install-${{ runner.os }}-wit-deps-cargo-component-wasm-tools
+
+      - name: Install Cargo tools
+        run: |
+          which wit-deps || cargo install wit-deps-cli --locked
+          which cargo-component || cargo install cargo-component --locked
+          which wasm-tools || cargo install wasm-tools --locked
+
+      - name: Download WIT dependencies
+        working-directory: runtime
+        run: wit-deps update
+
+      - name: Build WASM components
+        working-directory: runtime
+        run: |
+          cargo component build --release --target wasm32-wasip2 \
+            -p ts-runtime-mcp \
+            -p tsx-engine \
+            -p sqlite-module \
+            -p ratatui-demo \
+            -p edtui-module \
+            -p web-agent-tui \
+            -p web-headless-agent
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and Transpile
+        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+
+      - name: Run tests
+        working-directory: frontend
+        run: pnpm test
+
+      - name: Summary
+        run: |
+          echo "✅ Local CI passed!"
+          echo "WASM: $(ls -la target/wasm32-wasip2/release/*.wasm | wc -l) components"
+          echo "Turbo: $(du -sh .turbo 2>/dev/null || echo 'no cache')"

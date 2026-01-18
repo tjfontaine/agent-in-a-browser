@@ -1,0 +1,14 @@
+# act configuration for local GitHub Actions testing
+# See: https://github.com/nektos/act
+
+# Use medium-sized Ubuntu image (faster than large)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Mount cache directories for faster rebuilds
+--bind
+
+# Reuse containers for faster subsequent runs
+--reuse
+
+# Enable artifact server for upload/download-artifact actions
+--artifact-server-path /tmp/act-artifacts

@@ -1,32 +1,75 @@
-# Use Playwright v1.57.0 with Ubuntu 24.04 (Noble) - uses Chrome for Testing
-FROM mcr.microsoft.com/playwright:v1.57.0-noble
+# E2E Test Environment with pnpm + Turbo
+# Mirrors GitHub Actions CI environment for local testing
+
+# Stage 1: Rust WASM builder
+FROM rustlang/rust:nightly-slim AS rust-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wasm32-wasip2 target
+RUN rustup target add wasm32-wasip2
+
+# Install cargo tools
+RUN cargo install wit-deps-cli cargo-component wasm-tools --locked
 
 WORKDIR /app
 
-# Copy root package files (workspace config)
-COPY package.json ./
+# Copy Cargo files and build WASM
+COPY Cargo.toml Cargo.lock ./
+COPY runtime/ ./runtime/
 
-# Copy packages (workspace dependencies)
+# Download WIT dependencies and build WASM
+RUN cd runtime && wit-deps update
+RUN cargo component build --release --target wasm32-wasip2 \
+    -p ts-runtime-mcp \
+    -p tsx-engine \
+    -p sqlite-module \
+    -p ratatui-demo \
+    -p edtui-module \
+    -p web-agent-tui \
+    -p web-headless-agent
+
+# Stage 2: Node.js with Playwright
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
+
+# Install pnpm
+RUN npm install -g pnpm@9
+
+WORKDIR /app
+
+# Copy workspace config
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+COPY .npmrc ./
+
+# Copy all package.json files
 COPY packages/ ./packages/
-
-# Remove any node_modules that might have been copied
-RUN rm -rf packages/*/node_modules
-
-# Copy frontend package.json
 COPY frontend/package.json ./frontend/
 
-# Install all dependencies fresh for this platform
-# Don't use package-lock.json since it has darwin-specific deps
-RUN npm install
+# Remove any stale node_modules
+RUN find . -name "node_modules" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
-# Install Chromium (Playwright 1.57+ uses Chrome for Testing on x64)
-RUN cd frontend && npx playwright install chromium
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
-# Copy frontend source files (excluding node_modules via .dockerignore)
+# Copy WASM artifacts from rust-builder
+COPY --from=rust-builder /app/target/wasm32-wasip2/release/*.wasm ./target/wasm32-wasip2/release/
+
+# Copy scripts
+COPY scripts/ ./scripts/
+
+# Copy source files
 COPY frontend/ ./frontend/
 
-# Working directory for tests
+# Build and transpile everything using turbo
+RUN pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+
+# Install Playwright browsers
+RUN cd frontend && npx playwright install chromium
+
 WORKDIR /app/frontend
 
-# Default command runs E2E tests
+# Default: run E2E tests
 CMD ["npx", "playwright", "test", "--reporter=list"]

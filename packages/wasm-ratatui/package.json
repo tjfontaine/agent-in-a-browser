@@ -8,6 +8,11 @@
         "./wasm/*": "./wasm/*",
         "./wasm-sync/*": "./wasm-sync/*"
     },
+    "scripts": {
+        "transpile": "node ../../scripts/transpile.mjs ratatui-demo",
+        "transpile:sync": "node ../../scripts/transpile.mjs ratatui-demo --sync",
+        "clean": "rm -rf wasm wasm-sync"
+    },
     "dependencies": {
         "@tjfontaine/wasm-loader": "workspace:*"
     }

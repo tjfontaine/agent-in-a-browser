@@ -12,9 +12,10 @@
         }
     },
     "scripts": {
-        "build": "npm run transpile && tsc && cp -r src/wasm dist/",
+        "build": "pnpm run transpile && tsc && cp -r src/wasm dist/",
         "transpile": "node ../../scripts/transpile.mjs web-headless-agent",
-        "clean": "rm -rf dist src/wasm"
+        "transpile:sync": "node ../../scripts/transpile.mjs web-headless-agent --sync",
+        "clean": "rm -rf dist src/wasm src/wasm-sync"
     },
     "files": [
         "dist",

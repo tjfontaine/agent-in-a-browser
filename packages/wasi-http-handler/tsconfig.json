@@ -11,7 +11,7 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "lib": [
-            "ES2022",
+            "ESNext",
             "DOM",
             "DOM.Iterable"
         ]

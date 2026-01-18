@@ -19,11 +19,33 @@
         },
         "transpile": {
             "inputs": [
-                "../target/wasm32-wasip2/release/*.wasm",
-                "../scripts/transpile.mjs"
+                "../../target/wasm32-wasip2/release/*.wasm",
+                "../../scripts/transpile.mjs"
             ],
             "outputs": [
-                "src/wasm/**"
+                "wasm/**",
+                "wasm-sync/**",
+                "mcp-server-jspi/**",
+                "mcp-server-sync/**",
+                "src/wasm/**",
+                "src/wasm-sync/**"
+            ]
+        },
+        "transpile:sync": {
+            "inputs": [
+                "../../target/wasm32-wasip2/release/*.wasm",
+                "../../scripts/transpile.mjs"
+            ],
+            "outputs": [
+                "wasm-sync/**",
+                "mcp-server-sync/**",
+                "src/wasm-sync/**"
+            ]
+        },
+        "transpile:all": {
+            "dependsOn": [
+                "^transpile",
+                "^transpile:sync"
             ]
         },
         "dev": {
@@ -46,7 +68,7 @@
         "test:e2e": {
             "dependsOn": [
                 "build",
-                "transpile"
+                "transpile:all"
             ],
             "cache": false
         },

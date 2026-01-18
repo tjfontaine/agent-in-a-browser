@@ -16,14 +16,9 @@
         "test:e2e:ui": "playwright test --ui",
         "test:e2e:docker": "docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit",
         "test:all": "pnpm run test && pnpm run test:e2e",
-        "transpile": "node ../scripts/transpile.mjs",
-        "transpile:component": "node ../scripts/transpile.mjs ts-runtime-mcp",
-        "transpile:tsx-engine": "node ../scripts/transpile.mjs tsx-engine",
-        "transpile:sqlite-module": "node ../scripts/transpile.mjs sqlite-module",
-        "transpile:ratatui-demo": "node ../scripts/transpile.mjs ratatui-demo",
-        "transpile:edtui-module": "node ../scripts/transpile.mjs edtui-module",
-        "transpile:web-agent-tui": "node ../scripts/transpile.mjs web-agent-tui",
-        "transpile:all": "node ../scripts/transpile.mjs && node ../scripts/transpile.mjs --sync",
+        "transpile": "node ../scripts/transpile.mjs web-agent-tui",
+        "transpile:sync": "node ../scripts/transpile.mjs web-agent-tui --sync",
+        "transpile:all": "pnpm turbo run transpile transpile:sync --filter=@tjfontaine/mcp-wasm-server --filter=@tjfontaine/wasm-tsx --filter=@tjfontaine/wasm-sqlite --filter=@tjfontaine/wasm-ratatui --filter=@tjfontaine/wasm-vim --filter=@tjfontaine/web-agent-core --filter=web-agent-frontend",
         "clean:wasm": "rm -rf src/wasm/mcp-server-jspi src/wasm/mcp-server-sync src/wasm/tsx-engine src/wasm/sqlite-module src/wasm/ratatui-demo src/wasm/edtui-module src/wasm/web-agent-tui"
     },
     "dependencies": {

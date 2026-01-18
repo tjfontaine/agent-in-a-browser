@@ -3,10 +3,16 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile.e2e
+      # Enable BuildKit for faster builds
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     environment:
       - CI=true
     volumes:
       - ./test-results:/app/frontend/test-results
       - ./playwright-report:/app/frontend/playwright-report
-      # Mount transpiled WASM from local build
-      - ../target/wasm32-wasip2/release:/app/target/wasm32-wasip2/release:ro
+      # Mount turbo cache for faster rebuilds
+      - turbo-cache:/app/.turbo
+
+volumes:
+  turbo-cache:
