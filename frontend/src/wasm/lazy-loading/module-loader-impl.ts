@@ -620,27 +620,28 @@ type CommandWorkerOutMessage =
  * would be bundled differently.
  */
 function getModuleUrl(moduleName: string): string {
-    // Vite's /@fs/ prefix allows serving files from absolute paths
-    // The packages are in the workspace root's packages/ directory
-    const pkgBase = '/@fs/Users/tjfontaine/Development/web-agent/packages';
+    // Use package specifiers that Vite's alias system can resolve
+    // These are configured in vite.config.ts to point to the right directories
+    // This works in any environment (local dev, CI, production) unlike hardcoded paths
+    const pkgPrefix = '@tjfontaine';
 
     switch (moduleName) {
         case 'tsx-engine':
             return hasJSPI
-                ? `${pkgBase}/wasm-tsx/wasm/tsx-engine.js`
-                : `${pkgBase}/wasm-tsx/wasm-sync/tsx-engine.js`;
+                ? `${pkgPrefix}/wasm-tsx/wasm/tsx-engine.js`
+                : `${pkgPrefix}/wasm-tsx/wasm-sync/tsx-engine.js`;
         case 'sqlite-module':
             return hasJSPI
-                ? `${pkgBase}/wasm-sqlite/wasm/sqlite-module.js`
-                : `${pkgBase}/wasm-sqlite/wasm-sync/sqlite-module.js`;
+                ? `${pkgPrefix}/wasm-sqlite/wasm/sqlite-module.js`
+                : `${pkgPrefix}/wasm-sqlite/wasm-sync/sqlite-module.js`;
         case 'edtui-module':
             return hasJSPI
-                ? `${pkgBase}/wasm-vim/wasm/edtui-module.js`
-                : `${pkgBase}/wasm-vim/wasm-sync/edtui-module.js`;
+                ? `${pkgPrefix}/wasm-vim/wasm/edtui-module.js`
+                : `${pkgPrefix}/wasm-vim/wasm-sync/edtui-module.js`;
         case 'ratatui-demo':
             return hasJSPI
-                ? `${pkgBase}/wasm-ratatui/wasm/ratatui-demo.js`
-                : `${pkgBase}/wasm-ratatui/wasm-sync/ratatui-demo.js`;
+                ? `${pkgPrefix}/wasm-ratatui/wasm/ratatui-demo.js`
+                : `${pkgPrefix}/wasm-ratatui/wasm-sync/ratatui-demo.js`;
         default:
             throw new Error(`No module URL for: ${moduleName}`);
     }
