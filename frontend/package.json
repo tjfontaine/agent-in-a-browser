@@ -24,7 +24,12 @@
     "dependencies": {
         "@tjfontaine/mcp-wasm-server": "workspace:*",
         "@tjfontaine/wasi-shims": "workspace:*",
+        "@tjfontaine/wasm-loader": "workspace:*",
+        "@tjfontaine/wasm-ratatui": "workspace:*",
+        "@tjfontaine/wasm-sqlite": "workspace:*",
+        "@tjfontaine/wasm-tsx": "workspace:*",
         "@tjfontaine/wasm-vim": "workspace:*",
+        "@tjfontaine/web-agent-core": "workspace:*",
         "ghostty-web": "^0.4.0",
         "isomorphic-git": "^1.36.1",
         "vite-plugin-node-polyfills": "^0.24.0"

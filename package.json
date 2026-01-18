@@ -5,14 +5,15 @@
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "build:packages": "pnpm --filter @tjfontaine/wasm-loader --filter @tjfontaine/wasi-shims --filter @tjfontaine/web-agent-core run build",
-    "build": "pnpm run build:wasm && pnpm run build:frontend",
+    "build:packages": "pnpm turbo run build --filter=@tjfontaine/*",
+    "build:all": "pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...",
+    "build": "pnpm run build:wasm && pnpm run build:all",
     "build:wasm": "cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml",
     "build:frontend": "pnpm --filter web-agent-frontend run build",
     "dev:wasm": "cargo watch -w runtime/src -s 'cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml'",
     "dev:frontend": "pnpm --filter web-agent-frontend run dev",
     "dev": "concurrently -n wasm,frontend -c yellow,cyan 'pnpm:dev:wasm' 'pnpm:dev:frontend'",
-    "clean": "cargo clean && pnpm --filter web-agent-frontend exec rm -rf dist src/wasm/mcp-server",
+    "clean": "cargo clean && pnpm turbo run clean",
     "test": "cargo test --workspace",
     "docker:build": "docker build -t web-agent .",
     "docker:run": "docker run -p 8080:8080 web-agent"

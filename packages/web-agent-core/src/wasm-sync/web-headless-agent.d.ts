@@ -45,7 +45,11 @@ export interface TaskCompleteInfo {
   success: boolean,
   output?: string,
 }
-export type AgentEvent = AgentEventStreamStart | AgentEventStreamChunk | AgentEventStreamComplete | AgentEventStreamError | AgentEventToolCall | AgentEventToolResult | AgentEventPlanGenerated | AgentEventTaskStart | AgentEventTaskUpdate | AgentEventTaskComplete | AgentEventReady;
+export interface ModelLoadingProgress {
+  text: string,
+  progress: number,
+}
+export type AgentEvent = AgentEventStreamStart | AgentEventStreamChunk | AgentEventStreamComplete | AgentEventStreamError | AgentEventToolCall | AgentEventToolResult | AgentEventPlanGenerated | AgentEventTaskStart | AgentEventTaskUpdate | AgentEventTaskComplete | AgentEventModelLoading | AgentEventReady;
 export interface AgentEventStreamStart {
   tag: 'stream-start',
 }
@@ -84,6 +88,10 @@ export interface AgentEventTaskUpdate {
 export interface AgentEventTaskComplete {
   tag: 'task-complete',
   val: TaskCompleteInfo,
+}
+export interface AgentEventModelLoading {
+  tag: 'model-loading',
+  val: ModelLoadingProgress,
 }
 export interface AgentEventReady {
   tag: 'ready',

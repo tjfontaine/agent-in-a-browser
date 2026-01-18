@@ -23,9 +23,24 @@ importers:
       '@tjfontaine/wasi-shims':
         specifier: workspace:*
         version: link:../packages/wasi-shims
+      '@tjfontaine/wasm-loader':
+        specifier: workspace:*
+        version: link:../packages/wasm-loader
+      '@tjfontaine/wasm-ratatui':
+        specifier: workspace:*
+        version: link:../packages/wasm-ratatui
+      '@tjfontaine/wasm-sqlite':
+        specifier: workspace:*
+        version: link:../packages/wasm-sqlite
+      '@tjfontaine/wasm-tsx':
+        specifier: workspace:*
+        version: link:../packages/wasm-tsx
       '@tjfontaine/wasm-vim':
         specifier: workspace:*
         version: link:../packages/wasm-vim
+      '@tjfontaine/web-agent-core':
+        specifier: workspace:*
+        version: link:../packages/web-agent-core
       ghostty-web:
         specifier: ^0.4.0
         version: 0.4.0
