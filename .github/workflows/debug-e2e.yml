@@ -11,6 +11,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime
+
+      - name: Install build tools
+        run: |
+          which wit-deps || cargo install wit-deps-cli --locked
+          which cargo-component || cargo install cargo-component --locked
+
+      - name: Download WIT dependencies
+        working-directory: runtime
+        run: wit-deps update
+
+      - name: Build MCP server WASM only
+        working-directory: runtime
+        run: cargo component build --release --target wasm32-wasip2 -p ts-runtime-mcp
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -19,15 +42,6 @@ jobs:
         with:
           node-version: "22.22.0"
           cache: "pnpm"
-
-      # Use most recent WASM artifacts from main branch
-      - name: Download WASM from latest successful build
-        uses: dawidd6/action-download-artifact@v3
-        with:
-          workflow: build.yml
-          name: wasm-component
-          path: target/wasm32-wasip2/release/
-          branch: main
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
