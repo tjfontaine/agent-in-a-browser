@@ -30,9 +30,17 @@ jobs:
         working-directory: runtime
         run: wit-deps update
 
-      - name: Build MCP server WASM only
+      - name: Build all WASM components
         working-directory: runtime
-        run: cargo component build --release --target wasm32-wasip2 -p ts-runtime-mcp
+        run: |
+          cargo component build --release --target wasm32-wasip2 \
+            -p ts-runtime-mcp \
+            -p tsx-engine \
+            -p sqlite-module \
+            -p ratatui-demo \
+            -p edtui-module \
+            -p web-agent-tui \
+            -p web-headless-agent
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
