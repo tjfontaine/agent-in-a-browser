@@ -1,0 +1,52 @@
+name: Debug E2E Only
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  e2e-debug:
+    name: Quick E2E Debug
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+          cache: "pnpm"
+
+      # Use most recent WASM artifacts from main branch
+      - name: Download WASM from latest successful build
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: wasm-component
+          path: target/wasm32-wasip2/release/
+          branch: main
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and Transpile (fresh, no cache)
+        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend... --force
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests (single test for debug)
+        working-directory: frontend
+        run: npx playwright test --project=chromium --reporter=list tests/e2e/wasm-runtime.test.ts -g "executes a simple script"
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-debug
+          path: frontend/playwright-report/
+          retention-days: 7
