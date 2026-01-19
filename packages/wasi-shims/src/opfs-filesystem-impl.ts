@@ -934,8 +934,24 @@ class _Descriptor {
 
 // Singleton registration via Symbol.for - ensures same class across all module loads
 const DESCRIPTOR_KEY = Symbol.for('wasi:Descriptor');
-if (!(globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY]) {
+const existingDescriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY];
+
+// DIAGNOSTIC: Log Symbol.for singleton status
+console.log('[opfs-fs] DESCRIPTOR DIAGNOSTIC:', {
+    symbolKey: DESCRIPTOR_KEY.toString(),
+    existingClass: existingDescriptor ? (existingDescriptor as Function).name : 'none',
+    newClass: _Descriptor.name,
+    alreadyRegistered: !!existingDescriptor,
+    isSameClass: existingDescriptor === _Descriptor,
+    existingPrototype: existingDescriptor ? Object.getOwnPropertyNames((existingDescriptor as Function).prototype).slice(0, 5) : [],
+    newPrototype: Object.getOwnPropertyNames(_Descriptor.prototype).slice(0, 5),
+});
+
+if (!existingDescriptor) {
     (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] = _Descriptor;
+    console.log('[opfs-fs] Registered _Descriptor as singleton');
+} else {
+    console.log('[opfs-fs] Using existing singleton Descriptor class');
 }
 const Descriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] as typeof _Descriptor;
 type Descriptor = InstanceType<typeof Descriptor>;
