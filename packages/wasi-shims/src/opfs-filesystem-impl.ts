@@ -1012,6 +1012,17 @@ function filesystemErrorCode(): string | undefined {
     return undefined;
 }
 
+// DIAGNOSTIC: Verify types.Descriptor is the same as globalThis singleton
+const DESCRIPTOR_VERIFY_KEY = Symbol.for('wasi:Descriptor');
+const globalDescriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_VERIFY_KEY];
+console.log('[opfs-fs] TYPES EXPORT IDENTITY CHECK:', {
+    typesDescriptor: Descriptor?.name || 'undefined',
+    globalDescriptor: (globalDescriptor as Function)?.name || 'undefined',
+    isSameClass: Descriptor === globalDescriptor,
+    typesDescriptorProto: Descriptor?.prototype?.constructor?.name,
+    globalDescriptorProto: (globalDescriptor as Function)?.prototype?.constructor?.name,
+});
+
 export const types = {
     Descriptor,
     DirectoryEntryStream,
