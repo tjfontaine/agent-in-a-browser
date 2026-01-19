@@ -180,12 +180,19 @@ export default defineConfig(({ mode }) => ({
     },
     optimizeDeps: {
         exclude: ['@wasmer/sdk'],
-        // Include preview2-shim to ensure single module instance
+        // Include shim packages to ensure single module instance across all imports
+        // This prevents Vite from serving separate module instances which would break instanceof checks
         include: [
             '@bytecodealliance/preview2-shim/cli',
             '@bytecodealliance/preview2-shim/io',
             '@bytecodealliance/preview2-shim/random',
             '@bytecodealliance/preview2-shim/filesystem',
+            '@tjfontaine/wasi-shims/opfs-filesystem-impl.js',
+            '@tjfontaine/wasi-shims/clocks-impl.js',
+            '@tjfontaine/wasi-shims/ghostty-cli-shim.js',
+            '@tjfontaine/wasi-shims/poll-impl.js',
+            '@tjfontaine/wasi-shims/streams.js',
+            '@tjfontaine/wasi-shims/wasi-http-impl.js',
         ],
     },
     build: {
