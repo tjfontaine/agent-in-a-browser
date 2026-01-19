@@ -106,6 +106,15 @@ type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
 
 // Descriptor - defined as internal class, exported via Symbol.for singleton
 class OpfsDescriptor {
+    // Factory method to ensure we always use the singleton class for instantiation
+    // This robustness works even if the module is loaded multiple times (e.g. via @fs bypass)
+    static create(path: string, entry: TreeEntry): OpfsDescriptor {
+        const KEY = Symbol.for('wasi:Descriptor');
+        // Use registered singleton if available, otherwise fallback to local class (this)
+        const Ctor = (globalThis as any)[KEY] as typeof OpfsDescriptor || OpfsDescriptor;
+        return new Ctor(path, entry);
+    }
+
     private path: string;
     private treeEntry: TreeEntry;
     private isRoot: boolean;
@@ -231,7 +240,7 @@ class OpfsDescriptor {
             }
         }
 
-        return new OpfsDescriptor(fullPath, entry);
+        return OpfsDescriptor.create(fullPath, entry);
     }
 
     private async createOpfsFile(path: string): Promise<void> {
@@ -982,7 +991,7 @@ export function releaseFile(path: string): void {
 // ============================================================
 
 // Root descriptor - represents the root directory
-const rootDescriptor = new OpfsDescriptor('', { dir: {} });
+const rootDescriptor = OpfsDescriptor.create('', { dir: {} });
 
 export const preopens = {
     getDirectories(): Array<[Descriptor, string]> {
