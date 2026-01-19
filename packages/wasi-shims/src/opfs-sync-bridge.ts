@@ -135,7 +135,7 @@ export async function initHelperWorker(): Promise<void> {
 
     // Spawn helper worker
     helperWorker = new Worker(
-        new URL('./opfs-async-helper.ts', import.meta.url),
+        new URL('./opfs-async-helper.js', import.meta.url),
         { type: 'module' }
     );
 
