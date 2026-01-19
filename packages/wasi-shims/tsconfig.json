@@ -6,6 +6,8 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
+        "allowJs": true,
+        "checkJs": false,
         "declaration": true,
         "declarationMap": true,
         "outDir": "./dist",

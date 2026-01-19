@@ -21,6 +21,12 @@ jobs:
         with:
           workspaces: runtime
 
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-tools-v1
+
       - name: Install build tools
         run: |
           which wit-deps || cargo install wit-deps-cli --locked
