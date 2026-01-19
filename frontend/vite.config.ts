@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
             '@tjfontaine/mcp-wasm-server/mcp-server-sync': path.resolve(__dirname, '../packages/mcp-wasm-server/mcp-server-sync'),
             '@tjfontaine/mcp-wasm-server/src': path.resolve(__dirname, '../packages/mcp-wasm-server/src'),
             '@tjfontaine/mcp-wasm-server': path.resolve(__dirname, '../packages/mcp-wasm-server/src/index.ts'),
-            '@tjfontaine/wasi-shims': path.resolve(__dirname, '../packages/wasi-shims/src'),
+
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),
             '@tjfontaine/wasm-vim': path.resolve(__dirname, '../packages/wasm-vim'),
             // Use source directly for development (avoid needing `npm run build` for each change)
@@ -36,15 +36,7 @@ export default defineConfig(({ mode }) => ({
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),
             'vite-plugin-node-polyfills/shims/process': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/process'),
 
-            // Force all shim imports to resolve to the exact same source file
-            // This prevents "dual package" issues where the same file is loaded twice
-            // (once via node_modules, once via source path), which breaks singletons.
-            '@tjfontaine/wasi-shims/opfs-filesystem-impl.js': path.resolve(__dirname, '../packages/wasi-shims/src/opfs-filesystem-impl.ts'),
-            '@tjfontaine/wasi-shims/clocks-impl.js': path.resolve(__dirname, '../packages/wasi-shims/src/clocks-impl.ts'),
-            '@tjfontaine/wasi-shims/ghostty-cli-shim.js': path.resolve(__dirname, '../packages/wasi-shims/src/ghostty-cli-shim.ts'),
-            '@tjfontaine/wasi-shims/poll-impl.js': path.resolve(__dirname, '../packages/wasi-shims/src/poll-impl.ts'),
-            '@tjfontaine/wasi-shims/streams.js': path.resolve(__dirname, '../packages/wasi-shims/src/streams.ts'),
-            '@tjfontaine/wasi-shims/wasi-http-impl.js': path.resolve(__dirname, '../packages/wasi-shims/src/wasi-http-impl.ts'),
+
         },
         // Dedupe shims to prevent multiple bundle copies (fixes instanceof checks and resource isolation)
         dedupe: [

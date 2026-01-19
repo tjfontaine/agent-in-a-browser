@@ -54,6 +54,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Packages (required for wasi-shims dist)
+        run: npm run build:packages
+
       - name: Build and Transpile (fresh, no cache)
         run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend... --force
 
