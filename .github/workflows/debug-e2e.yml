@@ -53,14 +53,16 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests (single test for debug)
+      - name: Run E2E tests (writeFile - known failing test)
         working-directory: frontend
-        run: npx playwright test --project=chromium --reporter=list tests/e2e/wasm-runtime.test.ts -g "executes a simple script"
+        run: npx playwright test --project=chromium --reporter=list tests/e2e/llm-async-patterns.test.ts -g "writeFile"
 
-      - name: Upload Playwright Report
+      - name: Upload Test Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-debug
-          path: frontend/playwright-report/
+          name: e2e-debug-results
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
           retention-days: 7
