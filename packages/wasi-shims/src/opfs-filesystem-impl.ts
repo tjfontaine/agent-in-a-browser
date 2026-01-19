@@ -105,7 +105,7 @@ const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_E
 type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
 
 // Descriptor - defined as internal class, exported via Symbol.for singleton
-class _Descriptor {
+class OpfsDescriptor {
     private path: string;
     private treeEntry: TreeEntry;
     private isRoot: boolean;
@@ -231,7 +231,7 @@ class _Descriptor {
             }
         }
 
-        return new Descriptor(fullPath, entry);
+        return new OpfsDescriptor(fullPath, entry);
     }
 
     private async createOpfsFile(path: string): Promise<void> {
@@ -934,26 +934,10 @@ class _Descriptor {
 
 // Singleton registration via Symbol.for - ensures same class across all module loads
 const DESCRIPTOR_KEY = Symbol.for('wasi:Descriptor');
-const existingDescriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY];
-
-// DIAGNOSTIC: Log Symbol.for singleton status
-console.log('[opfs-fs] DESCRIPTOR DIAGNOSTIC:', {
-    symbolKey: DESCRIPTOR_KEY.toString(),
-    existingClass: existingDescriptor ? (existingDescriptor as Function).name : 'none',
-    newClass: _Descriptor.name,
-    alreadyRegistered: !!existingDescriptor,
-    isSameClass: existingDescriptor === _Descriptor,
-    existingPrototype: existingDescriptor ? Object.getOwnPropertyNames((existingDescriptor as Function).prototype).slice(0, 5) : [],
-    newPrototype: Object.getOwnPropertyNames(_Descriptor.prototype).slice(0, 5),
-});
-
-if (!existingDescriptor) {
-    (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] = _Descriptor;
-    console.log('[opfs-fs] Registered _Descriptor as singleton');
-} else {
-    console.log('[opfs-fs] Using existing singleton Descriptor class');
+if (!(globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY]) {
+    (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] = OpfsDescriptor;
 }
-const Descriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] as typeof _Descriptor;
+const Descriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_KEY] as typeof OpfsDescriptor;
 type Descriptor = InstanceType<typeof Descriptor>;
 
 // ============================================================
@@ -998,7 +982,7 @@ export function releaseFile(path: string): void {
 // ============================================================
 
 // Root descriptor - represents the root directory
-const rootDescriptor = new Descriptor('', { dir: {} });
+const rootDescriptor = new OpfsDescriptor('', { dir: {} });
 
 export const preopens = {
     getDirectories(): Array<[Descriptor, string]> {
@@ -1013,15 +997,7 @@ function filesystemErrorCode(): string | undefined {
 }
 
 // DIAGNOSTIC: Verify types.Descriptor is the same as globalThis singleton
-const DESCRIPTOR_VERIFY_KEY = Symbol.for('wasi:Descriptor');
-const globalDescriptor = (globalThis as Record<symbol, unknown>)[DESCRIPTOR_VERIFY_KEY];
-console.log('[opfs-fs] TYPES EXPORT IDENTITY CHECK:', {
-    typesDescriptor: Descriptor?.name || 'undefined',
-    globalDescriptor: (globalDescriptor as Function)?.name || 'undefined',
-    isSameClass: Descriptor === globalDescriptor,
-    typesDescriptorProto: Descriptor?.prototype?.constructor?.name,
-    globalDescriptorProto: (globalDescriptor as Function)?.prototype?.constructor?.name,
-});
+
 
 export const types = {
     Descriptor,
