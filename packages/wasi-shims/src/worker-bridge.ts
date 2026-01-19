@@ -89,10 +89,12 @@ export class WorkerBridge {
     // Batched terminal output to prevent Safari event loop flooding
     private terminalOutputBuffer: string[] = [];
     private terminalOutputFlushScheduled = false;
+    private workerUrl: URL | null = null;
 
-    constructor(terminal?: Terminal, options?: { mcpTransport?: HttpTransportHandler }) {
+    constructor(terminal?: Terminal, options?: { mcpTransport?: HttpTransportHandler; workerUrl?: URL }) {
         this.terminal = terminal || null;
         this.mcpTransport = options?.mcpTransport || null;
+        this.workerUrl = options?.workerUrl || null;
 
         // Create SharedArrayBuffer for communication
         this.sharedBuffer = new SharedArrayBuffer(TOTAL_BUFFER_SIZE);
@@ -108,13 +110,16 @@ export class WorkerBridge {
 
     /**
      * Start the worker and initialize communication.
+     * @param workerUrl Optional URL to the worker script. Overrides constructor option.
      */
-    async start(): Promise<void> {
+    async start(workerUrl?: URL): Promise<void> {
+        const url = workerUrl || this.workerUrl;
+        if (!url) {
+            throw new Error('[WorkerBridge] No worker URL provided. Pass workerUrl to constructor or start().');
+        }
+
         // Spawn the worker
-        this.worker = new Worker(
-            new URL('./wasm-worker.ts', import.meta.url),
-            { type: 'module' }
-        );
+        this.worker = new Worker(url, { type: 'module' });
 
         // Set up message handler
         this.worker.onmessage = (e: MessageEvent<WorkerOutboundMessage>) => {

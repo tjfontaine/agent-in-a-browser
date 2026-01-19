@@ -8,18 +8,21 @@
  * 1. Running WASM in this worker thread
  * 2. Blocking on Atomics.wait() when WASM calls blocking operations
  * 3. Main thread performs async ops and wakes via Atomics.notify()
+ * 
+ * NOTE: This file lives in frontend because it imports from frontend modules.
+ * The WorkerBridge in wasi-shims accepts a worker URL parameter.
  */
 
-import { initStdinSyncBridge } from './stdin-sync-bridge.js';
+import { initStdinSyncBridge } from '@tjfontaine/wasi-shims/stdin-sync-bridge.js';
 import {
     STDIN_CONTROL,
     HTTP_CONTROL,
     BUFFER_LAYOUT,
     type WorkerMessage,
-} from './worker-constants.js';
+} from '@tjfontaine/wasi-shims/worker-constants.js';
 
-// Re-export for backwards compatibility
-export { STDIN_CONTROL, HTTP_CONTROL, BUFFER_LAYOUT } from './worker-constants.js';
+// Re-export for type compatibility
+export { STDIN_CONTROL, HTTP_CONTROL, BUFFER_LAYOUT } from '@tjfontaine/wasi-shims/worker-constants.js';
 export type {
     WorkerInitMessage,
     WorkerRunMessage,
@@ -28,7 +31,7 @@ export type {
     WorkerHttpHeadersMessage,
     WorkerResizeMessage,
     WorkerMessage,
-} from './worker-constants.js';
+} from '@tjfontaine/wasi-shims/worker-constants.js';
 
 // Buffer layout derived from constants
 const CONTROL_SIZE = BUFFER_LAYOUT.CONTROL_SIZE;
@@ -41,7 +44,6 @@ const HTTP_BUFFER_SIZE = BUFFER_LAYOUT.HTTP_BUFFER_SIZE;
 // STATE
 // ============================================================
 
-let sharedBuffer: SharedArrayBuffer | null = null;
 let controlArray: Int32Array | null = null;
 let stdinDataArray: Uint8Array | null = null;
 let httpDataArray: Uint8Array | null = null;
@@ -49,6 +51,12 @@ let initialized = false;
 
 // Pending HTTP response headers (sent via postMessage, stored here for streaming)
 let pendingHttpHeaders: { status: number; headers: [string, string][] } | null = null;
+
+// Helper function to read pendingHttpHeaders without TypeScript control flow analysis
+// This prevents TS from narrowing the value to 'never' after setting it to null
+function getPendingHttpHeaders(): { status: number; headers: [string, string][] } | null {
+    return pendingHttpHeaders;
+}
 
 // ============================================================
 // INITIALIZATION
@@ -58,7 +66,7 @@ let pendingHttpHeaders: { status: number; headers: [string, string][] } | null =
  * Initialize the worker with shared memory from main thread.
  */
 function initWorker(buffer: SharedArrayBuffer): void {
-    sharedBuffer = buffer;
+    // Note: buffer is used directly, not stored in module-level variable
     controlArray = new Int32Array(buffer, 0, CONTROL_SIZE / 4);
     stdinDataArray = new Uint8Array(buffer, STDIN_BUFFER_OFFSET, STDIN_BUFFER_SIZE);
     httpDataArray = new Uint8Array(buffer, HTTP_BUFFER_OFFSET, HTTP_BUFFER_SIZE);
@@ -246,7 +254,10 @@ export function* blockingHttpRequestStreaming(
         const chunk = httpDataArray.slice(0, chunkLen);
 
         // Get headers from pending (sent via postMessage) on first chunk
-        const responseHeaders = isFirst && pendingHttpHeaders ? pendingHttpHeaders.headers : [];
+        // Use helper function to avoid TypeScript control flow narrowing to 'never'
+        // (pendingHttpHeaders is set asynchronously by message handler)
+        const pendingHeaders = getPendingHttpHeaders();
+        const responseHeaders = isFirst && pendingHeaders ? pendingHeaders.headers : [];
 
         // Reset response ready flag
         Atomics.store(controlArray, HTTP_CONTROL.RESPONSE_READY, 0);
@@ -258,7 +269,7 @@ export function* blockingHttpRequestStreaming(
         console.log(`[WasmWorker] Streaming chunk: ${chunkLen} bytes, done=${isDone}`);
 
         yield {
-            status: isFirst ? (pendingHttpHeaders?.status ?? status) : 0,
+            status: isFirst ? (pendingHeaders?.status ?? status) : 0,
             headers: responseHeaders,
             chunk,
             done: isDone
@@ -354,19 +365,12 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                 if (msg.module === 'tui') {
                     console.log('[WasmWorker] Initializing OPFS filesystem for TUI...');
 
-                    // CRITICAL: Import from the SAME path that the transpiled TUI module uses
-                    // The sync web-agent-tui.js imports from '../../../../packages/wasi-shims/src/opfs-filesystem-impl.js'
-                    // Relative to this worker file (in packages/wasi-shims/src), that's just './opfs-filesystem-impl.js'
-                    // However, after bundling, Vite may resolve these differently.
-                    // 
-                    // To ensure the same module instance, we import the TUI module FIRST (which imports the shims),
-                    // then call initFilesystem from the shim the TUI module imported.
+                    // Load sync TUI module (imports shims via package paths)
                     console.log('[WasmWorker] Loading sync web-agent-tui module (with shims)...');
-                    const tuiModule = await import('../../../frontend/src/wasm/web-agent-tui-sync/web-agent-tui.js');
+                    const tuiModule = await import('../wasm/web-agent-tui-sync/web-agent-tui.js');
 
-                    // Import initFilesystem from the SYNC path - same as what web-agent-tui-sync.js uses
-                    // The sync TUI module imports from opfs-filesystem-sync-impl.js, NOT opfs-filesystem-impl.js
-                    const opfsShim = await import('./opfs-filesystem-sync-impl.js');
+                    // Import filesystem shim and initialize
+                    const opfsShim = await import('@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js');
 
                     // DEBUG: Check if the Descriptor classes are the same
                     const shimDescriptor = opfsShim.types?.Descriptor;
@@ -380,26 +384,18 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                     await opfsShim.initFilesystem();
                     console.log('[WasmWorker] OPFS filesystem ready');
 
-                    // CRITICAL: Pre-load all lazy modules in the worker context
-                    // The worker has its own lazy-modules.ts with an empty loadedModules map.
-                    // We must call initializeForSyncMode() HERE to populate the worker's cache.
+                    // Pre-load all lazy modules in the worker context
                     console.log('[WasmWorker] Pre-loading all lazy modules...');
-                    const { initializeForSyncMode } = await import('../../../frontend/src/wasm/lazy-loading/lazy-modules.js');
+                    const { initializeForSyncMode } = await import('../wasm/lazy-loading/lazy-modules.js');
                     await initializeForSyncMode();
                     console.log('[WasmWorker] Lazy modules pre-loaded');
 
                     // Set up sync transport handler for MCP requests
-                    // Route localhost:3000 MCP requests through Atomics-based sync bridge
-                    // Pass isSyncMode=true so wasi-http-impl doesn't use async lazy streams
-                    const { setTransportHandler, setStreamingTransportHandler } = await import('./wasi-http-impl.js');
+                    const { setTransportHandler, setStreamingTransportHandler } = await import('@tjfontaine/wasi-shims/wasi-http-impl.js');
 
                     // Legacy sync transport handler (for backwards compatibility)
                     setTransportHandler((method, url, headers, body) => {
-                        // This handler is called for localhost MCP requests
-                        // Use blockingHttpRequest which blocks via Atomics.wait
                         const response = blockingHttpRequest(method, url, headers, body);
-                        // Return as syncValue marker - NOT Promise - so wasi-http-impl can bypass async path
-                        // This is critical for Safari which can't suspend at async/await in WASM call stack
                         return {
                             syncValue: {
                                 status: response.status,
@@ -407,12 +403,10 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                                 body: response.body
                             }
                         };
-                    }, true); // isSyncMode = true - don't use async lazy streams
+                    }, true); // isSyncMode = true
 
-                    // NEW: Streaming transport handler - yields chunks instead of buffering
-                    // This enables true streaming for LLM responses in Safari
+                    // Streaming transport handler
                     setStreamingTransportHandler(function* (method, url, headers, body) {
-                        // Delegate to the streaming generator
                         const generator = blockingHttpRequestStreaming(method, url, headers, body);
                         for (const chunk of generator) {
                             yield {
@@ -434,8 +428,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                     console.log('[WasmWorker] TUI module loaded, starting run()...');
                     self.postMessage({ type: 'started', module: msg.module });
 
-                    // Run the TUI - this will block in sync mode, using Atomics.wait
-                    // for stdin reads. The shims should be configured via the transpiled module.
+                    // Run the TUI
                     try {
                         const exitCode = tuiModule.run();
                         console.log('[WasmWorker] TUI exited with code:', exitCode);
@@ -457,4 +450,3 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 };
 
 // Export for type checking
-

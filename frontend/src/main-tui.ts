@@ -85,8 +85,9 @@ const terminalEl = document.getElementById('terminal')!;
                 return { status: response.status, body: responseBody };
             };
 
-            // Launch worker bridge with MCP transport
-            const bridge = new WorkerBridge(terminal, { mcpTransport });
+            // Launch worker bridge with MCP transport and worker URL
+            const workerUrl = new URL('./workers/wasm-worker.ts', import.meta.url);
+            const bridge = new WorkerBridge(terminal, { mcpTransport, workerUrl });
             await bridge.start();
 
             // Wire terminal resize events to WorkerBridge

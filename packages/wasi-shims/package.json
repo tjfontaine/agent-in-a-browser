@@ -15,7 +15,10 @@
         "./clocks-impl.js": "./dist/clocks-impl.js",
         "./poll-impl.js": "./dist/poll-impl.js",
         "./wasi-http-impl.js": "./dist/wasi-http-impl.js",
-        "./directory-tree.js": "./dist/directory-tree.js"
+        "./directory-tree.js": "./dist/directory-tree.js",
+        "./stdin-sync-bridge.js": "./dist/stdin-sync-bridge.js",
+        "./worker-constants.js": "./dist/worker-constants.js",
+        "./worker-bridge.js": "./dist/worker-bridge.js"
     },
     "types": "./dist/index.d.ts",
     "files": [

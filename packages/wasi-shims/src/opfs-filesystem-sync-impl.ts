@@ -82,7 +82,7 @@ export function initFilesystemSync(sharedBuffer: SharedArrayBuffer): Promise<voi
 
         // Create helper worker
         helperWorker = new Worker(
-            new URL('./opfs-async-helper.ts', import.meta.url),
+            new URL('./opfs-async-helper.js', import.meta.url),
             { type: 'module' }
         );
 
