@@ -114,8 +114,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -195,8 +195,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -243,8 +243,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
+
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
