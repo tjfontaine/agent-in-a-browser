@@ -1,5 +1,9 @@
 {
     "$schema": "https://turbo.build/schema.json",
+    "globalDependencies": [
+        "packages/wasi-shims/src/**",
+        "scripts/transpile.mjs"
+    ],
     "tasks": {
         "build": {
             "dependsOn": [
