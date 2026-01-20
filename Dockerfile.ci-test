@@ -55,8 +55,13 @@ RUN cd runtime && wit-deps update && \
 
 # Transpile WASM modules first (outside of the build script)
 # This avoids nested Turbo which ignores TURBO_FORCE
+# IMPORTANT: Only delete GENERATED wasm directories, not source files like tui/ and lazy-loading/
 ENV TURBO_FORCE=1
-RUN rm -rf frontend/src/wasm packages/*/wasm packages/*/wasm-sync packages/*/mcp-server-* && \
+RUN rm -rf frontend/src/wasm/mcp-server-jspi frontend/src/wasm/mcp-server-sync \
+    frontend/src/wasm/tsx-engine frontend/src/wasm/sqlite-module \
+    frontend/src/wasm/web-agent-tui frontend/src/wasm/web-agent-tui-sync \
+    frontend/src/wasm/edtui-module frontend/src/wasm/ratatui-demo \
+    packages/*/wasm packages/*/wasm-sync packages/*/mcp-server-* && \
     pnpm turbo run transpile transpile:sync --filter=web-agent-frontend...
 
 # Now run the build (which still calls transpile:all, but outputs already exist)
