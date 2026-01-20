@@ -53,8 +53,9 @@ RUN cd runtime && wit-deps update && \
     -p web-agent-tui \
     -p web-headless-agent
 
-# Build and transpile frontend
-RUN pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+# Build and transpile frontend  
+# Use --force to bypass Turbo cache and ensure fresh builds in Docker
+RUN pnpm turbo run build transpile transpile:sync --force --filter=web-agent-frontend...
 
 # Install Playwright browsers
 RUN cd frontend && npx playwright install chromium
