@@ -13,6 +13,7 @@ thread_local! {
 }
 
 /// Set the argv for the current script execution
+#[allow(dead_code)]
 pub fn set_argv(args: Vec<String>) {
     SCRIPT_ARGV.with(|a| {
         *a.borrow_mut() = args;

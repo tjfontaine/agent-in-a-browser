@@ -13,6 +13,7 @@ pub mod process;
 pub mod url;
 
 // Re-export console log functions for use by the runtime
+#[allow(unused_imports)]
 pub use console::{clear_logs, get_logs};
 
 use rquickjs::{Ctx, Result};

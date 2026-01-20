@@ -657,13 +657,20 @@ fn reverse_search(
     initial_query: &str,
 ) -> Option<String> {
     let mut query = initial_query.to_string();
-    let mut match_idx: Option<usize> = None;
+    // When user presses Ctrl+R again, we search from before this index
+    let mut search_before: Option<usize> = None;
 
     loop {
         // Find matching history entry (searching backwards)
-        match_idx = None;
+        let mut match_idx: Option<usize> = None;
+
         if !query.is_empty() {
-            for (i, entry) in history.iter().enumerate().rev() {
+            // Determine the search range based on whether user pressed Ctrl+R again
+            let search_range = match search_before {
+                Some(before) if before > 0 => &history[..before],
+                _ => history,
+            };
+            for (i, entry) in search_range.iter().enumerate().rev() {
                 if entry.contains(&query) {
                     match_idx = Some(i);
                     break;
@@ -692,22 +699,15 @@ fn reverse_search(
                 return None;
             }
             Some(0x12) => {
-                // Ctrl+R again - find next match
-                if !query.is_empty() {
-                    if let Some(current) = match_idx {
-                        // Search for next match before current
-                        for (i, entry) in history[..current].iter().enumerate().rev() {
-                            if entry.contains(&query) {
-                                match_idx = Some(i);
-                                break;
-                            }
-                        }
-                    }
+                // Ctrl+R again - search for next match (earlier in history)
+                if let Some(current) = match_idx {
+                    search_before = Some(current);
                 }
             }
             Some(0x7F) | Some(0x08) => {
-                // Backspace - remove last char from query
+                // Backspace - remove last char from query, reset search range
                 query.pop();
+                search_before = None;
             }
             Some(0x03) => {
                 // Ctrl+C - cancel
@@ -715,8 +715,9 @@ fn reverse_search(
                 return None;
             }
             Some(c) if c >= 0x20 && c < 0x7F => {
-                // Printable character - add to query
+                // Printable character - add to query, reset search range
                 query.push(c as char);
+                search_before = None;
             }
             _ => {}
         }

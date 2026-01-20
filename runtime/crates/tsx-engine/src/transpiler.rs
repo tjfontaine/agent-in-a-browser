@@ -32,6 +32,7 @@ pub struct TranspileResult {
     /// Generated JavaScript code
     pub code: String,
     /// Source map JSON (for error line mapping) - TODO: implement
+    #[allow(dead_code)]
     pub source_map: Option<Vec<u8>>,
 }
 

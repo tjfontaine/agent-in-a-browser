@@ -18,6 +18,7 @@ pub struct FetchResponse {
 
 impl FetchResponse {
     /// Get body as UTF-8 string (legacy compatibility)
+    #[allow(dead_code)]
     pub fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.bytes.clone())
     }

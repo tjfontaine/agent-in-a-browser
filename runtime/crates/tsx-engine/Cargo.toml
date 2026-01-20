@@ -8,12 +8,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # QuickJS-NG engine
-rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = [
+# Pinned to specific commit for API stability (Loader trait signature)
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "c99675e5", features = [
     "futures",
     "loader",
     "classes",
     "macro",
 ] }
+
 
 # SWC transpiler (individual crates)
 # Versions pinned from Cargo.lock for reproducibility
