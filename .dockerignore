@@ -1,45 +1,49 @@
-# Docker ignore file
-# Excludes unnecessary files from Docker build context
+# Docker build context exclusions
+# This prevents stale local build artifacts from contaminating container builds
+# CRITICAL: Docker builds must start from scratch to ensure reproducibility
 
-# Dependencies (will be installed fresh)
+# All node_modules (will be installed fresh in container)
 node_modules/
-.cargo/
+**/node_modules/
 
-# Rust build outputs (mounted separately for E2E)
+# All dist folders (will be built fresh in container)
+dist/
+**/dist/
+
+# Turbo cache (prevents cross-platform cache contamination)
+.turbo/
+
+# ALL Rust/Cargo build artifacts - must build from scratch in container
+# This is critical because macOS-built WASM may differ from Linux-built WASM
 target/
 
-# IDE
+# WASM transpilation outputs (will be regenerated in container)
+frontend/src/wasm/*/
+packages/wasm-*/wasm/
+packages/wasm-*/wasm-sync/
+packages/mcp-wasm-server/mcp-server-*/
+packages/web-agent-core/wasm/
+packages/web-agent-core/src/wasm/
+packages/wasi-shims/browser-dist/
+
+# Test artifacts
+frontend/test-results/
+frontend/playwright-report/
+
+# IDE and editor
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
-# OS
-.DS_Store
-Thumbs.db
+# Git (not needed in build context)
+.git/
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Environment and secrets
+.env*
+!.env.example
 
 # Logs
 *.log
-npm-debug.log*
 
-# Git
-.git/
-.gitignore
-
-# Documentation (except README)
-*.md
-!README.md
-
-# Cache
-.cache/
-.vite/
-
-# Test results (mounted as volumes in E2E)
-frontend/test-results/
-frontend/playwright-report/
+# OS files
+.DS_Store
+Thumbs.db
