@@ -22,7 +22,8 @@ let initializationPromise: Promise<void> | null = null;
 const connectedPorts: Set<MessagePort> = new Set();
 
 // Broadcast to all connected clients
-function broadcast(message: unknown): void {
+function _broadcast(message: unknown): void {
+
     for (const port of connectedPorts) {
         try {
             port.postMessage(message);
@@ -124,6 +125,7 @@ async function initialize(): Promise<void> {
                 // CRITICAL: Also set on external index.js served at /wasi-shims/index.js
                 // This is the module that edtui, vim, and shell actually import at runtime
                 try {
+                    // @ts-expect-error - runtime path, served by dev server
                     const externalWasiShims = await import('/wasi-shims/index.js');
                     if (externalWasiShims.setOpfsRoot) {
                         externalWasiShims.setOpfsRoot(opfsRootHandle);
@@ -152,6 +154,7 @@ async function initialize(): Promise<void> {
 
                 // CRITICAL: Also set on external index.js served at /wasi-shims/index.js
                 try {
+                    // @ts-expect-error - runtime path, served by dev server
                     const externalWasiShims = await import('/wasi-shims/index.js');
                     if (externalWasiShims.setOpfsRoot) {
                         externalWasiShims.setOpfsRoot(opfsRootHandle);

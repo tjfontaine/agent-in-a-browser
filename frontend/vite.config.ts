@@ -185,7 +185,9 @@ export default defineConfig(({ mode }) => ({
             external: [
                 /^@tjfontaine\/wasi-shims/,
                 /^@tjfontaine\/wasm-loader/,
+                /^\/wasi-shims\//,  // Also externalize absolute runtime paths
             ],
+
             output: {
                 paths: {
                     '@tjfontaine/wasi-shims': '/wasi-shims/index.js',
@@ -244,7 +246,9 @@ export default defineConfig(({ mode }) => ({
             // fixing instanceof checks across chunks (Pollable, Descriptor, etc.)
             external: [
                 /^@tjfontaine\/wasi-shims/,
+                /^\/wasi-shims\//,  // Also externalize absolute runtime paths
             ],
+
             output: {
                 // Map external modules to their runtime paths
                 paths: {

@@ -23,12 +23,11 @@ import {
 
 /**
  * Ensure OPFS root is initialized.
- * In worker context, it should already be set by SharedSandboxWorker.
- * This is a fallback for edge cases where the initialization might be missed.
+ * In worker context, it should already be set. If not, get it directly.
  */
 async function ensureOpfsInitialized(): Promise<void> {
     if (!getOpfsRoot()) {
-        // Get OPFS root directly if not already set (fallback)
+        // Get OPFS root directly if not already set
         const root = await navigator.storage.getDirectory();
         setOpfsRoot(root);
     }

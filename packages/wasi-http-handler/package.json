@@ -17,6 +17,9 @@
         "test": "vitest run"
     },
     "peerDependencies": {},
+    "dependencies": {
+        "@tjfontaine/wasi-shims": "workspace:*"
+    },
     "devDependencies": {
         "typescript": "^5.7.0",
         "vitest": "^4.0.0"

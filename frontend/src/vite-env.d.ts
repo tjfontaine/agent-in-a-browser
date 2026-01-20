@@ -17,3 +17,16 @@ declare module '../../../../packages/wasm-sqlite/wasm-sync/sqlite-module.js' {
     };
     export const $init: Promise<void> | undefined;
 }
+
+// Extend Window interface for E2E testing - tuiTerminal is exposed by main-tui.ts
+// Using import type to pull in the Terminal interface from xterm
+import type { Terminal } from '@xterm/xterm';
+
+declare global {
+    interface Window {
+        tuiTerminal?: Terminal;
+    }
+}
+
+// Required to make this a module so `declare global` works
+export { };
