@@ -31,6 +31,9 @@ RUN cargo install wit-deps-cli cargo-component wasm-tools --locked
 # Install Playwright browser dependencies
 RUN npx playwright install-deps chromium
 
+# Set CI environment to use bundled Chromium instead of 'chrome' channel
+ENV CI=true
+
 WORKDIR /app
 
 # Copy project files
