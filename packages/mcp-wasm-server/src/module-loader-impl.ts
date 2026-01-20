@@ -14,12 +14,9 @@ import {
     type CommandModule,
     type ExecEnv as LazyExecEnv,
 } from './lazy-modules.js';
-import { InputStream as CustomInputStream, OutputStream as CustomOutputStream } from '@tjfontaine/wasi-shims';
-import { poll } from '@bytecodealliance/preview2-shim/io';
+import { InputStream as CustomInputStream, OutputStream as CustomOutputStream, ReadyPollable } from '@tjfontaine/wasi-shims';
 
-// Get the Pollable base class from preview2-shim
-// @ts-expect-error - Pollable is exported at runtime
-const { Pollable: BasePollable } = poll as { Pollable: new () => { ready(): boolean; block(): void } };
+// Use ReadyPollable from wasi-shims as base class (no preview2-shim dependency)
 
 // Types from the generated WIT bindings
 export interface ExecEnv {
@@ -94,9 +91,10 @@ export async function spawnInteractive(
 }
 
 /**
- * ReadyPollable - A pollable that is immediately ready since module is already loaded.
+ * ModuleReadyPollable - A pollable that is immediately ready since module is already loaded.
+ * Extends ReadyPollable from wasi-shims but also stores the loaded module.
  */
-class ReadyPollable extends BasePollable {
+class ModuleReadyPollable extends ReadyPollable {
     private _module: CommandModule;
 
     constructor(module: CommandModule) {
@@ -104,11 +102,11 @@ class ReadyPollable extends BasePollable {
         this._module = module;
     }
 
-    ready(): boolean {
+    override ready(): boolean {
         return true; // Module is already loaded
     }
 
-    block(): void {
+    override block(): void {
         // Nothing to block on - module is already loaded
     }
 
@@ -158,7 +156,7 @@ export class LazyProcess {
         this.terminalSize = terminalSize ?? { cols: 80, rows: 24 };
 
         // Module is already loaded
-        this.readyPollable = new ReadyPollable(module);
+        this.readyPollable = new ModuleReadyPollable(module);
     }
 
     getReadyPollable(): ReadyPollable {

@@ -1,16 +1,16 @@
-import { error } from '@bytecodealliance/preview2-shim/io';
-import { insecureSeed as insecureSeed$1 } from '@bytecodealliance/preview2-shim/random';
 import { monotonicClock } from '@tjfontaine/wasi-shims/clocks-impl.js';
+import { error } from '@tjfontaine/wasi-shims/error.js';
 import { environment, exit as exit$1, stderr } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 import { Pollable } from '@tjfontaine/wasi-shims/poll-impl.js';
+import { insecureSeed as insecureSeed$1 } from '@tjfontaine/wasi-shims/random.js';
 import { InputStream, OutputStream } from '@tjfontaine/wasi-shims/streams.js';
 import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '@tjfontaine/wasi-shims/wasi-http-impl.js';
-const { Error: Error$1 } = error;
-const { insecureSeed } = insecureSeed$1;
 const { subscribeDuration } = monotonicClock;
+const { Error: Error$1 } = error;
 const { getEnvironment } = environment;
 const { exit } = exit$1;
 const { getStderr } = stderr;
+const { insecureSeed } = insecureSeed$1;
 const { handle } = outgoingHandler;
 
 let dv = new DataView(new ArrayBuffer());

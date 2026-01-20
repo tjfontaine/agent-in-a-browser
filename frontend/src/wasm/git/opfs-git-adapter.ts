@@ -18,7 +18,21 @@ import {
     fileExistsInOpfs,
     directoryExistsInOpfs,
     getOpfsRoot,
+    setOpfsRoot,
 } from '@tjfontaine/wasi-shims/directory-tree.js';
+
+/**
+ * Ensure OPFS root is initialized.
+ * In worker context, it should already be set by SharedSandboxWorker.
+ * This is a fallback for edge cases where the initialization might be missed.
+ */
+async function ensureOpfsInitialized(): Promise<void> {
+    if (!getOpfsRoot()) {
+        // Get OPFS root directly if not already set (fallback)
+        const root = await navigator.storage.getDirectory();
+        setOpfsRoot(root);
+    }
+}
 
 // isomorphic-git expects a Node.js-like fs API
 // We implement the subset that isomorphic-git actually uses
@@ -107,6 +121,7 @@ export const opfsFs = {
             data: Uint8Array | string,
             _options?: { encoding?: string; mode?: number }
         ): Promise<void> {
+            await ensureOpfsInitialized();
             const path = normalizePath(filepath);
             if (!path) {
                 throw createFsError('EINVAL', 'Cannot write to root');
@@ -162,6 +177,7 @@ export const opfsFs = {
         },
 
         async mkdir(dirpath: string, _options?: { recursive?: boolean }): Promise<void> {
+            await ensureOpfsInitialized();
             const path = normalizePath(dirpath);
             if (!path) return; // Don't create root
 

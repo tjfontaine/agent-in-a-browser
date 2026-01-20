@@ -20,7 +20,7 @@ import {
     type ExecEnv as LazyExecEnv,
 } from './lazy-modules.js';
 import { CustomInputStream, CustomOutputStream } from '@tjfontaine/wasi-shims/streams.js';
-import { poll } from '@bytecodealliance/preview2-shim/io';
+import { Pollable as BasePollable } from '@tjfontaine/wasi-shims/poll-impl.js';
 
 // Import ghostty terminal streams for interactive TUI applications
 import {
@@ -31,9 +31,7 @@ import {
     clearPipedStreams
 } from '@tjfontaine/wasi-shims/ghostty-cli-shim.js';
 
-// Get the Pollable base class from preview2-shim
-// @ts-expect-error - Pollable is exported at runtime
-const { Pollable: BasePollable } = poll as { Pollable: new () => { ready(): boolean; block(): void } };
+// BasePollable is imported from wasi-shims/poll-impl.js above - it has the POLLABLE_MARKER symbol
 
 // Types from the generated WIT bindings
 export interface ExecEnv {

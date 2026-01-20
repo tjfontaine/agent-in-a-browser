@@ -12,7 +12,6 @@ import type { Page } from '@playwright/test';
 // Helper to type into the terminal
 async function typeInTerminal(page: Page, text: string): Promise<void> {
     await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
     await page.keyboard.type(text, { delay: 50 });
@@ -21,7 +20,6 @@ async function typeInTerminal(page: Page, text: string): Promise<void> {
 // Helper to press keys
 async function pressKey(page: Page, key: string): Promise<void> {
     await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
     await page.keyboard.press(key);
@@ -30,7 +28,6 @@ async function pressKey(page: Page, key: string): Promise<void> {
 // Helper to get all terminal screen text via ghostty-web buffer API
 async function getTerminalText(page: Page): Promise<string> {
     return await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         const terminal = window.tuiTerminal;
         if (!terminal || !terminal.buffer?.active) {
             return '';
@@ -81,7 +78,6 @@ async function waitForTuiReady(page: Page, timeout = 5000): Promise<void> {
     await page.waitForSelector('canvas', { timeout });
     await page.waitForFunction(
         () => {
-            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
             return window.tuiTerminal?.buffer?.active !== undefined;
         },
         { timeout }
@@ -129,7 +125,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         // Create a file with content so we have something to show the cursor on
         await typeInTerminal(page, 'echo "test content" > cursor_test.txt');
         await pressKey(page, 'Enter');
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(1000);
 
         await typeInTerminal(page, 'vim cursor_test.txt');
         await pressKey(page, 'Enter');
@@ -138,7 +134,6 @@ test.describe('Vim Editor in Shell Mode', () => {
         // Check that there's a cell with reverse video (block cursor)
         // The cursor should be on the 't' of 'test' at row 1 (after title bar)
         const hasCursor = await page.evaluate(() => {
-            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
             const terminal = window.tuiTerminal;
             if (!terminal || !terminal.buffer?.active) {
                 return { found: false, debug: 'no terminal' };
@@ -188,7 +183,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         // Create a JavaScript file with keywords that should be highlighted
         await typeInTerminal(page, 'echo "const x = 42;" > syntax_test.js');
         await pressKey(page, 'Enter');
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(1000);
 
         await typeInTerminal(page, 'vim syntax_test.js');
         await pressKey(page, 'Enter');
@@ -197,7 +192,6 @@ test.describe('Vim Editor in Shell Mode', () => {
         // Check that there's syntax highlighting (non-default foreground color)
         // The 'const' keyword should have a specific color from base16-ocean.dark theme
         const hasHighlighting = await page.evaluate(() => {
-            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
             const terminal = window.tuiTerminal;
             if (!terminal || !terminal.buffer?.active) {
                 return { found: false, debug: 'no terminal' };
@@ -254,7 +248,7 @@ test.describe('Vim Editor in Shell Mode', () => {
         // Create a TypeScript file
         await typeInTerminal(page, 'echo "const x: number = 42;" > test.ts');
         await pressKey(page, 'Enter');
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(1000);
 
         await typeInTerminal(page, 'vim test.ts');
         await pressKey(page, 'Enter');
@@ -262,7 +256,6 @@ test.describe('Vim Editor in Shell Mode', () => {
 
         // Check for syntax highlighting
         const hasHighlighting = await page.evaluate(() => {
-            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
             const terminal = window.tuiTerminal;
             if (!terminal || !terminal.buffer?.active) {
                 return { found: false, debug: 'no terminal' };

@@ -77,8 +77,8 @@ const SHIMS = {
     'wasi:filesystem/*': '@tjfontaine/wasi-shims/opfs-filesystem-impl.js#*',
     'wasi:io/poll': '@tjfontaine/wasi-shims/poll-impl.js',
     'wasi:io/streams': '@tjfontaine/wasi-shims/streams.js',
-    'wasi:io/*': '@bytecodealliance/preview2-shim/io#*',
-    'wasi:random/*': '@bytecodealliance/preview2-shim/random#*',
+    'wasi:io/*': '@tjfontaine/wasi-shims/error.js#*',
+    'wasi:random/*': '@tjfontaine/wasi-shims/random.js#*',
     'wasi:sockets/*': '@bytecodealliance/preview2-shim/sockets#*',
     'wasi:http/types': '@tjfontaine/wasi-shims/wasi-http-impl.js',
     'wasi:http/outgoing-handler': '@tjfontaine/wasi-shims/wasi-http-impl.js#outgoingHandler',
@@ -192,6 +192,54 @@ function build(name, mod, syncMode) {
 }
 
 // ============================================================
+// POST-TRANSPILE PATCHING
+// ============================================================
+// JCO generates instanceof checks that fail across bundled chunks
+// because each chunk may define its own class. We patch these to
+// use Symbol-based validation that works across module boundaries.
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
+
+function patchInstanceofChecks(outputDir) {
+    // Resource classes that need patching with their WASI resource paths
+    const resourcePatches = [
+        { class: 'Pollable', symbol: 'wasi:io/poll@0.2.4#Pollable' },
+        { class: 'InputStream', symbol: 'wasi:io/streams@0.2.4#InputStream' },
+        { class: 'OutputStream', symbol: 'wasi:io/streams@0.2.4#OutputStream' },
+        { class: 'Descriptor', symbol: 'wasi:filesystem/types@0.2.6#Descriptor' },
+    ];
+
+    // Find the main JS file in the output directory
+    const files = readdirSync(outputDir).filter(f => f.endsWith('.js'));
+    let patchCount = 0;
+
+    for (const file of files) {
+        const filePath = `${outputDir}/${file}`;
+        let content = readFileSync(filePath, 'utf8');
+        let modified = false;
+
+        for (const { class: className, symbol } of resourcePatches) {
+            // Match patterns like: instanceof ClassName
+            // JCO generates: if (!(e instanceof ClassName)) { throw new TypeError('Resource error: Not a valid "ClassName" resource.'); }
+
+            // Pattern 1: Direct instanceof in conditional
+            const pattern1 = new RegExp(`instanceof\\s+${className}(?=[\\s;\\)\\]])`, 'g');
+            if (pattern1.test(content)) {
+                content = content.replace(pattern1, `?.[Symbol.for('${symbol}')]`);
+                modified = true;
+                patchCount++;
+            }
+        }
+
+        if (modified) {
+            writeFileSync(filePath, content);
+            console.log(`   ↳ Patched ${file}`);
+        }
+    }
+
+    return patchCount;
+}
+
+// ============================================================
 // MAIN
 // ============================================================
 import { existsSync, rmSync } from 'fs';
@@ -230,6 +278,8 @@ for (const name of targets) {
 
     try {
         execSync(cmd, { cwd: FRONTEND, stdio: 'inherit', shell: true });
+        // Patch instanceof checks to use Symbol-based validation
+        patchInstanceofChecks(outputDir);
     } catch {
         console.error(`   ✗ Failed`);
         process.exit(1);

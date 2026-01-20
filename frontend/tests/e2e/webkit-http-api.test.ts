@@ -17,7 +17,6 @@ import type { Page } from '@playwright/test';
 // Helper to execute commands through the sandbox worker
 async function shellEval(page: Page, command: string): Promise<{ output: string; success: boolean; error?: string }> {
     const result = await page.evaluate(async (cmd) => {
-        // @ts-expect-error - window.testHarness is set up by our test page
         const harness = window.testHarness;
         if (!harness) {
             throw new Error('Test harness not initialized');
@@ -31,7 +30,6 @@ async function shellEval(page: Page, command: string): Promise<{ output: string;
 // Helper to write a file via the sandbox MCP tool (async)
 async function writeFile(page: Page, path: string, content: string): Promise<void> {
     await page.evaluate(async ({ path, content }) => {
-        // @ts-expect-error - window.testHarness is set up by our test page
         const harness = window.testHarness;
         if (!harness) {
             throw new Error('Test harness not initialized');
@@ -44,7 +42,6 @@ test.describe('WebKit HTTP with API Key', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
-            // @ts-expect-error - window.testHarness is set up when ready
             return window.testHarness?.ready === true;
         }, { timeout: 30000 });
     });

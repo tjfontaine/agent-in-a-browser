@@ -27,14 +27,14 @@
     ],
     "scripts": {
         "build": "tsc",
-        "clean": "rm -rf dist",
+        "build:browser": "node scripts/build-browser.mjs",
+        "clean": "rm -rf dist browser-dist",
         "test": "vitest run"
     },
-    "peerDependencies": {
-        "@bytecodealliance/preview2-shim": "^0.17.0"
-    },
+    "peerDependencies": {},
     "devDependencies": {
         "@types/wicg-file-system-access": "^2023.10.7",
+        "esbuild": "^0.20.0",
         "typescript": "^5.7.0",
         "vitest": "^4.0.0"
     },

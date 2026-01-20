@@ -36,17 +36,18 @@ export default defineConfig(({ mode }) => ({
             'vite-plugin-node-polyfills/shims/global': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/global'),
             'vite-plugin-node-polyfills/shims/process': path.resolve(__dirname, 'node_modules/vite-plugin-node-polyfills/shims/process'),
 
-
         },
         // Dedupe shims to prevent multiple bundle copies (fixes instanceof checks and resource isolation)
         dedupe: [
             // Our WASI shims - critical for resource isolation between worker and transpiled modules
             '@tjfontaine/wasi-shims',
-            // preview2-shim for bytecode alliance components
-            '@bytecodealliance/preview2-shim',
-            '@bytecodealliance/preview2-shim/io',
-            '@bytecodealliance/preview2-shim/cli',
-            '@bytecodealliance/preview2-shim/random',
+            // Specific subpaths that JCO imports - must be deduped for instanceof checks to work
+            '@tjfontaine/wasi-shims/poll-impl.js',
+            '@tjfontaine/wasi-shims/streams.js',
+            '@tjfontaine/wasi-shims/clocks-impl.js',
+            '@tjfontaine/wasi-shims/opfs-filesystem-impl.js',
+            '@tjfontaine/wasi-shims/wasi-http-impl.js',
+            '@tjfontaine/wasi-shims/ghostty-cli-shim.js',
         ],
     },
     server: {
@@ -179,6 +180,40 @@ export default defineConfig(({ mode }) => ({
     },
     worker: {
         format: 'es',
+        rollupOptions: {
+            // Apply same external config to workers
+            external: [
+                /^@tjfontaine\/wasi-shims/,
+                /^@tjfontaine\/wasm-loader/,
+            ],
+            output: {
+                paths: {
+                    '@tjfontaine/wasi-shims': '/wasi-shims/index.js',
+                    '@tjfontaine/wasi-shims/poll-impl.js': '/wasi-shims/poll-impl.js',
+                    '@tjfontaine/wasi-shims/streams.js': '/wasi-shims/streams.js',
+                    '@tjfontaine/wasi-shims/clocks-impl.js': '/wasi-shims/clocks-impl.js',
+                    '@tjfontaine/wasi-shims/opfs-filesystem-impl.js': '/wasi-shims/opfs-filesystem-impl.js',
+                    '@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js': '/wasi-shims/opfs-filesystem-sync-impl.js',
+                    '@tjfontaine/wasi-shims/wasi-http-impl.js': '/wasi-shims/wasi-http-impl.js',
+                    '@tjfontaine/wasi-shims/ghostty-cli-shim.js': '/wasi-shims/ghostty-cli-shim.js',
+                    '@tjfontaine/wasi-shims/execution-mode.js': '/wasi-shims/execution-mode.js',
+                    '@tjfontaine/wasi-shims/directory-tree.js': '/wasi-shims/directory-tree.js',
+                    '@tjfontaine/wasi-shims/hf-transport.js': '/wasi-shims/hf-transport.js',
+                    '@tjfontaine/wasi-shims/symlink-store.js': '/wasi-shims/symlink-store.js',
+                    '@tjfontaine/wasi-shims/opfs-async-helper.js': '/wasi-shims/opfs-async-helper.js',
+                    '@tjfontaine/wasi-shims/terminal-info-impl.js': '/wasi-shims/terminal-info-impl.js',
+                    '@tjfontaine/wasi-shims/worker-bridge.js': '/wasi-shims/worker-bridge.js',
+                    '@tjfontaine/wasi-shims/worker-constants.js': '/wasi-shims/worker-constants.js',
+                    '@tjfontaine/wasi-shims/http-sync-bridge.js': '/wasi-shims/http-sync-bridge.js',
+                    '@tjfontaine/wasi-shims/stdin-sync-bridge.js': '/wasi-shims/stdin-sync-bridge.js',
+                    '@tjfontaine/wasi-shims/opfs-sync-bridge.js': '/wasi-shims/opfs-sync-bridge.js',
+                    // New shims replacing @bytecodealliance/preview2-shim
+                    '@tjfontaine/wasi-shims/error.js': '/wasi-shims/error.js',
+                    '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
+                    '@tjfontaine/wasm-loader': '/wasm-loader/index.js',
+                },
+            },
+        },
     },
 
     optimizeDeps: {
@@ -186,10 +221,6 @@ export default defineConfig(({ mode }) => ({
         // Include shim packages to ensure single module instance across all imports
         // This prevents Vite from serving separate module instances which would break instanceof checks
         include: [
-            '@bytecodealliance/preview2-shim/cli',
-            '@bytecodealliance/preview2-shim/io',
-            '@bytecodealliance/preview2-shim/random',
-            '@bytecodealliance/preview2-shim/filesystem',
             '@tjfontaine/wasi-shims/opfs-filesystem-impl.js',
             '@tjfontaine/wasi-shims/clocks-impl.js',
             '@tjfontaine/wasi-shims/ghostty-cli-shim.js',
@@ -200,11 +231,46 @@ export default defineConfig(({ mode }) => ({
     },
     build: {
         target: 'esnext',
+        minify: false, // Preserve function names for debugging and tests
         rollupOptions: {
             input: {
                 main: 'index.html',
                 'embed-demo': 'embed-demo.html',
                 'mcp-bridge': 'mcp-bridge.html',
+                'wasm-test': 'wasm-test.html',
+            },
+            // Mark wasi-shims as external to prevent Rollup from inlining
+            // This ensures a single shared module instance at runtime,
+            // fixing instanceof checks across chunks (Pollable, Descriptor, etc.)
+            external: [
+                /^@tjfontaine\/wasi-shims/,
+            ],
+            output: {
+                // Map external modules to their runtime paths
+                paths: {
+                    '@tjfontaine/wasi-shims': '/wasi-shims/index.js',
+                    '@tjfontaine/wasi-shims/poll-impl.js': '/wasi-shims/poll-impl.js',
+                    '@tjfontaine/wasi-shims/streams.js': '/wasi-shims/streams.js',
+                    '@tjfontaine/wasi-shims/clocks-impl.js': '/wasi-shims/clocks-impl.js',
+                    '@tjfontaine/wasi-shims/opfs-filesystem-impl.js': '/wasi-shims/opfs-filesystem-impl.js',
+                    '@tjfontaine/wasi-shims/opfs-filesystem-sync-impl.js': '/wasi-shims/opfs-filesystem-sync-impl.js',
+                    '@tjfontaine/wasi-shims/wasi-http-impl.js': '/wasi-shims/wasi-http-impl.js',
+                    '@tjfontaine/wasi-shims/ghostty-cli-shim.js': '/wasi-shims/ghostty-cli-shim.js',
+                    '@tjfontaine/wasi-shims/execution-mode.js': '/wasi-shims/execution-mode.js',
+                    '@tjfontaine/wasi-shims/directory-tree.js': '/wasi-shims/directory-tree.js',
+                    '@tjfontaine/wasi-shims/hf-transport.js': '/wasi-shims/hf-transport.js',
+                    '@tjfontaine/wasi-shims/symlink-store.js': '/wasi-shims/symlink-store.js',
+                    '@tjfontaine/wasi-shims/opfs-async-helper.js': '/wasi-shims/opfs-async-helper.js',
+                    '@tjfontaine/wasi-shims/terminal-info-impl.js': '/wasi-shims/terminal-info-impl.js',
+                    '@tjfontaine/wasi-shims/worker-bridge.js': '/wasi-shims/worker-bridge.js',
+                    '@tjfontaine/wasi-shims/worker-constants.js': '/wasi-shims/worker-constants.js',
+                    '@tjfontaine/wasi-shims/http-sync-bridge.js': '/wasi-shims/http-sync-bridge.js',
+                    '@tjfontaine/wasi-shims/stdin-sync-bridge.js': '/wasi-shims/stdin-sync-bridge.js',
+                    '@tjfontaine/wasi-shims/opfs-sync-bridge.js': '/wasi-shims/opfs-sync-bridge.js',
+                    // New shims replacing @bytecodealliance/preview2-shim
+                    '@tjfontaine/wasi-shims/error.js': '/wasi-shims/error.js',
+                    '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
+                },
             },
         },
     },

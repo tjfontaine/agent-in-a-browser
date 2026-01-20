@@ -104,6 +104,9 @@ if (!(globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_KEY]) {
 const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_KEY] as typeof _DirectoryEntryStream;
 type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
 
+// Symbol marker for cross-bundle instanceof replacement (matches transpile.mjs patch)
+const DESCRIPTOR_MARKER = Symbol.for('wasi:filesystem/types@0.2.6#Descriptor');
+
 // Descriptor - defined as internal class, exported via Symbol.for singleton
 class OpfsDescriptor {
     // Factory method to ensure we always use the singleton class for instantiation
@@ -123,6 +126,8 @@ class OpfsDescriptor {
         this.path = path;
         this.treeEntry = entry;
         this.isRoot = path === '' || path === '/';
+        // Symbol marker for patched instanceof checks (cross-bundle validation)
+        Object.defineProperty(this, DESCRIPTOR_MARKER, { value: true, enumerable: false });
     }
 
     getType(): string {
@@ -1059,3 +1064,7 @@ export async function initFilesystem(): Promise<void> {
         setInitialized(true);
     }
 }
+
+// Re-export setOpfsRoot so it can be called on the bundled index.js module
+// This is needed because bundling creates a separate copy of directory-tree state
+export { setOpfsRoot };

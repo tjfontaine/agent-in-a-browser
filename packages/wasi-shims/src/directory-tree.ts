@@ -68,6 +68,29 @@ export function setOpfsRoot(root: FileSystemDirectoryHandle): void {
 }
 
 /**
+ * Lazy initialization promise to avoid racing getDirectory calls
+ */
+let opfsRootInitPromise: Promise<FileSystemDirectoryHandle> | null = null;
+
+/**
+ * Ensure opfsRoot is initialized, auto-fetching if not set.
+ * This allows the module to work across different JS contexts (Worker, main page)
+ * without explicit setOpfsRoot calls from each context.
+ */
+export async function ensureOpfsRoot(): Promise<FileSystemDirectoryHandle> {
+    if (opfsRoot) return opfsRoot;
+
+    // Use cached init promise to avoid race conditions
+    if (!opfsRootInitPromise) {
+        opfsRootInitPromise = navigator.storage.getDirectory().then(root => {
+            opfsRoot = root;
+            return root;
+        });
+    }
+    return opfsRootInitPromise;
+}
+
+/**
  * Load symlinks from IndexedDB into cache
  */
 export async function loadSymlinksIntoCache(): Promise<void> {
@@ -172,6 +195,7 @@ export function resolveSymlinks(path: string, followFinal = true): string {
  * Get or create OPFS directory handle for a path
  */
 export async function getOpfsDirectory(pathParts: string[], create: boolean): Promise<FileSystemDirectoryHandle> {
+    await ensureOpfsRoot();
     if (!opfsRoot) throw new Error('OPFS root not set');
 
     let current = opfsRoot;
@@ -185,6 +209,7 @@ export async function getOpfsDirectory(pathParts: string[], create: boolean): Pr
  * Get OPFS file handle for a path
  */
 export async function getOpfsFile(path: string, create: boolean): Promise<FileSystemFileHandle> {
+    await ensureOpfsRoot();
     if (!opfsRoot) throw new Error('OPFS root not set');
 
     const normalizedPath = normalizePath(path);

@@ -16,9 +16,7 @@
         "clean": "rm -rf dist",
         "test": "vitest run"
     },
-    "peerDependencies": {
-        "@bytecodealliance/preview2-shim": "^0.17.0"
-    },
+    "peerDependencies": {},
     "devDependencies": {
         "typescript": "^5.7.0",
         "vitest": "^4.0.0"

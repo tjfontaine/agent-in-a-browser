@@ -37,6 +37,33 @@ export const test = base.extend<{ page: Page }>({
 
             const persistentPage = context.pages()[0] || await context.newPage();
 
+            // Set up CORS proxy route interception for external HTTP requests
+            await persistentPage.route('**/cors-proxy*', async (route) => {
+                const url = new URL(route.request().url());
+                const targetUrl = url.searchParams.get('url');
+                if (!targetUrl) {
+                    await route.fulfill({ status: 400, body: 'Missing url parameter' });
+                    return;
+                }
+                try {
+                    const response = await fetch(targetUrl, {
+                        method: route.request().method(),
+                        headers: route.request().headers(),
+                    });
+                    const body = await response.arrayBuffer();
+                    await route.fulfill({
+                        status: response.status,
+                        headers: Object.fromEntries(response.headers.entries()),
+                        body: Buffer.from(body),
+                    });
+                } catch (e) {
+                    await route.fulfill({
+                        status: 502,
+                        body: `Proxy error: ${e instanceof Error ? e.message : String(e)}`,
+                    });
+                }
+            });
+
             await use(persistentPage);
 
             await context.close();
@@ -46,7 +73,33 @@ export const test = base.extend<{ page: Page }>({
                 console.warn(`[Fixture Cleanup] Failed to remove temp dir: ${e}`);
             }
         } else {
-            // For other browsers, use the normal page
+            // For other browsers, set up CORS proxy route interception
+            await page.route('**/cors-proxy*', async (route) => {
+                const url = new URL(route.request().url());
+                const targetUrl = url.searchParams.get('url');
+                if (!targetUrl) {
+                    await route.fulfill({ status: 400, body: 'Missing url parameter' });
+                    return;
+                }
+                try {
+                    const response = await fetch(targetUrl, {
+                        method: route.request().method(),
+                        headers: route.request().headers(),
+                    });
+                    const body = await response.arrayBuffer();
+                    await route.fulfill({
+                        status: response.status,
+                        headers: Object.fromEntries(response.headers.entries()),
+                        body: Buffer.from(body),
+                    });
+                } catch (e) {
+                    await route.fulfill({
+                        status: 502,
+                        body: `Proxy error: ${e instanceof Error ? e.message : String(e)}`,
+                    });
+                }
+            });
+
             await use(page);
         }
     },

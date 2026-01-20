@@ -291,6 +291,9 @@ if (!(globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_SYNC_KEY]) {
 const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_ENTRY_STREAM_SYNC_KEY] as typeof _DirectoryEntryStreamSync;
 type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
 
+// Symbol marker for cross-bundle instanceof replacement (matches transpile.mjs patch)
+const DESCRIPTOR_SYNC_MARKER = Symbol.for('wasi:filesystem/types@0.2.6#Descriptor');
+
 // Descriptor - sync version
 class _DescriptorSync {
     private path: string;
@@ -301,6 +304,8 @@ class _DescriptorSync {
         this.path = path;
         this.treeEntry = entry;
         this.isRoot = path === '' || path === '/';
+        // Symbol marker for patched instanceof checks (cross-bundle validation)
+        Object.defineProperty(this, DESCRIPTOR_SYNC_MARKER, { value: true, enumerable: false });
     }
 
     getType(): string {

@@ -16,7 +16,6 @@ import type { Page } from '@playwright/test';
 // Helper to type into the terminal
 async function typeInTerminal(page: Page, text: string): Promise<void> {
     await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
     await page.keyboard.type(text, { delay: 50 });
@@ -25,7 +24,6 @@ async function typeInTerminal(page: Page, text: string): Promise<void> {
 // Helper to press keys
 async function pressKey(page: Page, key: string): Promise<void> {
     await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         window.tuiTerminal?.focus();
     });
     await page.keyboard.press(key);
@@ -34,7 +32,6 @@ async function pressKey(page: Page, key: string): Promise<void> {
 // Helper to get all terminal screen text via ghostty-web buffer API
 async function getTerminalText(page: Page): Promise<string> {
     return await page.evaluate(() => {
-        // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
         const terminal = window.tuiTerminal;
         if (!terminal || !terminal.buffer?.active) {
             return '';
@@ -71,7 +68,6 @@ async function waitForTuiReady(page: Page, timeout = 30000): Promise<void> {
     await page.waitForSelector('canvas', { timeout });
     await page.waitForFunction(
         () => {
-            // @ts-expect-error - window.tuiTerminal is set up by main-tui.ts
             return window.tuiTerminal?.buffer?.active !== undefined;
         },
         { timeout }

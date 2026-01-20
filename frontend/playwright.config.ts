@@ -14,7 +14,8 @@ export default defineConfig({
     timeout: 60 * 1000, // 60 second timeout per test
 
     use: {
-        baseURL: 'http://localhost:3000',
+        // Use port 8080 for npx serve (static production build)
+        baseURL: 'http://localhost:8080',
         trace: 'on-first-retry',
     },
 
@@ -47,12 +48,15 @@ export default defineConfig({
         },
     ],
 
-    /* Run local dev server before starting the tests */
+    /* Serve the pre-built production dist folder directly with a static file server.
+     * This completely bypasses Vite which has module resolution issues causing
+     * incorrect Pollable class imports. Uses npx serve with serve.json config. */
     webServer: {
-        command: 'npm run dev',
-        url: 'http://localhost:3000',
+        // Serve the pre-built dist folder - assumes build was run separately
+        command: 'npx serve -l tcp://0.0.0.0:8080 dist',
+        url: 'http://localhost:8080',
         reuseExistingServer: !process.env.CI,
-        timeout: 120 * 1000,
+        timeout: 30 * 1000, // 30 seconds for serve to start
         stdout: 'pipe',
         stderr: 'pipe',
     },

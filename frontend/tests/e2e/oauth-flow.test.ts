@@ -15,7 +15,6 @@ test.describe('OAuth Infrastructure', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
-            // @ts-expect-error - window.testHarness is set up when ready
             return window.testHarness?.ready === true;
         }, { timeout: 30000 });
     });
@@ -81,7 +80,6 @@ test.describe('OAuth Popup Message Passing', () => {
         // First, navigate to main page
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
-            // @ts-expect-error - window.testHarness is set up when ready
             return window.testHarness?.ready === true;
         }, { timeout: 30000 });
 
@@ -125,7 +123,6 @@ test.describe('OAuth WASI HTTP Interception', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/wasm-test.html');
         await page.waitForFunction(() => {
-            // @ts-expect-error - window.testHarness is set up when ready
             return window.testHarness?.ready === true;
         }, { timeout: 30000 });
     });
