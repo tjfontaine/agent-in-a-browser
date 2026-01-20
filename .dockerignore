@@ -29,7 +29,7 @@ frontend/src/wasm/edtui-module/
 frontend/src/wasm/ratatui-demo/
 frontend/src/wasm/web-agent-tui/
 frontend/src/wasm/web-agent-tui-sync/
-frontend/src/wasm/tui/
+# Note: tui/ is NOT excluded - it contains source files like tui-loader.ts
 packages/wasm-*/wasm/
 packages/wasm-*/wasm-sync/
 packages/mcp-wasm-server/mcp-server-*/
