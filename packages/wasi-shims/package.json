@@ -26,7 +26,7 @@
         "README.md"
     ],
     "scripts": {
-        "build": "tsc",
+        "build": "tsc && node scripts/build-browser.mjs",
         "build:browser": "node scripts/build-browser.mjs",
         "clean": "rm -rf dist browser-dist",
         "test": "vitest run"

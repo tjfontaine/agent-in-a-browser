@@ -930,7 +930,7 @@ function trampoline3(arg0) {
   const ret = subscribeDuration(BigInt.asUintN(64, arg0));
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="subscribe-duration"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret instanceof Pollable)) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1070,7 +1070,7 @@ function trampoline8(arg0) {
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  if (!(ret instanceof Pollable)) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle3 = ret[symbolRscHandle];
@@ -1099,7 +1099,7 @@ function trampoline19() {
   const ret = getStderr();
   _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret instanceof OutputStream)) {
+  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1235,7 +1235,7 @@ function trampoline22(arg0, arg1) {
     case 'ok': {
       const e = variant4.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e instanceof InputStream)) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
         throw new TypeError('Resource error: Not a valid "InputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -1298,7 +1298,7 @@ function trampoline23(arg0, arg1) {
     case 'ok': {
       const e = variant4.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e instanceof OutputStream)) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
         throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];

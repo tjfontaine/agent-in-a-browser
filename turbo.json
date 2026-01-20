@@ -7,6 +7,7 @@
             ],
             "outputs": [
                 "dist/**",
+                "browser-dist/**",
                 "*.js",
                 "*.d.ts",
                 "*.js.map"
