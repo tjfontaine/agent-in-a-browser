@@ -54,8 +54,11 @@ RUN cd runtime && wit-deps update && \
     -p web-headless-agent
 
 # Build and transpile frontend  
-# Use --force to bypass Turbo cache and ensure fresh builds in Docker
-RUN pnpm turbo run build transpile transpile:sync --force --filter=web-agent-frontend...
+# Clear Turbo cache and any stale transpile outputs first
+# The nested turbo run in transpile:all ignores outer --force flag
+RUN rm -rf .turbo node_modules/.cache && \
+    rm -rf frontend/src/wasm packages/*/wasm packages/*/wasm-sync packages/*/mcp-server-* && \
+    pnpm turbo run build transpile transpile:sync --force --filter=web-agent-frontend...
 
 # Install Playwright browsers
 RUN cd frontend && npx playwright install chromium
