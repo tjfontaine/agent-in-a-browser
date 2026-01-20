@@ -53,12 +53,14 @@ RUN cd runtime && wit-deps update && \
     -p web-agent-tui \
     -p web-headless-agent
 
-# Build and transpile frontend  
-# TURBO_FORCE=1 forces ALL Turbo invocations (including nested ones) to ignore cache
-# Clear stale outputs first to ensure fresh transpilation
+# Transpile WASM modules first (outside of the build script)
+# This avoids nested Turbo which ignores TURBO_FORCE
 ENV TURBO_FORCE=1
 RUN rm -rf frontend/src/wasm packages/*/wasm packages/*/wasm-sync packages/*/mcp-server-* && \
-    pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+    pnpm turbo run transpile transpile:sync --filter=web-agent-frontend...
+
+# Now run the build (which still calls transpile:all, but outputs already exist)
+RUN pnpm turbo run build --filter=web-agent-frontend...
 
 # Install Playwright browsers
 RUN cd frontend && npx playwright install chromium
