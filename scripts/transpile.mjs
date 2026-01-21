@@ -30,27 +30,44 @@ const FRONTEND = `${ROOT}/frontend`;
 // We detect the version by inspecting the WASM file.
 
 /**
- * Detect WASI interface version from WASM file using wasm-tools.
+ * Detect WASI interface version from WASM file.
+ * Tries wasm-tools first, then @bytecodealliance/jco wit as fallback.
  * Returns the version string (e.g., "0.2.6" or "0.2.9").
  */
 function detectWasiVersion(wasmPath) {
+    // Try wasm-tools first (if installed)
     try {
         const wit = execSync(`wasm-tools component wit "${wasmPath}" 2>&1`, { encoding: 'utf8' });
-        // Look for pattern like "wasi:io/poll@0.2.9" or "wasi:io/poll@0.2.6"
         const match = wit.match(/wasi:io\/poll@(\d+\.\d+\.\d+)/);
         if (match) {
             return match[1];
         }
-        // Fallback to checking filesystem version
         const fsMatch = wit.match(/wasi:filesystem\/types@(\d+\.\d+\.\d+)/);
         if (fsMatch) {
             return fsMatch[1];
         }
     } catch (e) {
-        console.warn(`[transpile] Warning: Could not detect WASI version from ${wasmPath}: ${e.message}`);
+        // wasm-tools not installed, try jco wit
     }
-    // Default fallback
-    return '0.2.6';
+
+    // Fallback: try jco wit (available via npx)
+    try {
+        const wit = execSync(`npx @bytecodealliance/jco wit "${wasmPath}" 2>&1`, { encoding: 'utf8' });
+        const match = wit.match(/wasi:io\/poll@(\d+\.\d+\.\d+)/);
+        if (match) {
+            return match[1];
+        }
+        const fsMatch = wit.match(/wasi:filesystem\/types@(\d+\.\d+\.\d+)/);
+        if (fsMatch) {
+            return fsMatch[1];
+        }
+    } catch (e) {
+        console.warn(`[transpile] Warning: Could not detect WASI version from ${wasmPath}`);
+    }
+
+    // Default fallback - should match latest wit-bindgen
+    console.warn(`[transpile] Using default WASI version 0.2.9`);
+    return '0.2.9';
 }
 
 /**
