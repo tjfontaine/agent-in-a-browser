@@ -230,6 +230,18 @@ function patchInstanceofChecks(outputDir) {
             }
         }
 
+        // DIAGNOSTIC INJECTION: Add console.error before Descriptor TypeError throws
+        // This helps debug what object is being returned when validation fails
+        const descriptorErrorPattern = /throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
+        if (descriptorErrorPattern.test(content)) {
+            // Reset lastIndex
+            descriptorErrorPattern.lastIndex = 0;
+            content = content.replace(descriptorErrorPattern, (match) => {
+                return `console.error('[JCO DIAG] Descriptor validation failed - check object above'); ${match}`;
+            });
+            modified = true;
+        }
+
         if (modified) {
             writeFileSync(filePath, content);
             console.log(`   ↳ Patched ${file}`);
