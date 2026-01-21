@@ -230,14 +230,41 @@ function patchInstanceofChecks(outputDir) {
             }
         }
 
-        // DIAGNOSTIC INJECTION: Add console.error before Descriptor TypeError throws
-        // This helps debug what object is being returned when validation fails
-        const descriptorErrorPattern = /throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
-        if (descriptorErrorPattern.test(content)) {
-            // Reset lastIndex
-            descriptorErrorPattern.lastIndex = 0;
-            content = content.replace(descriptorErrorPattern, (match) => {
-                return `console.error('[JCO DIAG] Descriptor validation failed - check object above'); ${match}`;
+        // DIAGNOSTIC INJECTION: Include Descriptor diagnostic info IN the error message
+        // Since SharedWorker console.error doesn't propagate to main page, we must
+        // include the diagnostic info in the error string that gets serialized.
+        // Inject a helper function at the top of the file and use it in error throws.
+        if (content.includes('throw new TypeError(\'Resource error: Not a valid "Descriptor" resource.\');')) {
+            // Add helper function at top of file (after first opening brace or before exports)
+            const descriptorDiag = `
+function _descriptorDiag(obj) {
+  try {
+    const info = {
+      type: typeof obj,
+      ctor: obj?.constructor?.name,
+      hasSymbol: obj ? !!obj[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')] : false,
+      symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
+      keys: obj ? Object.keys(obj).slice(0,5) : []
+    };
+    return 'Resource error: Not a valid "Descriptor" resource. DIAG: ' + JSON.stringify(info);
+  } catch (e) {
+    return 'Resource error: Not a valid "Descriptor" resource. DIAG_ERROR: ' + e.message;
+  }
+}
+`;
+            // Insert after the first function or const declaration
+            const insertPoint = content.indexOf('function ');
+            if (insertPoint > 0) {
+                content = content.slice(0, insertPoint) + descriptorDiag + content.slice(insertPoint);
+                modified = true;
+            }
+
+            // Now replace the throw statements to use the helper
+            // Pattern: if (!(<varName>?.[Symbol...])) { throw new TypeError... }
+            // We want to capture the varName and use it in the diagnostic call
+            const throwPattern = /if\s*\(\s*!\s*\((\w+)\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.6#Descriptor'\)\]\)\s*\)\s*{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
+            content = content.replace(throwPattern, (match, varName) => {
+                return `if (!(${varName}?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
             });
             modified = true;
         }
