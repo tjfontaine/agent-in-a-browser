@@ -260,11 +260,14 @@ function _descriptorDiag(obj) {
             }
 
             // Now replace the throw statements to use the helper
-            // Pattern: if (!(<varName>?.[Symbol...])) { throw new TypeError... }
-            // We want to capture the varName and use it in the diagnostic call
-            const throwPattern = /if\s*\(\s*!\s*\((\w+)\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.6#Descriptor'\)\]\)\s*\)\s*{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
+            // Use simpler pattern that handles whitespace variations
+            // Match: if (!(varName ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) {
+            //   throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
+            // }
+            // Replace throw statement to call helper. Use capturing group for the variable name.
+            const throwPattern = /if\s*\(\s*!\s*\((\w+)\s*\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.6#Descriptor'\)\]\)\s*\)\s*\{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
             content = content.replace(throwPattern, (match, varName) => {
-                return `if (!(${varName}?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
+                return `if (!(${varName} ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
             });
             modified = true;
         }
