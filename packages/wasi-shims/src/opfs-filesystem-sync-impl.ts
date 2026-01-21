@@ -306,6 +306,14 @@ class _DescriptorSync {
         this.isRoot = path === '' || path === '/';
         // Symbol marker for patched instanceof checks (cross-bundle validation)
         Object.defineProperty(this, DESCRIPTOR_SYNC_MARKER, { value: true, enumerable: false });
+        // DIAGNOSTIC: Verify marker was set in constructor
+        console.log('[opfs-fs-sync DIAG] _DescriptorSync constructor:', {
+            path,
+            markerSet: !!(this as any)[DESCRIPTOR_SYNC_MARKER],
+            markerSymbol: DESCRIPTOR_SYNC_MARKER.toString(),
+            thisConstructorName: this.constructor.name,
+            instanceSymbols: Object.getOwnPropertySymbols(this).map(s => s.toString())
+        });
     }
 
     getType(): string {

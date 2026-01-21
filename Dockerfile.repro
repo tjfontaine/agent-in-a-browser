@@ -1,0 +1,23 @@
+FROM mcr.microsoft.com/playwright:v1.50.0-jammy
+
+WORKDIR /app
+
+# Set CI environment to use bundled Chromium instead of Chrome
+ENV CI=true
+# Copy all source files (respecting .dockerignore)
+COPY . .
+
+# Install pnpm
+RUN npm install -g pnpm && pnpm config set store-dir /tmp/pnpm-store
+
+# Install dependencies (frozen lockfile for CI consistency)
+RUN pnpm install --frozen-lockfile
+
+# Install Playwright browsers (from frontend where it's a devDep)
+WORKDIR /app/frontend
+RUN npx playwright install --with-deps chromium
+
+# Stay in frontend directory for running tests
+
+# Run the specific failing test
+CMD ["npx", "playwright", "test", "tests/e2e/wasm-runtime.test.ts", "--project=chromium"]

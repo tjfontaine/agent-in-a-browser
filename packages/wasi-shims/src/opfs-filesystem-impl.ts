@@ -115,7 +115,18 @@ class OpfsDescriptor {
         const KEY = Symbol.for('wasi:Descriptor');
         // Use registered singleton if available, otherwise fallback to local class (this)
         const Ctor = (globalThis as any)[KEY] as typeof OpfsDescriptor || OpfsDescriptor;
-        return new Ctor(path, entry);
+        const instance = new Ctor(path, entry);
+        // DIAGNOSTIC: Trace Symbol marker assignment
+        const hasMarker = !!(instance as any)[DESCRIPTOR_MARKER];
+        console.log('[opfs-fs DIAG] OpfsDescriptor.create:', {
+            path,
+            hasMarker,
+            markerSymbol: DESCRIPTOR_MARKER.toString(),
+            ctorName: Ctor.name,
+            usingGlobalSingleton: !!((globalThis as any)[KEY]),
+            instanceKeys: Object.getOwnPropertySymbols(instance).map(s => s.toString())
+        });
+        return instance;
     }
 
     private path: string;
@@ -128,6 +139,12 @@ class OpfsDescriptor {
         this.isRoot = path === '' || path === '/';
         // Symbol marker for patched instanceof checks (cross-bundle validation)
         Object.defineProperty(this, DESCRIPTOR_MARKER, { value: true, enumerable: false });
+        // DIAGNOSTIC: Verify marker was set in constructor
+        console.log('[opfs-fs DIAG] OpfsDescriptor constructor:', {
+            path,
+            markerSet: !!(this as any)[DESCRIPTOR_MARKER],
+            thisConstructorName: this.constructor.name
+        });
     }
 
     getType(): string {
