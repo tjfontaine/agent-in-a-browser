@@ -35,6 +35,21 @@ const dataView = mem => dv.buffer === mem.buffer ? dv : dv = new DataView(mem.bu
 
 const toUint64 = val => BigInt.asUintN(64, BigInt(val));
 
+
+function _descriptorDiag(obj) {
+  try {
+    const info = {
+      type: typeof obj,
+      ctor: obj?.constructor?.name,
+      hasSymbol: obj ? !!obj[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')] : false,
+      symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
+      keys: obj ? Object.keys(obj).slice(0,5) : []
+    };
+    return 'Resource error: Not a valid "Descriptor" resource. DIAG: ' + JSON.stringify(info);
+  } catch (e) {
+    return 'Resource error: Not a valid "Descriptor" resource. DIAG_ERROR: ' + e.message;
+  }
+}
 function toInt32(val) {
   return val >> 0;
 }
@@ -74,7 +89,7 @@ function utf8Encode(s, realloc, memory) {
 
 const T_FLAG = 1 << 30;
 
-function rscTableCreateOwn(table, rep) {
+function rscTableCreateOwn (table, rep) {
   const free = table[0] & ~T_FLAG;
   if (free === 0) {
     table.push(0);
@@ -87,7 +102,7 @@ function rscTableCreateOwn(table, rep) {
   return free;
 }
 
-function rscTableRemove(table, handle) {
+function rscTableRemove (table, handle) {
   const scope = table[handle << 1];
   const val = table[(handle << 1) + 1];
   const own = (val & T_FLAG) !== 0;
@@ -107,21 +122,21 @@ function startCurrentTask(componentIdx, isAsync, entryFnName) {
     throw new Error('missing/invalid component instance index while starting task');
   }
   const tasks = ASYNC_TASKS_BY_COMPONENT_IDX.get(componentIdx);
-
+  
   const nextId = ++NEXT_TASK_ID;
   const newTask = new AsyncTask({ id: nextId, componentIdx, isAsync, entryFnName });
   const newTaskMeta = { id: nextId, componentIdx, task: newTask };
-
+  
   ASYNC_CURRENT_TASK_IDS.push(nextId);
   ASYNC_CURRENT_COMPONENT_IDXS.push(componentIdx);
-
+  
   if (!tasks) {
     ASYNC_TASKS_BY_COMPONENT_IDX.set(componentIdx, [newTaskMeta]);
     return nextId;
   } else {
     tasks.push(newTaskMeta);
   }
-
+  
   return nextId;
 }
 
@@ -139,17 +154,17 @@ function endCurrentTask(componentIdx, taskId) {
   if (tasks.length == 0) {
     throw new Error('no current task(s) for component instance while ending task');
   }
-
+  
   if (taskId) {
     const last = tasks[tasks.length - 1];
     if (last.id !== taskId) {
       throw new Error('current task does not match expected task ID');
     }
   }
-
+  
   ASYNC_CURRENT_TASK_IDS.pop();
   ASYNC_CURRENT_COMPONENT_IDXS.pop();
-
+  
   return tasks.pop();
 }
 const ASYNC_TASKS_BY_COMPONENT_IDX = new Map();
@@ -164,12 +179,12 @@ class AsyncTask {
     CANCEL_DELIVERED: 'cancel-delivered',
     RESOLVED: 'resolved',
   }
-
+  
   static BlockResult = {
     CANCELLED: 'block.cancelled',
     NOT_CANCELLED: 'block.not-cancelled',
   }
-
+  
   #id;
   #componentIdx;
   #state;
@@ -178,19 +193,19 @@ class AsyncTask {
   #entryFnName = null;
   #subtasks = [];
   #completionPromise = null;
-
+  
   cancelled = false;
   requested = false;
   alwaysTaskReturn = false;
-
-  returnCalls = 0;
+  
+  returnCalls =  0;
   storage = [0, 0];
   borrowedHandles = {};
-
+  
   awaitableResume = null;
   awaitableCancel = null;
-
-
+  
+  
   constructor(opts) {
     if (opts?.id === undefined) { throw new TypeError('missing task ID during task creation'); }
     this.#id = opts.id;
@@ -201,27 +216,27 @@ class AsyncTask {
     this.#state = AsyncTask.State.INITIAL;
     this.#isAsync = opts?.isAsync ?? false;
     this.#entryFnName = opts.entryFnName;
-
+    
     const {
       promise: completionPromise,
       resolve: resolveCompletionPromise,
       reject: rejectCompletionPromise,
     } = Promise.withResolvers();
     this.#completionPromise = completionPromise;
-
+    
     this.#onResolve = (results) => {
       // TODO: handle external facing cancellation (should likely be a rejection)
       resolveCompletionPromise(results);
     }
   }
-
+  
   taskState() { return this.#state.slice(); }
   id() { return this.#id; }
   componentIdx() { return this.#componentIdx; }
   isAsync() { return this.#isAsync; }
   entryFnName() { return this.#entryFnName; }
   completionPromise() { return this.#completionPromise; }
-
+  
   mayEnter(task) {
     const cstate = getOrCreateAsyncState(this.#componentIdx);
     if (!cstate.backpressure) {
@@ -239,21 +254,21 @@ class AsyncTask {
     }
     return true;
   }
-
+  
   async enter() {
     _debugLog('[AsyncTask#enter()] args', { taskID: this.#id });
-
+    
     // TODO: assert scheduler locked
     // TODO: trap if on the stack
-
+    
     const cstate = getOrCreateAsyncState(this.#componentIdx);
-
+    
     let mayNotEnter = !this.mayEnter(this);
     const componentHasPendingTasks = cstate.pendingTasks > 0;
     if (mayNotEnter || componentHasPendingTasks) {
       throw new Error('in enter()'); // TODO: remove
       cstate.pendingTasks.set(this.#id, new Awaitable(new Promise()));
-
+      
       const blockResult = await this.onBlock(awaitable);
       if (blockResult) {
         // TODO: find this pending task in the component
@@ -265,41 +280,41 @@ class AsyncTask {
         this.#onResolve(new Error('failed enter'));
         return false;
       }
-
+      
       mayNotEnter = !this.mayEnter(this);
       if (!mayNotEnter || !cstate.startPendingTask) {
         throw new Error('invalid component entrance/pending task resolution');
       }
       cstate.startPendingTask = false;
     }
-
+    
     if (!this.isAsync) { cstate.callingSyncExport = true; }
-
+    
     return true;
   }
-
+  
   async waitForEvent(opts) {
     const { waitableSetRep, isAsync } = opts;
     _debugLog('[AsyncTask#waitForEvent()] args', { taskID: this.#id, waitableSetRep, isAsync });
-
+    
     if (this.#isAsync !== isAsync) {
       throw new Error('async waitForEvent called on non-async task');
     }
-
+    
     if (this.status === AsyncTask.State.CANCEL_PENDING) {
       this.#state = AsyncTask.State.CANCEL_DELIVERED;
       return {
         code: ASYNC_EVENT_CODE.TASK_CANCELLED,
       };
     }
-
+    
     const state = getOrCreateAsyncState(this.#componentIdx);
     const waitableSet = state.waitableSets.get(waitableSetRep);
     if (!waitableSet) { throw new Error('missing/invalid waitable set'); }
-
+    
     waitableSet.numWaiting += 1;
     let event = null;
-
+    
     while (event == null) {
       const awaitable = new Awaitable(waitableSet.getPendingEvent());
       const waited = await this.blockOn({ awaitable, isAsync, isCancellable: true });
@@ -312,44 +327,44 @@ class AsyncTask {
           code: ASYNC_EVENT_CODE.TASK_CANCELLED,
         };
       }
-
+      
       event = waitableSet.poll();
     }
-
+    
     waitableSet.numWaiting -= 1;
     return event;
   }
-
+  
   waitForEventSync(opts) {
     throw new Error('AsyncTask#yieldSync() not implemented')
   }
-
+  
   async pollForEvent(opts) {
     const { waitableSetRep, isAsync } = opts;
     _debugLog('[AsyncTask#pollForEvent()] args', { taskID: this.#id, waitableSetRep, isAsync });
-
+    
     if (this.#isAsync !== isAsync) {
       throw new Error('async pollForEvent called on non-async task');
     }
-
+    
     throw new Error('AsyncTask#pollForEvent() not implemented');
   }
-
+  
   pollForEventSync(opts) {
     throw new Error('AsyncTask#yieldSync() not implemented')
   }
-
+  
   async blockOn(opts) {
     const { awaitable, isCancellable, forCallback } = opts;
     _debugLog('[AsyncTask#blockOn()] args', { taskID: this.#id, awaitable, isCancellable, forCallback });
-
+    
     if (awaitable.resolved() && !ASYNC_DETERMINISM && _coinFlip()) {
       return AsyncTask.BlockResult.NOT_CANCELLED;
     }
-
+    
     const cstate = getOrCreateAsyncState(this.#componentIdx);
     if (forCallback) { cstate.exclusiveRelease(); }
-
+    
     let cancelled = await this.onBlock(awaitable);
     if (cancelled === AsyncTask.BlockResult.CANCELLED && !isCancellable) {
       const secondCancel = await this.onBlock(awaitable);
@@ -357,7 +372,7 @@ class AsyncTask {
         throw new Error('uncancellable task was canceled despite second onBlock()');
       }
     }
-
+    
     if (forCallback) {
       const acquired = new Awaitable(cstate.exclusiveLock());
       cancelled = await this.onBlock(acquired);
@@ -368,7 +383,7 @@ class AsyncTask {
         }
       }
     }
-
+    
     if (cancelled === AsyncTask.BlockResult.CANCELLED) {
       if (this.#state !== AsyncTask.State.INITIAL) {
         throw new Error('cancelled task is not at initial state');
@@ -381,16 +396,16 @@ class AsyncTask {
         return AsyncTask.BlockResult.NOT_CANCELLED;
       }
     }
-
+    
     return AsyncTask.BlockResult.NOT_CANCELLED;
   }
-
+  
   async onBlock(awaitable) {
     _debugLog('[AsyncTask#onBlock()] args', { taskID: this.#id, awaitable });
     if (!(awaitable instanceof Awaitable)) {
       throw new Error('invalid awaitable during onBlock');
     }
-
+    
     // Build a promise that this task can await on which resolves when it is awoken
     const { promise, resolve, reject } = Promise.withResolvers();
     this.awaitableResume = () => {
@@ -401,11 +416,11 @@ class AsyncTask {
       _debugLog('[AsyncTask] rejecting after onBlock', { taskID: this.#id, err });
       reject(err);
     };
-
+    
     // Park this task/execution to be handled later
     const state = getOrCreateAsyncState(this.#componentIdx);
     state.parkTaskOnAwaitable({ awaitable, task: this });
-
+    
     try {
       await promise;
       return AsyncTask.BlockResult.NOT_CANCELLED;
@@ -414,7 +429,7 @@ class AsyncTask {
       return AsyncTask.BlockResult.CANCELLED;
     }
   }
-
+  
   async asyncOnBlock(awaitable) {
     _debugLog('[AsyncTask#asyncOnBlock()] args', { taskID: this.#id, awaitable });
     if (!(awaitable instanceof Awaitable)) {
@@ -434,11 +449,11 @@ class AsyncTask {
     //
     throw new Error('AsyncTask#asyncOnBlock() not yet implemented');
   }
-
+  
   async yield(opts) {
     const { isCancellable, forCallback } = opts;
     _debugLog('[AsyncTask#yield()] args', { taskID: this.#id, isCancellable, forCallback });
-
+    
     if (isCancellable && this.status === AsyncTask.State.CANCEL_PENDING) {
       this.#state = AsyncTask.State.CANCELLED;
       return {
@@ -446,16 +461,16 @@ class AsyncTask {
         payload: [0, 0],
       };
     }
-
+    
     // TODO: Awaitables need to *always* trigger the parking mechanism when they're done...?
     // TODO: Component async state should remember which awaitables are done and work to clear tasks waiting
-
+    
     const blockResult = await this.blockOn({
       awaitable: new Awaitable(new Promise(resolve => setTimeout(resolve, 0))),
       isCancellable,
       forCallback,
     });
-
+    
     if (blockResult === AsyncTask.BlockResult.CANCELLED) {
       if (this.#state !== AsyncTask.State.INITIAL) {
         throw new Error('task should be in initial state found [' + this.#state + ']');
@@ -466,28 +481,28 @@ class AsyncTask {
         payload: [0, 0],
       };
     }
-
+    
     return {
       code: ASYNC_EVENT_CODE.NONE,
       payload: [0, 0],
     };
   }
-
+  
   yieldSync(opts) {
     throw new Error('AsyncTask#yieldSync() not implemented')
   }
-
+  
   cancel() {
-    _debugLog('[AsyncTask#cancel()] args', {});
+    _debugLog('[AsyncTask#cancel()] args', { });
     if (!this.taskState() !== AsyncTask.State.CANCEL_DELIVERED) {
       throw new Error('invalid task state for cancellation');
     }
     if (this.borrowedHandles.length > 0) { throw new Error('task still has borrow handles'); }
-
+    
     this.#onResolve(new Error('cancelled'));
     this.#state = AsyncTask.State.RESOLVED;
   }
-
+  
   resolve(results) {
     _debugLog('[AsyncTask#resolve()] args', { results });
     if (this.#state === AsyncTask.State.RESOLVED) {
@@ -497,10 +512,10 @@ class AsyncTask {
     this.#onResolve(results.length === 1 ? results[0] : results);
     this.#state = AsyncTask.State.RESOLVED;
   }
-
+  
   exit() {
-    _debugLog('[AsyncTask#exit()] args', {});
-
+    _debugLog('[AsyncTask#exit()] args', { });
+    
     // TODO: ensure there is only one task at a time (scheduler.lock() functionality)
     if (this.#state !== AsyncTask.State.RESOLVED) {
       throw new Error('task exited without resolution');
@@ -508,22 +523,22 @@ class AsyncTask {
     if (this.borrowedHandles > 0) {
       throw new Error('task exited without clearing borrowed handles');
     }
-
+    
     const state = getOrCreateAsyncState(this.#componentIdx);
     if (!state) { throw new Error('missing async state for component [' + this.#componentIdx + ']'); }
     if (!this.#isAsync && !state.inSyncExportCall) {
       throw new Error('sync task must be run from components known to be in a sync export call');
     }
     state.inSyncExportCall = false;
-
+    
     this.startPendingTask();
   }
-
+  
   startPendingTask(args) {
     _debugLog('[AsyncTask#startPendingTask()] args', args);
     throw new Error('AsyncTask#startPendingTask() not implemented');
   }
-
+  
   createSubtask(args) {
     _debugLog('[AsyncTask#createSubtask()] args', args);
     const newSubtask = new AsyncSubtask({
@@ -534,13 +549,13 @@ class AsyncTask {
     this.#subtasks.push(newSubtask);
     return newSubtask;
   }
-
+  
   currentSubtask() {
     _debugLog('[AsyncTask#currentSubtask()]');
     if (this.#subtasks.length === 0) { throw new Error('no current subtask'); }
     return this.#subtasks.at(-1);
   }
-
+  
   endCurrentSubtask() {
     _debugLog('[AsyncTask#endCurrentSubtask()]');
     if (this.#subtasks.length === 0) { throw new Error('cannot end current subtask: no current subtask'); }
@@ -557,7 +572,7 @@ function unpackCallbackResult(result) {
   if (eventCode < 0 || eventCode > 3) {
     throw new Error('invalid async return value [' + eventCode + '], outside callback code range');
   }
-  if (result < 0 || result >= 2 ** 32) { throw new Error('invalid callback result'); }
+  if (result < 0 || result >= 2**32) { throw new Error('invalid callback result'); }
   // TODO: table max length check?
   const waitableSetIdx = result >> 4;
   return [eventCode, waitableSetIdx];
@@ -575,13 +590,13 @@ class ComponentAsyncState {
   #callingAsyncImport = false;
   #syncImportWait = Promise.withResolvers();
   #lock = null;
-
+  
   mayLeave = true;
   waitableSets = new RepTable();
   waitables = new RepTable();
-
+  
   #parkedTasks = new Map();
-
+  
   callingSyncImport(val) {
     if (val === undefined) { return this.#callingAsyncImport; }
     if (typeof val !== 'boolean') { throw new TypeError('invalid setting for async import'); }
@@ -591,129 +606,129 @@ class ComponentAsyncState {
       this.#notifySyncImportEnd();
     }
   }
-
+  
   #notifySyncImportEnd() {
     const existing = this.#syncImportWait;
     this.#syncImportWait = Promise.withResolvers();
     existing.resolve();
   }
-
+  
   async waitForSyncImportCallEnd() {
     await this.#syncImportWait.promise;
   }
-
+  
   parkTaskOnAwaitable(args) {
     if (!args.awaitable) { throw new TypeError('missing awaitable when trying to park'); }
     if (!args.task) { throw new TypeError('missing task when trying to park'); }
     const { awaitable, task } = args;
-
+    
     let taskList = this.#parkedTasks.get(awaitable.id());
     if (!taskList) {
       taskList = [];
       this.#parkedTasks.set(awaitable.id(), taskList);
     }
     taskList.push(task);
-
+    
     this.wakeNextTaskForAwaitable(awaitable);
   }
-
+  
   wakeNextTaskForAwaitable(awaitable) {
     if (!awaitable) { throw new TypeError('missing awaitable when waking next task'); }
     const awaitableID = awaitable.id();
-
+    
     const taskList = this.#parkedTasks.get(awaitableID);
     if (!taskList || taskList.length === 0) {
       _debugLog('[ComponentAsyncState] no tasks waiting for awaitable', { awaitableID: awaitable.id() });
       return;
     }
-
+    
     let task = taskList.shift(); // todo(perf)
     if (!task) { throw new Error('no task in parked list despite previous check'); }
-
+    
     if (!task.awaitableResume) {
       throw new Error('task ready due to awaitable is missing resume', { taskID: task.id(), awaitableID });
     }
     task.awaitableResume();
   }
-
+  
   async exclusiveLock() {  // TODO: use atomics
-    if (this.#lock === null) {
-      this.#lock = { ticket: 0n };
-    }
-
-    // Take a ticket for the next valid usage
-    const ticket = ++this.#lock.ticket;
-
-    _debugLog('[ComponentAsyncState#exclusiveLock()] locking', {
-      currentTicket: ticket - 1n,
-      ticket
-    });
-
-    // If there is an active promise, then wait for it
-    let finishedTicket;
-    while (this.#lock.promise) {
-      finishedTicket = await this.#lock.promise;
-      if (finishedTicket === ticket - 1n) { break; }
-    }
-
-    const { promise, resolve } = Promise.withResolvers();
-    this.#lock = {
-      ticket,
-      promise,
-      resolve,
-    };
-
-    return this.#lock.promise;
+  if (this.#lock === null) {
+    this.#lock = { ticket: 0n };
   }
-
-  exclusiveRelease() {
-    _debugLog('[ComponentAsyncState#exclusiveRelease()] releasing', {
-      currentTicket: this.#lock === null ? 'none' : this.#lock.ticket,
-    });
-
-    if (this.#lock === null) { return; }
-
-    const existingLock = this.#lock;
-    this.#lock = null;
-    existingLock.resolve(existingLock.ticket);
+  
+  // Take a ticket for the next valid usage
+  const ticket = ++this.#lock.ticket;
+  
+  _debugLog('[ComponentAsyncState#exclusiveLock()] locking', {
+    currentTicket: ticket - 1n,
+    ticket
+  });
+  
+  // If there is an active promise, then wait for it
+  let finishedTicket;
+  while (this.#lock.promise) {
+    finishedTicket = await this.#lock.promise;
+    if (finishedTicket === ticket - 1n) { break; }
   }
+  
+  const { promise, resolve } = Promise.withResolvers();
+  this.#lock = {
+    ticket,
+    promise,
+    resolve,
+  };
+  
+  return this.#lock.promise;
+}
 
-  isExclusivelyLocked() { return this.#lock !== null; }
+exclusiveRelease() {
+  _debugLog('[ComponentAsyncState#exclusiveRelease()] releasing', {
+    currentTicket: this.#lock === null ? 'none' : this.#lock.ticket,
+  });
+  
+  if (this.#lock === null) { return; }
+  
+  const existingLock = this.#lock;
+  this.#lock = null;
+  existingLock.resolve(existingLock.ticket);
+}
+
+isExclusivelyLocked() { return this.#lock !== null; }
 
 }
 
 function prepareCall(memoryIdx) {
   _debugLog('[prepareCall()] args', { memoryIdx });
-
+  
   const taskMeta = getCurrentTask(ASYNC_CURRENT_COMPONENT_IDXS.at(-1), ASYNC_CURRENT_TASK_IDS.at(-1));
   if (!taskMeta) { throw new Error('invalid/missing current async task meta during prepare call'); }
-
+  
   const task = taskMeta.task;
   if (!task) { throw new Error('unexpectedly missing task in task meta during prepare call'); }
-
+  
   const state = getOrCreateAsyncState(task.componentIdx());
   if (!state) {
     throw new Error('invalid/missing async state for component instance [' + componentInstanceID + ']');
   }
-
+  
   const subtask = task.createSubtask({
     memoryIdx,
   });
-
+  
 }
 
 function asyncStartCall(callbackIdx, postReturnIdx) {
   _debugLog('[asyncStartCall()] args', { callbackIdx, postReturnIdx });
-
+  
   const taskMeta = getCurrentTask(ASYNC_CURRENT_COMPONENT_IDXS.at(-1), ASYNC_CURRENT_TASK_IDS.at(-1));
   if (!taskMeta) { throw new Error('invalid/missing current async task meta during prepare call'); }
-
+  
   const task = taskMeta.task;
   if (!task) { throw new Error('unexpectedly missing task in task meta during prepare call'); }
-
+  
   const subtask = task.currentSubtask();
   if (!subtask) { throw new Error('invalid/missing subtask during async start call'); }
-
+  
   return Number(subtask.waitableRep()) << 4 | subtask.getStateNumber();
 }
 
@@ -752,7 +767,7 @@ function clampGuest(i, min, max) {
 
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
 let _fs;
-async function fetchCompile(url) {
+async function fetchCompile (url) {
   if (isNode) {
     _fs = _fs || await import('node:fs/promises');
     return WebAssembly.compile(await _fs.readFile(url));
@@ -771,7 +786,7 @@ const symbolDispose = Symbol.dispose || Symbol.for('dispose');
 const handleTables = [];
 
 class ComponentError extends Error {
-  constructor(value) {
+  constructor (value) {
     const enumerable = typeof value !== 'string';
     super(enumerable ? `${String(value)} (see error.payload)` : value);
     Object.defineProperty(this, 'payload', { value, enumerable });
@@ -786,7 +801,7 @@ function getErrorPayload(e) {
 
 class RepTable {
   #data = [0, null];
-
+  
   insert(val) {
     _debugLog('[RepTable#insert()] args', { val });
     const freeIdx = this.#data[0];
@@ -801,34 +816,34 @@ class RepTable {
     this.#data[placementIdx + 1] = null;
     return freeIdx;
   }
-
+  
   get(rep) {
     _debugLog('[RepTable#get()] args', { rep });
     const baseIdx = rep << 1;
     const val = this.#data[baseIdx];
     return val;
   }
-
+  
   contains(rep) {
     _debugLog('[RepTable#contains()] args', { rep });
     const baseIdx = rep << 1;
     return !!this.#data[baseIdx];
   }
-
+  
   remove(rep) {
     _debugLog('[RepTable#remove()] args', { rep });
     if (this.#data.length === 2) { throw new Error('invalid'); }
-
+    
     const baseIdx = rep << 1;
     const val = this.#data[baseIdx];
     if (val === 0) { throw new Error('invalid resource rep (cannot be 0)'); }
-
+    
     this.#data[baseIdx] = this.#data[0];
     this.#data[0] = rep;
-
+    
     return val;
   }
-
+  
   clear() {
     _debugLog('[RepTable#clear()] args', { rep });
     this.#data = [0, null];
@@ -858,7 +873,7 @@ function trampoline0() {
 }
 
 const handleTable15 = [T_FLAG, 0];
-const captureTable15 = new Map();
+const captureTable15= new Map();
 let captureCnt15 = 0;
 handleTables[15] = handleTable15;
 
@@ -868,8 +883,8 @@ function trampoline1(arg0, arg1) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var bool3 = arg1;
@@ -897,8 +912,8 @@ function trampoline2(arg0) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.close-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -935,7 +950,7 @@ function trampoline3() {
 }
 
 const handleTable4 = [T_FLAG, 0];
-const captureTable4 = new Map();
+const captureTable4= new Map();
 let captureCnt4 = 0;
 handleTables[4] = handleTable4;
 
@@ -964,7 +979,7 @@ function trampoline5() {
 }
 
 const handleTable5 = [T_FLAG, 0];
-const captureTable5 = new Map();
+const captureTable5= new Map();
 let captureCnt5 = 0;
 handleTables[5] = handleTable5;
 
@@ -974,8 +989,8 @@ function trampoline6(arg0) {
   var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable4.delete(rep2);
@@ -1005,11 +1020,11 @@ function trampoline6(arg0) {
 }
 
 const handleTable3 = [T_FLAG, 0];
-const captureTable3 = new Map();
+const captureTable3= new Map();
 let captureCnt3 = 0;
 handleTables[3] = handleTable3;
 const handleTable0 = [T_FLAG, 0];
-const captureTable0 = new Map();
+const captureTable0= new Map();
 let captureCnt0 = 0;
 handleTables[0] = handleTable0;
 
@@ -1019,8 +1034,8 @@ function trampoline7(arg0) {
   var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1032,7 +1047,7 @@ function trampoline7(arg0) {
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle3 = ret[symbolRscHandle];
@@ -1051,7 +1066,7 @@ function trampoline7(arg0) {
 }
 
 const handleTable8 = [T_FLAG, 0];
-const captureTable8 = new Map();
+const captureTable8= new Map();
 let captureCnt8 = 0;
 handleTables[8] = handleTable8;
 
@@ -1061,8 +1076,8 @@ function trampoline8(arg0) {
   var rsc0 = captureTable8.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1084,7 +1099,7 @@ function trampoline8(arg0) {
 }
 
 const handleTable2 = [T_FLAG, 0];
-const captureTable2 = new Map();
+const captureTable2= new Map();
 let captureCnt2 = 0;
 handleTables[2] = handleTable2;
 
@@ -1094,8 +1109,8 @@ function trampoline9(arg0) {
   var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1107,7 +1122,7 @@ function trampoline9(arg0) {
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle3 = ret[symbolRscHandle];
@@ -1132,7 +1147,7 @@ function trampoline12(arg0) {
   const ret = subscribeDuration(BigInt.asUintN(64, arg0));
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="subscribe-duration"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1157,8 +1172,8 @@ function trampoline13(arg0) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.get-ready-pollable"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1170,7 +1185,7 @@ function trampoline13(arg0) {
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
   }
   var handle3 = ret[symbolRscHandle];
@@ -1195,8 +1210,8 @@ function trampoline14(arg0) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.is-ready"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1218,14 +1233,14 @@ function trampoline14(arg0) {
 }
 
 
-const trampoline15 = new WebAssembly.Suspending(async function (arg0) {
+const trampoline15 = new WebAssembly.Suspending(async function(arg0) {
   var handle1 = arg0;
   var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable0.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Pollable.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1246,7 +1261,7 @@ const trampoline15 = new WebAssembly.Suspending(async function (arg0) {
 }
 );
 const handleTable10 = [T_FLAG, 0];
-const captureTable10 = new Map();
+const captureTable10= new Map();
 let captureCnt10 = 0;
 handleTables[10] = handleTable10;
 
@@ -1256,8 +1271,8 @@ function trampoline25(arg0) {
   var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.headers"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1288,11 +1303,11 @@ function trampoline25(arg0) {
 }
 
 const handleTable9 = [T_FLAG, 0];
-const captureTable9 = new Map();
+const captureTable9= new Map();
 let captureCnt9 = 0;
 handleTables[9] = handleTable9;
 const handleTable11 = [T_FLAG, 0];
-const captureTable11 = new Map();
+const captureTable11= new Map();
 let captureCnt11 = 0;
 handleTables[11] = handleTable11;
 
@@ -1302,8 +1317,8 @@ function trampoline26(arg0) {
   var rsc0 = captureTable9.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable9.delete(rep2);
@@ -1333,7 +1348,7 @@ function trampoline26(arg0) {
 }
 
 const handleTable12 = [T_FLAG, 0];
-const captureTable12 = new Map();
+const captureTable12= new Map();
 let captureCnt12 = 0;
 handleTables[12] = handleTable12;
 
@@ -1343,8 +1358,8 @@ function trampoline28(arg0) {
   var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable4.delete(rep2);
@@ -1380,15 +1395,15 @@ function trampoline29(arg0, arg1) {
   var rsc0 = captureTable12.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.set-status-code"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-response.set-status-code');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setStatusCode(clampGuest(arg1, 0, 65535)) };
+    ret = { tag: 'ok', val: rsc0.setStatusCode(clampGuest(arg1, 0, 65535))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -1431,7 +1446,7 @@ function trampoline33() {
   const ret = getStdout();
   _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1472,7 +1487,7 @@ function trampoline35() {
   const ret = getStderr();
   _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1498,7 +1513,7 @@ function trampoline43() {
   const ret = getStdin();
   _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
+  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
     throw new TypeError('Resource error: Not a valid "InputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
@@ -1520,12 +1535,12 @@ function trampoline43() {
 function trampoline44(arg0) {
   let variant0;
   if (arg0) {
-    variant0 = {
+    variant0= {
       tag: 'err',
       val: undefined
     };
   } else {
-    variant0 = {
+    variant0= {
       tag: 'ok',
       val: undefined
     };
@@ -1548,7 +1563,7 @@ let memory0;
 let realloc0;
 let realloc1;
 
-const trampoline45 = new WebAssembly.Suspending(async function (arg0, arg1, arg2) {
+const trampoline45 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var ptr0 = arg0;
   var len0 = arg1;
   var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
@@ -1558,7 +1573,7 @@ const trampoline45 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="get-lazy-module"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant2 = ret;
-  if (variant2 === null || variant2 === undefined) {
+  if (variant2 === null || variant2=== undefined) {
     dataView(memory0).setInt8(arg2 + 0, 0, true);
   } else {
     const e = variant2;
@@ -1596,7 +1611,7 @@ function trampoline46(arg0, arg1) {
 }
 
 
-const trampoline47 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11) {
+const trampoline47 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11) {
   var ptr0 = arg0;
   var len0 = arg1;
   var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
@@ -1659,7 +1674,7 @@ const trampoline47 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline48 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+const trampoline48 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var ptr0 = arg0;
   var len0 = arg1;
   var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
@@ -1716,7 +1731,7 @@ const trampoline48 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline49 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
+const trampoline49 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   var ptr0 = arg0;
   var len0 = arg1;
   var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
@@ -1782,8 +1797,8 @@ function trampoline50(arg0, arg1, arg2) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -1814,8 +1829,8 @@ function trampoline51(arg0, arg1, arg2) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.read-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1849,8 +1864,8 @@ function trampoline52(arg0, arg1, arg2) {
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.read-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1878,14 +1893,14 @@ function trampoline52(arg0, arg1, arg2) {
 }
 
 
-const trampoline53 = new WebAssembly.Suspending(async function (arg0, arg1) {
+const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.try-wait"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1898,7 +1913,7 @@ const trampoline53 = new WebAssembly.Suspending(async function (arg0, arg1) {
   curResourceBorrows = [];
   endCurrentTask(0);
   var variant3 = ret;
-  if (variant3 === null || variant3 === undefined) {
+  if (variant3 === null || variant3=== undefined) {
     dataView(memory0).setInt8(arg1 + 0, 0, true);
   } else {
     const e = variant3;
@@ -1936,7 +1951,7 @@ function trampoline54(arg0, arg1) {
 }
 
 const handleTable17 = [T_FLAG, 0];
-const captureTable17 = new Map();
+const captureTable17= new Map();
 let captureCnt17 = 0;
 handleTables[17] = handleTable17;
 
@@ -1947,7 +1962,7 @@ function trampoline55(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
-  if (variant1 === null || variant1 === undefined) {
+  if (variant1 === null || variant1=== undefined) {
     dataView(memory0).setInt8(arg0 + 0, 0, true);
   } else {
     const e = variant1;
@@ -1978,8 +1993,8 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -1992,7 +2007,7 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.append');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.append(result3, result4) };
+    ret = { tag: 'ok', val: rsc0.append(result3, result4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2051,62 +2066,62 @@ function trampoline57(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   let variant4;
   switch (arg1) {
     case 0: {
-      variant4 = {
+      variant4= {
         tag: 'get',
       };
       break;
     }
     case 1: {
-      variant4 = {
+      variant4= {
         tag: 'head',
       };
       break;
     }
     case 2: {
-      variant4 = {
+      variant4= {
         tag: 'post',
       };
       break;
     }
     case 3: {
-      variant4 = {
+      variant4= {
         tag: 'put',
       };
       break;
     }
     case 4: {
-      variant4 = {
+      variant4= {
         tag: 'delete',
       };
       break;
     }
     case 5: {
-      variant4 = {
+      variant4= {
         tag: 'connect',
       };
       break;
     }
     case 6: {
-      variant4 = {
+      variant4= {
         tag: 'options',
       };
       break;
     }
     case 7: {
-      variant4 = {
+      variant4= {
         tag: 'trace',
       };
       break;
     }
     case 8: {
-      variant4 = {
+      variant4= {
         tag: 'patch',
       };
       break;
@@ -2115,7 +2130,7 @@ function trampoline57(arg0, arg1, arg2, arg3) {
       var ptr3 = arg2;
       var len3 = arg3;
       var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-      variant4 = {
+      variant4= {
         tag: 'other',
         val: result3
       };
@@ -2126,7 +2141,7 @@ function trampoline57(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-method');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setMethod(variant4) };
+    ret = { tag: 'ok', val: rsc0.setMethod(variant4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2169,8 +2184,8 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   let variant5;
@@ -2178,13 +2193,13 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
     let variant4;
     switch (arg2) {
       case 0: {
-        variant4 = {
+        variant4= {
           tag: 'HTTP',
         };
         break;
       }
       case 1: {
-        variant4 = {
+        variant4= {
           tag: 'HTTPS',
         };
         break;
@@ -2193,7 +2208,7 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
         var ptr3 = arg3;
         var len3 = arg4;
         var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-        variant4 = {
+        variant4= {
           tag: 'other',
           val: result3
         };
@@ -2208,7 +2223,7 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-scheme');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setScheme(variant5) };
+    ret = { tag: 'ok', val: rsc0.setScheme(variant5)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2251,8 +2266,8 @@ function trampoline59(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   let variant4;
@@ -2268,7 +2283,7 @@ function trampoline59(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-authority');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setAuthority(variant4) };
+    ret = { tag: 'ok', val: rsc0.setAuthority(variant4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2311,8 +2326,8 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   let variant4;
@@ -2328,7 +2343,7 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-path-with-query');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setPathWithQuery(variant4) };
+    ret = { tag: 'ok', val: rsc0.setPathWithQuery(variant4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2365,7 +2380,7 @@ function trampoline60(arg0, arg1, arg2, arg3) {
 }
 
 const handleTable6 = [T_FLAG, 0];
-const captureTable6 = new Map();
+const captureTable6= new Map();
 let captureCnt6 = 0;
 handleTables[6] = handleTable6;
 
@@ -2375,15 +2390,15 @@ function trampoline61(arg0, arg1) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.body');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.body() };
+    ret = { tag: 'ok', val: rsc0.body()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2428,18 +2443,18 @@ function trampoline61(arg0, arg1) {
 }
 
 const handleTable7 = [T_FLAG, 0];
-const captureTable7 = new Map();
+const captureTable7= new Map();
 let captureCnt7 = 0;
 handleTables[7] = handleTable7;
 
-const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
+const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(FutureIncomingResponse.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -2452,7 +2467,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
   curResourceBorrows = [];
   endCurrentTask(0);
   var variant44 = ret;
-  if (variant44 === null || variant44 === undefined) {
+  if (variant44 === null || variant44=== undefined) {
     dataView(memory0).setInt8(arg1 + 0, 0, true);
   } else {
     const e = variant44;
@@ -2491,9 +2506,9 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
               case 'DNS-error': {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 1, true);
-                var { rcode: v4_0, infoCode: v4_1 } = e;
+                var {rcode: v4_0, infoCode: v4_1 } = e;
                 var variant6 = v4_0;
-                if (variant6 === null || variant6 === undefined) {
+                if (variant6 === null || variant6=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant6;
@@ -2504,7 +2519,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                   dataView(memory0).setUint32(arg1 + 36, ptr5, true);
                 }
                 var variant7 = v4_1;
-                if (variant7 === null || variant7 === undefined) {
+                if (variant7 === null || variant7=== undefined) {
                   dataView(memory0).setInt8(arg1 + 44, 0, true);
                 } else {
                   const e = variant7;
@@ -2564,9 +2579,9 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
               case 'TLS-alert-received': {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 14, true);
-                var { alertId: v8_0, alertMessage: v8_1 } = e;
+                var {alertId: v8_0, alertMessage: v8_1 } = e;
                 var variant9 = v8_0;
-                if (variant9 === null || variant9 === undefined) {
+                if (variant9 === null || variant9=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant9;
@@ -2574,7 +2589,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                   dataView(memory0).setInt8(arg1 + 33, toUint8(e), true);
                 }
                 var variant11 = v8_1;
-                if (variant11 === null || variant11 === undefined) {
+                if (variant11 === null || variant11=== undefined) {
                   dataView(memory0).setInt8(arg1 + 36, 0, true);
                 } else {
                   const e = variant11;
@@ -2598,7 +2613,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 17, true);
                 var variant12 = e;
-                if (variant12 === null || variant12 === undefined) {
+                if (variant12 === null || variant12=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant12;
@@ -2623,7 +2638,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 21, true);
                 var variant13 = e;
-                if (variant13 === null || variant13 === undefined) {
+                if (variant13 === null || variant13=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant13;
@@ -2636,14 +2651,14 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 22, true);
                 var variant18 = e;
-                if (variant18 === null || variant18 === undefined) {
+                if (variant18 === null || variant18=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant18;
                   dataView(memory0).setInt8(arg1 + 32, 1, true);
-                  var { fieldName: v14_0, fieldSize: v14_1 } = e;
+                  var {fieldName: v14_0, fieldSize: v14_1 } = e;
                   var variant16 = v14_0;
-                  if (variant16 === null || variant16 === undefined) {
+                  if (variant16 === null || variant16=== undefined) {
                     dataView(memory0).setInt8(arg1 + 36, 0, true);
                   } else {
                     const e = variant16;
@@ -2654,7 +2669,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                     dataView(memory0).setUint32(arg1 + 40, ptr15, true);
                   }
                   var variant17 = v14_1;
-                  if (variant17 === null || variant17 === undefined) {
+                  if (variant17 === null || variant17=== undefined) {
                     dataView(memory0).setInt8(arg1 + 48, 0, true);
                   } else {
                     const e = variant17;
@@ -2668,7 +2683,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 23, true);
                 var variant19 = e;
-                if (variant19 === null || variant19 === undefined) {
+                if (variant19 === null || variant19=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant19;
@@ -2680,9 +2695,9 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
               case 'HTTP-request-trailer-size': {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 24, true);
-                var { fieldName: v20_0, fieldSize: v20_1 } = e;
+                var {fieldName: v20_0, fieldSize: v20_1 } = e;
                 var variant22 = v20_0;
-                if (variant22 === null || variant22 === undefined) {
+                if (variant22 === null || variant22=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant22;
@@ -2693,7 +2708,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                   dataView(memory0).setUint32(arg1 + 36, ptr21, true);
                 }
                 var variant23 = v20_1;
-                if (variant23 === null || variant23 === undefined) {
+                if (variant23 === null || variant23=== undefined) {
                   dataView(memory0).setInt8(arg1 + 44, 0, true);
                 } else {
                   const e = variant23;
@@ -2710,7 +2725,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 26, true);
                 var variant24 = e;
-                if (variant24 === null || variant24 === undefined) {
+                if (variant24 === null || variant24=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant24;
@@ -2722,9 +2737,9 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
               case 'HTTP-response-header-size': {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 27, true);
-                var { fieldName: v25_0, fieldSize: v25_1 } = e;
+                var {fieldName: v25_0, fieldSize: v25_1 } = e;
                 var variant27 = v25_0;
-                if (variant27 === null || variant27 === undefined) {
+                if (variant27 === null || variant27=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant27;
@@ -2735,7 +2750,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                   dataView(memory0).setUint32(arg1 + 36, ptr26, true);
                 }
                 var variant28 = v25_1;
-                if (variant28 === null || variant28 === undefined) {
+                if (variant28 === null || variant28=== undefined) {
                   dataView(memory0).setInt8(arg1 + 44, 0, true);
                 } else {
                   const e = variant28;
@@ -2748,7 +2763,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 28, true);
                 var variant29 = e;
-                if (variant29 === null || variant29 === undefined) {
+                if (variant29 === null || variant29=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant29;
@@ -2761,7 +2776,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 29, true);
                 var variant30 = e;
-                if (variant30 === null || variant30 === undefined) {
+                if (variant30 === null || variant30=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant30;
@@ -2773,9 +2788,9 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
               case 'HTTP-response-trailer-size': {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 30, true);
-                var { fieldName: v31_0, fieldSize: v31_1 } = e;
+                var {fieldName: v31_0, fieldSize: v31_1 } = e;
                 var variant33 = v31_0;
-                if (variant33 === null || variant33 === undefined) {
+                if (variant33 === null || variant33=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant33;
@@ -2786,7 +2801,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                   dataView(memory0).setUint32(arg1 + 36, ptr32, true);
                 }
                 var variant34 = v31_1;
-                if (variant34 === null || variant34 === undefined) {
+                if (variant34 === null || variant34=== undefined) {
                   dataView(memory0).setInt8(arg1 + 44, 0, true);
                 } else {
                   const e = variant34;
@@ -2799,7 +2814,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 31, true);
                 var variant36 = e;
-                if (variant36 === null || variant36 === undefined) {
+                if (variant36 === null || variant36=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant36;
@@ -2815,7 +2830,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 32, true);
                 var variant38 = e;
-                if (variant38 === null || variant38 === undefined) {
+                if (variant38 === null || variant38=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant38;
@@ -2851,7 +2866,7 @@ const trampoline62 = new WebAssembly.Suspending(async function (arg0, arg1) {
                 const e = variant41.val;
                 dataView(memory0).setInt8(arg1 + 24, 38, true);
                 var variant40 = e;
-                if (variant40 === null || variant40 === undefined) {
+                if (variant40 === null || variant40=== undefined) {
                   dataView(memory0).setInt8(arg1 + 32, 0, true);
                 } else {
                   const e = variant40;
@@ -2900,15 +2915,15 @@ function trampoline63(arg0, arg1) {
   var rsc0 = captureTable8.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-response.consume');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.consume() };
+    ret = { tag: 'ok', val: rsc0.consume()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2959,15 +2974,15 @@ function trampoline64(arg0, arg1) {
   var rsc0 = captureTable9.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-body.stream');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.stream() };
+    ret = { tag: 'ok', val: rsc0.stream()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -2982,7 +2997,7 @@ function trampoline64(arg0, arg1) {
     case 'ok': {
       const e = variant4.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
         throw new TypeError('Resource error: Not a valid "InputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -3018,15 +3033,15 @@ function trampoline65(arg0, arg1) {
   var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingBody.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-body.write');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.write() };
+    ret = { tag: 'ok', val: rsc0.write()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -3041,7 +3056,7 @@ function trampoline65(arg0, arg1) {
     case 'ok': {
       const e = variant4.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
         throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -3077,8 +3092,8 @@ function trampoline66(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingBody.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable6.delete(rep2);
@@ -3091,8 +3106,8 @@ function trampoline66(arg0, arg1, arg2, arg3) {
     var rsc3 = captureTable4.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(Fields.prototype);
-      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4 });
-      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5 });
+      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
+      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
       captureTable4.delete(rep5);
@@ -3106,7 +3121,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]outgoing-body.finish');
   let ret;
   try {
-    ret = { tag: 'ok', val: OutgoingBody.finish(rsc0, variant6) };
+    ret = { tag: 'ok', val: OutgoingBody.finish(rsc0, variant6)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -3131,9 +3146,9 @@ function trampoline66(arg0, arg1, arg2, arg3) {
         case 'DNS-error': {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 1, true);
-          var { rcode: v7_0, infoCode: v7_1 } = e;
+          var {rcode: v7_0, infoCode: v7_1 } = e;
           var variant9 = v7_0;
-          if (variant9 === null || variant9 === undefined) {
+          if (variant9 === null || variant9=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant9;
@@ -3144,7 +3159,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr8, true);
           }
           var variant10 = v7_1;
-          if (variant10 === null || variant10 === undefined) {
+          if (variant10 === null || variant10=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant10;
@@ -3204,9 +3219,9 @@ function trampoline66(arg0, arg1, arg2, arg3) {
         case 'TLS-alert-received': {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 14, true);
-          var { alertId: v11_0, alertMessage: v11_1 } = e;
+          var {alertId: v11_0, alertMessage: v11_1 } = e;
           var variant12 = v11_0;
-          if (variant12 === null || variant12 === undefined) {
+          if (variant12 === null || variant12=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant12;
@@ -3214,7 +3229,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
             dataView(memory0).setInt8(arg3 + 17, toUint8(e), true);
           }
           var variant14 = v11_1;
-          if (variant14 === null || variant14 === undefined) {
+          if (variant14 === null || variant14=== undefined) {
             dataView(memory0).setInt8(arg3 + 20, 0, true);
           } else {
             const e = variant14;
@@ -3238,7 +3253,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 17, true);
           var variant15 = e;
-          if (variant15 === null || variant15 === undefined) {
+          if (variant15 === null || variant15=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant15;
@@ -3263,7 +3278,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 21, true);
           var variant16 = e;
-          if (variant16 === null || variant16 === undefined) {
+          if (variant16 === null || variant16=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant16;
@@ -3276,14 +3291,14 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 22, true);
           var variant21 = e;
-          if (variant21 === null || variant21 === undefined) {
+          if (variant21 === null || variant21=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant21;
             dataView(memory0).setInt8(arg3 + 16, 1, true);
-            var { fieldName: v17_0, fieldSize: v17_1 } = e;
+            var {fieldName: v17_0, fieldSize: v17_1 } = e;
             var variant19 = v17_0;
-            if (variant19 === null || variant19 === undefined) {
+            if (variant19 === null || variant19=== undefined) {
               dataView(memory0).setInt8(arg3 + 20, 0, true);
             } else {
               const e = variant19;
@@ -3294,7 +3309,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
               dataView(memory0).setUint32(arg3 + 24, ptr18, true);
             }
             var variant20 = v17_1;
-            if (variant20 === null || variant20 === undefined) {
+            if (variant20 === null || variant20=== undefined) {
               dataView(memory0).setInt8(arg3 + 32, 0, true);
             } else {
               const e = variant20;
@@ -3308,7 +3323,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 23, true);
           var variant22 = e;
-          if (variant22 === null || variant22 === undefined) {
+          if (variant22 === null || variant22=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant22;
@@ -3320,9 +3335,9 @@ function trampoline66(arg0, arg1, arg2, arg3) {
         case 'HTTP-request-trailer-size': {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 24, true);
-          var { fieldName: v23_0, fieldSize: v23_1 } = e;
+          var {fieldName: v23_0, fieldSize: v23_1 } = e;
           var variant25 = v23_0;
-          if (variant25 === null || variant25 === undefined) {
+          if (variant25 === null || variant25=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant25;
@@ -3333,7 +3348,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr24, true);
           }
           var variant26 = v23_1;
-          if (variant26 === null || variant26 === undefined) {
+          if (variant26 === null || variant26=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant26;
@@ -3350,7 +3365,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 26, true);
           var variant27 = e;
-          if (variant27 === null || variant27 === undefined) {
+          if (variant27 === null || variant27=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant27;
@@ -3362,9 +3377,9 @@ function trampoline66(arg0, arg1, arg2, arg3) {
         case 'HTTP-response-header-size': {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 27, true);
-          var { fieldName: v28_0, fieldSize: v28_1 } = e;
+          var {fieldName: v28_0, fieldSize: v28_1 } = e;
           var variant30 = v28_0;
-          if (variant30 === null || variant30 === undefined) {
+          if (variant30 === null || variant30=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant30;
@@ -3375,7 +3390,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr29, true);
           }
           var variant31 = v28_1;
-          if (variant31 === null || variant31 === undefined) {
+          if (variant31 === null || variant31=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant31;
@@ -3388,7 +3403,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 28, true);
           var variant32 = e;
-          if (variant32 === null || variant32 === undefined) {
+          if (variant32 === null || variant32=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant32;
@@ -3401,7 +3416,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 29, true);
           var variant33 = e;
-          if (variant33 === null || variant33 === undefined) {
+          if (variant33 === null || variant33=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant33;
@@ -3413,9 +3428,9 @@ function trampoline66(arg0, arg1, arg2, arg3) {
         case 'HTTP-response-trailer-size': {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 30, true);
-          var { fieldName: v34_0, fieldSize: v34_1 } = e;
+          var {fieldName: v34_0, fieldSize: v34_1 } = e;
           var variant36 = v34_0;
-          if (variant36 === null || variant36 === undefined) {
+          if (variant36 === null || variant36=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant36;
@@ -3426,7 +3441,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr35, true);
           }
           var variant37 = v34_1;
-          if (variant37 === null || variant37 === undefined) {
+          if (variant37 === null || variant37=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant37;
@@ -3439,7 +3454,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 31, true);
           var variant39 = e;
-          if (variant39 === null || variant39 === undefined) {
+          if (variant39 === null || variant39=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant39;
@@ -3455,7 +3470,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 32, true);
           var variant41 = e;
-          if (variant41 === null || variant41 === undefined) {
+          if (variant41 === null || variant41=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant41;
@@ -3491,7 +3506,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
           const e = variant44.val;
           dataView(memory0).setInt8(arg3 + 8, 38, true);
           var variant43 = e;
-          if (variant43 === null || variant43 === undefined) {
+          if (variant43 === null || variant43=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant43;
@@ -3528,8 +3543,8 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
   var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -3549,7 +3564,7 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.set');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.set(result3, result5) };
+    ret = { tag: 'ok', val: rsc0.set(result3, result5)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -3608,8 +3623,8 @@ function trampoline68(arg0, arg1) {
   var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -3622,7 +3637,7 @@ function trampoline68(arg0, arg1) {
   curResourceBorrows = [];
   endCurrentTask(0);
   var variant4 = ret;
-  if (variant4 === null || variant4 === undefined) {
+  if (variant4 === null || variant4=== undefined) {
     dataView(memory0).setInt8(arg1 + 0, 0, true);
   } else {
     const e = variant4;
@@ -3647,15 +3662,15 @@ function trampoline69(arg0, arg1) {
   var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-request.consume');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.consume() };
+    ret = { tag: 'ok', val: rsc0.consume()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -3706,8 +3721,8 @@ function trampoline70(arg0, arg1) {
   var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.entries"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -3724,7 +3739,7 @@ function trampoline70(arg0, arg1) {
   var result6 = realloc0(0, 0, 4, len6 * 16);
   for (let i = 0; i < vec6.length; i++) {
     const e = vec6[i];
-    const base = result6 + i * 16; var [tuple3_0, tuple3_1] = e;
+    const base = result6 + i * 16;var [tuple3_0, tuple3_1] = e;
     var ptr4 = utf8Encode(tuple3_0, realloc0, memory0);
     var len4 = utf8EncodedLen;
     dataView(memory0).setUint32(base + 4, len4, true);
@@ -3754,15 +3769,15 @@ function trampoline71(arg0, arg1) {
   var rsc0 = captureTable12.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.body"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-response.body');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.body() };
+    ret = { tag: 'ok', val: rsc0.body()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -3807,7 +3822,7 @@ function trampoline71(arg0, arg1) {
 }
 
 const handleTable13 = [T_FLAG, 0];
-const captureTable13 = new Map();
+const captureTable13= new Map();
 let captureCnt13 = 0;
 handleTables[13] = handleTable13;
 
@@ -3817,8 +3832,8 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   var rsc0 = captureTable13.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(ResponseOutparam.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable13.delete(rep2);
@@ -3829,7 +3844,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
     let variant37;
     switch (arg2) {
       case 0: {
-        variant37 = {
+        variant37= {
           tag: 'DNS-timeout',
         };
         break;
@@ -3850,7 +3865,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant8 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'DNS-error',
           val: {
             rcode: variant7,
@@ -3860,73 +3875,73 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         break;
       }
       case 2: {
-        variant37 = {
+        variant37= {
           tag: 'destination-not-found',
         };
         break;
       }
       case 3: {
-        variant37 = {
+        variant37= {
           tag: 'destination-unavailable',
         };
         break;
       }
       case 4: {
-        variant37 = {
+        variant37= {
           tag: 'destination-IP-prohibited',
         };
         break;
       }
       case 5: {
-        variant37 = {
+        variant37= {
           tag: 'destination-IP-unroutable',
         };
         break;
       }
       case 6: {
-        variant37 = {
+        variant37= {
           tag: 'connection-refused',
         };
         break;
       }
       case 7: {
-        variant37 = {
+        variant37= {
           tag: 'connection-terminated',
         };
         break;
       }
       case 8: {
-        variant37 = {
+        variant37= {
           tag: 'connection-timeout',
         };
         break;
       }
       case 9: {
-        variant37 = {
+        variant37= {
           tag: 'connection-read-timeout',
         };
         break;
       }
       case 10: {
-        variant37 = {
+        variant37= {
           tag: 'connection-write-timeout',
         };
         break;
       }
       case 11: {
-        variant37 = {
+        variant37= {
           tag: 'connection-limit-reached',
         };
         break;
       }
       case 12: {
-        variant37 = {
+        variant37= {
           tag: 'TLS-protocol-error',
         };
         break;
       }
       case 13: {
-        variant37 = {
+        variant37= {
           tag: 'TLS-certificate-error',
         };
         break;
@@ -3947,7 +3962,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant11 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'TLS-alert-received',
           val: {
             alertId: variant9,
@@ -3957,13 +3972,13 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         break;
       }
       case 15: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-denied',
         };
         break;
       }
       case 16: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-length-required',
         };
         break;
@@ -3975,26 +3990,26 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant12 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-body-size',
           val: variant12
         };
         break;
       }
       case 18: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-method-invalid',
         };
         break;
       }
       case 19: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-URI-invalid',
         };
         break;
       }
       case 20: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-URI-too-long',
         };
         break;
@@ -4006,7 +4021,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant13 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-header-section-size',
           val: variant13
         };
@@ -4037,7 +4052,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant17 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-header-size',
           val: variant17
         };
@@ -4050,7 +4065,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant18 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-trailer-section-size',
           val: variant18
         };
@@ -4072,7 +4087,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant21 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-request-trailer-size',
           val: {
             fieldName: variant20,
@@ -4082,7 +4097,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         break;
       }
       case 25: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-incomplete',
         };
         break;
@@ -4094,7 +4109,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant22 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-header-section-size',
           val: variant22
         };
@@ -4116,7 +4131,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant25 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-header-size',
           val: {
             fieldName: variant24,
@@ -4132,7 +4147,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant26 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-body-size',
           val: variant26
         };
@@ -4145,7 +4160,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant27 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-trailer-section-size',
           val: variant27
         };
@@ -4167,7 +4182,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant30 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-trailer-size',
           val: {
             fieldName: variant29,
@@ -4186,7 +4201,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant32 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-transfer-coding',
           val: variant32
         };
@@ -4202,38 +4217,38 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant34 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-content-coding',
           val: variant34
         };
         break;
       }
       case 33: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-response-timeout',
         };
         break;
       }
       case 34: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-upgrade-failed',
         };
         break;
       }
       case 35: {
-        variant37 = {
+        variant37= {
           tag: 'HTTP-protocol-error',
         };
         break;
       }
       case 36: {
-        variant37 = {
+        variant37= {
           tag: 'loop-detected',
         };
         break;
       }
       case 37: {
-        variant37 = {
+        variant37= {
           tag: 'configuration-error',
         };
         break;
@@ -4248,14 +4263,14 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
         } else {
           variant36 = undefined;
         }
-        variant37 = {
+        variant37= {
           tag: 'internal-error',
           val: variant36
         };
         break;
       }
     }
-    variant38 = {
+    variant38= {
       tag: 'err',
       val: variant37
     };
@@ -4265,14 +4280,14 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
     var rsc3 = captureTable12.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(OutgoingResponse.prototype);
-      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4 });
-      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5 });
+      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
+      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
       captureTable12.delete(rep5);
     }
     rscTableRemove(handleTable12, handle4);
-    variant38 = {
+    variant38= {
       tag: 'ok',
       val: rsc3
     };
@@ -4291,7 +4306,7 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
 }
 
 const handleTable1 = [T_FLAG, 0];
-const captureTable1 = new Map();
+const captureTable1= new Map();
 let captureCnt1 = 0;
 handleTables[1] = handleTable1;
 
@@ -4301,8 +4316,8 @@ function trampoline73(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -4312,7 +4327,7 @@ function trampoline73(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.write');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.write(result3) };
+    ret = { tag: 'ok', val: rsc0.write(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4378,15 +4393,15 @@ function trampoline74(arg0, arg1, arg2) {
   var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.read');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.read(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: rsc0.read(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4453,21 +4468,21 @@ function trampoline74(arg0, arg1, arg2) {
 }
 
 
-const trampoline75 = new WebAssembly.Suspending(async function (arg0, arg1, arg2) {
+const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.blocking-read');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.blockingRead(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: await rsc0.blockingRead(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4534,14 +4549,14 @@ const trampoline75 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline76 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3) {
+const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -4551,7 +4566,7 @@ const trampoline76 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-write-and-flush');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.blockingWriteAndFlush(result3) };
+    ret = { tag: 'ok', val: await rsc0.blockingWriteAndFlush(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4611,7 +4626,7 @@ const trampoline76 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 const handleTable14 = [T_FLAG, 0];
-const captureTable14 = new Map();
+const captureTable14= new Map();
 let captureCnt14 = 0;
 handleTables[14] = handleTable14;
 
@@ -4621,8 +4636,8 @@ function trampoline77(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
     captureTable5.delete(rep2);
@@ -4635,8 +4650,8 @@ function trampoline77(arg0, arg1, arg2, arg3) {
     var rsc3 = captureTable14.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(RequestOptions.prototype);
-      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4 });
-      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5 });
+      Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
+      Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
       captureTable14.delete(rep5);
@@ -4650,7 +4665,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'handle');
   let ret;
   try {
-    ret = { tag: 'ok', val: handle(rsc0, variant6) };
+    ret = { tag: 'ok', val: handle(rsc0, variant6)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -4685,9 +4700,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
         case 'DNS-error': {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 1, true);
-          var { rcode: v8_0, infoCode: v8_1 } = e;
+          var {rcode: v8_0, infoCode: v8_1 } = e;
           var variant10 = v8_0;
-          if (variant10 === null || variant10 === undefined) {
+          if (variant10 === null || variant10=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant10;
@@ -4698,7 +4713,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr9, true);
           }
           var variant11 = v8_1;
-          if (variant11 === null || variant11 === undefined) {
+          if (variant11 === null || variant11=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant11;
@@ -4758,9 +4773,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
         case 'TLS-alert-received': {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 14, true);
-          var { alertId: v12_0, alertMessage: v12_1 } = e;
+          var {alertId: v12_0, alertMessage: v12_1 } = e;
           var variant13 = v12_0;
-          if (variant13 === null || variant13 === undefined) {
+          if (variant13 === null || variant13=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant13;
@@ -4768,7 +4783,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
             dataView(memory0).setInt8(arg3 + 17, toUint8(e), true);
           }
           var variant15 = v12_1;
-          if (variant15 === null || variant15 === undefined) {
+          if (variant15 === null || variant15=== undefined) {
             dataView(memory0).setInt8(arg3 + 20, 0, true);
           } else {
             const e = variant15;
@@ -4792,7 +4807,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 17, true);
           var variant16 = e;
-          if (variant16 === null || variant16 === undefined) {
+          if (variant16 === null || variant16=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant16;
@@ -4817,7 +4832,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 21, true);
           var variant17 = e;
-          if (variant17 === null || variant17 === undefined) {
+          if (variant17 === null || variant17=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant17;
@@ -4830,14 +4845,14 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 22, true);
           var variant22 = e;
-          if (variant22 === null || variant22 === undefined) {
+          if (variant22 === null || variant22=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant22;
             dataView(memory0).setInt8(arg3 + 16, 1, true);
-            var { fieldName: v18_0, fieldSize: v18_1 } = e;
+            var {fieldName: v18_0, fieldSize: v18_1 } = e;
             var variant20 = v18_0;
-            if (variant20 === null || variant20 === undefined) {
+            if (variant20 === null || variant20=== undefined) {
               dataView(memory0).setInt8(arg3 + 20, 0, true);
             } else {
               const e = variant20;
@@ -4848,7 +4863,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
               dataView(memory0).setUint32(arg3 + 24, ptr19, true);
             }
             var variant21 = v18_1;
-            if (variant21 === null || variant21 === undefined) {
+            if (variant21 === null || variant21=== undefined) {
               dataView(memory0).setInt8(arg3 + 32, 0, true);
             } else {
               const e = variant21;
@@ -4862,7 +4877,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 23, true);
           var variant23 = e;
-          if (variant23 === null || variant23 === undefined) {
+          if (variant23 === null || variant23=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant23;
@@ -4874,9 +4889,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
         case 'HTTP-request-trailer-size': {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 24, true);
-          var { fieldName: v24_0, fieldSize: v24_1 } = e;
+          var {fieldName: v24_0, fieldSize: v24_1 } = e;
           var variant26 = v24_0;
-          if (variant26 === null || variant26 === undefined) {
+          if (variant26 === null || variant26=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant26;
@@ -4887,7 +4902,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr25, true);
           }
           var variant27 = v24_1;
-          if (variant27 === null || variant27 === undefined) {
+          if (variant27 === null || variant27=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant27;
@@ -4904,7 +4919,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 26, true);
           var variant28 = e;
-          if (variant28 === null || variant28 === undefined) {
+          if (variant28 === null || variant28=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant28;
@@ -4916,9 +4931,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
         case 'HTTP-response-header-size': {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 27, true);
-          var { fieldName: v29_0, fieldSize: v29_1 } = e;
+          var {fieldName: v29_0, fieldSize: v29_1 } = e;
           var variant31 = v29_0;
-          if (variant31 === null || variant31 === undefined) {
+          if (variant31 === null || variant31=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant31;
@@ -4929,7 +4944,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr30, true);
           }
           var variant32 = v29_1;
-          if (variant32 === null || variant32 === undefined) {
+          if (variant32 === null || variant32=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant32;
@@ -4942,7 +4957,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 28, true);
           var variant33 = e;
-          if (variant33 === null || variant33 === undefined) {
+          if (variant33 === null || variant33=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant33;
@@ -4955,7 +4970,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 29, true);
           var variant34 = e;
-          if (variant34 === null || variant34 === undefined) {
+          if (variant34 === null || variant34=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant34;
@@ -4967,9 +4982,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
         case 'HTTP-response-trailer-size': {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 30, true);
-          var { fieldName: v35_0, fieldSize: v35_1 } = e;
+          var {fieldName: v35_0, fieldSize: v35_1 } = e;
           var variant37 = v35_0;
-          if (variant37 === null || variant37 === undefined) {
+          if (variant37 === null || variant37=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant37;
@@ -4980,7 +4995,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
             dataView(memory0).setUint32(arg3 + 20, ptr36, true);
           }
           var variant38 = v35_1;
-          if (variant38 === null || variant38 === undefined) {
+          if (variant38 === null || variant38=== undefined) {
             dataView(memory0).setInt8(arg3 + 28, 0, true);
           } else {
             const e = variant38;
@@ -4993,7 +5008,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 31, true);
           var variant40 = e;
-          if (variant40 === null || variant40 === undefined) {
+          if (variant40 === null || variant40=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant40;
@@ -5009,7 +5024,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 32, true);
           var variant42 = e;
-          if (variant42 === null || variant42 === undefined) {
+          if (variant42 === null || variant42=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant42;
@@ -5045,7 +5060,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
           const e = variant45.val;
           dataView(memory0).setInt8(arg3 + 8, 38, true);
           var variant44 = e;
-          if (variant44 === null || variant44 === undefined) {
+          if (variant44 === null || variant44=== undefined) {
             dataView(memory0).setInt8(arg3 + 16, 0, true);
           } else {
             const e = variant44;
@@ -5082,7 +5097,7 @@ function trampoline78(arg0) {
   const ret = now$1();
   _debugLog('[iface="wasi:clocks/wall-clock@0.2.6", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  var { seconds: v0_0, nanoseconds: v0_1 } = ret;
+  var {seconds: v0_0, nanoseconds: v0_1 } = ret;
   dataView(memory0).setBigInt64(arg0 + 0, toUint64(v0_0), true);
   dataView(memory0).setInt32(arg0 + 8, toUint32(v0_1), true);
   _debugLog('[iface="wasi:clocks/wall-clock@0.2.6", function="now"][Instruction::Return]', {
@@ -5100,8 +5115,8 @@ function trampoline79(arg0, arg1) {
   var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/error@0.2.6", function="[method]error.to-debug-string"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -5155,7 +5170,7 @@ function trampoline81(arg0) {
   var result3 = realloc1(0, 0, 4, len3 * 16);
   for (let i = 0; i < vec3.length; i++) {
     const e = vec3[i];
-    const base = result3 + i * 16; var [tuple0_0, tuple0_1] = e;
+    const base = result3 + i * 16;var [tuple0_0, tuple0_1] = e;
     var ptr1 = utf8Encode(tuple0_0, realloc1, memory0);
     var len1 = utf8EncodedLen;
     dataView(memory0).setUint32(base + 4, len1, true);
@@ -5176,7 +5191,7 @@ function trampoline81(arg0) {
 }
 
 const handleTable19 = [T_FLAG, 0];
-const captureTable19 = new Map();
+const captureTable19= new Map();
 let captureCnt19 = 0;
 handleTables[19] = handleTable19;
 
@@ -5186,15 +5201,15 @@ function trampoline82(arg0, arg1, arg2) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.set-size"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.set-size');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.setSize(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: rsc0.setSize(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -5366,7 +5381,7 @@ function trampoline82(arg0, arg1, arg2) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val3}" is not one of the cases of error-code`);
         }
       }
@@ -5392,8 +5407,8 @@ function trampoline83(arg0, arg1) {
   var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -5406,7 +5421,7 @@ function trampoline83(arg0, arg1) {
   curResourceBorrows = [];
   endCurrentTask(0);
   var variant4 = ret;
-  if (variant4 === null || variant4 === undefined) {
+  if (variant4 === null || variant4=== undefined) {
     dataView(memory0).setInt8(arg1 + 0, 0, true);
   } else {
     const e = variant4;
@@ -5563,7 +5578,7 @@ function trampoline83(arg0, arg1) {
         break;
       }
       default: {
-
+        
         throw new TypeError(`"${val3}" is not one of the cases of error-code`);
       }
     }
@@ -5578,25 +5593,25 @@ function trampoline83(arg0, arg1) {
 }
 
 const handleTable18 = [T_FLAG, 0];
-const captureTable18 = new Map();
+const captureTable18= new Map();
 let captureCnt18 = 0;
 handleTables[18] = handleTable18;
 
-const trampoline84 = new WebAssembly.Suspending(async function (arg0, arg1) {
+const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-directory"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-directory');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.readDirectory() };
+    ret = { tag: 'ok', val: await rsc0.readDirectory()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -5778,7 +5793,7 @@ const trampoline84 = new WebAssembly.Suspending(async function (arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -5804,15 +5819,15 @@ function trampoline85(arg0, arg1) {
   var rsc0 = captureTable18.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(DirectoryEntryStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]directory-entry-stream.read-directory-entry"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]directory-entry-stream.read-directory-entry');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.readDirectoryEntry() };
+    ret = { tag: 'ok', val: rsc0.readDirectoryEntry()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -5828,12 +5843,12 @@ function trampoline85(arg0, arg1) {
       const e = variant8.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
       var variant6 = e;
-      if (variant6 === null || variant6 === undefined) {
+      if (variant6 === null || variant6=== undefined) {
         dataView(memory0).setInt8(arg1 + 4, 0, true);
       } else {
         const e = variant6;
         dataView(memory0).setInt8(arg1 + 4, 1, true);
-        var { type: v3_0, name: v3_1 } = e;
+        var {type: v3_0, name: v3_1 } = e;
         var val4 = v3_0;
         let enum4;
         switch (val4) {
@@ -5870,7 +5885,7 @@ function trampoline85(arg0, arg1) {
             break;
           }
           default: {
-
+            
             throw new TypeError(`"${val4}" is not one of the cases of descriptor-type`);
           }
         }
@@ -6037,7 +6052,7 @@ function trampoline85(arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val7}" is not one of the cases of error-code`);
         }
       }
@@ -6057,14 +6072,14 @@ function trampoline85(arg0, arg1) {
 }
 
 
-const trampoline86 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3) {
+const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -6074,7 +6089,7 @@ const trampoline86 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.create-directory-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.createDirectoryAt(result3) };
+    ret = { tag: 'ok', val: await rsc0.createDirectoryAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6246,7 +6261,7 @@ const trampoline86 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -6266,14 +6281,14 @@ const trampoline86 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4) {
+const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var flags3 = {
@@ -6286,7 +6301,7 @@ const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.statAt(flags3, result4) };
+    ret = { tag: 'ok', val: await rsc0.statAt(flags3, result4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6301,7 +6316,7 @@ const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
     case 'ok': {
       const e = variant14.val;
       dataView(memory0).setInt8(arg4 + 0, 0, true);
-      var { type: v5_0, linkCount: v5_1, size: v5_2, dataAccessTimestamp: v5_3, dataModificationTimestamp: v5_4, statusChangeTimestamp: v5_5 } = e;
+      var {type: v5_0, linkCount: v5_1, size: v5_2, dataAccessTimestamp: v5_3, dataModificationTimestamp: v5_4, statusChangeTimestamp: v5_5 } = e;
       var val6 = v5_0;
       let enum6;
       switch (val6) {
@@ -6338,7 +6353,7 @@ const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val6}" is not one of the cases of descriptor-type`);
         }
       }
@@ -6346,32 +6361,32 @@ const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
       dataView(memory0).setBigInt64(arg4 + 16, toUint64(v5_1), true);
       dataView(memory0).setBigInt64(arg4 + 24, toUint64(v5_2), true);
       var variant8 = v5_3;
-      if (variant8 === null || variant8 === undefined) {
+      if (variant8 === null || variant8=== undefined) {
         dataView(memory0).setInt8(arg4 + 32, 0, true);
       } else {
         const e = variant8;
         dataView(memory0).setInt8(arg4 + 32, 1, true);
-        var { seconds: v7_0, nanoseconds: v7_1 } = e;
+        var {seconds: v7_0, nanoseconds: v7_1 } = e;
         dataView(memory0).setBigInt64(arg4 + 40, toUint64(v7_0), true);
         dataView(memory0).setInt32(arg4 + 48, toUint32(v7_1), true);
       }
       var variant10 = v5_4;
-      if (variant10 === null || variant10 === undefined) {
+      if (variant10 === null || variant10=== undefined) {
         dataView(memory0).setInt8(arg4 + 56, 0, true);
       } else {
         const e = variant10;
         dataView(memory0).setInt8(arg4 + 56, 1, true);
-        var { seconds: v9_0, nanoseconds: v9_1 } = e;
+        var {seconds: v9_0, nanoseconds: v9_1 } = e;
         dataView(memory0).setBigInt64(arg4 + 64, toUint64(v9_0), true);
         dataView(memory0).setInt32(arg4 + 72, toUint32(v9_1), true);
       }
       var variant12 = v5_5;
-      if (variant12 === null || variant12 === undefined) {
+      if (variant12 === null || variant12=== undefined) {
         dataView(memory0).setInt8(arg4 + 80, 0, true);
       } else {
         const e = variant12;
         dataView(memory0).setInt8(arg4 + 80, 1, true);
-        var { seconds: v11_0, nanoseconds: v11_1 } = e;
+        var {seconds: v11_0, nanoseconds: v11_1 } = e;
         dataView(memory0).setBigInt64(arg4 + 88, toUint64(v11_0), true);
         dataView(memory0).setInt32(arg4 + 96, toUint32(v11_1), true);
       }
@@ -6532,7 +6547,7 @@ const trampoline87 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val13}" is not one of the cases of error-code`);
         }
       }
@@ -6558,8 +6573,8 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var flags3 = {
@@ -6573,8 +6588,8 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var rsc5 = captureTable19.get(rep7);
   if (!rsc5) {
     rsc5 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc5, symbolRscHandle, { writable: true, value: handle6 });
-    Object.defineProperty(rsc5, symbolRscRep, { writable: true, value: rep7 });
+    Object.defineProperty(rsc5, symbolRscHandle, { writable: true, value: handle6});
+    Object.defineProperty(rsc5, symbolRscRep, { writable: true, value: rep7});
   }
   curResourceBorrows.push(rsc5);
   var ptr8 = arg5;
@@ -6584,7 +6599,7 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.link-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.linkAt(flags3, result4, rsc5, result8) };
+    ret = { tag: 'ok', val: rsc0.linkAt(flags3, result4, rsc5, result8)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6756,7 +6771,7 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val9}" is not one of the cases of error-code`);
         }
       }
@@ -6776,14 +6791,14 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
 }
 
 
-const trampoline89 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var flags3 = {
@@ -6810,7 +6825,7 @@ const trampoline89 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.open-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.openAt(flags3, result4, flags5, flags6) };
+    ret = { tag: 'ok', val: await rsc0.openAt(flags3, result4, flags5, flags6)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -6825,16 +6840,7 @@ const trampoline89 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
     case 'ok': {
       const e = variant9.val;
       dataView(memory0).setInt8(arg6 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) {
-        console.error('[JCO DIAG] Descriptor validation failed:', {
-          eType: typeof e,
-          eValue: e,
-          eConstructor: e?.constructor?.name,
-          hasSymbol: e ? Symbol.for('wasi:filesystem/types@0.2.6#Descriptor') in e : false,
-          symbols: e ? Object.getOwnPropertySymbols(e).map(s => s.toString()) : [],
-          keys: e ? Object.keys(e) : []
-        });
-        throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
+      if (!(e ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(e));
       }
       var handle7 = e[symbolRscHandle];
       if (!handle7) {
@@ -7000,7 +7006,7 @@ const trampoline89 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val8}" is not one of the cases of error-code`);
         }
       }
@@ -7020,14 +7026,14 @@ const trampoline89 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline90 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3) {
+const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -7037,7 +7043,7 @@ const trampoline90 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.remove-directory-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.removeDirectoryAt(result3) };
+    ret = { tag: 'ok', val: await rsc0.removeDirectoryAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7209,7 +7215,7 @@ const trampoline90 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -7229,14 +7235,14 @@ const trampoline90 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline91 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
+const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -7247,8 +7253,8 @@ const trampoline91 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   var rsc4 = captureTable19.get(rep6);
   if (!rsc4) {
     rsc4 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc4, symbolRscHandle, { writable: true, value: handle5 });
-    Object.defineProperty(rsc4, symbolRscRep, { writable: true, value: rep6 });
+    Object.defineProperty(rsc4, symbolRscHandle, { writable: true, value: handle5});
+    Object.defineProperty(rsc4, symbolRscRep, { writable: true, value: rep6});
   }
   curResourceBorrows.push(rsc4);
   var ptr7 = arg4;
@@ -7258,7 +7264,7 @@ const trampoline91 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.rename-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.renameAt(result3, rsc4, result7) };
+    ret = { tag: 'ok', val: await rsc0.renameAt(result3, rsc4, result7)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7430,7 +7436,7 @@ const trampoline91 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val8}" is not one of the cases of error-code`);
         }
       }
@@ -7450,14 +7456,14 @@ const trampoline91 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
 }
 );
 
-const trampoline92 = new WebAssembly.Suspending(async function (arg0, arg1, arg2, arg3) {
+const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -7467,7 +7473,7 @@ const trampoline92 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.unlink-file-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.unlinkFileAt(result3) };
+    ret = { tag: 'ok', val: await rsc0.unlinkFileAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7639,7 +7645,7 @@ const trampoline92 = new WebAssembly.Suspending(async function (arg0, arg1, arg2
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -7665,15 +7671,15 @@ function trampoline93(arg0, arg1, arg2) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-via-stream');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.readViaStream(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: rsc0.readViaStream(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7688,7 +7694,7 @@ function trampoline93(arg0, arg1, arg2) {
     case 'ok': {
       const e = variant5.val;
       dataView(memory0).setInt8(arg2 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
         throw new TypeError('Resource error: Not a valid "InputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -7855,7 +7861,7 @@ function trampoline93(arg0, arg1, arg2) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -7881,15 +7887,15 @@ function trampoline94(arg0, arg1, arg2) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.write-via-stream');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.writeViaStream(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: rsc0.writeViaStream(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -7904,7 +7910,7 @@ function trampoline94(arg0, arg1, arg2) {
     case 'ok': {
       const e = variant5.val;
       dataView(memory0).setInt8(arg2 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
         throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -8071,7 +8077,7 @@ function trampoline94(arg0, arg1, arg2) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -8097,15 +8103,15 @@ function trampoline95(arg0, arg1) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.append-via-stream');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.appendViaStream() };
+    ret = { tag: 'ok', val: rsc0.appendViaStream()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -8120,7 +8126,7 @@ function trampoline95(arg0, arg1) {
     case 'ok': {
       const e = variant5.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
         throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
@@ -8287,7 +8293,7 @@ function trampoline95(arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -8313,15 +8319,15 @@ function trampoline96(arg0, arg1) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.get-type');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.getType() };
+    ret = { tag: 'ok', val: rsc0.getType()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -8372,7 +8378,7 @@ function trampoline96(arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val3}" is not one of the cases of descriptor-type`);
         }
       }
@@ -8534,7 +8540,7 @@ function trampoline96(arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -8554,21 +8560,21 @@ function trampoline96(arg0, arg1) {
 }
 
 
-const trampoline97 = new WebAssembly.Suspending(async function (arg0, arg1) {
+const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.stat() };
+    ret = { tag: 'ok', val: await rsc0.stat()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -8583,7 +8589,7 @@ const trampoline97 = new WebAssembly.Suspending(async function (arg0, arg1) {
     case 'ok': {
       const e = variant12.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      var { type: v3_0, linkCount: v3_1, size: v3_2, dataAccessTimestamp: v3_3, dataModificationTimestamp: v3_4, statusChangeTimestamp: v3_5 } = e;
+      var {type: v3_0, linkCount: v3_1, size: v3_2, dataAccessTimestamp: v3_3, dataModificationTimestamp: v3_4, statusChangeTimestamp: v3_5 } = e;
       var val4 = v3_0;
       let enum4;
       switch (val4) {
@@ -8620,7 +8626,7 @@ const trampoline97 = new WebAssembly.Suspending(async function (arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of descriptor-type`);
         }
       }
@@ -8628,32 +8634,32 @@ const trampoline97 = new WebAssembly.Suspending(async function (arg0, arg1) {
       dataView(memory0).setBigInt64(arg1 + 16, toUint64(v3_1), true);
       dataView(memory0).setBigInt64(arg1 + 24, toUint64(v3_2), true);
       var variant6 = v3_3;
-      if (variant6 === null || variant6 === undefined) {
+      if (variant6 === null || variant6=== undefined) {
         dataView(memory0).setInt8(arg1 + 32, 0, true);
       } else {
         const e = variant6;
         dataView(memory0).setInt8(arg1 + 32, 1, true);
-        var { seconds: v5_0, nanoseconds: v5_1 } = e;
+        var {seconds: v5_0, nanoseconds: v5_1 } = e;
         dataView(memory0).setBigInt64(arg1 + 40, toUint64(v5_0), true);
         dataView(memory0).setInt32(arg1 + 48, toUint32(v5_1), true);
       }
       var variant8 = v3_4;
-      if (variant8 === null || variant8 === undefined) {
+      if (variant8 === null || variant8=== undefined) {
         dataView(memory0).setInt8(arg1 + 56, 0, true);
       } else {
         const e = variant8;
         dataView(memory0).setInt8(arg1 + 56, 1, true);
-        var { seconds: v7_0, nanoseconds: v7_1 } = e;
+        var {seconds: v7_0, nanoseconds: v7_1 } = e;
         dataView(memory0).setBigInt64(arg1 + 64, toUint64(v7_0), true);
         dataView(memory0).setInt32(arg1 + 72, toUint32(v7_1), true);
       }
       var variant10 = v3_5;
-      if (variant10 === null || variant10 === undefined) {
+      if (variant10 === null || variant10=== undefined) {
         dataView(memory0).setInt8(arg1 + 80, 0, true);
       } else {
         const e = variant10;
         dataView(memory0).setInt8(arg1 + 80, 1, true);
-        var { seconds: v9_0, nanoseconds: v9_1 } = e;
+        var {seconds: v9_0, nanoseconds: v9_1 } = e;
         dataView(memory0).setBigInt64(arg1 + 88, toUint64(v9_0), true);
         dataView(memory0).setInt32(arg1 + 96, toUint32(v9_1), true);
       }
@@ -8814,7 +8820,7 @@ const trampoline97 = new WebAssembly.Suspending(async function (arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val11}" is not one of the cases of error-code`);
         }
       }
@@ -8840,8 +8846,8 @@ function trampoline98(arg0, arg1, arg2, arg3) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var ptr3 = arg1;
@@ -8851,7 +8857,7 @@ function trampoline98(arg0, arg1, arg2, arg3) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.readlink-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.readlinkAt(result3) };
+    ret = { tag: 'ok', val: rsc0.readlinkAt(result3)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9027,7 +9033,7 @@ function trampoline98(arg0, arg1, arg2, arg3) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val5}" is not one of the cases of error-code`);
         }
       }
@@ -9053,15 +9059,15 @@ function trampoline99(arg0, arg1) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.metadataHash() };
+    ret = { tag: 'ok', val: rsc0.metadataHash()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9076,7 +9082,7 @@ function trampoline99(arg0, arg1) {
     case 'ok': {
       const e = variant5.val;
       dataView(memory0).setInt8(arg1 + 0, 0, true);
-      var { lower: v3_0, upper: v3_1 } = e;
+      var {lower: v3_0, upper: v3_1 } = e;
       dataView(memory0).setBigInt64(arg1 + 8, toUint64(v3_0), true);
       dataView(memory0).setBigInt64(arg1 + 16, toUint64(v3_1), true);
       break;
@@ -9236,7 +9242,7 @@ function trampoline99(arg0, arg1) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val4}" is not one of the cases of error-code`);
         }
       }
@@ -9262,8 +9268,8 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
   var rsc0 = captureTable19.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   var flags3 = {
@@ -9276,7 +9282,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash-at');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.metadataHashAt(flags3, result4) };
+    ret = { tag: 'ok', val: rsc0.metadataHashAt(flags3, result4)};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9291,7 +9297,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
     case 'ok': {
       const e = variant7.val;
       dataView(memory0).setInt8(arg4 + 0, 0, true);
-      var { lower: v5_0, upper: v5_1 } = e;
+      var {lower: v5_0, upper: v5_1 } = e;
       dataView(memory0).setBigInt64(arg4 + 8, toUint64(v5_0), true);
       dataView(memory0).setBigInt64(arg4 + 16, toUint64(v5_1), true);
       break;
@@ -9451,7 +9457,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
           break;
         }
         default: {
-
+          
           throw new TypeError(`"${val6}" is not one of the cases of error-code`);
         }
       }
@@ -9471,21 +9477,21 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
 }
 
 
-const trampoline101 = new WebAssembly.Suspending(async function (arg0, arg1, arg2) {
+const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.blocking-read');
   let ret;
   try {
-    ret = { tag: 'ok', val: await rsc0.blockingRead(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: await rsc0.blockingRead(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9558,15 +9564,15 @@ function trampoline102(arg0, arg1, arg2) {
   var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.read');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.read(BigInt.asUintN(64, arg1)) };
+    ret = { tag: 'ok', val: rsc0.read(BigInt.asUintN(64, arg1))};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9639,15 +9645,15 @@ function trampoline103(arg0, arg1) {
   var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.check-write');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.checkWrite() };
+    ret = { tag: 'ok', val: rsc0.checkWrite()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9714,15 +9720,15 @@ function trampoline104(arg0, arg1) {
   var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1 });
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2 });
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
   _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-flush');
   let ret;
   try {
-    ret = { tag: 'ok', val: rsc0.blockingFlush() };
+    ret = { tag: 'ok', val: rsc0.blockingFlush()};
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
@@ -9793,17 +9799,8 @@ function trampoline105(arg0) {
   var result3 = realloc1(0, 0, 4, len3 * 12);
   for (let i = 0; i < vec3.length; i++) {
     const e = vec3[i];
-    const base = result3 + i * 12; var [tuple0_0, tuple0_1] = e;
-    if (!(tuple0_0?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) {
-      console.error('[JCO DIAG] get-directories Descriptor validation failed:', {
-        tuple0_0Type: typeof tuple0_0,
-        tuple0_0Value: tuple0_0,
-        tuple0_0Constructor: tuple0_0?.constructor?.name,
-        hasSymbol: tuple0_0 ? Symbol.for('wasi:filesystem/types@0.2.6#Descriptor') in tuple0_0 : false,
-        symbols: tuple0_0 ? Object.getOwnPropertySymbols(tuple0_0).map(s => s.toString()) : [],
-        keys: tuple0_0 ? Object.keys(tuple0_0) : []
-      });
-      throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
+    const base = result3 + i * 12;var [tuple0_0, tuple0_1] = e;
+    if (!(tuple0_0 ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(tuple0_0));
     }
     var handle1 = tuple0_0[symbolRscHandle];
     if (!handle1) {
@@ -9828,7 +9825,7 @@ function trampoline105(arg0) {
 }
 
 const handleTable16 = [T_FLAG, 0];
-const captureTable16 = new Map();
+const captureTable16= new Map();
 let captureCnt16 = 0;
 handleTables[16] = handleTable16;
 
@@ -9839,7 +9836,7 @@ function trampoline106(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
-  if (variant1 === null || variant1 === undefined) {
+  if (variant1 === null || variant1=== undefined) {
     dataView(memory0).setInt8(arg0 + 0, 0, true);
   } else {
     const e = variant1;
@@ -9871,7 +9868,7 @@ function trampoline107(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
-  if (variant1 === null || variant1 === undefined) {
+  if (variant1 === null || variant1=== undefined) {
     dataView(memory0).setInt8(arg0 + 0, 0, true);
   } else {
     const e = variant1;
@@ -9900,7 +9897,7 @@ let postReturn0;
 function trampoline4(handle) {
   const handleEntry = rscTableRemove(handleTable17, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable17.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9913,7 +9910,7 @@ function trampoline4(handle) {
 function trampoline10(handle) {
   const handleEntry = rscTableRemove(handleTable8, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable8.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9926,7 +9923,7 @@ function trampoline10(handle) {
 function trampoline11(handle) {
   const handleEntry = rscTableRemove(handleTable7, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable7.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9939,7 +9936,7 @@ function trampoline11(handle) {
 function trampoline16(handle) {
   const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable0.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9952,7 +9949,7 @@ function trampoline16(handle) {
 function trampoline17(handle) {
   const handleEntry = rscTableRemove(handleTable4, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable4.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9965,7 +9962,7 @@ function trampoline17(handle) {
 function trampoline18(handle) {
   const handleEntry = rscTableRemove(handleTable2, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable2.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9978,7 +9975,7 @@ function trampoline18(handle) {
 function trampoline19(handle) {
   const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable1.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -9991,7 +9988,7 @@ function trampoline19(handle) {
 function trampoline20(handle) {
   const handleEntry = rscTableRemove(handleTable9, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable9.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10004,7 +10001,7 @@ function trampoline20(handle) {
 function trampoline21(handle) {
   const handleEntry = rscTableRemove(handleTable6, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable6.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10017,7 +10014,7 @@ function trampoline21(handle) {
 function trampoline22(handle) {
   const handleEntry = rscTableRemove(handleTable3, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable3.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10030,7 +10027,7 @@ function trampoline22(handle) {
 function trampoline23(handle) {
   const handleEntry = rscTableRemove(handleTable5, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable5.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10043,7 +10040,7 @@ function trampoline23(handle) {
 function trampoline24(handle) {
   const handleEntry = rscTableRemove(handleTable15, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable15.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10056,7 +10053,7 @@ function trampoline24(handle) {
 function trampoline27(handle) {
   const handleEntry = rscTableRemove(handleTable11, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable11.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10069,7 +10066,7 @@ function trampoline27(handle) {
 function trampoline30(handle) {
   const handleEntry = rscTableRemove(handleTable12, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable12.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10082,7 +10079,7 @@ function trampoline30(handle) {
 function trampoline31(handle) {
   const handleEntry = rscTableRemove(handleTable13, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable13.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10095,7 +10092,7 @@ function trampoline31(handle) {
 function trampoline32(handle) {
   const handleEntry = rscTableRemove(handleTable10, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable10.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10106,7 +10103,7 @@ function trampoline32(handle) {
   }
 }
 const handleTable20 = [T_FLAG, 0];
-const captureTable20 = new Map();
+const captureTable20= new Map();
 let captureCnt20 = 0;
 handleTables[20] = handleTable20;
 function trampoline36(handle) {
@@ -10116,7 +10113,7 @@ function trampoline36(handle) {
   }
 }
 const handleTable21 = [T_FLAG, 0];
-const captureTable21 = new Map();
+const captureTable21= new Map();
 let captureCnt21 = 0;
 handleTables[21] = handleTable21;
 function trampoline37(handle) {
@@ -10126,7 +10123,7 @@ function trampoline37(handle) {
   }
 }
 const handleTable22 = [T_FLAG, 0];
-const captureTable22 = new Map();
+const captureTable22= new Map();
 let captureCnt22 = 0;
 handleTables[22] = handleTable22;
 function trampoline38(handle) {
@@ -10136,7 +10133,7 @@ function trampoline38(handle) {
   }
 }
 const handleTable23 = [T_FLAG, 0];
-const captureTable23 = new Map();
+const captureTable23= new Map();
 let captureCnt23 = 0;
 handleTables[23] = handleTable23;
 function trampoline39(handle) {
@@ -10148,7 +10145,7 @@ function trampoline39(handle) {
 function trampoline40(handle) {
   const handleEntry = rscTableRemove(handleTable18, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable18.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10161,7 +10158,7 @@ function trampoline40(handle) {
 function trampoline41(handle) {
   const handleEntry = rscTableRemove(handleTable19, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable19.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10174,7 +10171,7 @@ function trampoline41(handle) {
 function trampoline42(handle) {
   const handleEntry = rscTableRemove(handleTable16, handle);
   if (handleEntry.own) {
-
+    
     const rsc = captureTable16.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
@@ -10231,12 +10228,12 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
   var result2 = realloc0(0, 0, 4, len2 * 8);
   for (let i = 0; i < vec2.length; i++) {
     const e = vec2[i];
-    const base = result2 + i * 8; var ptr1 = utf8Encode(e, realloc0, memory0);
+    const base = result2 + i * 8;var ptr1 = utf8Encode(e, realloc0, memory0);
     var len1 = utf8EncodedLen;
     dataView(memory0).setUint32(base + 4, len1, true);
     dataView(memory0).setUint32(base + 0, ptr1, true);
   }
-  var { cwd: v3_0, vars: v3_1 } = arg2;
+  var {cwd: v3_0, vars: v3_1 } = arg2;
   var ptr4 = utf8Encode(v3_0, realloc0, memory0);
   var len4 = utf8EncodedLen;
   var vec8 = v3_1;
@@ -10244,7 +10241,7 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
   var result8 = realloc0(0, 0, 4, len8 * 16);
   for (let i = 0; i < vec8.length; i++) {
     const e = vec8[i];
-    const base = result8 + i * 16; var [tuple5_0, tuple5_1] = e;
+    const base = result8 + i * 16;var [tuple5_0, tuple5_1] = e;
     var ptr6 = utf8Encode(tuple5_0, realloc0, memory0);
     var len6 = utf8EncodedLen;
     dataView(memory0).setUint32(base + 4, len6, true);
@@ -10254,7 +10251,7 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
     dataView(memory0).setUint32(base + 12, len7, true);
     dataView(memory0).setUint32(base + 8, ptr7, true);
   }
-  if (!(arg3?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
+  if (!(arg3 ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
     throw new TypeError('Resource error: Not a valid "InputStream" resource.');
   }
   var handle9 = arg3[symbolRscHandle];
@@ -10263,7 +10260,7 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
     captureTable2.set(rep, arg3);
     handle9 = rscTableCreateOwn(handleTable2, rep);
   }
-  if (!(arg4?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+  if (!(arg4 ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle10 = arg4[symbolRscHandle];
@@ -10272,7 +10269,7 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
     captureTable3.set(rep, arg4);
     handle10 = rscTableCreateOwn(handleTable3, rep);
   }
-  if (!(arg5?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+  if (!(arg5 ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle11 = arg5[symbolRscHandle];
@@ -10327,13 +10324,13 @@ function listCommands() {
     postReturn: true
   });
   const retCopy = result1;
-
+  
   let cstate = getOrCreateAsyncState(0);
   cstate.mayLeave = false;
   postReturn0(ret);
   cstate.mayLeave = true;
   return retCopy;
-
+  
 }
 let run026Run;
 
@@ -10349,12 +10346,12 @@ async function run$1() {
   endCurrentTask(0);
   let variant0;
   if (ret) {
-    variant0 = {
+    variant0= {
       tag: 'err',
       val: undefined
     };
   } else {
-    variant0 = {
+    variant0= {
       tag: 'ok',
       val: undefined
     };
@@ -10366,16 +10363,16 @@ async function run$1() {
     postReturn: false
   });
   const retCopy = variant0;
-
+  
   if (typeof retCopy === 'object' && retCopy.tag === 'err') {
     throw new ComponentError(retCopy.val);
   }
   return retCopy.val;
-
+  
 }
 
 const $init = (() => {
-  let gen = (function* _initGenerator() {
+  let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./ts-runtime-mcp.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./ts-runtime-mcp.core2.wasm', import.meta.url));
     const module2 = fetchCompile(new URL('./ts-runtime-mcp.core3.wasm', import.meta.url));
@@ -10703,7 +10700,7 @@ const $init = (() => {
     run026Run = WebAssembly.promising(exports2['wasi:cli/run@0.2.6#run']);
   })();
   let promise, resolve, reject;
-  function runNext(value) {
+  function runNext (value) {
     try {
       let done;
       do {
@@ -10729,15 +10726,15 @@ await $init;
 const command010 = {
   listCommands: listCommands,
   run: run,
-
+  
 };
 const run026 = {
   run: run$1,
-
+  
 };
 const incomingHandler024 = {
   handle: handle$1,
-
+  
 };
 
-export { command010 as command, incomingHandler024 as incomingHandler, run026 as run, command010 as 'shell:unix/command@0.1.0', run026 as 'wasi:cli/run@0.2.6', incomingHandler024 as 'wasi:http/incoming-handler@0.2.4', }
+export { command010 as command, incomingHandler024 as incomingHandler, run026 as run, command010 as 'shell:unix/command@0.1.0', run026 as 'wasi:cli/run@0.2.6', incomingHandler024 as 'wasi:http/incoming-handler@0.2.4',  }
