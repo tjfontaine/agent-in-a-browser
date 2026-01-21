@@ -1572,7 +1572,73 @@ export const outgoingHandler = {
             });
         }
 
-        // Fallback to XHR if no streaming handler
+        // In JSPI mode, use async fetch for localhost HTTP (same as HTTPS path)
+        // This avoids blocking the main thread with sync XHR
+        if (hasJSPI) {
+            console.log('[http] Using async fetch for HTTP localhost (JSPI mode):', method, localUrl);
+
+            // Build fetch options
+            const filteredHeaders = Object.fromEntries(
+                Object.entries(headers).filter(([name]) =>
+                    name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host'
+                )
+            );
+
+            const fetchOptions: RequestInit = {
+                method,
+                headers: filteredHeaders,
+            };
+
+            if (body && body.length > 0) {
+                fetchOptions.body = new Blob([body as BlobPart]);
+            }
+
+            // Create an async promise that awaits the fetch for headers/status
+            const fetchPromise = (async (): Promise<StreamingResponse> => {
+                try {
+                    const response = await fetch(localUrl, fetchOptions);
+
+                    // Extract response headers
+                    const responseHeaders: [string, Uint8Array][] = [];
+                    response.headers.forEach((value, name) => {
+                        responseHeaders.push([name.toLowerCase(), new TextEncoder().encode(value)]);
+                    });
+
+                    // Get body stream for lazy reading
+                    const bodyStream = response.body
+                        ? createStreamingInputStream(response.body.getReader())
+                        : createInputStreamFromBytes(new Uint8Array(0));
+
+                    return {
+                        status: response.status,
+                        headers: responseHeaders,
+                        bodyStream
+                    };
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Network error';
+                    console.error('[http] Fetch failed:', method, localUrl, '-', errorMessage);
+
+                    const errorBody = JSON.stringify({
+                        error: 'network_error',
+                        message: errorMessage,
+                        url: localUrl
+                    });
+
+                    return {
+                        status: 502,
+                        headers: [
+                            ['content-type', new TextEncoder().encode('application/json')],
+                            ['x-error-source', new TextEncoder().encode('wasi-http-shim')]
+                        ],
+                        bodyStream: createInputStreamFromBytes(new TextEncoder().encode(errorBody))
+                    };
+                }
+            })();
+
+            return new FutureIncomingResponse(fetchPromise);
+        }
+
+        // Fallback to sync XHR for non-JSPI environments (Safari)
         console.log('[http] No streaming handler, falling back to sync XHR');
         const xhr = new XMLHttpRequest();
         xhr.open(method, localUrl, false); // false = synchronous
