@@ -17,9 +17,11 @@ use bindings::wasi::filesystem::types::{Descriptor, DescriptorFlags, OpenFlags, 
 use bindings::wasi::io::streams::{InputStream, OutputStream};
 
 use ropey::Rope;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{Style, ThemeSet};
-use syntect::parsing::SyntaxSet;
+use syntect::highlighting::{HighlightState, Style, ThemeSet};
+use syntect::parsing::{ParseState, SyntaxSet};
 
 struct EdtuiModule;
 
@@ -103,6 +105,11 @@ struct Editor {
     // Cached syntax highlighting (expensive to load, do it once)
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
+    // ParseState cache for incremental highlighting
+    // Each entry: (line_content_hash, ParseState after this line, HighlightState after this line)
+    parse_state_cache: Vec<(u64, ParseState, HighlightState)>,
+    // First line that needs re-highlighting (None = all clean)
+    dirty_from: Option<usize>,
 }
 
 impl Editor {
@@ -137,11 +144,29 @@ impl Editor {
             current_match_idx: None,
             syntax_set,
             theme_set,
+            parse_state_cache: Vec::new(),
+            dirty_from: Some(0), // Initially all lines need highlighting
         }
     }
 
     fn to_string(&self) -> String {
         self.rope.to_string()
+    }
+
+    /// Mark lines as needing re-highlighting from a given line onwards.
+    /// This is called after any text modification.
+    fn mark_dirty_from(&mut self, line: usize) {
+        self.dirty_from = Some(match self.dirty_from {
+            Some(existing) => existing.min(line),
+            None => line,
+        });
+    }
+
+    /// Compute a hash for a line's content
+    fn hash_line(&self, content: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        hasher.finish()
     }
 
     fn line_count(&self) -> usize {
@@ -202,6 +227,7 @@ impl Editor {
             self.cursor_col = prev.cursor_col;
             self.clamp_cursor();
             self.status_message = format!("{} changes undone", self.undo_stack.len() + 1);
+            self.mark_dirty_from(0); // Full content potentially changed
         } else {
             self.status_message = "Already at oldest change".to_string();
         }
@@ -222,6 +248,7 @@ impl Editor {
             self.cursor_col = next.cursor_col;
             self.clamp_cursor();
             self.status_message = "Redo".to_string();
+            self.mark_dirty_from(0); // Full content potentially changed
         } else {
             self.status_message = "Already at newest change".to_string();
         }
@@ -418,6 +445,7 @@ impl Editor {
         self.rope.insert_char(idx, c);
         self.cursor_col += 1;
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row);
     }
 
     fn delete_char_at_cursor(&mut self) {
@@ -426,6 +454,7 @@ impl Editor {
             let idx = self.char_idx(self.cursor_row, self.cursor_col);
             self.rope.remove(idx..idx + 1);
             self.modified = true;
+            self.mark_dirty_from(self.cursor_row);
             self.clamp_cursor_col();
         }
     }
@@ -437,6 +466,7 @@ impl Editor {
             let idx = self.char_idx(self.cursor_row, self.cursor_col);
             self.rope.remove(idx..idx + 1);
             self.modified = true;
+            self.mark_dirty_from(self.cursor_row);
         } else if self.cursor_row > 0 {
             self.capture();
             // Join with previous line
@@ -457,6 +487,7 @@ impl Editor {
             self.cursor_row -= 1;
             self.cursor_col = prev_len;
             self.modified = true;
+            self.mark_dirty_from(self.cursor_row); // Previous line now contains joined content
         }
     }
 
@@ -467,6 +498,7 @@ impl Editor {
         self.cursor_row += 1;
         self.cursor_col = 0;
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row.saturating_sub(1)); // Original line was split
     }
 
     fn open_line_below(&mut self) {
@@ -478,6 +510,7 @@ impl Editor {
         self.cursor_col = 0;
         self.mode = Mode::Insert;
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row); // New line below current
     }
 
     fn open_line_above(&mut self) {
@@ -487,6 +520,7 @@ impl Editor {
         self.cursor_col = 0;
         self.mode = Mode::Insert;
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row); // All lines shifted
     }
 
     fn delete_line(&mut self) {
@@ -513,6 +547,7 @@ impl Editor {
             self.clamp_cursor_col();
         }
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row); // Current and following lines affected
     }
 
     fn yank_line(&mut self) {
@@ -556,6 +591,7 @@ impl Editor {
             self.cursor_col += self.yank_buffer.len();
         }
         self.modified = true;
+        self.mark_dirty_from(self.cursor_row); // Paste affects current and possibly following lines
     }
 
     fn delete_selection(&mut self) {
@@ -588,6 +624,7 @@ impl Editor {
             self.cursor_col = start_col;
             self.clamp_cursor();
             self.modified = true;
+            self.mark_dirty_from(start_row); // Deleted region affects this and following lines
             self.selection_anchor = None;
             self.mode = Mode::Normal;
 
@@ -776,7 +813,7 @@ fn run_editor(
 
     while running {
         let dims = get_terminal_size();
-        draw_editor(&stdout, &editor, dims.cols as usize, dims.rows as usize);
+        draw_editor(&stdout, &mut editor, dims.cols as usize, dims.rows as usize);
 
         if let Some(byte) = read_single_byte(&stdin) {
             editor.status_message.clear();
@@ -1091,7 +1128,7 @@ fn style_to_ansi(style: &Style) -> String {
     format!("\x1B[38;2;{};{};{}m", fg.r, fg.g, fg.b)
 }
 
-fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usize) {
+fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height: usize) {
     let mut buffer = String::new();
     buffer.push_str(HOME);
 
@@ -1144,8 +1181,82 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
         })
         .unwrap_or_else(|| ps.find_syntax_plain_text());
 
-    // Create highlighter
-    let mut highlighter = HighlightLines::new(syntax, theme);
+    // Determine where to start highlighting from (for incremental updates)
+    let dirty_from = editor.dirty_from.unwrap_or(0);
+
+    // Truncate cache from dirty_from onwards (those entries are now invalid)
+    if dirty_from < editor.parse_state_cache.len() {
+        editor.parse_state_cache.truncate(dirty_from);
+    }
+
+    // Pre-process all lines from 0 to the last visible line to ensure cache is populated
+    // We need to process lines sequentially to build up correct parse state
+    let total_lines = editor.line_count();
+    let visible_end = (editor.scroll_offset + content_height).min(total_lines);
+
+    // Start from cached state or fresh
+    let mut highlighter = if dirty_from > 0 && dirty_from <= editor.parse_state_cache.len() {
+        // Restore from cached state (cache is: hash, ParseState, HighlightState)
+        let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[dirty_from - 1];
+        HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone())
+    } else {
+        // Start fresh from beginning
+        HighlightLines::new(syntax, theme)
+    };
+
+    // The start_line is where our highlighter state corresponds to
+    let start_line = dirty_from.min(editor.parse_state_cache.len());
+
+    // Process lines from start_line up to visible_end to build cache
+    for line_idx in start_line..visible_end {
+        let line = editor.get_line(line_idx);
+        let line_with_newline = format!("{}\n", line);
+        let line_hash = editor.hash_line(&line);
+
+        // Check if this line is already cached and unchanged
+        if line_idx < editor.parse_state_cache.len() {
+            let (cached_hash, _, _) = &editor.parse_state_cache[line_idx];
+            if *cached_hash == line_hash {
+                // Line unchanged, restore highlighter from this line's end state for next iteration
+                let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[line_idx];
+                highlighter =
+                    HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone());
+                continue;
+            }
+        }
+
+        // Highlight this line (this advances the internal state)
+        let _ = highlighter.highlight_line(&line_with_newline, ps);
+
+        // Extract state for caching (state() consumes highlighter)
+        let (hs, parse_st) = highlighter.state();
+
+        // Store the state AFTER processing this line
+        if line_idx < editor.parse_state_cache.len() {
+            editor.parse_state_cache[line_idx] = (line_hash, parse_st.clone(), hs.clone());
+        } else {
+            editor
+                .parse_state_cache
+                .push((line_hash, parse_st.clone(), hs.clone()));
+        }
+
+        // Reconstruct highlighter from the state we just extracted for the next iteration
+        highlighter = HighlightLines::from_state(theme, hs, parse_st);
+    }
+
+    // Clear dirty flag since we've processed everything up to visible_end
+    editor.dirty_from = None;
+
+    // Now render the visible lines
+    // Restore highlighter to scroll_offset position
+    let mut render_highlighter = if editor.scroll_offset > 0
+        && editor.scroll_offset <= editor.parse_state_cache.len()
+    {
+        let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[editor.scroll_offset - 1];
+        HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone())
+    } else {
+        HighlightLines::new(syntax, theme)
+    };
 
     // Editor content
     for i in 0..content_height {
@@ -1156,7 +1267,7 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
             let mut display = String::new();
 
             // Get highlighted ranges for this line
-            let highlighted = highlighter.highlight_line(&line_with_newline, &ps);
+            let highlighted = render_highlighter.highlight_line(&line_with_newline, ps);
 
             // Build display string with syntax highlighting and selection
             let mut char_idx = 0;
