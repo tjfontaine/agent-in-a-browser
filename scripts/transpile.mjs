@@ -23,44 +23,72 @@ const PACKAGES = `${ROOT}/packages`;
 const FRONTEND = `${ROOT}/frontend`;
 
 // ============================================================
-// WASI VERSION - Update when wit-bindgen changes
+// WASI VERSION - Detected from WASM at runtime
 // ============================================================
-const V = '0.2.6';
+// ASYNC_IMPORTS versions MUST match what the WASM file exports.
+// wit-bindgen 0.51.0 changed from 0.2.6 to 0.2.9.
+// We detect the version by inspecting the WASM file.
 
-// ============================================================
-// ASYNC-IMPORTS - All blocking operations for JSPI suspension
-// ============================================================
-const ASYNC_IMPORTS = [
-    // IO
-    `wasi:io/streams@${V}#[method]input-stream.blocking-read`,
-    `wasi:io/streams@${V}#[method]output-stream.blocking-write-and-flush`,
-    // Polling - required for HTTP response waiting
-    `wasi:io/poll@${V}#[method]pollable.block`,
-    `wasi:io/poll@${V}#poll`,
-    // HTTP - future-incoming-response.get() is async to allow JSPI suspension
-    // This allows callers that busy-wait on get() to properly suspend
-    `wasi:http/types@0.2.4#[method]future-incoming-response.get`,
-    // Filesystem
-    `wasi:filesystem/types@${V}#[method]descriptor.read`,
-    `wasi:filesystem/types@${V}#[method]descriptor.write`,
-    `wasi:filesystem/types@${V}#[method]descriptor.read-directory`,
-    `wasi:filesystem/types@${V}#[method]descriptor.open-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.stat`,
-    `wasi:filesystem/types@${V}#[method]descriptor.stat-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.create-directory-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.unlink-file-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.remove-directory-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.rename-at`,
-    `wasi:filesystem/types@${V}#[method]descriptor.symlink-at`,
-    // MCP loader
-    'mcp:module-loader/loader#get-lazy-module',
-    'mcp:module-loader/loader#spawn-lazy-command',
-    'mcp:module-loader/loader#spawn-worker-command',
-    'mcp:module-loader/loader#spawn-interactive',
-    'mcp:module-loader/loader#[method]lazy-process.try-wait',
-    // Shell
-    'shell:unix/command@0.1.0#run',
-];
+/**
+ * Detect WASI interface version from WASM file using wasm-tools.
+ * Returns the version string (e.g., "0.2.6" or "0.2.9").
+ */
+function detectWasiVersion(wasmPath) {
+    try {
+        const wit = execSync(`wasm-tools component wit "${wasmPath}" 2>&1`, { encoding: 'utf8' });
+        // Look for pattern like "wasi:io/poll@0.2.9" or "wasi:io/poll@0.2.6"
+        const match = wit.match(/wasi:io\/poll@(\d+\.\d+\.\d+)/);
+        if (match) {
+            return match[1];
+        }
+        // Fallback to checking filesystem version
+        const fsMatch = wit.match(/wasi:filesystem\/types@(\d+\.\d+\.\d+)/);
+        if (fsMatch) {
+            return fsMatch[1];
+        }
+    } catch (e) {
+        console.warn(`[transpile] Warning: Could not detect WASI version from ${wasmPath}: ${e.message}`);
+    }
+    // Default fallback
+    return '0.2.6';
+}
+
+/**
+ * Build ASYNC_IMPORTS list with the detected version.
+ */
+function buildAsyncImports(V) {
+    return [
+        // IO
+        `wasi:io/streams@${V}#[method]input-stream.blocking-read`,
+        `wasi:io/streams@${V}#[method]output-stream.blocking-write-and-flush`,
+        // Polling - required for HTTP response waiting
+        `wasi:io/poll@${V}#[method]pollable.block`,
+        `wasi:io/poll@${V}#poll`,
+        // HTTP - future-incoming-response.get() is async to allow JSPI suspension
+        // This allows callers that busy-wait on get() to properly suspend
+        `wasi:http/types@0.2.4#[method]future-incoming-response.get`,
+        // Filesystem
+        `wasi:filesystem/types@${V}#[method]descriptor.read`,
+        `wasi:filesystem/types@${V}#[method]descriptor.write`,
+        `wasi:filesystem/types@${V}#[method]descriptor.read-directory`,
+        `wasi:filesystem/types@${V}#[method]descriptor.open-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.stat`,
+        `wasi:filesystem/types@${V}#[method]descriptor.stat-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.create-directory-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.unlink-file-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.remove-directory-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.rename-at`,
+        `wasi:filesystem/types@${V}#[method]descriptor.symlink-at`,
+        // MCP loader
+        'mcp:module-loader/loader#get-lazy-module',
+        'mcp:module-loader/loader#spawn-lazy-command',
+        'mcp:module-loader/loader#spawn-worker-command',
+        'mcp:module-loader/loader#spawn-interactive',
+        'mcp:module-loader/loader#[method]lazy-process.try-wait',
+        // Shell
+        'shell:unix/command@0.1.0#run',
+    ];
+}
 
 // ============================================================
 // SHIMS - Use package imports for proper module deduplication
@@ -172,7 +200,11 @@ function build(name, mod, syncMode) {
         args.push('--async-mode', 'sync', '--tla-compat');
     } else {
         args.push('--async-mode', 'jspi');
-        for (const imp of ASYNC_IMPORTS) args.push('--async-imports', `'${imp}'`);
+        // Detect WASI version from the WASM file and build ASYNC_IMPORTS with matching version
+        const wasiVersion = detectWasiVersion(input);
+        const asyncImports = buildAsyncImports(wasiVersion);
+        console.log(`📦 Detected WASI version: ${wasiVersion}`);
+        for (const imp of asyncImports) args.push('--async-imports', `'${imp}'`);
         for (const exp of (mod.exports || [])) args.push('--async-exports', `'${exp}'`);
     }
 
@@ -291,7 +323,7 @@ const syncMode = args.includes('--sync');
 const names = args.filter(a => !a.startsWith('--'));
 const targets = names.length ? names : Object.keys(MODULES);
 
-console.log(`🔧 JCO Transpile (WASI ${V}, ${syncMode ? 'SYNC' : 'JSPI'})\n`);
+console.log(`🔧 JCO Transpile (${syncMode ? 'SYNC' : 'JSPI'})\n`);
 
 for (const name of targets) {
     const mod = MODULES[name];

@@ -872,15 +872,15 @@ function trampoline0() {
   return ret ? 1 : 0;
 }
 
-const handleTable15 = [T_FLAG, 0];
-const captureTable15= new Map();
-let captureCnt15 = 0;
-handleTables[15] = handleTable15;
+const handleTable1 = [T_FLAG, 0];
+const captureTable1= new Map();
+let captureCnt1 = 0;
+handleTables[1] = handleTable1;
 
 function trampoline1(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -908,8 +908,8 @@ function trampoline1(arg0, arg1) {
 
 function trampoline2(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -935,12 +935,12 @@ function trampoline2(arg0) {
 
 
 function trampoline3() {
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-u64"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-u64"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-random-u64');
   const ret = getRandomU64();
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-u64"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-u64"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-u64"][Instruction::Return]', {
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-u64"][Instruction::Return]', {
     funcName: 'get-random-u64',
     paramCount: 1,
     async: false,
@@ -949,27 +949,27 @@ function trampoline3() {
   return toUint64(ret);
 }
 
-const handleTable4 = [T_FLAG, 0];
-const captureTable4= new Map();
-let captureCnt4 = 0;
-handleTables[4] = handleTable4;
+const handleTable5 = [T_FLAG, 0];
+const captureTable5= new Map();
+let captureCnt5 = 0;
+handleTables[5] = handleTable5;
 
 function trampoline5() {
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]fields"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]fields');
   const ret = new Fields();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]fields"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret instanceof Fields)) {
     throw new TypeError('Resource error: Not a valid "Fields" resource.');
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable4, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt5;
+    captureTable5.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable5, rep);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]fields"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]fields"][Instruction::Return]', {
     funcName: '[constructor]fields',
     paramCount: 1,
     async: false,
@@ -978,39 +978,39 @@ function trampoline5() {
   return handle0;
 }
 
-const handleTable5 = [T_FLAG, 0];
-const captureTable5= new Map();
-let captureCnt5 = 0;
-handleTables[5] = handleTable5;
+const handleTable6 = [T_FLAG, 0];
+const captureTable6= new Map();
+let captureCnt6 = 0;
+handleTables[6] = handleTable6;
 
 function trampoline6(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable4.delete(rep2);
+    captureTable5.delete(rep2);
   }
-  rscTableRemove(handleTable4, handle1);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"] [Instruction::CallInterface] (async? sync, @ enter)');
+  rscTableRemove(handleTable5, handle1);
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-request"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]outgoing-request');
   const ret = new OutgoingRequest(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-request"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret instanceof OutgoingRequest)) {
     throw new TypeError('Resource error: Not a valid "OutgoingRequest" resource.');
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt5;
-    captureTable5.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable5, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt6;
+    captureTable6.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable6, rep);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-request"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-request"][Instruction::Return]', {
     funcName: '[constructor]outgoing-request',
     paramCount: 1,
     async: false,
@@ -1019,10 +1019,10 @@ function trampoline6(arg0) {
   return handle3;
 }
 
-const handleTable3 = [T_FLAG, 0];
-const captureTable3= new Map();
-let captureCnt3 = 0;
-handleTables[3] = handleTable3;
+const handleTable4 = [T_FLAG, 0];
+const captureTable4= new Map();
+let captureCnt4 = 0;
+handleTables[4] = handleTable4;
 const handleTable0 = [T_FLAG, 0];
 const captureTable0= new Map();
 let captureCnt0 = 0;
@@ -1030,18 +1030,18 @@ handleTables[0] = handleTable0;
 
 function trampoline7(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.subscribe');
   const ret = rsc0.subscribe();
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.subscribe"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.subscribe"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -1056,7 +1056,7 @@ function trampoline7(arg0) {
     captureTable0.set(rep, ret);
     handle3 = rscTableCreateOwn(handleTable0, rep);
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.subscribe"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.subscribe"][Instruction::Return]', {
     funcName: '[method]output-stream.subscribe',
     paramCount: 1,
     async: false,
@@ -1065,31 +1065,31 @@ function trampoline7(arg0) {
   return handle3;
 }
 
-const handleTable8 = [T_FLAG, 0];
-const captureTable8= new Map();
-let captureCnt8 = 0;
-handleTables[8] = handleTable8;
+const handleTable9 = [T_FLAG, 0];
+const captureTable9= new Map();
+let captureCnt9 = 0;
+handleTables[9] = handleTable9;
 
 function trampoline8(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable8.get(rep2);
+  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable9.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.status"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-response.status');
   const ret = rsc0.status();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.status"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.status"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.status"][Instruction::Return]', {
     funcName: '[method]incoming-response.status',
     paramCount: 1,
     async: false,
@@ -1098,25 +1098,25 @@ function trampoline8(arg0) {
   return toUint16(ret);
 }
 
-const handleTable2 = [T_FLAG, 0];
-const captureTable2= new Map();
-let captureCnt2 = 0;
-handleTables[2] = handleTable2;
+const handleTable3 = [T_FLAG, 0];
+const captureTable3= new Map();
+let captureCnt3 = 0;
+handleTables[3] = handleTable3;
 
 function trampoline9(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.subscribe"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.subscribe');
   const ret = rsc0.subscribe();
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.subscribe"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.subscribe"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -1131,7 +1131,7 @@ function trampoline9(arg0) {
     captureTable0.set(rep, ret);
     handle3 = rscTableCreateOwn(handleTable0, rep);
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.subscribe"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.subscribe"][Instruction::Return]', {
     funcName: '[method]input-stream.subscribe',
     paramCount: 1,
     async: false,
@@ -1142,10 +1142,10 @@ function trampoline9(arg0) {
 
 
 function trampoline12(arg0) {
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="subscribe-duration"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'subscribe-duration');
   const ret = subscribeDuration(BigInt.asUintN(64, arg0));
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="subscribe-duration"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret ?.[Symbol.for('wasi:io/poll@0.2.4#Pollable')])) {
     throw new TypeError('Resource error: Not a valid "Pollable" resource.');
@@ -1156,7 +1156,7 @@ function trampoline12(arg0) {
     captureTable0.set(rep, ret);
     handle0 = rscTableCreateOwn(handleTable0, rep);
   }
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="subscribe-duration"][Instruction::Return]', {
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"][Instruction::Return]', {
     funcName: 'subscribe-duration',
     paramCount: 1,
     async: false,
@@ -1168,8 +1168,8 @@ function trampoline12(arg0) {
 
 function trampoline13(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1206,8 +1206,8 @@ function trampoline13(arg0) {
 
 function trampoline14(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1243,16 +1243,16 @@ const trampoline15 = new WebAssembly.Suspending(async function(arg0) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/poll@0.2.9", function="[method]pollable.block"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]pollable.block');
   await rsc0.block();
-  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/poll@0.2.9", function="[method]pollable.block"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
   curResourceBorrows = [];
   endCurrentTask(0);
-  _debugLog('[iface="wasi:io/poll@0.2.6", function="[method]pollable.block"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/poll@0.2.9", function="[method]pollable.block"][Instruction::Return]', {
     funcName: '[method]pollable.block',
     paramCount: 0,
     async: false,
@@ -1260,25 +1260,25 @@ const trampoline15 = new WebAssembly.Suspending(async function(arg0) {
   });
 }
 );
-const handleTable10 = [T_FLAG, 0];
-const captureTable10= new Map();
-let captureCnt10 = 0;
-handleTables[10] = handleTable10;
+const handleTable11 = [T_FLAG, 0];
+const captureTable11= new Map();
+let captureCnt11 = 0;
+handleTables[11] = handleTable11;
 
 function trampoline25(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable10.get(rep2);
+  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable11.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.headers"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.headers"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-request.headers');
   const ret = rsc0.headers();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.headers"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.headers"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -1289,11 +1289,11 @@ function trampoline25(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable4, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt5;
+    captureTable5.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable5, rep);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.headers"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.headers"][Instruction::Return]', {
     funcName: '[method]incoming-request.headers',
     paramCount: 1,
     async: false,
@@ -1302,43 +1302,43 @@ function trampoline25(arg0) {
   return handle3;
 }
 
-const handleTable9 = [T_FLAG, 0];
-const captureTable9= new Map();
-let captureCnt9 = 0;
-handleTables[9] = handleTable9;
-const handleTable11 = [T_FLAG, 0];
-const captureTable11= new Map();
-let captureCnt11 = 0;
-handleTables[11] = handleTable11;
+const handleTable10 = [T_FLAG, 0];
+const captureTable10= new Map();
+let captureCnt10 = 0;
+handleTables[10] = handleTable10;
+const handleTable12 = [T_FLAG, 0];
+const captureTable12= new Map();
+let captureCnt12 = 0;
+handleTables[12] = handleTable12;
 
 function trampoline26(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable9.get(rep2);
+  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable9.delete(rep2);
+    captureTable10.delete(rep2);
   }
-  rscTableRemove(handleTable9, handle1);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]incoming-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
+  rscTableRemove(handleTable10, handle1);
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]incoming-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]incoming-body.finish');
   const ret = IncomingBody.finish(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]incoming-body.finish"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]incoming-body.finish"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret instanceof FutureTrailers)) {
     throw new TypeError('Resource error: Not a valid "FutureTrailers" resource.');
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt11;
-    captureTable11.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable11, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt12;
+    captureTable12.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable12, rep);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]incoming-body.finish"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]incoming-body.finish"][Instruction::Return]', {
     funcName: '[static]incoming-body.finish',
     paramCount: 1,
     async: false,
@@ -1347,39 +1347,39 @@ function trampoline26(arg0) {
   return handle3;
 }
 
-const handleTable12 = [T_FLAG, 0];
-const captureTable12= new Map();
-let captureCnt12 = 0;
-handleTables[12] = handleTable12;
+const handleTable13 = [T_FLAG, 0];
+const captureTable13= new Map();
+let captureCnt13 = 0;
+handleTables[13] = handleTable13;
 
 function trampoline28(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable4.delete(rep2);
+    captureTable5.delete(rep2);
   }
-  rscTableRemove(handleTable4, handle1);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-response"] [Instruction::CallInterface] (async? sync, @ enter)');
+  rscTableRemove(handleTable5, handle1);
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-response"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]outgoing-response');
   const ret = new OutgoingResponse(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-response"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-response"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret instanceof OutgoingResponse)) {
     throw new TypeError('Resource error: Not a valid "OutgoingResponse" resource.');
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt12;
-    captureTable12.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable12, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt13;
+    captureTable13.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable13, rep);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[constructor]outgoing-response"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-response"][Instruction::Return]', {
     funcName: '[constructor]outgoing-response',
     paramCount: 1,
     async: false,
@@ -1391,15 +1391,15 @@ function trampoline28(arg0) {
 
 function trampoline29(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable12[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable12.get(rep2);
+  var rep2 = handleTable13[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable13.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.set-status-code"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.set-status-code"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-response.set-status-code');
   let ret;
   try {
@@ -1407,7 +1407,7 @@ function trampoline29(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.set-status-code"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.set-status-code"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -1430,7 +1430,7 @@ function trampoline29(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.set-status-code"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.set-status-code"][Instruction::Return]', {
     funcName: '[method]outgoing-response.set-status-code',
     paramCount: 1,
     async: false,
@@ -1441,21 +1441,21 @@ function trampoline29(arg0, arg1) {
 
 
 function trampoline33() {
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
   const ret = getStdout();
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable3, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt4;
+    captureTable4.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable4, rep);
   }
-  _debugLog('[iface="wasi:cli/stdout@0.2.6", function="get-stdout"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"][Instruction::Return]', {
     funcName: 'get-stdout',
     paramCount: 1,
     async: false,
@@ -1466,12 +1466,12 @@ function trampoline33() {
 
 
 function trampoline34() {
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'now');
   const ret = now();
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.6", function="now"][Instruction::Return]', {
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"][Instruction::Return]', {
     funcName: 'now',
     paramCount: 1,
     async: false,
@@ -1482,21 +1482,21 @@ function trampoline34() {
 
 
 function trampoline35() {
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/stderr@0.2.9", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stderr');
   const ret = getStderr();
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/stderr@0.2.9", function="get-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable3, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt4;
+    captureTable4.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable4, rep);
   }
-  _debugLog('[iface="wasi:cli/stderr@0.2.6", function="get-stderr"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/stderr@0.2.9", function="get-stderr"][Instruction::Return]', {
     funcName: 'get-stderr',
     paramCount: 1,
     async: false,
@@ -1508,21 +1508,21 @@ function trampoline35() {
 let exports1;
 
 function trampoline43() {
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdin');
   const ret = getStdin();
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
     throw new TypeError('Resource error: Not a valid "InputStream" resource.');
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt2;
-    captureTable2.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable2, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable3, rep);
   }
-  _debugLog('[iface="wasi:cli/stdin@0.2.6", function="get-stdin"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"][Instruction::Return]', {
     funcName: 'get-stdin',
     paramCount: 1,
     async: false,
@@ -1545,12 +1545,12 @@ function trampoline44(arg0) {
       val: undefined
     };
   }
-  _debugLog('[iface="wasi:cli/exit@0.2.6", function="exit"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/exit@0.2.9", function="exit"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'exit');
   exit(variant0);
-  _debugLog('[iface="wasi:cli/exit@0.2.6", function="exit"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/exit@0.2.9", function="exit"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  _debugLog('[iface="wasi:cli/exit@0.2.6", function="exit"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/exit@0.2.9", function="exit"][Instruction::Return]', {
     funcName: 'exit',
     paramCount: 0,
     async: false,
@@ -1660,9 +1660,9 @@ const trampoline47 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
-    const rep = ret[symbolRscRep] || ++captureCnt15;
-    captureTable15.set(rep, ret);
-    handle8 = rscTableCreateOwn(handleTable15, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle8 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-interactive"][Instruction::Return]', {
     funcName: 'spawn-interactive',
@@ -1717,9 +1717,9 @@ const trampoline48 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle7 = ret[symbolRscHandle];
   if (!handle7) {
-    const rep = ret[symbolRscRep] || ++captureCnt15;
-    captureTable15.set(rep, ret);
-    handle7 = rscTableCreateOwn(handleTable15, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle7 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-worker-command"][Instruction::Return]', {
     funcName: 'spawn-worker-command',
@@ -1777,9 +1777,9 @@ const trampoline49 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
-    const rep = ret[symbolRscRep] || ++captureCnt15;
-    captureTable15.set(rep, ret);
-    handle8 = rscTableCreateOwn(handleTable15, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle8 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-lazy-command"][Instruction::Return]', {
     funcName: 'spawn-lazy-command',
@@ -1793,8 +1793,8 @@ const trampoline49 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 function trampoline50(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1825,8 +1825,8 @@ function trampoline50(arg0, arg1, arg2) {
 
 function trampoline51(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1860,8 +1860,8 @@ function trampoline51(arg0, arg1, arg2) {
 
 function trampoline52(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1895,8 +1895,8 @@ function trampoline52(arg0, arg1, arg2) {
 
 const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable15.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1930,10 +1930,10 @@ const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1) {
 );
 
 function trampoline54(arg0, arg1) {
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-bytes"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-bytes"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-random-bytes');
   const ret = getRandomBytes(BigInt.asUintN(64, arg0));
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-bytes"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-bytes"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var val0 = ret;
   var len0 = val0.byteLength;
@@ -1942,7 +1942,7 @@ function trampoline54(arg0, arg1) {
   (new Uint8Array(memory0.buffer, ptr0, len0 * 1)).set(src0);
   dataView(memory0).setUint32(arg1 + 4, len0, true);
   dataView(memory0).setUint32(arg1 + 0, ptr0, true);
-  _debugLog('[iface="wasi:random/random@0.2.6", function="get-random-bytes"][Instruction::Return]', {
+  _debugLog('[iface="wasi:random/random@0.2.9", function="get-random-bytes"][Instruction::Return]', {
     funcName: 'get-random-bytes',
     paramCount: 0,
     async: false,
@@ -1956,10 +1956,10 @@ let captureCnt17 = 0;
 handleTables[17] = handleTable17;
 
 function trampoline55(arg0) {
-  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.9", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdout');
   const ret = getTerminalStdout();
-  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.9", function="get-terminal-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
   if (variant1 === null || variant1=== undefined) {
@@ -1978,7 +1978,7 @@ function trampoline55(arg0) {
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
-  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.6", function="get-terminal-stdout"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/terminal-stdout@0.2.9", function="get-terminal-stdout"][Instruction::Return]', {
     funcName: 'get-terminal-stdout',
     paramCount: 0,
     async: false,
@@ -1989,8 +1989,8 @@ function trampoline55(arg0) {
 
 function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2003,7 +2003,7 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   var ptr4 = arg3;
   var len4 = arg4;
   var result4 = new Uint8Array(memory0.buffer.slice(ptr4, ptr4 + len4 * 1));
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.append"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.append');
   let ret;
   try {
@@ -2011,7 +2011,7 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.append"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2051,7 +2051,7 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.append"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.append"][Instruction::Return]', {
     funcName: '[method]fields.append',
     paramCount: 0,
     async: false,
@@ -2062,8 +2062,8 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
 
 function trampoline57(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2137,7 +2137,7 @@ function trampoline57(arg0, arg1, arg2, arg3) {
       break;
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-method');
   let ret;
   try {
@@ -2145,7 +2145,7 @@ function trampoline57(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-method"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2168,7 +2168,7 @@ function trampoline57(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-method"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-method"][Instruction::Return]', {
     funcName: '[method]outgoing-request.set-method',
     paramCount: 1,
     async: false,
@@ -2180,8 +2180,8 @@ function trampoline57(arg0, arg1, arg2, arg3) {
 
 function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2219,7 +2219,7 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   } else {
     variant5 = undefined;
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-scheme');
   let ret;
   try {
@@ -2227,7 +2227,7 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-scheme"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2250,7 +2250,7 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-scheme"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-scheme"][Instruction::Return]', {
     funcName: '[method]outgoing-request.set-scheme',
     paramCount: 1,
     async: false,
@@ -2262,8 +2262,8 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
 
 function trampoline59(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2279,7 +2279,7 @@ function trampoline59(arg0, arg1, arg2, arg3) {
   } else {
     variant4 = undefined;
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-authority');
   let ret;
   try {
@@ -2287,7 +2287,7 @@ function trampoline59(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-authority"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2310,7 +2310,7 @@ function trampoline59(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-authority"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-authority"][Instruction::Return]', {
     funcName: '[method]outgoing-request.set-authority',
     paramCount: 1,
     async: false,
@@ -2322,8 +2322,8 @@ function trampoline59(arg0, arg1, arg2, arg3) {
 
 function trampoline60(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2339,7 +2339,7 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   } else {
     variant4 = undefined;
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.set-path-with-query');
   let ret;
   try {
@@ -2347,7 +2347,7 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-path-with-query"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2370,7 +2370,7 @@ function trampoline60(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.set-path-with-query"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.set-path-with-query"][Instruction::Return]', {
     funcName: '[method]outgoing-request.set-path-with-query',
     paramCount: 1,
     async: false,
@@ -2379,22 +2379,22 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   return variant5_0;
 }
 
-const handleTable6 = [T_FLAG, 0];
-const captureTable6= new Map();
-let captureCnt6 = 0;
-handleTables[6] = handleTable6;
+const handleTable7 = [T_FLAG, 0];
+const captureTable7= new Map();
+let captureCnt7 = 0;
+handleTables[7] = handleTable7;
 
 function trampoline61(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.body"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-request.body');
   let ret;
   try {
@@ -2402,7 +2402,7 @@ function trampoline61(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.body"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2418,9 +2418,9 @@ function trampoline61(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt6;
-        captureTable6.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable6, rep);
+        const rep = e[symbolRscRep] || ++captureCnt7;
+        captureTable7.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable7, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -2434,7 +2434,7 @@ function trampoline61(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-request.body"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-request.body"][Instruction::Return]', {
     funcName: '[method]outgoing-request.body',
     paramCount: 0,
     async: false,
@@ -2442,25 +2442,25 @@ function trampoline61(arg0, arg1) {
   });
 }
 
-const handleTable7 = [T_FLAG, 0];
-const captureTable7= new Map();
-let captureCnt7 = 0;
-handleTables[7] = handleTable7;
+const handleTable8 = [T_FLAG, 0];
+const captureTable8= new Map();
+let captureCnt8 = 0;
+handleTables[8] = handleTable8;
 
-const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
+function trampoline62(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable7.get(rep2);
+  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable8.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(FutureIncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]future-incoming-response.get');
-  const ret = await rsc0.get();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (sync, @ post-call)');
+  const ret = rsc0.get();
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]future-incoming-response.get"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2487,9 +2487,9 @@ const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
             }
             var handle3 = e[symbolRscHandle];
             if (!handle3) {
-              const rep = e[symbolRscRep] || ++captureCnt8;
-              captureTable8.set(rep, e);
-              handle3 = rscTableCreateOwn(handleTable8, rep);
+              const rep = e[symbolRscRep] || ++captureCnt9;
+              captureTable9.set(rep, e);
+              handle3 = rscTableCreateOwn(handleTable9, rep);
             }
             dataView(memory0).setInt32(arg1 + 24, handle3, true);
             break;
@@ -2900,26 +2900,26 @@ const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
       }
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]future-incoming-response.get"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]future-incoming-response.get"][Instruction::Return]', {
     funcName: '[method]future-incoming-response.get',
     paramCount: 0,
     async: false,
     postReturn: false
   });
 }
-);
+
 
 function trampoline63(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable8.get(rep2);
+  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable9.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-response.consume');
   let ret;
   try {
@@ -2927,7 +2927,7 @@ function trampoline63(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.consume"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2943,9 +2943,9 @@ function trampoline63(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt9;
-        captureTable9.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable9, rep);
+        const rep = e[symbolRscRep] || ++captureCnt10;
+        captureTable10.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable10, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -2959,7 +2959,7 @@ function trampoline63(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-response.consume"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-response.consume"][Instruction::Return]', {
     funcName: '[method]incoming-response.consume',
     paramCount: 0,
     async: false,
@@ -2970,15 +2970,15 @@ function trampoline63(arg0, arg1) {
 
 function trampoline64(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable9.get(rep2);
+  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-body.stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-body.stream');
   let ret;
   try {
@@ -2986,7 +2986,7 @@ function trampoline64(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-body.stream"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -2999,65 +2999,6 @@ function trampoline64(arg0, arg1) {
       dataView(memory0).setInt8(arg1 + 0, 0, true);
       if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#InputStream')])) {
         throw new TypeError('Resource error: Not a valid "InputStream" resource.');
-      }
-      var handle3 = e[symbolRscHandle];
-      if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt2;
-        captureTable2.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable2, rep);
-      }
-      dataView(memory0).setInt32(arg1 + 4, handle3, true);
-      break;
-    }
-    case 'err': {
-      const e = variant4.val;
-      dataView(memory0).setInt8(arg1 + 0, 1, true);
-      break;
-    }
-    default: {
-      throw new TypeError('invalid variant specified for result');
-    }
-  }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-body.stream"][Instruction::Return]', {
-    funcName: '[method]incoming-body.stream',
-    paramCount: 0,
-    async: false,
-    postReturn: false
-  });
-}
-
-
-function trampoline65(arg0, arg1) {
-  var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
-  if (!rsc0) {
-    rsc0 = Object.create(OutgoingBody.prototype);
-    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
-    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
-  }
-  curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-body.write');
-  let ret;
-  try {
-    ret = { tag: 'ok', val: rsc0.write()};
-  } catch (e) {
-    ret = { tag: 'err', val: getErrorPayload(e) };
-  }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"] [Instruction::CallInterface] (sync, @ post-call)');
-  for (const rsc of curResourceBorrows) {
-    rsc[symbolRscHandle] = undefined;
-  }
-  curResourceBorrows = [];
-  endCurrentTask(0);
-  var variant4 = ret;
-  switch (variant4.tag) {
-    case 'ok': {
-      const e = variant4.val;
-      dataView(memory0).setInt8(arg1 + 0, 0, true);
-      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
-        throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
@@ -3077,7 +3018,66 @@ function trampoline65(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-body.write"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-body.stream"][Instruction::Return]', {
+    funcName: '[method]incoming-body.stream',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline65(arg0, arg1) {
+  var handle1 = arg0;
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
+  if (!rsc0) {
+    rsc0 = Object.create(OutgoingBody.prototype);
+    Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
+    Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
+  }
+  curResourceBorrows.push(rsc0);
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-body.write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-body.write');
+  let ret;
+  try {
+    ret = { tag: 'ok', val: rsc0.write()};
+  } catch (e) {
+    ret = { tag: 'err', val: getErrorPayload(e) };
+  }
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-body.write"] [Instruction::CallInterface] (sync, @ post-call)');
+  for (const rsc of curResourceBorrows) {
+    rsc[symbolRscHandle] = undefined;
+  }
+  curResourceBorrows = [];
+  endCurrentTask(0);
+  var variant4 = ret;
+  switch (variant4.tag) {
+    case 'ok': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 0, true);
+      if (!(e ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
+        throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+      }
+      var handle3 = e[symbolRscHandle];
+      if (!handle3) {
+        const rep = e[symbolRscRep] || ++captureCnt4;
+        captureTable4.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable4, rep);
+      }
+      dataView(memory0).setInt32(arg1 + 4, handle3, true);
+      break;
+    }
+    case 'err': {
+      const e = variant4.val;
+      dataView(memory0).setInt8(arg1 + 0, 1, true);
+      break;
+    }
+    default: {
+      throw new TypeError('invalid variant specified for result');
+    }
+  }
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-body.write"][Instruction::Return]', {
     funcName: '[method]outgoing-body.write',
     paramCount: 0,
     async: false,
@@ -3088,36 +3088,36 @@ function trampoline65(arg0, arg1) {
 
 function trampoline66(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable6.delete(rep2);
+    captureTable7.delete(rep2);
   }
-  rscTableRemove(handleTable6, handle1);
+  rscTableRemove(handleTable7, handle1);
   let variant6;
   if (arg1) {
     var handle4 = arg2;
-    var rep5 = handleTable4[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable4.get(rep5);
+    var rep5 = handleTable5[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable5.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(Fields.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable4.delete(rep5);
+      captureTable5.delete(rep5);
     }
-    rscTableRemove(handleTable4, handle4);
+    rscTableRemove(handleTable5, handle4);
     variant6 = rsc3;
   } else {
     variant6 = undefined;
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]outgoing-body.finish');
   let ret;
   try {
@@ -3125,7 +3125,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]outgoing-body.finish"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant45 = ret;
   switch (variant45.tag) {
@@ -3528,7 +3528,7 @@ function trampoline66(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]outgoing-body.finish"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]outgoing-body.finish"][Instruction::Return]', {
     funcName: '[static]outgoing-body.finish',
     paramCount: 0,
     async: false,
@@ -3539,8 +3539,8 @@ function trampoline66(arg0, arg1, arg2, arg3) {
 
 function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3560,7 +3560,7 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
     var result4 = new Uint8Array(memory0.buffer.slice(ptr4, ptr4 + len4 * 1));
     result5.push(result4);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.set"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.set"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.set');
   let ret;
   try {
@@ -3568,7 +3568,7 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.set"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.set"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -3608,7 +3608,7 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.set"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.set"][Instruction::Return]', {
     funcName: '[method]fields.set',
     paramCount: 0,
     async: false,
@@ -3619,18 +3619,18 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
 
 function trampoline68(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable10.get(rep2);
+  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable11.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.path-with-query"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-request.path-with-query');
   const ret = rsc0.pathWithQuery();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.path-with-query"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.path-with-query"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -3647,7 +3647,7 @@ function trampoline68(arg0, arg1) {
     dataView(memory0).setUint32(arg1 + 8, len3, true);
     dataView(memory0).setUint32(arg1 + 4, ptr3, true);
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.path-with-query"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.path-with-query"][Instruction::Return]', {
     funcName: '[method]incoming-request.path-with-query',
     paramCount: 0,
     async: false,
@@ -3658,15 +3658,15 @@ function trampoline68(arg0, arg1) {
 
 function trampoline69(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable10.get(rep2);
+  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable11.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.consume"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]incoming-request.consume');
   let ret;
   try {
@@ -3674,7 +3674,7 @@ function trampoline69(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.consume"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.consume"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -3690,9 +3690,9 @@ function trampoline69(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt9;
-        captureTable9.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable9, rep);
+        const rep = e[symbolRscRep] || ++captureCnt10;
+        captureTable10.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable10, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3706,7 +3706,7 @@ function trampoline69(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]incoming-request.consume"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.consume"][Instruction::Return]', {
     funcName: '[method]incoming-request.consume',
     paramCount: 0,
     async: false,
@@ -3717,18 +3717,18 @@ function trampoline69(arg0, arg1) {
 
 function trampoline70(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.entries"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.entries"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]fields.entries');
   const ret = rsc0.entries();
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.entries"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.entries"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -3754,7 +3754,7 @@ function trampoline70(arg0, arg1) {
   }
   dataView(memory0).setUint32(arg1 + 4, len6, true);
   dataView(memory0).setUint32(arg1 + 0, result6, true);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]fields.entries"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]fields.entries"][Instruction::Return]', {
     funcName: '[method]fields.entries',
     paramCount: 0,
     async: false,
@@ -3765,15 +3765,15 @@ function trampoline70(arg0, arg1) {
 
 function trampoline71(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable12[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable12.get(rep2);
+  var rep2 = handleTable13[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable13.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.body"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.body"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]outgoing-response.body');
   let ret;
   try {
@@ -3781,7 +3781,7 @@ function trampoline71(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.body"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.body"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -3797,9 +3797,9 @@ function trampoline71(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt6;
-        captureTable6.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable6, rep);
+        const rep = e[symbolRscRep] || ++captureCnt7;
+        captureTable7.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable7, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3813,7 +3813,7 @@ function trampoline71(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[method]outgoing-response.body"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[method]outgoing-response.body"][Instruction::Return]', {
     funcName: '[method]outgoing-response.body',
     paramCount: 0,
     async: false,
@@ -3821,24 +3821,24 @@ function trampoline71(arg0, arg1) {
   });
 }
 
-const handleTable13 = [T_FLAG, 0];
-const captureTable13= new Map();
-let captureCnt13 = 0;
-handleTables[13] = handleTable13;
+const handleTable14 = [T_FLAG, 0];
+const captureTable14= new Map();
+let captureCnt14 = 0;
+handleTables[14] = handleTable14;
 
 function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   var handle1 = arg0;
-  var rep2 = handleTable13[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable13.get(rep2);
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(ResponseOutparam.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable13.delete(rep2);
+    captureTable14.delete(rep2);
   }
-  rscTableRemove(handleTable13, handle1);
+  rscTableRemove(handleTable14, handle1);
   let variant38;
   if (arg1) {
     let variant37;
@@ -4276,28 +4276,28 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
     };
   } else {
     var handle4 = arg2;
-    var rep5 = handleTable12[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable12.get(rep5);
+    var rep5 = handleTable13[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable13.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(OutgoingResponse.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable12.delete(rep5);
+      captureTable13.delete(rep5);
     }
-    rscTableRemove(handleTable12, handle4);
+    rscTableRemove(handleTable13, handle4);
     variant38= {
       tag: 'ok',
       val: rsc3
     };
   }
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]response-outparam.set"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]response-outparam.set"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]response-outparam.set');
   ResponseOutparam.set(rsc0, variant38);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]response-outparam.set"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]response-outparam.set"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  _debugLog('[iface="wasi:http/types@0.2.4", function="[static]response-outparam.set"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/types@0.2.9", function="[static]response-outparam.set"][Instruction::Return]', {
     funcName: '[static]response-outparam.set',
     paramCount: 0,
     async: false,
@@ -4305,15 +4305,15 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   });
 }
 
-const handleTable1 = [T_FLAG, 0];
-const captureTable1= new Map();
-let captureCnt1 = 0;
-handleTables[1] = handleTable1;
+const handleTable2 = [T_FLAG, 0];
+const captureTable2= new Map();
+let captureCnt2 = 0;
+handleTables[2] = handleTable2;
 
 function trampoline73(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4323,7 +4323,7 @@ function trampoline73(arg0, arg1, arg2, arg3) {
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = new Uint8Array(memory0.buffer.slice(ptr3, ptr3 + len3 * 1));
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.write"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.write');
   let ret;
   try {
@@ -4331,7 +4331,7 @@ function trampoline73(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.write"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -4357,9 +4357,9 @@ function trampoline73(arg0, arg1, arg2, arg3) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg3 + 8, handle4, true);
           break;
@@ -4378,7 +4378,7 @@ function trampoline73(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.write"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.write"][Instruction::Return]', {
     funcName: '[method]output-stream.write',
     paramCount: 0,
     async: false,
@@ -4389,15 +4389,15 @@ function trampoline73(arg0, arg1, arg2, arg3) {
 
 function trampoline74(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.read');
   let ret;
   try {
@@ -4405,7 +4405,7 @@ function trampoline74(arg0, arg1, arg2) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -4438,9 +4438,9 @@ function trampoline74(arg0, arg1, arg2) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -4459,7 +4459,7 @@ function trampoline74(arg0, arg1, arg2) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"][Instruction::Return]', {
     funcName: '[method]input-stream.read',
     paramCount: 0,
     async: false,
@@ -4470,15 +4470,15 @@ function trampoline74(arg0, arg1, arg2) {
 
 const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.blocking-read');
   let ret;
   try {
@@ -4486,7 +4486,7 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -4519,9 +4519,9 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -4540,7 +4540,7 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"][Instruction::Return]', {
     funcName: '[method]input-stream.blocking-read',
     paramCount: 0,
     async: false,
@@ -4551,8 +4551,8 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 
 const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4562,7 +4562,7 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = new Uint8Array(memory0.buffer.slice(ptr3, ptr3 + len3 * 1));
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-write-and-flush');
   let ret;
   try {
@@ -4570,7 +4570,7 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-write-and-flush"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -4596,9 +4596,9 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg3 + 8, handle4, true);
           break;
@@ -4617,7 +4617,7 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-write-and-flush"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-write-and-flush"][Instruction::Return]', {
     funcName: '[method]output-stream.blocking-write-and-flush',
     paramCount: 0,
     async: false,
@@ -4625,43 +4625,43 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   });
 }
 );
-const handleTable14 = [T_FLAG, 0];
-const captureTable14= new Map();
-let captureCnt14 = 0;
-handleTables[14] = handleTable14;
+const handleTable15 = [T_FLAG, 0];
+const captureTable15= new Map();
+let captureCnt15 = 0;
+handleTables[15] = handleTable15;
 
 function trampoline77(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable5.delete(rep2);
+    captureTable6.delete(rep2);
   }
-  rscTableRemove(handleTable5, handle1);
+  rscTableRemove(handleTable6, handle1);
   let variant6;
   if (arg1) {
     var handle4 = arg2;
-    var rep5 = handleTable14[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable14.get(rep5);
+    var rep5 = handleTable15[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable15.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(RequestOptions.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable14.delete(rep5);
+      captureTable15.delete(rep5);
     }
-    rscTableRemove(handleTable14, handle4);
+    rscTableRemove(handleTable15, handle4);
     variant6 = rsc3;
   } else {
     variant6 = undefined;
   }
-  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.9", function="handle"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'handle');
   let ret;
   try {
@@ -4669,7 +4669,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.9", function="handle"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant46 = ret;
   switch (variant46.tag) {
@@ -4681,9 +4681,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
       }
       var handle7 = e[symbolRscHandle];
       if (!handle7) {
-        const rep = e[symbolRscRep] || ++captureCnt7;
-        captureTable7.set(rep, e);
-        handle7 = rscTableCreateOwn(handleTable7, rep);
+        const rep = e[symbolRscRep] || ++captureCnt8;
+        captureTable8.set(rep, e);
+        handle7 = rscTableCreateOwn(handleTable8, rep);
       }
       dataView(memory0).setInt32(arg3 + 8, handle7, true);
       break;
@@ -5082,7 +5082,7 @@ function trampoline77(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:http/outgoing-handler@0.2.4", function="handle"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/outgoing-handler@0.2.9", function="handle"][Instruction::Return]', {
     funcName: 'handle',
     paramCount: 0,
     async: false,
@@ -5092,15 +5092,15 @@ function trampoline77(arg0, arg1, arg2, arg3) {
 
 
 function trampoline78(arg0) {
-  _debugLog('[iface="wasi:clocks/wall-clock@0.2.6", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:clocks/wall-clock@0.2.9", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'now');
   const ret = now$1();
-  _debugLog('[iface="wasi:clocks/wall-clock@0.2.6", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:clocks/wall-clock@0.2.9", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var {seconds: v0_0, nanoseconds: v0_1 } = ret;
   dataView(memory0).setBigInt64(arg0 + 0, toUint64(v0_0), true);
   dataView(memory0).setInt32(arg0 + 8, toUint32(v0_1), true);
-  _debugLog('[iface="wasi:clocks/wall-clock@0.2.6", function="now"][Instruction::Return]', {
+  _debugLog('[iface="wasi:clocks/wall-clock@0.2.9", function="now"][Instruction::Return]', {
     funcName: 'now',
     paramCount: 0,
     async: false,
@@ -5111,18 +5111,18 @@ function trampoline78(arg0) {
 
 function trampoline79(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/error@0.2.6", function="[method]error.to-debug-string"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/error@0.2.9", function="[method]error.to-debug-string"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]error.to-debug-string');
   const ret = rsc0.toDebugString();
-  _debugLog('[iface="wasi:io/error@0.2.6", function="[method]error.to-debug-string"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/error@0.2.9", function="[method]error.to-debug-string"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -5132,7 +5132,7 @@ function trampoline79(arg0, arg1) {
   var len3 = utf8EncodedLen;
   dataView(memory0).setUint32(arg1 + 4, len3, true);
   dataView(memory0).setUint32(arg1 + 0, ptr3, true);
-  _debugLog('[iface="wasi:io/error@0.2.6", function="[method]error.to-debug-string"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/error@0.2.9", function="[method]error.to-debug-string"][Instruction::Return]', {
     funcName: '[method]error.to-debug-string',
     paramCount: 0,
     async: false,
@@ -5142,15 +5142,15 @@ function trampoline79(arg0, arg1) {
 
 
 function trampoline80(arg0) {
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
   const ret = insecureSeed();
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var [tuple0_0, tuple0_1] = ret;
   dataView(memory0).setBigInt64(arg0 + 0, toUint64(tuple0_0), true);
   dataView(memory0).setBigInt64(arg0 + 8, toUint64(tuple0_1), true);
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.6", function="insecure-seed"][Instruction::Return]', {
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"][Instruction::Return]', {
     funcName: 'insecure-seed',
     paramCount: 0,
     async: false,
@@ -5160,10 +5160,10 @@ function trampoline80(arg0) {
 
 
 function trampoline81(arg0) {
-  _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/environment@0.2.9", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-environment');
   const ret = getEnvironment();
-  _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/environment@0.2.9", function="get-environment"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var vec3 = ret;
   var len3 = vec3.length;
@@ -5182,7 +5182,7 @@ function trampoline81(arg0) {
   }
   dataView(memory0).setUint32(arg0 + 4, len3, true);
   dataView(memory0).setUint32(arg0 + 0, result3, true);
-  _debugLog('[iface="wasi:cli/environment@0.2.6", function="get-environment"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/environment@0.2.9", function="get-environment"][Instruction::Return]', {
     funcName: 'get-environment',
     paramCount: 0,
     async: false,
@@ -5205,7 +5205,7 @@ function trampoline82(arg0, arg1, arg2) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.set-size"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.set-size"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.set-size');
   let ret;
   try {
@@ -5213,7 +5213,7 @@ function trampoline82(arg0, arg1, arg2) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.set-size"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.set-size"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -5392,7 +5392,7 @@ function trampoline82(arg0, arg1, arg2) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.set-size"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.set-size"][Instruction::Return]', {
     funcName: '[method]descriptor.set-size',
     paramCount: 0,
     async: false,
@@ -5403,18 +5403,18 @@ function trampoline82(arg0, arg1, arg2) {
 
 function trampoline83(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="filesystem-error-code"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'filesystem-error-code');
   const ret = filesystemErrorCode(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="filesystem-error-code"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -5584,7 +5584,7 @@ function trampoline83(arg0, arg1) {
     }
     dataView(memory0).setInt8(arg1 + 1, enum3, true);
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="filesystem-error-code"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="filesystem-error-code"][Instruction::Return]', {
     funcName: 'filesystem-error-code',
     paramCount: 0,
     async: false,
@@ -5607,7 +5607,7 @@ const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-directory"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-directory"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-directory');
   let ret;
   try {
@@ -5615,7 +5615,7 @@ const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-directory"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-directory"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -5804,7 +5804,7 @@ const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-directory"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-directory"][Instruction::Return]', {
     funcName: '[method]descriptor.read-directory',
     paramCount: 0,
     async: false,
@@ -5823,7 +5823,7 @@ function trampoline85(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]directory-entry-stream.read-directory-entry"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]directory-entry-stream.read-directory-entry"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]directory-entry-stream.read-directory-entry');
   let ret;
   try {
@@ -5831,7 +5831,7 @@ function trampoline85(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]directory-entry-stream.read-directory-entry"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]directory-entry-stream.read-directory-entry"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -6063,7 +6063,7 @@ function trampoline85(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]directory-entry-stream.read-directory-entry"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]directory-entry-stream.read-directory-entry"][Instruction::Return]', {
     funcName: '[method]directory-entry-stream.read-directory-entry',
     paramCount: 0,
     async: false,
@@ -6085,7 +6085,7 @@ const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.create-directory-at');
   let ret;
   try {
@@ -6093,7 +6093,7 @@ const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.create-directory-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -6272,7 +6272,7 @@ const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.create-directory-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.create-directory-at"][Instruction::Return]', {
     funcName: '[method]descriptor.create-directory-at',
     paramCount: 0,
     async: false,
@@ -6297,7 +6297,7 @@ const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr4 = arg2;
   var len4 = arg3;
   var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat-at');
   let ret;
   try {
@@ -6305,7 +6305,7 @@ const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -6558,7 +6558,7 @@ const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat-at"][Instruction::Return]', {
     funcName: '[method]descriptor.stat-at',
     paramCount: 0,
     async: false,
@@ -6595,7 +6595,7 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var ptr8 = arg5;
   var len8 = arg6;
   var result8 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr8, len8));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.link-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.link-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.link-at');
   let ret;
   try {
@@ -6603,7 +6603,7 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.link-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.link-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -6782,7 +6782,7 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.link-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.link-at"][Instruction::Return]', {
     funcName: '[method]descriptor.link-at',
     paramCount: 0,
     async: false,
@@ -6821,7 +6821,7 @@ const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
     requestedWriteSync: Boolean(arg5 & 16),
     mutateDirectory: Boolean(arg5 & 32),
   };
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.open-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.open-at');
   let ret;
   try {
@@ -6829,7 +6829,7 @@ const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.open-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7017,7 +7017,7 @@ const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.open-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.open-at"][Instruction::Return]', {
     funcName: '[method]descriptor.open-at',
     paramCount: 0,
     async: false,
@@ -7039,7 +7039,7 @@ const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.remove-directory-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.remove-directory-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.remove-directory-at');
   let ret;
   try {
@@ -7047,7 +7047,7 @@ const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.remove-directory-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.remove-directory-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7226,7 +7226,7 @@ const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.remove-directory-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.remove-directory-at"][Instruction::Return]', {
     funcName: '[method]descriptor.remove-directory-at',
     paramCount: 0,
     async: false,
@@ -7260,7 +7260,7 @@ const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr7 = arg4;
   var len7 = arg5;
   var result7 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr7, len7));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.rename-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.rename-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.rename-at');
   let ret;
   try {
@@ -7268,7 +7268,7 @@ const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.rename-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.rename-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7447,7 +7447,7 @@ const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.rename-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.rename-at"][Instruction::Return]', {
     funcName: '[method]descriptor.rename-at',
     paramCount: 0,
     async: false,
@@ -7469,7 +7469,7 @@ const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.unlink-file-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.unlink-file-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.unlink-file-at');
   let ret;
   try {
@@ -7477,7 +7477,7 @@ const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.unlink-file-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.unlink-file-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7656,7 +7656,7 @@ const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.unlink-file-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.unlink-file-at"][Instruction::Return]', {
     funcName: '[method]descriptor.unlink-file-at',
     paramCount: 0,
     async: false,
@@ -7675,7 +7675,7 @@ function trampoline93(arg0, arg1, arg2) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.read-via-stream');
   let ret;
   try {
@@ -7683,7 +7683,7 @@ function trampoline93(arg0, arg1, arg2) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7699,9 +7699,9 @@ function trampoline93(arg0, arg1, arg2) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt2;
-        captureTable2.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable2, rep);
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
       }
       dataView(memory0).setInt32(arg2 + 4, handle3, true);
       break;
@@ -7872,7 +7872,7 @@ function trampoline93(arg0, arg1, arg2) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.read-via-stream"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.read-via-stream"][Instruction::Return]', {
     funcName: '[method]descriptor.read-via-stream',
     paramCount: 0,
     async: false,
@@ -7891,7 +7891,7 @@ function trampoline94(arg0, arg1, arg2) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.write-via-stream');
   let ret;
   try {
@@ -7899,7 +7899,7 @@ function trampoline94(arg0, arg1, arg2) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.write-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -7915,9 +7915,9 @@ function trampoline94(arg0, arg1, arg2) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt3;
-        captureTable3.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable3, rep);
+        const rep = e[symbolRscRep] || ++captureCnt4;
+        captureTable4.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable4, rep);
       }
       dataView(memory0).setInt32(arg2 + 4, handle3, true);
       break;
@@ -8088,7 +8088,7 @@ function trampoline94(arg0, arg1, arg2) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.write-via-stream"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.write-via-stream"][Instruction::Return]', {
     funcName: '[method]descriptor.write-via-stream',
     paramCount: 0,
     async: false,
@@ -8107,7 +8107,7 @@ function trampoline95(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.append-via-stream');
   let ret;
   try {
@@ -8115,7 +8115,7 @@ function trampoline95(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.append-via-stream"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -8131,9 +8131,9 @@ function trampoline95(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt3;
-        captureTable3.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable3, rep);
+        const rep = e[symbolRscRep] || ++captureCnt4;
+        captureTable4.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable4, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -8304,7 +8304,7 @@ function trampoline95(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.append-via-stream"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.append-via-stream"][Instruction::Return]', {
     funcName: '[method]descriptor.append-via-stream',
     paramCount: 0,
     async: false,
@@ -8323,7 +8323,7 @@ function trampoline96(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.get-type"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.get-type');
   let ret;
   try {
@@ -8331,7 +8331,7 @@ function trampoline96(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.get-type"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -8551,7 +8551,7 @@ function trampoline96(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.get-type"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.get-type"][Instruction::Return]', {
     funcName: '[method]descriptor.get-type',
     paramCount: 0,
     async: false,
@@ -8570,7 +8570,7 @@ const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.stat');
   let ret;
   try {
@@ -8578,7 +8578,7 @@ const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -8831,7 +8831,7 @@ const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.stat"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.stat"][Instruction::Return]', {
     funcName: '[method]descriptor.stat',
     paramCount: 0,
     async: false,
@@ -8853,7 +8853,7 @@ function trampoline98(arg0, arg1, arg2, arg3) {
   var ptr3 = arg1;
   var len3 = arg2;
   var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.readlink-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.readlink-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.readlink-at');
   let ret;
   try {
@@ -8861,7 +8861,7 @@ function trampoline98(arg0, arg1, arg2, arg3) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.readlink-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.readlink-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9044,7 +9044,7 @@ function trampoline98(arg0, arg1, arg2, arg3) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.readlink-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.readlink-at"][Instruction::Return]', {
     funcName: '[method]descriptor.readlink-at',
     paramCount: 0,
     async: false,
@@ -9063,7 +9063,7 @@ function trampoline99(arg0, arg1) {
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash');
   let ret;
   try {
@@ -9071,7 +9071,7 @@ function trampoline99(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9253,7 +9253,7 @@ function trampoline99(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash"][Instruction::Return]', {
     funcName: '[method]descriptor.metadata-hash',
     paramCount: 0,
     async: false,
@@ -9278,7 +9278,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
   var ptr4 = arg2;
   var len4 = arg3;
   var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]descriptor.metadata-hash-at');
   let ret;
   try {
@@ -9286,7 +9286,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash-at"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9468,7 +9468,7 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:filesystem/types@0.2.6", function="[method]descriptor.metadata-hash-at"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/types@0.2.9", function="[method]descriptor.metadata-hash-at"][Instruction::Return]', {
     funcName: '[method]descriptor.metadata-hash-at',
     paramCount: 0,
     async: false,
@@ -9479,15 +9479,15 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
 
 const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.blocking-read');
   let ret;
   try {
@@ -9495,7 +9495,7 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9528,9 +9528,9 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -9549,7 +9549,7 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.blocking-read"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.blocking-read"][Instruction::Return]', {
     funcName: '[method]input-stream.blocking-read',
     paramCount: 0,
     async: false,
@@ -9560,15 +9560,15 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
 
 function trampoline102(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]input-stream.read');
   let ret;
   try {
@@ -9576,7 +9576,7 @@ function trampoline102(arg0, arg1, arg2) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9609,9 +9609,9 @@ function trampoline102(arg0, arg1, arg2) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -9630,7 +9630,7 @@ function trampoline102(arg0, arg1, arg2) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]input-stream.read"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.read"][Instruction::Return]', {
     funcName: '[method]input-stream.read',
     paramCount: 0,
     async: false,
@@ -9641,15 +9641,15 @@ function trampoline102(arg0, arg1, arg2) {
 
 function trampoline103(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.check-write"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.check-write');
   let ret;
   try {
@@ -9657,7 +9657,7 @@ function trampoline103(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.check-write"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9684,9 +9684,9 @@ function trampoline103(arg0, arg1) {
           }
           var handle3 = e[symbolRscHandle];
           if (!handle3) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle3 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg1 + 12, handle3, true);
           break;
@@ -9705,7 +9705,7 @@ function trampoline103(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.check-write"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.check-write"][Instruction::Return]', {
     funcName: '[method]output-stream.check-write',
     paramCount: 0,
     async: false,
@@ -9716,15 +9716,15 @@ function trampoline103(arg0, arg1) {
 
 function trampoline104(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   curResourceBorrows.push(rsc0);
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[method]output-stream.blocking-flush');
   let ret;
   try {
@@ -9732,7 +9732,7 @@ function trampoline104(arg0, arg1) {
   } catch (e) {
     ret = { tag: 'err', val: getErrorPayload(e) };
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-flush"] [Instruction::CallInterface] (sync, @ post-call)');
   for (const rsc of curResourceBorrows) {
     rsc[symbolRscHandle] = undefined;
   }
@@ -9758,9 +9758,9 @@ function trampoline104(arg0, arg1) {
           }
           var handle3 = e[symbolRscHandle];
           if (!handle3) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle3 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt2;
+            captureTable2.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable2, rep);
           }
           dataView(memory0).setInt32(arg1 + 8, handle3, true);
           break;
@@ -9779,7 +9779,7 @@ function trampoline104(arg0, arg1) {
       throw new TypeError('invalid variant specified for result');
     }
   }
-  _debugLog('[iface="wasi:io/streams@0.2.6", function="[method]output-stream.blocking-flush"][Instruction::Return]', {
+  _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.blocking-flush"][Instruction::Return]', {
     funcName: '[method]output-stream.blocking-flush',
     paramCount: 0,
     async: false,
@@ -9789,10 +9789,10 @@ function trampoline104(arg0, arg1) {
 
 
 function trampoline105(arg0) {
-  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.9", function="get-directories"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-directories');
   const ret = getDirectories();
-  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.9", function="get-directories"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var vec3 = ret;
   var len3 = vec3.length;
@@ -9816,7 +9816,7 @@ function trampoline105(arg0) {
   }
   dataView(memory0).setUint32(arg0 + 4, len3, true);
   dataView(memory0).setUint32(arg0 + 0, result3, true);
-  _debugLog('[iface="wasi:filesystem/preopens@0.2.6", function="get-directories"][Instruction::Return]', {
+  _debugLog('[iface="wasi:filesystem/preopens@0.2.9", function="get-directories"][Instruction::Return]', {
     funcName: 'get-directories',
     paramCount: 0,
     async: false,
@@ -9830,10 +9830,10 @@ let captureCnt16 = 0;
 handleTables[16] = handleTable16;
 
 function trampoline106(arg0) {
-  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.9", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stdin');
   const ret = getTerminalStdin();
-  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.9", function="get-terminal-stdin"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
   if (variant1 === null || variant1=== undefined) {
@@ -9852,7 +9852,7 @@ function trampoline106(arg0) {
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
-  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.6", function="get-terminal-stdin"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/terminal-stdin@0.2.9", function="get-terminal-stdin"][Instruction::Return]', {
     funcName: 'get-terminal-stdin',
     paramCount: 0,
     async: false,
@@ -9862,10 +9862,10 @@ function trampoline106(arg0) {
 
 
 function trampoline107(arg0) {
-  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.9", function="get-terminal-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-terminal-stderr');
   const ret = getTerminalStderr();
-  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.9", function="get-terminal-stderr"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
   var variant1 = ret;
   if (variant1 === null || variant1=== undefined) {
@@ -9884,7 +9884,7 @@ function trampoline107(arg0) {
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
-  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.6", function="get-terminal-stderr"][Instruction::Return]', {
+  _debugLog('[iface="wasi:cli/terminal-stderr@0.2.9", function="get-terminal-stderr"][Instruction::Return]', {
     funcName: 'get-terminal-stderr',
     paramCount: 0,
     async: false,
@@ -9908,6 +9908,19 @@ function trampoline4(handle) {
   }
 }
 function trampoline10(handle) {
+  const handleEntry = rscTableRemove(handleTable9, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable9.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable9.delete(handleEntry.rep);
+    } else if (IncomingResponse[symbolCabiDispose]) {
+      IncomingResponse[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline11(handle) {
   const handleEntry = rscTableRemove(handleTable8, handle);
   if (handleEntry.own) {
     
@@ -9915,19 +9928,6 @@ function trampoline10(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable8.delete(handleEntry.rep);
-    } else if (IncomingResponse[symbolCabiDispose]) {
-      IncomingResponse[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline11(handle) {
-  const handleEntry = rscTableRemove(handleTable7, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable7.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable7.delete(handleEntry.rep);
     } else if (FutureIncomingResponse[symbolCabiDispose]) {
       FutureIncomingResponse[symbolCabiDispose](handleEntry.rep);
     }
@@ -9947,84 +9947,6 @@ function trampoline16(handle) {
   }
 }
 function trampoline17(handle) {
-  const handleEntry = rscTableRemove(handleTable4, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable4.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable4.delete(handleEntry.rep);
-    } else if (Fields[symbolCabiDispose]) {
-      Fields[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline18(handle) {
-  const handleEntry = rscTableRemove(handleTable2, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable2.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable2.delete(handleEntry.rep);
-    } else if (InputStream[symbolCabiDispose]) {
-      InputStream[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline19(handle) {
-  const handleEntry = rscTableRemove(handleTable1, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable1.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable1.delete(handleEntry.rep);
-    } else if (Error$1[symbolCabiDispose]) {
-      Error$1[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline20(handle) {
-  const handleEntry = rscTableRemove(handleTable9, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable9.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable9.delete(handleEntry.rep);
-    } else if (IncomingBody[symbolCabiDispose]) {
-      IncomingBody[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline21(handle) {
-  const handleEntry = rscTableRemove(handleTable6, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable6.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable6.delete(handleEntry.rep);
-    } else if (OutgoingBody[symbolCabiDispose]) {
-      OutgoingBody[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline22(handle) {
-  const handleEntry = rscTableRemove(handleTable3, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable3.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable3.delete(handleEntry.rep);
-    } else if (OutputStream[symbolCabiDispose]) {
-      OutputStream[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline23(handle) {
   const handleEntry = rscTableRemove(handleTable5, handle);
   if (handleEntry.own) {
     
@@ -10032,64 +9954,38 @@ function trampoline23(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable5.delete(handleEntry.rep);
-    } else if (OutgoingRequest[symbolCabiDispose]) {
-      OutgoingRequest[symbolCabiDispose](handleEntry.rep);
+    } else if (Fields[symbolCabiDispose]) {
+      Fields[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline24(handle) {
-  const handleEntry = rscTableRemove(handleTable15, handle);
+function trampoline18(handle) {
+  const handleEntry = rscTableRemove(handleTable3, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable15.get(handleEntry.rep);
+    const rsc = captureTable3.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable15.delete(handleEntry.rep);
-    } else if (LazyProcess[symbolCabiDispose]) {
-      LazyProcess[symbolCabiDispose](handleEntry.rep);
+      captureTable3.delete(handleEntry.rep);
+    } else if (InputStream[symbolCabiDispose]) {
+      InputStream[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline27(handle) {
-  const handleEntry = rscTableRemove(handleTable11, handle);
+function trampoline19(handle) {
+  const handleEntry = rscTableRemove(handleTable2, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable11.get(handleEntry.rep);
+    const rsc = captureTable2.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable11.delete(handleEntry.rep);
-    } else if (FutureTrailers[symbolCabiDispose]) {
-      FutureTrailers[symbolCabiDispose](handleEntry.rep);
+      captureTable2.delete(handleEntry.rep);
+    } else if (Error$1[symbolCabiDispose]) {
+      Error$1[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline30(handle) {
-  const handleEntry = rscTableRemove(handleTable12, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable12.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable12.delete(handleEntry.rep);
-    } else if (OutgoingResponse[symbolCabiDispose]) {
-      OutgoingResponse[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline31(handle) {
-  const handleEntry = rscTableRemove(handleTable13, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable13.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable13.delete(handleEntry.rep);
-    } else if (ResponseOutparam[symbolCabiDispose]) {
-      ResponseOutparam[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline32(handle) {
+function trampoline20(handle) {
   const handleEntry = rscTableRemove(handleTable10, handle);
   if (handleEntry.own) {
     
@@ -10097,6 +9993,110 @@ function trampoline32(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable10.delete(handleEntry.rep);
+    } else if (IncomingBody[symbolCabiDispose]) {
+      IncomingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline21(handle) {
+  const handleEntry = rscTableRemove(handleTable7, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable7.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable7.delete(handleEntry.rep);
+    } else if (OutgoingBody[symbolCabiDispose]) {
+      OutgoingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline22(handle) {
+  const handleEntry = rscTableRemove(handleTable4, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable4.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable4.delete(handleEntry.rep);
+    } else if (OutputStream[symbolCabiDispose]) {
+      OutputStream[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline23(handle) {
+  const handleEntry = rscTableRemove(handleTable6, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable6.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable6.delete(handleEntry.rep);
+    } else if (OutgoingRequest[symbolCabiDispose]) {
+      OutgoingRequest[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline24(handle) {
+  const handleEntry = rscTableRemove(handleTable1, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable1.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable1.delete(handleEntry.rep);
+    } else if (LazyProcess[symbolCabiDispose]) {
+      LazyProcess[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline27(handle) {
+  const handleEntry = rscTableRemove(handleTable12, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable12.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable12.delete(handleEntry.rep);
+    } else if (FutureTrailers[symbolCabiDispose]) {
+      FutureTrailers[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline30(handle) {
+  const handleEntry = rscTableRemove(handleTable13, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable13.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable13.delete(handleEntry.rep);
+    } else if (OutgoingResponse[symbolCabiDispose]) {
+      OutgoingResponse[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline31(handle) {
+  const handleEntry = rscTableRemove(handleTable14, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable14.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable14.delete(handleEntry.rep);
+    } else if (ResponseOutparam[symbolCabiDispose]) {
+      ResponseOutparam[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline32(handle) {
+  const handleEntry = rscTableRemove(handleTable11, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable11.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable11.delete(handleEntry.rep);
     } else if (IncomingRequest[symbolCabiDispose]) {
       IncomingRequest[symbolCabiDispose](handleEntry.rep);
     }
@@ -10189,18 +10189,18 @@ async function handle$1(arg0, arg1) {
   }
   var handle0 = arg0[symbolRscHandle];
   if (!handle0) {
-    const rep = arg0[symbolRscRep] || ++captureCnt10;
-    captureTable10.set(rep, arg0);
-    handle0 = rscTableCreateOwn(handleTable10, rep);
+    const rep = arg0[symbolRscRep] || ++captureCnt11;
+    captureTable11.set(rep, arg0);
+    handle0 = rscTableCreateOwn(handleTable11, rep);
   }
   if (!(arg1 instanceof ResponseOutparam)) {
     throw new TypeError('Resource error: Not a valid "ResponseOutparam" resource.');
   }
   var handle1 = arg1[symbolRscHandle];
   if (!handle1) {
-    const rep = arg1[symbolRscRep] || ++captureCnt13;
-    captureTable13.set(rep, arg1);
-    handle1 = rscTableCreateOwn(handleTable13, rep);
+    const rep = arg1[symbolRscRep] || ++captureCnt14;
+    captureTable14.set(rep, arg1);
+    handle1 = rscTableCreateOwn(handleTable14, rep);
   }
   _debugLog('[iface="wasi:http/incoming-handler@0.2.4", function="handle"][Instruction::CallWasm] enter', {
     funcName: 'handle',
@@ -10256,27 +10256,27 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
   }
   var handle9 = arg3[symbolRscHandle];
   if (!handle9) {
-    const rep = arg3[symbolRscRep] || ++captureCnt2;
-    captureTable2.set(rep, arg3);
-    handle9 = rscTableCreateOwn(handleTable2, rep);
+    const rep = arg3[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, arg3);
+    handle9 = rscTableCreateOwn(handleTable3, rep);
   }
   if (!(arg4 ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle10 = arg4[symbolRscHandle];
   if (!handle10) {
-    const rep = arg4[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, arg4);
-    handle10 = rscTableCreateOwn(handleTable3, rep);
+    const rep = arg4[symbolRscRep] || ++captureCnt4;
+    captureTable4.set(rep, arg4);
+    handle10 = rscTableCreateOwn(handleTable4, rep);
   }
   if (!(arg5 ?.[Symbol.for('wasi:io/streams@0.2.4#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle11 = arg5[symbolRscHandle];
   if (!handle11) {
-    const rep = arg5[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, arg5);
-    handle11 = rscTableCreateOwn(handleTable3, rep);
+    const rep = arg5[symbolRscRep] || ++captureCnt4;
+    captureTable4.set(rep, arg5);
+    handle11 = rscTableCreateOwn(handleTable4, rep);
   }
   _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::CallWasm] enter', {
     funcName: 'run',
