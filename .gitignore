@@ -7,7 +7,6 @@ dist/
 target/
 **/*.rs.bk
 *.pdb
-Cargo.lock
 
 # WIT dependencies (downloaded by wit-deps)
 # Ignore downloaded WASI packages but keep custom WIT packages
