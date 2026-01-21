@@ -164,7 +164,7 @@ const MODULES = {
 function build(name, mod, syncMode) {
     const input = `${TARGET}/${mod.wasm}`;
     const output = syncMode ? (mod.syncOut || mod.jspiOut.replace('jspi', 'sync')) : mod.jspiOut;
-    const args = ['npx', 'jco', 'transpile', input, '-o', output];
+    const args = ['npx', '@bytecodealliance/jco', 'transpile', input, '-o', output];
 
     if (syncMode) {
         // Sync mode: use synchronous shims that block via Atomics.wait
