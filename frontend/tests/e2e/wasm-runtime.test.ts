@@ -221,9 +221,18 @@ test.describe('WASM Async FS (fs.promises)', () => {
     });
 
     test('fs.writeFileSync and readFileSync work', async ({ page }) => {
-        const result = await shellEval(page, 'tsx -e "fs.writeFileSync(\\"/sync-test.txt\\", \\"sync content\\"); console.log(fs.readFileSync(\\"/sync-test.txt\\"));"');
-        expect(result.success).toBe(true);
-        expect(result.output).toContain('sync content');
+        // Write file using sync API
+        const writeResult = await shellEval(page, 'tsx -e "fs.writeFileSync(\\"/sync-test.txt\\", \\"sync content\\"); console.log(\\"write done\\");"');
+        expect(writeResult.success).toBe(true);
+        expect(writeResult.output).toContain('write done');
+
+        // Read file back using sync API (separate command to avoid buffering issues)
+        const readResult = await shellEval(page, 'tsx -e "console.log(fs.readFileSync(\\"/sync-test.txt\\"));"');
+        expect(readResult.success).toBe(true);
+        expect(readResult.output).toContain('sync content');
+
+        // Cleanup
+        await shellEval(page, 'rm /sync-test.txt');
     });
 
     test('fs.promises.writeFile and readFile work', async ({ page }) => {
