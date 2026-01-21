@@ -100,6 +100,9 @@ struct Editor {
     search_pattern: String,
     search_matches: Vec<(usize, usize)>, // (row, col) of matches
     current_match_idx: Option<usize>,
+    // Cached syntax highlighting (expensive to load, do it once)
+    syntax_set: SyntaxSet,
+    theme_set: ThemeSet,
 }
 
 impl Editor {
@@ -109,6 +112,10 @@ impl Editor {
         } else {
             Rope::from(content.as_str())
         };
+
+        // Load syntax highlighting resources once at startup (expensive operation)
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
 
         Self {
             rope,
@@ -128,6 +135,8 @@ impl Editor {
             search_pattern: String::new(),
             search_matches: Vec::new(),
             current_match_idx: None,
+            syntax_set,
+            theme_set,
         }
     }
 
@@ -1111,9 +1120,9 @@ fn draw_editor(stdout: &OutputStream, editor: &Editor, width: usize, height: usi
     // Get selection for highlighting
     let selection = editor.get_selection();
 
-    // Initialize syntax highlighting
-    let ps = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
+    // Use cached syntax highlighting (already loaded in Editor::new)
+    let ps = &editor.syntax_set;
+    let ts = &editor.theme_set;
     let theme = &ts.themes["base16-ocean.dark"];
 
     // Get syntax by file extension (more reliable than by name)
