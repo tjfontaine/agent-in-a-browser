@@ -80,6 +80,130 @@ struct UndoState {
     cursor_col: usize,
 }
 
+/// RGB color for terminal rendering
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+impl Color {
+    fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    fn reset() -> Self {
+        // Default terminal foreground (white-ish)
+        Self {
+            r: 204,
+            g: 204,
+            b: 204,
+        }
+    }
+
+    fn bg_default() -> Self {
+        // Default terminal background (dark)
+        Self {
+            r: 40,
+            g: 44,
+            b: 52,
+        }
+    }
+}
+
+/// A single cell in the screen buffer
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Cell {
+    ch: char,
+    fg: Color,
+    bg: Color,
+    /// Bit flags: 1=bold, 2=italic, 4=underline, 8=reverse
+    modifiers: u8,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self {
+            ch: ' ',
+            fg: Color::reset(),
+            bg: Color::bg_default(),
+            modifiers: 0,
+        }
+    }
+}
+
+impl Cell {
+    fn new(ch: char, fg: Color, bg: Color) -> Self {
+        Self {
+            ch,
+            fg,
+            bg,
+            modifiers: 0,
+        }
+    }
+
+    /// Convert cell to ANSI escape sequence
+    fn to_ansi(&self) -> String {
+        format!(
+            "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m{}",
+            self.fg.r, self.fg.g, self.fg.b, self.bg.r, self.bg.g, self.bg.b, self.ch
+        )
+    }
+}
+
+/// Screen buffer for double-buffering
+struct ScreenBuffer {
+    cells: Vec<Cell>,
+    width: usize,
+    height: usize,
+}
+
+impl ScreenBuffer {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            cells: vec![Cell::default(); width * height],
+            width,
+            height,
+        }
+    }
+
+    fn resize(&mut self, width: usize, height: usize) {
+        if self.width != width || self.height != height {
+            self.width = width;
+            self.height = height;
+            self.cells = vec![Cell::default(); width * height];
+        }
+    }
+
+    fn clear(&mut self) {
+        for cell in &mut self.cells {
+            *cell = Cell::default();
+        }
+    }
+
+    fn get(&self, row: usize, col: usize) -> Option<&Cell> {
+        if row < self.height && col < self.width {
+            Some(&self.cells[row * self.width + col])
+        } else {
+            None
+        }
+    }
+
+    fn set(&mut self, row: usize, col: usize, cell: Cell) {
+        if row < self.height && col < self.width {
+            self.cells[row * self.width + col] = cell;
+        }
+    }
+
+    /// Copy contents from another buffer
+    fn copy_from(&mut self, other: &ScreenBuffer) {
+        if self.width == other.width && self.height == other.height {
+            self.cells.copy_from_slice(&other.cells);
+        }
+    }
+}
+
 struct Editor {
     rope: Rope,
     cursor_row: usize,
@@ -110,6 +234,13 @@ struct Editor {
     parse_state_cache: Vec<(u64, ParseState, HighlightState)>,
     // First line that needs re-highlighting (None = all clean)
     dirty_from: Option<usize>,
+    // Double buffering for efficient rendering
+    current_buffer: ScreenBuffer,
+    previous_buffer: ScreenBuffer,
+    // Track last cursor position for efficient cursor-only updates
+    last_cursor_pos: (usize, usize),
+    // Force full redraw on next render (e.g., after resize)
+    force_full_redraw: bool,
 }
 
 impl Editor {
@@ -146,6 +277,10 @@ impl Editor {
             theme_set,
             parse_state_cache: Vec::new(),
             dirty_from: Some(0), // Initially all lines need highlighting
+            current_buffer: ScreenBuffer::new(80, 24),
+            previous_buffer: ScreenBuffer::new(80, 24),
+            last_cursor_pos: (0, 0),
+            force_full_redraw: true, // First render is full
         }
     }
 
@@ -1128,13 +1263,30 @@ fn style_to_ansi(style: &Style) -> String {
     format!("\x1B[38;2;{};{};{}m", fg.r, fg.g, fg.b)
 }
 
-fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height: usize) {
-    let mut buffer = String::new();
-    buffer.push_str(HOME);
+/// Convert a syntect Style's foreground color to our Color type
+fn style_to_color(style: &Style) -> Color {
+    Color::new(style.foreground.r, style.foreground.g, style.foreground.b)
+}
+
+/// ANSI escape sequences for synchronized updates (DEC Private Mode 2026)
+/// Prevents screen tearing by batching all updates atomically
+const BEGIN_SYNC_UPDATE: &str = "\x1b[?2026h";
+const END_SYNC_UPDATE: &str = "\x1b[?2026l";
+
+/// Render the editor state to the current buffer (without outputting to terminal)
+fn render_to_buffer(editor: &mut Editor, width: usize, height: usize) {
+    // Resize buffers if needed
+    editor.current_buffer.resize(width, height);
+    editor.previous_buffer.resize(width, height);
 
     let content_height = height.saturating_sub(2);
+    let bg = Color::bg_default();
+    let fg_white = Color::reset();
+    let fg_reverse_bg = Color::new(0, 0, 0); // Black text on reverse
+    let reverse_bg = Color::new(200, 200, 200); // Light gray for reverse video
+    let selection_bg = Color::new(180, 180, 60); // Yellow-ish for selection
 
-    // Mode indicator
+    // Row 0: Title bar (reverse video)
     let mode_str = match editor.mode {
         Mode::Normal => "NORMAL",
         Mode::Insert => "INSERT",
@@ -1146,24 +1298,22 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
     let filename = editor.file_path.as_deref().unwrap_or("[No Name]");
     let mod_indicator = if editor.modified { "[+]" } else { "" };
     let title = format!(" {} {} {} ", mode_str, filename, mod_indicator);
-    buffer.push_str(&format!(
-        "{}{:width$}{}\r\n",
-        REVERSE_VIDEO,
-        title,
-        RESET,
-        width = width
-    ));
+
+    for col in 0..width {
+        let ch = title.chars().nth(col).unwrap_or(' ');
+        editor
+            .current_buffer
+            .set(0, col, Cell::new(ch, fg_reverse_bg, reverse_bg));
+    }
 
     // Get selection for highlighting
     let selection = editor.get_selection();
 
-    // Use cached syntax highlighting (already loaded in Editor::new)
+    // Get syntax highlighting setup
     let ps = &editor.syntax_set;
     let ts = &editor.theme_set;
     let theme = &ts.themes["base16-ocean.dark"];
 
-    // Get syntax by file extension (more reliable than by name)
-    // Fall back to JavaScript for TypeScript (syntect defaults may not include TS)
     let ext = editor
         .file_path
         .as_deref()
@@ -1171,12 +1321,237 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
 
     let syntax = ext
         .and_then(|e| {
-            ps.find_syntax_by_extension(e).or_else(|| {
-                // TypeScript fallback to JavaScript
-                match e {
-                    "ts" | "tsx" | "mts" | "cts" => ps.find_syntax_by_extension("js"),
-                    _ => None,
+            ps.find_syntax_by_extension(e).or_else(|| match e {
+                "ts" | "tsx" | "mts" | "cts" => ps.find_syntax_by_extension("js"),
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| ps.find_syntax_plain_text());
+
+    // Create highlighter from scroll position
+    let mut render_highlighter = if editor.scroll_offset > 0
+        && editor.scroll_offset <= editor.parse_state_cache.len()
+    {
+        let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[editor.scroll_offset - 1];
+        HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone())
+    } else {
+        HighlightLines::new(syntax, theme)
+    };
+
+    // Rows 1 to content_height: Editor content
+    for i in 0..content_height {
+        let row = i + 1; // Screen row (0 is title bar)
+        let line_idx = editor.scroll_offset + i;
+
+        if line_idx < editor.line_count() {
+            let line = editor.get_line(line_idx);
+            let line_with_newline = format!("{}\n", line);
+
+            // Get highlighted ranges for this line
+            let highlighted = render_highlighter.highlight_line(&line_with_newline, ps);
+
+            let mut col = 0;
+            if let Ok(ranges) = highlighted {
+                for (style, text) in ranges {
+                    let fg = style_to_color(&style);
+                    for c in text.chars() {
+                        if c == '\n' || col >= width {
+                            continue;
+                        }
+
+                        // Check cursor and selection
+                        let is_cursor_pos = line_idx == editor.cursor_row
+                            && col == editor.cursor_col
+                            && editor.mode != Mode::Insert;
+
+                        let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
+                            if editor.mode == Mode::VisualLine {
+                                line_idx >= sr && line_idx <= er
+                            } else {
+                                (line_idx > sr && line_idx < er)
+                                    || (line_idx == sr && line_idx == er && col >= sc && col <= ec)
+                                    || (line_idx == sr && line_idx < er && col >= sc)
+                                    || (line_idx > sr && line_idx == er && col <= ec)
+                            }
+                        } else {
+                            false
+                        };
+
+                        let cell = if is_cursor_pos {
+                            Cell::new(c, fg_reverse_bg, reverse_bg)
+                        } else if in_selection {
+                            Cell::new(c, fg_reverse_bg, selection_bg)
+                        } else {
+                            Cell::new(c, fg, bg)
+                        };
+
+                        editor.current_buffer.set(row, col, cell);
+                        col += 1;
+                    }
                 }
+            }
+
+            // Handle cursor at end of line (block cursor shown as space)
+            let line_len = line.chars().count();
+            if line_idx == editor.cursor_row
+                && editor.cursor_col >= line_len
+                && editor.mode != Mode::Insert
+                && col < width
+            {
+                editor
+                    .current_buffer
+                    .set(row, col, Cell::new(' ', fg_reverse_bg, reverse_bg));
+                col += 1;
+            }
+
+            // Fill rest of line with spaces
+            while col < width {
+                editor
+                    .current_buffer
+                    .set(row, col, Cell::new(' ', fg_white, bg));
+                col += 1;
+            }
+        } else {
+            // Empty line (tilde)
+            editor
+                .current_buffer
+                .set(row, 0, Cell::new('~', fg_white, bg));
+            for col in 1..width {
+                editor
+                    .current_buffer
+                    .set(row, col, Cell::new(' ', fg_white, bg));
+            }
+        }
+    }
+
+    // Last row: Status bar
+    let status_row = height - 1;
+    let status_text = if editor.mode == Mode::Command {
+        format!(":{}", editor.command_buffer)
+    } else if editor.mode == Mode::Search {
+        format!("/{}", editor.search_pattern)
+    } else if !editor.status_message.is_empty() {
+        editor.status_message.clone()
+    } else {
+        let pos = format!("{}:{}", editor.cursor_row + 1, editor.cursor_col + 1);
+        format!("{:>width$}", pos, width = width)
+    };
+
+    for col in 0..width {
+        let ch = status_text.chars().nth(col).unwrap_or(' ');
+        editor
+            .current_buffer
+            .set(status_row, col, Cell::new(ch, fg_reverse_bg, reverse_bg));
+    }
+}
+
+/// Diff current and previous buffers, emit only changed cells to terminal
+fn diff_and_emit(editor: &mut Editor, width: usize, height: usize) -> String {
+    let mut output = String::new();
+
+    // Begin synchronized update (prevents tearing)
+    output.push_str(BEGIN_SYNC_UPDATE);
+
+    let force_full = editor.force_full_redraw;
+    let mut last_row: Option<usize> = None;
+    let mut last_col: Option<usize> = None;
+    let mut last_fg: Option<Color> = None;
+    let mut last_bg: Option<Color> = None;
+
+    for row in 0..height {
+        for col in 0..width {
+            let current = editor.current_buffer.get(row, col);
+            let previous = editor.previous_buffer.get(row, col);
+
+            // Check if cell changed (or force full redraw)
+            let needs_update = force_full || current != previous;
+
+            if needs_update {
+                if let Some(cell) = current {
+                    // Move cursor if not contiguous
+                    let need_move = last_row != Some(row) || last_col.map(|c| c + 1) != Some(col);
+                    if need_move {
+                        output.push_str(&format!("\x1b[{};{}H", row + 1, col + 1));
+                    }
+
+                    // Emit color codes only if changed
+                    let fg_changed = last_fg != Some(cell.fg);
+                    let bg_changed = last_bg != Some(cell.bg);
+
+                    if fg_changed || bg_changed {
+                        output.push_str(&format!(
+                            "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m",
+                            cell.fg.r, cell.fg.g, cell.fg.b, cell.bg.r, cell.bg.g, cell.bg.b
+                        ));
+                        last_fg = Some(cell.fg);
+                        last_bg = Some(cell.bg);
+                    }
+
+                    output.push(cell.ch);
+                    last_row = Some(row);
+                    last_col = Some(col);
+                }
+            }
+        }
+    }
+
+    // Reset colors
+    output.push_str(RESET);
+
+    // Position cursor at actual cursor location
+    let screen_row = editor.cursor_row.saturating_sub(editor.scroll_offset) + 2;
+    let screen_col = editor.cursor_col + 1;
+    output.push_str(&format!("\x1b[{};{}H", screen_row, screen_col));
+
+    // Show cursor
+    output.push_str(SHOW_CURSOR);
+
+    // End synchronized update
+    output.push_str(END_SYNC_UPDATE);
+
+    // Swap buffers for next frame
+    editor.previous_buffer.copy_from(&editor.current_buffer);
+    editor.force_full_redraw = false;
+    editor.last_cursor_pos = (editor.cursor_row, editor.cursor_col);
+
+    output
+}
+
+fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height: usize) {
+    // Update syntax highlighting cache if needed (for visible lines)
+    update_highlight_cache(editor, width, height);
+
+    // Render to the current buffer (Cell grid)
+    render_to_buffer(editor, width, height);
+
+    // Diff against previous buffer and emit only changed cells
+    let output = diff_and_emit(editor, width, height);
+
+    // Write to terminal
+    write_to_stream(stdout, output.as_bytes());
+}
+
+/// Update the syntax highlighting cache for visible lines
+fn update_highlight_cache(editor: &mut Editor, _width: usize, height: usize) {
+    let content_height = height.saturating_sub(2);
+    let total_lines = editor.line_count();
+    let visible_end = (editor.scroll_offset + content_height).min(total_lines);
+
+    // Get syntax highlighting setup
+    let ps = &editor.syntax_set;
+    let ts = &editor.theme_set;
+    let theme = &ts.themes["base16-ocean.dark"];
+
+    let ext = editor
+        .file_path
+        .as_deref()
+        .and_then(|path| path.rsplit('.').next());
+
+    let syntax = ext
+        .and_then(|e| {
+            ps.find_syntax_by_extension(e).or_else(|| match e {
+                "ts" | "tsx" | "mts" | "cts" => ps.find_syntax_by_extension("js"),
+                _ => None,
             })
         })
         .unwrap_or_else(|| ps.find_syntax_plain_text());
@@ -1184,27 +1559,19 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
     // Determine where to start highlighting from (for incremental updates)
     let dirty_from = editor.dirty_from.unwrap_or(0);
 
-    // Truncate cache from dirty_from onwards (those entries are now invalid)
+    // Truncate cache from dirty_from onwards
     if dirty_from < editor.parse_state_cache.len() {
         editor.parse_state_cache.truncate(dirty_from);
     }
 
-    // Pre-process all lines from 0 to the last visible line to ensure cache is populated
-    // We need to process lines sequentially to build up correct parse state
-    let total_lines = editor.line_count();
-    let visible_end = (editor.scroll_offset + content_height).min(total_lines);
-
     // Start from cached state or fresh
     let mut highlighter = if dirty_from > 0 && dirty_from <= editor.parse_state_cache.len() {
-        // Restore from cached state (cache is: hash, ParseState, HighlightState)
         let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[dirty_from - 1];
         HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone())
     } else {
-        // Start fresh from beginning
         HighlightLines::new(syntax, theme)
     };
 
-    // The start_line is where our highlighter state corresponds to
     let start_line = dirty_from.min(editor.parse_state_cache.len());
 
     // Process lines from start_line up to visible_end to build cache
@@ -1217,7 +1584,6 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
         if line_idx < editor.parse_state_cache.len() {
             let (cached_hash, _, _) = &editor.parse_state_cache[line_idx];
             if *cached_hash == line_hash {
-                // Line unchanged, restore highlighter from this line's end state for next iteration
                 let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[line_idx];
                 highlighter =
                     HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone());
@@ -1225,13 +1591,12 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
             }
         }
 
-        // Highlight this line (this advances the internal state)
+        // Highlight this line
         let _ = highlighter.highlight_line(&line_with_newline, ps);
 
-        // Extract state for caching (state() consumes highlighter)
+        // Extract and cache state
         let (hs, parse_st) = highlighter.state();
 
-        // Store the state AFTER processing this line
         if line_idx < editor.parse_state_cache.len() {
             editor.parse_state_cache[line_idx] = (line_hash, parse_st.clone(), hs.clone());
         } else {
@@ -1240,173 +1605,11 @@ fn draw_editor(stdout: &OutputStream, editor: &mut Editor, width: usize, height:
                 .push((line_hash, parse_st.clone(), hs.clone()));
         }
 
-        // Reconstruct highlighter from the state we just extracted for the next iteration
         highlighter = HighlightLines::from_state(theme, hs, parse_st);
     }
 
-    // Clear dirty flag since we've processed everything up to visible_end
+    // Clear dirty flag
     editor.dirty_from = None;
-
-    // Now render the visible lines
-    // Restore highlighter to scroll_offset position
-    let mut render_highlighter = if editor.scroll_offset > 0
-        && editor.scroll_offset <= editor.parse_state_cache.len()
-    {
-        let (_, ref cached_ps, ref cached_hs) = editor.parse_state_cache[editor.scroll_offset - 1];
-        HighlightLines::from_state(theme, cached_hs.clone(), cached_ps.clone())
-    } else {
-        HighlightLines::new(syntax, theme)
-    };
-
-    // Editor content
-    for i in 0..content_height {
-        let line_idx = editor.scroll_offset + i;
-        if line_idx < editor.line_count() {
-            let line = editor.get_line(line_idx);
-            let line_with_newline = format!("{}\n", line);
-            let mut display = String::new();
-
-            // Get highlighted ranges for this line
-            let highlighted = render_highlighter.highlight_line(&line_with_newline, ps);
-
-            // Build display string with syntax highlighting and selection
-            let mut char_idx = 0;
-            if let Ok(ranges) = highlighted {
-                for (style, text) in ranges {
-                    for c in text.chars() {
-                        if c == '\n' {
-                            continue; // Skip the newline we added
-                        }
-
-                        // Check if this is the cursor position (for block cursor in Normal mode)
-                        let is_cursor_pos = line_idx == editor.cursor_row
-                            && char_idx == editor.cursor_col
-                            && editor.mode != Mode::Insert;
-
-                        let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
-                            if editor.mode == Mode::VisualLine {
-                                line_idx >= sr && line_idx <= er
-                            } else {
-                                (line_idx > sr && line_idx < er)
-                                    || (line_idx == sr
-                                        && line_idx == er
-                                        && char_idx >= sc
-                                        && char_idx <= ec)
-                                    || (line_idx == sr && line_idx < er && char_idx >= sc)
-                                    || (line_idx > sr && line_idx == er && char_idx <= ec)
-                            }
-                        } else {
-                            false
-                        };
-
-                        if is_cursor_pos {
-                            // Block cursor: render with reverse video
-                            display.push_str(REVERSE_VIDEO);
-                            display.push(c);
-                            display.push_str(RESET);
-                        } else if in_selection {
-                            // Selection overrides syntax highlighting
-                            display.push_str(YELLOW_BG);
-                            display.push_str(BLACK_FG);
-                            display.push(c);
-                            display.push_str(RESET);
-                        } else {
-                            // Apply syntax highlighting color
-                            display.push_str(&style_to_ansi(&style));
-                            display.push(c);
-                            display.push_str(RESET);
-                        }
-                        char_idx += 1;
-                    }
-                }
-            } else {
-                // Fallback: no syntax highlighting (display plain)
-                for (col, c) in line.chars().enumerate() {
-                    // Check if this is the cursor position
-                    let is_cursor_pos = line_idx == editor.cursor_row
-                        && col == editor.cursor_col
-                        && editor.mode != Mode::Insert;
-
-                    let in_selection = if let Some(((sr, sc), (er, ec))) = selection {
-                        if editor.mode == Mode::VisualLine {
-                            line_idx >= sr && line_idx <= er
-                        } else {
-                            (line_idx > sr && line_idx < er)
-                                || (line_idx == sr && line_idx == er && col >= sc && col <= ec)
-                                || (line_idx == sr && line_idx < er && col >= sc)
-                                || (line_idx > sr && line_idx == er && col <= ec)
-                        }
-                    } else {
-                        false
-                    };
-
-                    if is_cursor_pos {
-                        display.push_str(REVERSE_VIDEO);
-                        display.push(c);
-                        display.push_str(RESET);
-                    } else if in_selection {
-                        display.push_str(YELLOW_BG);
-                        display.push_str(BLACK_FG);
-                        display.push(c);
-                        display.push_str(RESET);
-                    } else {
-                        display.push(c);
-                    }
-                }
-            }
-
-            // Handle cursor at end of line or on empty line (Normal mode block cursor)
-            let line_len = line.chars().count();
-            if line_idx == editor.cursor_row
-                && editor.cursor_col >= line_len
-                && editor.mode != Mode::Insert
-            {
-                display.push_str(REVERSE_VIDEO);
-                display.push(' ');
-                display.push_str(RESET);
-            }
-
-            // Truncate if needed (note: this is imprecise with ANSI codes)
-            buffer.push_str(&format!("{}{}\r\n", display, CLEAR_LINE));
-        } else {
-            buffer.push_str(&format!("~{}\r\n", CLEAR_LINE));
-        }
-    }
-
-    // Status bar
-    if editor.mode == Mode::Command {
-        buffer.push_str(&format!(
-            "{}:{}{}{}",
-            REVERSE_VIDEO, editor.command_buffer, CLEAR_LINE, RESET
-        ));
-    } else if editor.mode == Mode::Search {
-        buffer.push_str(&format!(
-            "{}/{}{}{}",
-            REVERSE_VIDEO, editor.search_pattern, CLEAR_LINE, RESET
-        ));
-    } else if !editor.status_message.is_empty() {
-        buffer.push_str(&format!(
-            "{}{:width$}{}",
-            REVERSE_VIDEO,
-            editor.status_message,
-            RESET,
-            width = width
-        ));
-    } else {
-        let pos = format!("{}:{}", editor.cursor_row + 1, editor.cursor_col + 1);
-        let padding = " ".repeat(width.saturating_sub(pos.len()));
-        buffer.push_str(&format!("{}{}{}{}", REVERSE_VIDEO, padding, pos, RESET));
-    }
-
-    // Position cursor
-    let screen_row = editor.cursor_row - editor.scroll_offset + 2;
-    let screen_col = editor.cursor_col + 1;
-    buffer.push_str(&format!("\x1B[{};{}H", screen_row, screen_col));
-
-    // Always show cursor (DECSCUSR shape sequences may not be supported)
-    buffer.push_str(SHOW_CURSOR);
-
-    write_to_stream(stdout, buffer.as_bytes());
 }
 
 fn read_single_byte(stdin: &InputStream) -> Option<u8> {
