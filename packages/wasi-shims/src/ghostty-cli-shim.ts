@@ -33,6 +33,19 @@ let terminalRows = 24;
 let pipedStdoutWrite: ((contents: Uint8Array) => bigint) | null = null;
 let pipedStderrWrite: ((contents: Uint8Array) => bigint) | null = null;
 
+// Debug mode callback key (globalThis for cross-bundle sharing)
+// Uses globalThis to ensure all module instances share the same callback,
+// even when bundled/transpiled separately
+const DEBUG_STDERR_CALLBACK_KEY = Symbol.for('wasi-shims:debug-stderr-callback');
+
+// Type for the callback
+type DebugStderrCallback = ((text: string) => void) | null;
+
+// Getter for the shared callback
+function getDebugStderrCallback(): DebugStderrCallback {
+    return (globalThis as Record<symbol, DebugStderrCallback>)[DEBUG_STDERR_CALLBACK_KEY] ?? null;
+}
+
 /**
  * Set piped write functions for buffered command output.
  * Call this before spawning a command that should capture stdout.
@@ -52,6 +65,15 @@ export function setPipedStreams(
 export function clearPipedStreams(): void {
     pipedStdoutWrite = null;
     pipedStderrWrite = null;
+}
+
+/**
+ * Set debug stderr callback for forwarding stderr to main thread.
+ * Used when ?debug=true is set to show WASM stderr in browser DevTools.
+ * Uses globalThis to share across bundled module instances.
+ */
+export function setDebugStderrCallback(callback: ((text: string) => void) | null): void {
+    (globalThis as Record<symbol, DebugStderrCallback>)[DEBUG_STDERR_CALLBACK_KEY] = callback;
 }
 
 /**
@@ -250,11 +272,23 @@ const stderrStream = new CustomOutputStream({
                 // Log to browser console for debugging WASM output
                 // Note: We intentionally don't write to terminal to avoid corrupting the TUI
                 console.log('[WASM stderr]', text.trimEnd());
+
+                // Forward to main thread via debug callback if set (uses globalThis for cross-bundle sharing)
+                const debugCallback = getDebugStderrCallback();
+                if (debugCallback) {
+                    debugCallback(text.trimEnd());
+                }
             }
         } catch (e) {
             console.error('[ghostty-shim] Terminal stderr write error:', e);
         }
         return BigInt(contents.length);
+    },
+
+    // Called by WASM stderr for blocking writes (eprintln!, panic!, etc.)
+    // This must call write() to trigger the debug callback forwarding
+    blockingWriteAndFlush(contents: Uint8Array): void {
+        this.write(contents);
     },
 
     blockingFlush(): void { },
