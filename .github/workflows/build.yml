@@ -270,6 +270,7 @@ jobs:
 
       - name: Run E2E tests
         working-directory: frontend
+        timeout-minutes: 5
         run: npx playwright test --project=chromium
 
       - name: Upload Playwright Report
