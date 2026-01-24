@@ -1458,6 +1458,12 @@ fn diff_and_emit(editor: &mut Editor, width: usize, height: usize) -> String {
     let mut last_fg: Option<Color> = None;
     let mut last_bg: Option<Color> = None;
 
+    // Instrumentation: count changed cells (only when perf_metrics enabled)
+    #[cfg(feature = "perf_metrics")]
+    let mut cells_changed: usize = 0;
+    #[cfg(feature = "perf_metrics")]
+    let total_cells = width * height;
+
     for row in 0..height {
         for col in 0..width {
             let current = editor.current_buffer.get(row, col);
@@ -1467,6 +1473,10 @@ fn diff_and_emit(editor: &mut Editor, width: usize, height: usize) -> String {
             let needs_update = force_full || current != previous;
 
             if needs_update {
+                #[cfg(feature = "perf_metrics")]
+                {
+                    cells_changed += 1;
+                }
                 if let Some(cell) = current {
                     // Move cursor if not contiguous
                     let need_move = last_row != Some(row) || last_col.map(|c| c + 1) != Some(col);
@@ -1493,6 +1503,24 @@ fn diff_and_emit(editor: &mut Editor, width: usize, height: usize) -> String {
                 }
             }
         }
+    }
+
+    // INSTRUMENTATION: Log performance metrics to stderr (only when perf_metrics feature enabled)
+    #[cfg(feature = "perf_metrics")]
+    {
+        let change_pct = if total_cells > 0 {
+            (cells_changed * 100) / total_cells
+        } else {
+            0
+        };
+        eprintln!(
+            "[PERF] force={} cells_changed={}/{} ({}%) output_bytes={}",
+            force_full,
+            cells_changed,
+            total_cells,
+            change_pct,
+            output.len()
+        );
     }
 
     // Reset colors

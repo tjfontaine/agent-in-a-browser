@@ -6,6 +6,10 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# Enable performance metrics logging via eprintln!
+perf_metrics = []
+
 [dependencies]
 # Text buffer - rope data structure for efficient large file editing
 ropey = "1.6"
