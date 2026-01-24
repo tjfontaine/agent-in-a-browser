@@ -2412,7 +2412,7 @@ dependencies = [
 [[package]]
 name = "rig-core"
 version = "0.29.0"
-source = "git+https://github.com/tjfontaine/rig?branch=wasip2#b9790bfd77b113607a300610139baf345c13753e"
+source = "git+https://github.com/tjfontaine/rig?branch=wasip2#782a52c8505c52b295902c871dcda1e2d4ae340e"
 dependencies = [
  "as-any",
  "async-stream",
