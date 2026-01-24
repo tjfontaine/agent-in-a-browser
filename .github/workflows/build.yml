@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -114,8 +115,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -195,8 +196,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -243,8 +244,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs') }}-
+          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml') }}-
 
 
       - name: Install dependencies
