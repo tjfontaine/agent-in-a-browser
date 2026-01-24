@@ -22,8 +22,8 @@ let id = 0;
 const symbolDispose = Symbol.dispose || Symbol.for('dispose');
 
 // Symbol markers for patched instanceof checks (cross-bundle validation)
-const INPUT_STREAM_MARKER = Symbol.for('wasi:io/streams@0.2.4#InputStream');
-const OUTPUT_STREAM_MARKER = Symbol.for('wasi:io/streams@0.2.4#OutputStream');
+const INPUT_STREAM_MARKER = Symbol.for('wasi:io/streams@0.2.9#InputStream');
+const OUTPUT_STREAM_MARKER = Symbol.for('wasi:io/streams@0.2.9#OutputStream');
 
 /**
  * InputStreamHandler interface matching preview2-shim expectations

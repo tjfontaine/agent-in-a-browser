@@ -12,7 +12,7 @@
 const POLLABLE_KEY = Symbol.for('wasi:io/poll.Pollable');
 
 // Symbol marker for cross-bundle instanceof replacement
-const POLLABLE_MARKER = Symbol.for('wasi:io/poll@0.2.4#Pollable');
+const POLLABLE_MARKER = Symbol.for('wasi:io/poll@0.2.9#Pollable');
 
 /**
  * Base Pollable class compatible with JCO expectations.

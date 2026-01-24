@@ -104,7 +104,7 @@ base64 = "0.22" # Base64 encoding/decoding
 
 # WASI bindings for http handler
 wasi = "0.14.7"
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen-rt.workspace = true
 brush-parser = "0.3.0"
 regex = "1"
 itertools = "0.14"

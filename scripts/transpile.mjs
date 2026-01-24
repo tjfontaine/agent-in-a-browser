@@ -83,7 +83,7 @@ function buildAsyncImports(V) {
         `wasi:io/poll@${V}#poll`,
         // HTTP - future-incoming-response.get() is async to allow JSPI suspension
         // This allows callers that busy-wait on get() to properly suspend
-        `wasi:http/types@0.2.4#[method]future-incoming-response.get`,
+        `wasi:http/types@${V}#[method]future-incoming-response.get`,
         // Filesystem
         `wasi:filesystem/types@${V}#[method]descriptor.read`,
         `wasi:filesystem/types@${V}#[method]descriptor.write`,
@@ -251,10 +251,10 @@ import { readFileSync, writeFileSync, readdirSync } from 'fs';
 function patchInstanceofChecks(outputDir) {
     // Resource classes that need patching with their WASI resource paths
     const resourcePatches = [
-        { class: 'Pollable', symbol: 'wasi:io/poll@0.2.4#Pollable' },
-        { class: 'InputStream', symbol: 'wasi:io/streams@0.2.4#InputStream' },
-        { class: 'OutputStream', symbol: 'wasi:io/streams@0.2.4#OutputStream' },
-        { class: 'Descriptor', symbol: 'wasi:filesystem/types@0.2.6#Descriptor' },
+        { class: 'Pollable', symbol: 'wasi:io/poll@0.2.9#Pollable' },
+        { class: 'InputStream', symbol: 'wasi:io/streams@0.2.9#InputStream' },
+        { class: 'OutputStream', symbol: 'wasi:io/streams@0.2.9#OutputStream' },
+        { class: 'Descriptor', symbol: 'wasi:filesystem/types@0.2.9#Descriptor' },
     ];
 
     // Find the main JS file in the output directory
@@ -291,7 +291,7 @@ function _descriptorDiag(obj) {
     const info = {
       type: typeof obj,
       ctor: obj?.constructor?.name,
-      hasSymbol: obj ? !!obj[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')] : false,
+      hasSymbol: obj ? !!obj[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')] : false,
       symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
       keys: obj ? Object.keys(obj).slice(0,5) : []
     };
@@ -310,20 +310,20 @@ function _descriptorDiag(obj) {
 
             // Now replace the throw statements to use the helper
             // Use simpler pattern that handles whitespace variations
-            // Match: if (!(varName ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) {
+            // Match: if (!(varName ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) {
             //   throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
             // }
             // Replace throw statement to call helper. Use capturing group for the variable name.
-            const throwPattern = /if\s*\(\s*!\s*\((\w+)\s*\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.6#Descriptor'\)\]\)\s*\)\s*\{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
+            const throwPattern = /if\s*\(\s*!\s*\((\w+)\s*\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.9#Descriptor'\)\]\)\s*\)\s*\{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
             content = content.replace(throwPattern, (match, varName) => {
-                return `if (!(${varName} ?.[Symbol.for('wasi:filesystem/types@0.2.6#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
+                return `if (!(${varName} ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
             });
             modified = true;
         }
 
         if (modified) {
             writeFileSync(filePath, content);
-            console.log(`   ↳ Patched ${file}`);
+            console.log(`   ↳ Patched ${file} `);
         }
     }
 
@@ -340,12 +340,12 @@ const syncMode = args.includes('--sync');
 const names = args.filter(a => !a.startsWith('--'));
 const targets = names.length ? names : Object.keys(MODULES);
 
-console.log(`🔧 JCO Transpile (${syncMode ? 'SYNC' : 'JSPI'})\n`);
+console.log(`🔧 JCO Transpile(${syncMode ? 'SYNC' : 'JSPI'}) \n`);
 
 for (const name of targets) {
     const mod = MODULES[name];
     if (!mod) {
-        console.error(`❌ Unknown: ${name}\n   Available: ${Object.keys(MODULES).join(', ')}`);
+        console.error(`❌ Unknown: ${name} \n   Available: ${Object.keys(MODULES).join(', ')} `);
         process.exit(1);
     }
 

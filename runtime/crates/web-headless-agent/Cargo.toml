@@ -18,8 +18,8 @@ rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", defau
 ] }
 
 # WASM support with async features for streaming
-wit-bindgen = { version = "0.50", features = ["async", "async-spawn"] }
-wit-bindgen-rt = { version = "0.44", features = ["async"] }
+wit-bindgen.workspace = true
+wit-bindgen-rt.workspace = true
 
 # Serialization for config and AI messages
 serde = { version = "1.0", features = ["derive"] }

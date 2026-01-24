@@ -97,16 +97,16 @@ export interface AgentEventReady {
   tag: 'ready',
 }
 export type AgentHandle = number;
-export type * as WasiCliEnvironment026 from './interfaces/wasi-cli-environment.js'; // import wasi:cli/environment@0.2.6
-export type * as WasiCliExit026 from './interfaces/wasi-cli-exit.js'; // import wasi:cli/exit@0.2.6
-export type * as WasiCliStderr026 from './interfaces/wasi-cli-stderr.js'; // import wasi:cli/stderr@0.2.6
-export type * as WasiClocksMonotonicClock026 from './interfaces/wasi-clocks-monotonic-clock.js'; // import wasi:clocks/monotonic-clock@0.2.6
-export type * as WasiHttpOutgoingHandler024 from './interfaces/wasi-http-outgoing-handler.js'; // import wasi:http/outgoing-handler@0.2.4
-export type * as WasiHttpTypes024 from './interfaces/wasi-http-types.js'; // import wasi:http/types@0.2.4
-export type * as WasiIoError026 from './interfaces/wasi-io-error.js'; // import wasi:io/error@0.2.6
-export type * as WasiIoPoll026 from './interfaces/wasi-io-poll.js'; // import wasi:io/poll@0.2.6
-export type * as WasiIoStreams026 from './interfaces/wasi-io-streams.js'; // import wasi:io/streams@0.2.6
-export type * as WasiRandomInsecureSeed026 from './interfaces/wasi-random-insecure-seed.js'; // import wasi:random/insecure-seed@0.2.6
+export type * as WasiCliEnvironment029 from './interfaces/wasi-cli-environment.js'; // import wasi:cli/environment@0.2.9
+export type * as WasiCliExit029 from './interfaces/wasi-cli-exit.js'; // import wasi:cli/exit@0.2.9
+export type * as WasiCliStderr029 from './interfaces/wasi-cli-stderr.js'; // import wasi:cli/stderr@0.2.9
+export type * as WasiClocksMonotonicClock029 from './interfaces/wasi-clocks-monotonic-clock.js'; // import wasi:clocks/monotonic-clock@0.2.9
+export type * as WasiHttpOutgoingHandler029 from './interfaces/wasi-http-outgoing-handler.js'; // import wasi:http/outgoing-handler@0.2.9
+export type * as WasiHttpTypes029 from './interfaces/wasi-http-types.js'; // import wasi:http/types@0.2.9
+export type * as WasiIoError029 from './interfaces/wasi-io-error.js'; // import wasi:io/error@0.2.9
+export type * as WasiIoPoll029 from './interfaces/wasi-io-poll.js'; // import wasi:io/poll@0.2.9
+export type * as WasiIoStreams029 from './interfaces/wasi-io-streams.js'; // import wasi:io/streams@0.2.9
+export type * as WasiRandomInsecureSeed029 from './interfaces/wasi-random-insecure-seed.js'; // import wasi:random/insecure-seed@0.2.9
 export function create(config: AgentConfig): AgentHandle;
 export function destroy(handle: AgentHandle): void;
 export function send(handle: AgentHandle, message: string): void;

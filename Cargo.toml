@@ -19,6 +19,13 @@ edition = "2021"
 authors = ["Web Agent Contributors"]
 license = "MIT"
 
+# Centralize wit-bindgen versions to ensure all crates produce compatible WASI interfaces.
+# wit-bindgen 0.51 produces WASI 0.2.9 interfaces which must match wasi-shims Symbol markers.
+# Note: wit-bindgen-rt has a separate versioning scheme from wit-bindgen
+[workspace.dependencies]
+wit-bindgen = { version = "0.51", features = ["async", "async-spawn"] }
+wit-bindgen-rt = { version = "0.44", features = ["async", "bitflags"] }
+
 [profile.release]
 opt-level = "z"   # Optimize for size
 lto = true        # Enable link-time optimization

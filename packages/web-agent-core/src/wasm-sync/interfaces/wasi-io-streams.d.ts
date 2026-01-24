@@ -1,4 +1,4 @@
-/** @module Interface wasi:io/streams@0.2.6 **/
+/** @module Interface wasi:io/streams@0.2.9 **/
 export type Error = import('./wasi-io-error.js').Error;
 export type StreamError = StreamErrorLastOperationFailed | StreamErrorClosed;
 export interface StreamErrorLastOperationFailed {

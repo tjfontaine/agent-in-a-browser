@@ -40,7 +40,7 @@ web-sys = { version = "0.3", features = [
     "RequestInit",
     "Headers",
 ] }
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen-rt.workspace = true
 
 # Serialization (for fetch options parsing)
 serde = { version = "1", features = ["derive"] }

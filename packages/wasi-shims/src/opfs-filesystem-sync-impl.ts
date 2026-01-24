@@ -292,7 +292,7 @@ const DirectoryEntryStream = (globalThis as Record<symbol, unknown>)[DIRECTORY_E
 type DirectoryEntryStream = InstanceType<typeof DirectoryEntryStream>;
 
 // Symbol marker for cross-bundle instanceof replacement (matches transpile.mjs patch)
-const DESCRIPTOR_SYNC_MARKER = Symbol.for('wasi:filesystem/types@0.2.6#Descriptor');
+const DESCRIPTOR_SYNC_MARKER = Symbol.for('wasi:filesystem/types@0.2.9#Descriptor');
 
 // Descriptor - sync version
 class _DescriptorSync {

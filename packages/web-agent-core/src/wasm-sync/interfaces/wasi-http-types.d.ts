@@ -1,4 +1,4 @@
-/** @module Interface wasi:http/types@0.2.4 **/
+/** @module Interface wasi:http/types@0.2.9 **/
 export type Headers = Fields;
 export type FieldKey = string;
 export type FieldName = FieldKey;

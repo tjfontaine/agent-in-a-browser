@@ -1,3 +1,3 @@
-/** @module Interface wasi:cli/stderr@0.2.6 **/
+/** @module Interface wasi:cli/stderr@0.2.9 **/
 export function getStderr(): OutputStream;
 export type OutputStream = import('./wasi-io-streams.js').OutputStream;
