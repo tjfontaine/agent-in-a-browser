@@ -234,6 +234,7 @@ export default defineConfig(({ mode }) => ({
     build: {
         target: 'esnext',
         minify: false, // Preserve function names for debugging and tests
+        sourcemap: true, // Enable sourcemaps for debugging
         rollupOptions: {
             input: {
                 main: 'index.html',
