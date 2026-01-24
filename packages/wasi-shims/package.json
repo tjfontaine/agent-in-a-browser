@@ -8,6 +8,8 @@
         "./clocks": "./dist/clocks.js",
         "./streams": "./dist/streams.js",
         "./streams.js": "./dist/streams.js",
+        "./error.js": "./dist/error.js",
+        "./random.js": "./dist/random.js",
         "./ghostty-cli-shim.js": "./dist/ghostty-cli-shim.js",
         "./opfs-filesystem-impl.js": "./dist/opfs-filesystem-impl.js",
         "./opfs-filesystem-sync-impl.js": "./dist/opfs-filesystem-sync-impl.js",
