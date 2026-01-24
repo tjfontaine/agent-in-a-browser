@@ -2412,7 +2412,7 @@ dependencies = [
 [[package]]
 name = "rig-core"
 version = "0.29.0"
-source = "git+https://github.com/tjfontaine/rig?branch=wasip2#782a52c8505c52b295902c871dcda1e2d4ae340e"
+source = "git+https://github.com/tjfontaine/rig?branch=wasip2#84884df4a9b31832d60ad3915be41a7e8f6f66f0"
 dependencies = [
  "as-any",
  "async-stream",
@@ -2437,6 +2437,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "url",
+ "wasip2",
  "wasm-bindgen-futures",
  "wit-bindgen 0.50.0",
 ]
