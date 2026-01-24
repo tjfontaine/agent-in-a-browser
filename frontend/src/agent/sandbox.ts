@@ -49,6 +49,25 @@ try {
 // Export the port for debugging
 export { sandboxPort, isSharedWorker };
 
+// ============ Debug Mode ============
+
+// Check for ?debug=true query string to enable WASM stderr forwarding
+const debugMode = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('debug') === 'true';
+
+if (debugMode) {
+    console.log('[Sandbox] Debug mode enabled - WASM stderr will be forwarded to console');
+}
+
+// Listen for debug stderr messages from worker
+sandboxPort.addEventListener('message', (event: MessageEvent) => {
+    if (event.data?.type === 'debug_stderr') {
+        console.log('[WASM stderr]', event.data.text);
+    } else if (event.data?.type === 'debug_mode_set') {
+        console.log('[Sandbox] Debug mode set confirmed:', event.data.enabled);
+    }
+});
+
 // ============ Worker Fetch ============
 
 // Wrapper that adapts MessagePort to Worker-like interface for existing utilities
@@ -122,6 +141,12 @@ export function initializeSandbox(): Promise<void> {
             } else if (type === 'init_complete') {
                 console.log('[Sandbox] Worker init complete!');
                 sandboxPort.removeEventListener('message', handler);
+
+                // Enable debug mode if requested via query string
+                if (debugMode) {
+                    sandboxPort.postMessage({ type: 'set_debug_mode', id: 'debug-' + Date.now(), enabled: true });
+                }
+
                 resolve();
             } else if (type === 'error') {
                 console.error('[Sandbox] Worker error during init:', event.data);

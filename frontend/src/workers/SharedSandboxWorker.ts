@@ -335,6 +335,35 @@ function handlePortMessage(port: MessagePort, event: MessageEvent): void {
                     break;
                 }
 
+                case 'set_debug_mode': {
+                    const { enabled } = data;
+                    console.log('[SharedSandboxWorker] Setting debug mode:', enabled);
+
+                    try {
+                        // Import from external wasi-shims (same instance as edtui uses)
+                        // @ts-expect-error - runtime path, served by dev server
+                        const wasiShims = await import('/wasi-shims/ghostty-cli-shim.js');
+                        if (wasiShims.setDebugStderrCallback) {
+                            if (enabled) {
+                                wasiShims.setDebugStderrCallback((text: string) => {
+                                    _broadcast({ type: 'debug_stderr', text });
+                                });
+                                console.log('[SharedSandboxWorker] Debug stderr callback installed');
+                            } else {
+                                wasiShims.setDebugStderrCallback(null);
+                                console.log('[SharedSandboxWorker] Debug stderr callback cleared');
+                            }
+                        } else {
+                            console.warn('[SharedSandboxWorker] setDebugStderrCallback not available');
+                        }
+                    } catch (e) {
+                        console.error('[SharedSandboxWorker] Failed to set debug mode:', e);
+                    }
+
+                    port.postMessage({ type: 'debug_mode_set', id, enabled });
+                    break;
+                }
+
                 default:
                     port.postMessage({ type: 'error', id, message: `Unknown message type: ${type}` });
             }
