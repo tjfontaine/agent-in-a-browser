@@ -77,6 +77,19 @@ where
         builder = builder.base_url(url);
     }
 
+    // Enable direct browser access for WASM builds
+    // This header is required by Anthropic for API calls from browser contexts
+    #[cfg(target_arch = "wasm32")]
+    {
+        use http::HeaderMap;
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "anthropic-dangerous-direct-browser-access",
+            http::HeaderValue::from_static("true"),
+        );
+        builder = builder.http_headers(headers);
+    }
+
     builder.api_key(api_key).build()
 }
 
