@@ -26,7 +26,6 @@ jobs:
           name: frontend-dist
           path: frontend/dist
           workflow: build.yml
-          branch: main
           run_id: ${{ github.event.workflow_run.id }}
           if_no_artifact_found: warn
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +51,6 @@ jobs:
           name: website-dist
           path: website/dist
           workflow: build.yml
-          branch: main
           run_id: ${{ github.event.workflow_run.id }}
           if_no_artifact_found: warn
           github_token: ${{ secrets.GITHUB_TOKEN }}
