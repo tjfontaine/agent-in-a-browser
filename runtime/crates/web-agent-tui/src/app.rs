@@ -68,6 +68,18 @@ pub struct App<R: PollableRead, W: Write> {
     pub(crate) agent: AgentCore,
 }
 
+/// Check if an error message indicates authentication failure (401, invalid API key, etc.)
+/// Returns true if the user should be prompted for a new API key
+fn is_auth_error(error: &str) -> bool {
+    let lower = error.to_lowercase();
+    lower.contains("401")
+        || lower.contains("unauthorized")
+        || lower.contains("invalid api key")
+        || lower.contains("authentication")
+        || lower.contains("invalid_api_key")
+        || lower.contains("invalid x-api-key")
+}
+
 impl<R: PollableRead, W: Write> App<R, W> {
     /// Create a new App with std Read/Write streams
     pub fn new(stdin: R, mut stdout: W, width: u16, height: u16) -> Self {
@@ -956,7 +968,37 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 }
                 crate::events::AgentEvent::StreamError { error } => {
                     self.timeline
-                        .push(crate::display::TimelineEntry::error(error));
+                        .push(crate::display::TimelineEntry::error(&error));
+
+                    // If this is an authentication error (401, invalid API key, etc.),
+                    // prompt the user to re-enter their API key
+                    if is_auth_error(&error) {
+                        use crate::ui::server_manager::{Overlay, ProviderWizardStep};
+
+                        // Get current provider to populate wizard
+                        let current_provider = self.agent.config().current_provider();
+                        let settings = self.agent.config().current_provider_settings();
+                        let provider_idx = crate::ui::server_manager::PROVIDERS
+                            .iter()
+                            .position(|(id, _, _)| *id == current_provider)
+                            .unwrap_or(0);
+
+                        self.overlay = Some(Overlay::ProviderWizard {
+                            step: ProviderWizardStep::EditApiKey,
+                            selected_provider: provider_idx,
+                            selected_api_format: 0,
+                            selected_model: 0,
+                            selected_field: 2, // API Key field
+                            base_url_input: settings.base_url.clone().unwrap_or_default(),
+                            model_input: settings.model.clone(),
+                            api_key_input: String::new(), // Clear the invalid key
+                            fetched_models: None,
+                            standalone: true, // Close overlay when done
+                        });
+
+                        self.notice("API key invalid or expired. Please enter a new key:");
+                    }
+
                     self.state = AppState::Ready;
                 }
 
@@ -3371,5 +3413,35 @@ mod tests {
 
         assert_eq!(lower.bg, upper.bg);
         assert_eq!(lower.bg, mixed.bg);
+    }
+
+    // === 401 Error Handling Tests ===
+    // These tests verify the is_auth_error detection used in StreamError handling
+
+    /// 401 Unauthorized errors should be detected as auth failures
+    #[test]
+    fn detect_401_as_auth_error() {
+        use super::is_auth_error;
+
+        // Various 401 error message formats from different providers
+        assert!(is_auth_error("HTTP 401 Unauthorized"));
+        assert!(is_auth_error("status: 401"));
+        assert!(is_auth_error("401 - Invalid API Key"));
+        assert!(is_auth_error("Error: unauthorized"));
+        assert!(is_auth_error("authentication required"));
+        assert!(is_auth_error("invalid_api_key"));
+        assert!(is_auth_error("Invalid x-api-key"));
+    }
+
+    /// Non-auth errors should NOT be detected as auth failures
+    #[test]
+    fn non_auth_errors_not_detected() {
+        use super::is_auth_error;
+
+        assert!(!is_auth_error("HTTP 500 Internal Server Error"));
+        assert!(!is_auth_error("Connection timeout"));
+        assert!(!is_auth_error("Rate limit exceeded"));
+        assert!(!is_auth_error("Model not found"));
+        assert!(!is_auth_error("Context length exceeded"));
     }
 }

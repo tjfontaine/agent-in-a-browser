@@ -23,7 +23,7 @@ pub use messages::MessagesWidget;
 pub use panels::{
     render_aux_panel, AuxContent, AuxContentKind, AuxPanelWidget, RemoteServer, ServerStatus,
 };
-pub use server_manager::{render_overlay, Overlay, ServerManagerView};
+pub use server_manager::{render_overlay, Overlay, ProviderWizardStep, ServerManagerView};
 pub use status_bar::StatusBarWidget;
 pub use theme::Theme;
 
@@ -498,6 +498,253 @@ mod tests {
             &[TimelineEntry::user_message("What is 2+2?")],
             100,
             24,
+        );
+        assert_snapshot!(output);
+    }
+
+    // === ProviderWizard Overlay Tests ===
+    // These tests verify security and UX requirements for API key handling
+
+    #[test]
+    fn ui_overlay_provider_wizard_edit_api_key_empty() {
+        // Test EditApiKey step with empty input
+        // SHOULD: Show clear instructions and masked input field
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 30)).unwrap();
+        let theme = Theme::dark();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[],
+                    &AuxContent::default(),
+                    &ServerStatus::default(),
+                    "test-model",
+                    Some(&Overlay::ProviderWizard {
+                        step: ProviderWizardStep::EditApiKey,
+                        selected_provider: 0,
+                        selected_api_format: 0,
+                        selected_model: 0,
+                        selected_field: 2,
+                        base_url_input: String::new(),
+                        model_input: "claude-haiku".to_string(),
+                        api_key_input: String::new(), // Empty
+                        fetched_models: None,
+                        standalone: false,
+                    }),
+                    &[],
+                    &theme,
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        // SECURITY: Output should NOT contain any API key text
+        assert!(!output.contains("sk-"));
+        // UX: Should show the Edit API Key title
+        assert!(output.contains("Edit API Key") || output.contains("API Key"));
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_provider_wizard_edit_api_key_with_input() {
+        // Test EditApiKey step with masked input
+        // SECURITY: API key MUST be masked, not shown in plaintext
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 30)).unwrap();
+        let theme = Theme::dark();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[],
+                    &AuxContent::default(),
+                    &ServerStatus::default(),
+                    "test-model",
+                    Some(&Overlay::ProviderWizard {
+                        step: ProviderWizardStep::EditApiKey,
+                        selected_provider: 0,
+                        selected_api_format: 0,
+                        selected_model: 0,
+                        selected_field: 2,
+                        base_url_input: String::new(),
+                        model_input: "claude-haiku".to_string(),
+                        api_key_input: "sk-ant-secret123456".to_string(), // 19 chars
+                        fetched_models: None,
+                        standalone: false,
+                    }),
+                    &[],
+                    &theme,
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        // SECURITY: The actual API key MUST NOT appear in the output
+        assert!(
+            !output.contains("sk-ant-secret123456"),
+            "API key should be masked, not shown in plaintext"
+        );
+        assert!(
+            !output.contains("secret"),
+            "API key content should not be visible"
+        );
+        // SECURITY: Asterisks should appear (masking indicator)
+        assert!(output.contains("*"), "Masked input should show asterisks");
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_provider_wizard_config_no_api_key() {
+        // Test ProviderConfig step when API key is NOT set
+        // SHOULD: Show "not set" status with error color indication
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 30)).unwrap();
+        let theme = Theme::dark();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[],
+                    &AuxContent::default(),
+                    &ServerStatus::default(),
+                    "test-model",
+                    Some(&Overlay::ProviderWizard {
+                        step: ProviderWizardStep::ProviderConfig,
+                        selected_provider: 0,
+                        selected_api_format: 0,
+                        selected_model: 0,
+                        selected_field: 0,
+                        base_url_input: String::new(),
+                        model_input: "claude-haiku".to_string(),
+                        api_key_input: String::new(), // Not set
+                        fetched_models: None,
+                        standalone: false,
+                    }),
+                    &[],
+                    &theme,
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        // UX: Should indicate API key is not configured
+        assert!(
+            output.contains("not set") || output.contains("✗"),
+            "Should show API key is not configured"
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_provider_wizard_config_with_api_key() {
+        // Test ProviderConfig step when API key IS set
+        // SHOULD: Show "configured" status, NOT the actual key
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 30)).unwrap();
+        let theme = Theme::dark();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[],
+                    &AuxContent::default(),
+                    &ServerStatus::default(),
+                    "test-model",
+                    Some(&Overlay::ProviderWizard {
+                        step: ProviderWizardStep::ProviderConfig,
+                        selected_provider: 0,
+                        selected_api_format: 0,
+                        selected_model: 0,
+                        selected_field: 0,
+                        base_url_input: String::new(),
+                        model_input: "claude-haiku".to_string(),
+                        api_key_input: "sk-ant-secret-key-12345".to_string(),
+                        fetched_models: None,
+                        standalone: false,
+                    }),
+                    &[],
+                    &theme,
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        // SECURITY: The actual API key MUST NOT appear
+        assert!(
+            !output.contains("sk-ant-secret-key-12345"),
+            "API key should never be shown in ProviderConfig"
+        );
+        // UX: Should indicate API key is configured
+        assert!(
+            output.contains("configured") || output.contains("✓"),
+            "Should show API key is configured"
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_provider_wizard_edit_model() {
+        // Test EditModel step
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 30)).unwrap();
+        let theme = Theme::dark();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[],
+                    &AuxContent::default(),
+                    &ServerStatus::default(),
+                    "test-model",
+                    Some(&Overlay::ProviderWizard {
+                        step: ProviderWizardStep::EditModel,
+                        selected_provider: 0,
+                        selected_api_format: 0,
+                        selected_model: 0,
+                        selected_field: 0,
+                        base_url_input: String::new(),
+                        model_input: "claude-sonnet-4".to_string(),
+                        api_key_input: String::new(),
+                        fetched_models: None,
+                        standalone: false,
+                    }),
+                    &[],
+                    &theme,
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        // UX: Should show model selection/editing interface
+        assert!(
+            output.contains("Model") || output.contains("model"),
+            "Should show model editing interface"
         );
         assert_snapshot!(output);
     }

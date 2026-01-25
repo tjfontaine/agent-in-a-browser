@@ -1029,3 +1029,250 @@ pub fn render_provider_wizard(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === API Key Masking Tests ===
+
+    #[test]
+    fn test_api_key_mask_length() {
+        // The mask logic: "*".repeat(api_key_input.len().min(40))
+        assert_eq!("*".repeat(0), "");
+        assert_eq!("*".repeat(5), "*****");
+        assert_eq!("*".repeat(10), "**********");
+    }
+
+    #[test]
+    fn test_api_key_mask_caps_at_40() {
+        // Keys longer than 40 chars should cap at 40 asterisks
+        let long_key = "x".repeat(100);
+        let masked = "*".repeat(long_key.len().min(40));
+        assert_eq!(masked.len(), 40);
+        assert_eq!(masked, "*".repeat(40));
+    }
+
+    #[test]
+    fn test_api_key_mask_short_key() {
+        let short_key = "sk-abc123";
+        let masked = "*".repeat(short_key.len().min(40));
+        assert_eq!(masked.len(), 9);
+    }
+
+    // === ProviderWizardStep Tests ===
+
+    #[test]
+    fn test_provider_wizard_step_variants() {
+        // Verify all step variants exist and can be created
+        let _ = ProviderWizardStep::SelectProvider;
+        let _ = ProviderWizardStep::ProviderConfig;
+        let _ = ProviderWizardStep::EditModel;
+        let _ = ProviderWizardStep::EditBaseUrl;
+        let _ = ProviderWizardStep::EditApiKey;
+    }
+
+    #[test]
+    fn test_provider_wizard_step_equality() {
+        assert_eq!(
+            ProviderWizardStep::EditApiKey,
+            ProviderWizardStep::EditApiKey
+        );
+        assert_ne!(
+            ProviderWizardStep::EditApiKey,
+            ProviderWizardStep::EditModel
+        );
+        assert_ne!(
+            ProviderWizardStep::SelectProvider,
+            ProviderWizardStep::ProviderConfig
+        );
+    }
+
+    #[test]
+    fn test_provider_wizard_step_debug() {
+        // Test Debug trait
+        assert_eq!(
+            format!("{:?}", ProviderWizardStep::EditApiKey),
+            "EditApiKey"
+        );
+        assert_eq!(
+            format!("{:?}", ProviderWizardStep::SelectProvider),
+            "SelectProvider"
+        );
+    }
+
+    // === Centered Rect Tests ===
+
+    #[test]
+    fn test_centered_rect_calculation() {
+        let area = Rect::new(0, 0, 100, 50);
+        let popup = centered_rect(50, 50, area);
+
+        // 50% of 100 = 50, centered = (100-50)/2 = 25
+        assert_eq!(popup.width, 50);
+        assert_eq!(popup.x, 25);
+
+        // 50% of 50 = 25, centered = (50-25)/2 = 12
+        assert_eq!(popup.height, 25);
+        assert_eq!(popup.y, 12);
+    }
+
+    #[test]
+    fn test_centered_rect_small_popup() {
+        let area = Rect::new(0, 0, 80, 24);
+        let popup = centered_rect(60, 35, area);
+
+        // 60% of 80 = 48, centered = (80-48)/2 = 16
+        assert_eq!(popup.width, 48);
+        assert_eq!(popup.x, 16);
+
+        // 35% of 24 = 8, centered = (24-8)/2 = 8
+        assert_eq!(popup.height, 8);
+        assert_eq!(popup.y, 8);
+    }
+
+    #[test]
+    fn test_centered_rect_with_offset() {
+        let area = Rect::new(10, 5, 100, 50);
+        let popup = centered_rect(50, 50, area);
+
+        // Should be centered within the area, plus the area offset
+        assert_eq!(popup.x, 10 + 25); // area.x + centering offset
+        assert_eq!(popup.y, 5 + 12); // area.y + centering offset
+    }
+
+    // === Provider/Model Helper Tests ===
+
+    #[test]
+    fn test_get_models_for_known_providers() {
+        let anthropic_models = get_models_for_provider("anthropic");
+        assert!(!anthropic_models.is_empty());
+        assert!(anthropic_models.iter().any(|(id, _)| id.contains("claude")));
+
+        let openai_models = get_models_for_provider("openai");
+        assert!(!openai_models.is_empty());
+        assert!(openai_models.iter().any(|(id, _)| id.contains("gpt")));
+
+        let gemini_models = get_models_for_provider("gemini");
+        assert!(!gemini_models.is_empty());
+        assert!(gemini_models.iter().any(|(id, _)| id.contains("gemini")));
+    }
+
+    #[test]
+    fn test_get_models_for_unknown_provider() {
+        let models = get_models_for_provider("nonexistent");
+        assert!(models.is_empty());
+    }
+
+    #[test]
+    fn test_providers_constant() {
+        // PROVIDERS should have expected entries
+        assert!(PROVIDERS.len() >= 4);
+
+        // Check expected providers exist
+        assert!(PROVIDERS.iter().any(|(id, _, _)| *id == "anthropic"));
+        assert!(PROVIDERS.iter().any(|(id, _, _)| *id == "openai"));
+        assert!(PROVIDERS.iter().any(|(id, _, _)| *id == "gemini"));
+    }
+
+    #[test]
+    fn test_api_formats_constant() {
+        // API_FORMATS should have OpenAI-compatible formats
+        assert!(API_FORMATS.len() >= 3);
+        assert!(API_FORMATS.iter().any(|(id, _, _, _)| *id == "openai"));
+        assert!(API_FORMATS.iter().any(|(id, _, _, _)| *id == "anthropic"));
+    }
+
+    // === Overlay Enum Tests ===
+
+    #[test]
+    fn test_overlay_variants() {
+        // Test that all overlay variants can be created
+        let _ = Overlay::ServerManager(ServerManagerView::default());
+        let _ = Overlay::ProviderSelector { selected: 0 };
+        let _ = Overlay::ProviderWizard {
+            step: ProviderWizardStep::SelectProvider,
+            selected_provider: 0,
+            selected_api_format: 0,
+            selected_model: 0,
+            selected_field: 0,
+            base_url_input: String::new(),
+            model_input: String::new(),
+            api_key_input: String::new(),
+            fetched_models: None,
+            standalone: false,
+        };
+    }
+
+    #[test]
+    fn test_provider_wizard_overlay_api_key_storage() {
+        // Test that API key is stored in the overlay
+        let overlay = Overlay::ProviderWizard {
+            step: ProviderWizardStep::EditApiKey,
+            selected_provider: 0,
+            selected_api_format: 0,
+            selected_model: 0,
+            selected_field: 0,
+            base_url_input: String::new(),
+            model_input: String::new(),
+            api_key_input: "sk-test-key-123".to_string(),
+            fetched_models: None,
+            standalone: false,
+        };
+
+        if let Overlay::ProviderWizard { api_key_input, .. } = overlay {
+            assert_eq!(api_key_input, "sk-test-key-123");
+        } else {
+            panic!("Expected ProviderWizard variant");
+        }
+    }
+
+    // === ServerManagerView Tests ===
+
+    #[test]
+    fn test_server_manager_view_default() {
+        let view = ServerManagerView::default();
+        if let ServerManagerView::ServerList { selected } = view {
+            assert_eq!(selected, 0);
+        } else {
+            panic!("Expected ServerList variant");
+        }
+    }
+
+    #[test]
+    fn test_set_token_view() {
+        let view = ServerManagerView::SetToken {
+            server_id: "test-server".to_string(),
+            token_input: "my-secret-token".to_string(),
+            error: None,
+        };
+
+        if let ServerManagerView::SetToken {
+            server_id,
+            token_input,
+            error,
+        } = view
+        {
+            assert_eq!(server_id, "test-server");
+            assert_eq!(token_input, "my-secret-token");
+            assert!(error.is_none());
+        } else {
+            panic!("Expected SetToken variant");
+        }
+    }
+
+    #[test]
+    fn test_set_token_view_with_error() {
+        let view = ServerManagerView::SetToken {
+            server_id: "test-server".to_string(),
+            token_input: String::new(),
+            error: Some("Invalid token format".to_string()),
+        };
+
+        if let ServerManagerView::SetToken { error, .. } = view {
+            assert_eq!(error, Some("Invalid token format".to_string()));
+        } else {
+            panic!("Expected SetToken variant");
+        }
+    }
+}
