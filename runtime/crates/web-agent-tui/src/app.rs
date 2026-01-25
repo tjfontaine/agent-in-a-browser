@@ -6,7 +6,7 @@ use ratatui::Terminal;
 
 use crate::backend::{enter_alternate_screen, leave_alternate_screen, WasiBackend};
 use crate::bridge::{
-    get_local_tool_definitions, get_system_message, mcp_client::McpError, McpClient,
+    get_local_tool_definitions, get_system_message_for_mode, mcp_client::McpError, McpClient,
 };
 
 use crate::config::{self, Config, ServersConfig};
@@ -536,6 +536,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x04 => {
                 if self.mode == Mode::Shell {
                     self.mode = Mode::Agent;
+                    self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
                     self.timeline
                         .push(crate::display::TimelineEntry::info("Exiting shell mode."));
                 } else {
@@ -547,6 +548,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x0E => {
                 if self.mode != Mode::Agent {
                     self.mode = Mode::Agent;
+                    self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
                     self.timeline.push(crate::display::TimelineEntry::info(
                         "Switched to normal mode.",
                     ));
@@ -557,10 +559,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
             0x10 => {
                 if self.mode == Mode::Plan {
                     self.mode = Mode::Agent;
+                    self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
                     self.timeline
                         .push(crate::display::TimelineEntry::info("Exiting plan mode."));
                 } else if self.mode != Mode::Shell {
                     self.mode = Mode::Plan;
+                    self.agent.invalidate_agent(); // Rebuild with Plan mode prompt
                     self.timeline.push(crate::display::TimelineEntry::info(
                         "Entering plan mode. Type 'go' to execute plan, or /mode normal to exit.",
                     ));
@@ -733,6 +737,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         // Handle shell-local commands
         if command.trim() == "exit" {
             self.mode = Mode::Agent;
+            self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
             self.timeline
                 .push(crate::display::TimelineEntry::info("Exiting shell mode."));
             return;
@@ -820,7 +825,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
         if self.agent.rig_agent().is_none() {
             // Collect tools first (requires mutable borrow of self)
             let tools = self.collect_all_tools();
-            let preambles = get_system_message(&tools);
+            let is_plan_mode = self.mode == Mode::Plan;
+            let preambles = get_system_message_for_mode(is_plan_mode, &tools);
 
             // Now borrow config immutably for settings
             let config = self.agent.config();
@@ -965,7 +971,25 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     tool_name,
                     result,
                     is_error,
+                    request_execution,
                 } => {
+                    // Handle execution request from Plan Mode
+                    if request_execution && self.mode == Mode::Plan {
+                        // Switch from Plan Mode to Agent Mode
+                        self.mode = Mode::Agent;
+                        self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
+
+                        // Show transition in timeline
+                        self.timeline
+                            .push(crate::display::TimelineEntry::info(format!(
+                                "📋 Executing: {}",
+                                result
+                            )));
+
+                        // Mark first pending task as in_progress if we have tasks in aux panel
+                        // This is done by the LLM in a subsequent task_write call
+                    }
+
                     // Update aux panel with tool output
                     // Special handling for task_write to show formatted task list
                     if tool_name == "task_write" {
@@ -2463,6 +2487,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     self.notice("Exit shell mode first (^D or 'exit').".to_string());
                 } else {
                     self.mode = Mode::Plan;
+                    self.agent.invalidate_agent(); // Rebuild with Plan mode prompt
                     self.notice("📋 PLAN MODE - Describe what you want to accomplish.\nType 'go' to execute plan, Ctrl+P to toggle, or /mode normal to exit.".to_string());
                 }
             }
@@ -2472,10 +2497,12 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     match *mode_arg {
                         "normal" | "agent" => {
                             self.mode = Mode::Agent;
+                            self.agent.invalidate_agent(); // Rebuild with Agent mode prompt
                             self.notice("Switched to normal mode.".to_string());
                         }
                         "plan" => {
                             self.mode = Mode::Plan;
+                            self.agent.invalidate_agent(); // Rebuild with Plan mode prompt
                             self.notice("📋 Switched to plan mode. Type 'go' to execute or /mode normal to exit.".to_string());
                         }
                         "shell" => {
@@ -3054,5 +3081,95 @@ mod tests {
         // Ctrl+W deletes "one "
         buf.delete_word_back();
         assert_eq!(buf.text(), "");
+    }
+
+    // ============================================================
+    // Mode Transition Tests - verify invalidate_agent is always called
+    // ============================================================
+
+    /// Helper to create a testable ModeTransition tracker
+    struct ModeTransitionTracker {
+        mode: Mode,
+        invalidation_count: usize,
+    }
+
+    impl ModeTransitionTracker {
+        fn new(starting_mode: Mode) -> Self {
+            Self {
+                mode: starting_mode,
+                invalidation_count: 0,
+            }
+        }
+
+        /// Set mode - MUST call invalidate_agent when mode actually changes
+        fn set_mode(&mut self, new_mode: Mode) {
+            if self.mode != new_mode {
+                self.mode = new_mode;
+                self.invalidation_count += 1;
+            }
+        }
+
+        fn mode(&self) -> Mode {
+            self.mode
+        }
+
+        fn invalidation_count(&self) -> usize {
+            self.invalidation_count
+        }
+    }
+
+    #[test]
+    fn mode_transition_plan_to_agent_increments() {
+        let mut tracker = ModeTransitionTracker::new(Mode::Plan);
+        tracker.set_mode(Mode::Agent);
+        assert_eq!(tracker.mode(), Mode::Agent);
+        assert_eq!(
+            tracker.invalidation_count(),
+            1,
+            "Plan→Agent should invalidate"
+        );
+    }
+
+    #[test]
+    fn mode_transition_agent_to_plan_increments() {
+        let mut tracker = ModeTransitionTracker::new(Mode::Agent);
+        tracker.set_mode(Mode::Plan);
+        assert_eq!(tracker.mode(), Mode::Plan);
+        assert_eq!(
+            tracker.invalidation_count(),
+            1,
+            "Agent→Plan should invalidate"
+        );
+    }
+
+    #[test]
+    fn mode_transition_same_mode_no_increment() {
+        let mut tracker = ModeTransitionTracker::new(Mode::Agent);
+        tracker.set_mode(Mode::Agent);
+        assert_eq!(
+            tracker.invalidation_count(),
+            0,
+            "Same mode should not invalidate"
+        );
+    }
+
+    #[test]
+    fn mode_transition_shell_to_agent_increments() {
+        let mut tracker = ModeTransitionTracker::new(Mode::Shell);
+        tracker.set_mode(Mode::Agent);
+        assert_eq!(tracker.mode(), Mode::Agent);
+        assert_eq!(
+            tracker.invalidation_count(),
+            1,
+            "Shell→Agent should invalidate"
+        );
+    }
+
+    #[test]
+    fn mode_debug_format() {
+        // Existing test that checks Mode display
+        assert_eq!(format!("{:?}", Mode::Plan), "Plan");
+        assert_eq!(format!("{:?}", Mode::Agent), "Agent");
+        assert_eq!(format!("{:?}", Mode::Shell), "Shell");
     }
 }

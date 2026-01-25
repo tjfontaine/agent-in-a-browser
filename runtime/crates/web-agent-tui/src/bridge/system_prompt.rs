@@ -124,3 +124,57 @@ pub fn get_system_message_for_mode(is_plan_mode: bool, tools: &[ToolDefinition])
 pub struct SystemMessage {
     pub content: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_system_message_for_mode_agent() {
+        let tools = vec![];
+        let message = get_system_message_for_mode(false, &tools);
+
+        // Should contain base prompt
+        assert!(message.content.contains("You are a helpful AI assistant"));
+        // Should NOT contain plan mode prompt
+        assert!(!message.content.contains("PLAN MODE ACTIVE"));
+    }
+
+    #[test]
+    fn test_get_system_message_for_mode_plan() {
+        let tools = vec![];
+        let message = get_system_message_for_mode(true, &tools);
+
+        // Should contain base prompt AND plan mode prompt
+        assert!(message.content.contains("You are a helpful AI assistant"));
+        assert!(message.content.contains("PLAN MODE ACTIVE"));
+    }
+
+    #[test]
+    fn test_get_system_message_includes_tools() {
+        let tools = vec![ToolDefinition {
+            name: "__sandbox__read_file".to_string(),
+            description: "Read a file from the filesystem".to_string(),
+            input_schema: serde_json::json!({}),
+            title: None,
+        }];
+
+        let message = get_system_message_for_mode(false, &tools);
+        assert!(message.content.contains("read_file"));
+        assert!(message.content.contains("Sandbox Tools"));
+    }
+
+    #[test]
+    fn test_get_system_message_includes_local_tools() {
+        let tools = vec![ToolDefinition {
+            name: "__local__task_write".to_string(),
+            description: "Write task list".to_string(),
+            input_schema: serde_json::json!({}),
+            title: None,
+        }];
+
+        let message = get_system_message_for_mode(true, &tools);
+        assert!(message.content.contains("task_write"));
+        assert!(message.content.contains("Local Tools"));
+    }
+}

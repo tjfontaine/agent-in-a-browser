@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::display::{NoticeKind, ToolStatus};
 use crate::events::AgentEvent;
 use crate::servers::{RemoteServerEntry, ServerConnectionStatus, ToolCollector};
+use agent_bridge::decode_request_execution;
 use std::collections::VecDeque;
 
 // Simple server status for AgentCore
@@ -53,6 +54,8 @@ pub struct AgentCore {
     events: VecDeque<AgentEvent>,
     /// Pending tool activity (used to dedup events)
     last_tool_activity: Option<String>,
+    /// Counter for invalidate_agent calls (used in tests)
+    pub invalidation_count: usize,
 }
 
 impl AgentCore {
@@ -68,6 +71,7 @@ impl AgentCore {
             remote_servers: Vec::new(),
             events: VecDeque::new(),
             last_tool_activity: None,
+            invalidation_count: 0,
         }
     }
 
@@ -183,6 +187,7 @@ impl AgentCore {
     /// Call this when available tools change (MCP server added/removed/connected)
     pub fn invalidate_agent(&mut self) {
         self.rig_agent = None;
+        self.invalidation_count += 1;
     }
 
     /// Get mutable config
@@ -339,10 +344,13 @@ impl AgentCore {
             } else {
                 // Activity cleared - check if we have a tool result
                 if let Some((tool_name, result, is_error)) = stream.buffer().take_tool_result() {
+                    // Decode request_execution from JSON envelope (returns false if not present)
+                    let request_execution = decode_request_execution(&result);
                     self.emit(AgentEvent::ToolResult {
                         tool_name,
                         result,
                         is_error,
+                        request_execution,
                     });
                 } else if let Some(last) = &self.last_tool_activity {
                     // Fallback if no result stored (shouldn't happen)
@@ -350,6 +358,7 @@ impl AgentCore {
                         tool_name: last.clone(),
                         result: "Done".to_string(),
                         is_error: false,
+                        request_execution: false,
                     });
                 }
             }

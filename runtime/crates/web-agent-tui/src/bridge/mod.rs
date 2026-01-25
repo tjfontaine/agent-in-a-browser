@@ -31,6 +31,6 @@ pub use rig_client::{
     create_openai_completions_client, AnthropicClient, OpenAIClient, OpenAICompletionsClient,
 };
 pub use rig_tools::{build_tool_set, LocalToolAdapter, McpToolAdapter};
-pub use system_prompt::{get_system_message, SystemMessage};
+pub use system_prompt::{get_system_message, get_system_message_for_mode, SystemMessage};
 pub use wasi_completion_model::{AnthropicModel, GeminiModel, OpenAIModel};
 pub use wasi_http_adapter::WasiHttpClient;

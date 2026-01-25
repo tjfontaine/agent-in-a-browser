@@ -9,7 +9,7 @@ use rig::wasm_compat::WasmBoxedFuture;
 use serde_json::Value;
 
 use super::mcp_client::{McpClient, ToolDefinition as McpToolDefinition};
-use agent_bridge::LocalToolDefinition;
+use agent_bridge::{encode_local_tool_response, LocalToolDefinition};
 
 /// Wrapper for an MCP tool that implements rig-core's `ToolDyn` trait.
 ///
@@ -134,17 +134,8 @@ impl ToolDyn for LocalToolAdapter {
             match super::local_tools::try_execute_local_tool(&tool_name, args_value) {
                 Some(result) => {
                     if result.success {
-                        // For task_write, also return the tasks as JSON so the agent knows what happened
-                        if let Some(tasks) = result.tasks {
-                            Ok(serde_json::to_string(&serde_json::json!({
-                                "success": true,
-                                "message": result.message,
-                                "tasks": tasks
-                            }))
-                            .unwrap_or(result.message))
-                        } else {
-                            Ok(result.message)
-                        }
+                        // Use encoder to preserve metadata (request_execution) through rig layer
+                        Ok(encode_local_tool_response(&result))
                     } else {
                         Err(ToolError::ToolCallError(result.message.into()))
                     }
@@ -189,5 +180,6 @@ mod tests {
         let tools = LocalToolAdapter::all_local_tools();
         assert!(!tools.is_empty());
         assert!(tools.iter().any(|t| t.name() == "task_write"));
+        assert!(tools.iter().any(|t| t.name() == "request_execution"));
     }
 }

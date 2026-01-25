@@ -37,8 +37,9 @@ pub use http_transport::{
     HttpBodyStream, HttpError, HttpResponse, HttpStreamingResponse, HttpTransport,
 };
 pub use local_tools::{
-    format_tasks_for_display, get_local_tool_definitions, try_execute_local_tool,
-    LocalToolDefinition, LocalToolResult, Task, TaskStatus,
+    decode_request_execution, encode_local_tool_response, format_tasks_for_display,
+    get_local_tool_definitions, try_execute_local_tool, LocalToolDefinition, LocalToolResult, Task,
+    TaskStatus,
 };
 pub use mcp_transport::{
     JsonRpcError, JsonRpcResponse, McpError, McpTransport, ToolContent, ToolDefinition, ToolResult,

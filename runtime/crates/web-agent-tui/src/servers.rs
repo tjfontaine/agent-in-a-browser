@@ -47,6 +47,8 @@ pub struct ToolExecutionResult {
     pub output: Result<String, String>,
     pub tasks: Option<Vec<Task>>,
     pub aux_update: Option<AuxContent>,
+    /// If true, LLM is requesting to transition from planning to execution
+    pub request_execution: bool,
 }
 
 /// Tool routing logic for multi-server MCP architecture
@@ -85,12 +87,14 @@ impl ToolRouter {
                     },
                     tasks: result.tasks,
                     aux_update,
+                    request_execution: result.request_execution,
                 };
             }
             return ToolExecutionResult {
                 output: Err(format!("Unknown local tool: {}", tool_name)),
                 tasks: None,
                 aux_update: None,
+                request_execution: false,
             };
         }
 
@@ -100,6 +104,7 @@ impl ToolRouter {
                 output: call_sandbox_tool(tool_name, args),
                 tasks: None,
                 aux_update: None,
+                request_execution: false,
             };
         }
 
@@ -116,6 +121,7 @@ impl ToolRouter {
                     )),
                     tasks: None,
                     aux_update: None,
+                    request_execution: false,
                 };
             }
 
@@ -127,6 +133,7 @@ impl ToolRouter {
                 )),
                 tasks: None,
                 aux_update: None,
+                request_execution: false,
             };
         }
 
@@ -134,6 +141,7 @@ impl ToolRouter {
             output: Err(format!("Unknown tool: {}", prefixed_name)),
             tasks: None,
             aux_update: None,
+            request_execution: false,
         }
     }
 
@@ -315,5 +323,117 @@ impl ToolCollector {
         }
 
         (all_tools, local_connected, local_tool_count)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tool_router_local_task_write() {
+        let args = serde_json::json!({
+            "tasks": [
+                { "id": "1", "content": "Test step", "status": "pending" }
+            ]
+        });
+
+        let result = ToolRouter::route_tool_call("__local__task_write", args, |_, _| {
+            Err("should not call sandbox".into())
+        });
+
+        assert!(result.output.is_ok());
+        assert!(!result.request_execution);
+        assert!(result.tasks.is_some());
+    }
+
+    #[test]
+    fn test_tool_router_local_request_execution() {
+        let args = serde_json::json!({
+            "summary": "Add dark mode feature"
+        });
+
+        let result = ToolRouter::route_tool_call("__local__request_execution", args, |_, _| {
+            Err("should not call sandbox".into())
+        });
+
+        assert!(result.output.is_ok());
+        assert!(result.request_execution);
+        assert!(result.output.unwrap().contains("Add dark mode feature"));
+    }
+
+    #[test]
+    fn test_tool_router_request_execution_missing_summary() {
+        let args = serde_json::json!({});
+
+        let result = ToolRouter::route_tool_call("__local__request_execution", args, |_, _| {
+            Err("should not call sandbox".into())
+        });
+
+        assert!(result.output.is_err());
+        assert!(!result.request_execution);
+    }
+
+    #[test]
+    fn test_tool_router_task_write_single_in_progress() {
+        let args = serde_json::json!({
+            "tasks": [
+                { "id": "1", "content": "Step 1", "status": "in_progress" },
+                { "id": "2", "content": "Step 2", "status": "in_progress" }
+            ]
+        });
+
+        let result = ToolRouter::route_tool_call("__local__task_write", args, |_, _| {
+            Err("should not call sandbox".into())
+        });
+
+        assert!(result.output.is_err());
+        assert!(result.output.unwrap_err().contains("Only one step"));
+    }
+
+    #[test]
+    fn test_tool_router_sandbox_tool() {
+        let args = serde_json::json!({ "path": "/test" });
+
+        let result = ToolRouter::route_tool_call("__sandbox__read_file", args, |name, _| {
+            assert_eq!(name, "read_file");
+            Ok("file contents".into())
+        });
+
+        assert!(result.output.is_ok());
+        assert!(!result.request_execution);
+        assert!(result.tasks.is_none());
+    }
+
+    #[test]
+    fn test_tool_router_unknown_local_tool() {
+        let args = serde_json::json!({});
+
+        let result = ToolRouter::route_tool_call("__local__nonexistent", args, |_, _| {
+            Err("should not call sandbox".into())
+        });
+
+        assert!(result.output.is_err());
+        assert!(result.output.unwrap_err().contains("Unknown local tool"));
+    }
+
+    #[test]
+    fn test_format_tool_for_display_local() {
+        assert_eq!(
+            ToolRouter::format_tool_for_display("__local__task_write"),
+            "task_write"
+        );
+        assert_eq!(
+            ToolRouter::format_tool_for_display("__local__request_execution"),
+            "request_execution"
+        );
+    }
+
+    #[test]
+    fn test_format_tool_for_display_sandbox() {
+        assert_eq!(
+            ToolRouter::format_tool_for_display("__sandbox__read_file"),
+            "read_file"
+        );
     }
 }

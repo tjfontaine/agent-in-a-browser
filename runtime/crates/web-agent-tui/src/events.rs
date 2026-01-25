@@ -33,6 +33,8 @@ pub enum AgentEvent {
         tool_name: String,
         result: String,
         is_error: bool,
+        /// If true, LLM is requesting to transition from planning to execution
+        request_execution: bool,
     },
     /// Stream completed successfully
     StreamComplete { final_text: String },
