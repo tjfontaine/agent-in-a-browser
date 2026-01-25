@@ -16,7 +16,7 @@ interface loader {
   }
 
   /// A pollable resource (from wasi:io/poll)
-  use wasi:io/poll@0.2.4.{pollable};
+  use wasi:io/poll@0.2.9.{pollable};
 
   /// A handle to a lazy-loaded process
   resource lazy-process {

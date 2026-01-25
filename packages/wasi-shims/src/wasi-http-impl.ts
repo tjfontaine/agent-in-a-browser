@@ -916,7 +916,8 @@ export class FutureIncomingResponse {
             this._promise = resolvedDataOrPromise.then((resolvedData) => {
                 this._setResult(resolvedData);
             }).catch((err) => {
-                this._result = { tag: 'err', val: String(err) };
+                // ErrorCode is a variant - internal-error takes an optional string message
+                this._result = { tag: 'err', val: { tag: 'internal-error', val: String(err) } };
             });
             this._pollable = new AsyncPollable(this._promise);
         } else {

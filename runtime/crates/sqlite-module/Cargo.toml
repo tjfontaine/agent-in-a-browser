@@ -28,9 +28,9 @@ path = "wit"
 world = "sqlite-module"
 
 [package.metadata.component.target.dependencies]
-"wasi:io" = { path = "wit/deps/io" }
-"wasi:filesystem" = { path = "wit/deps/filesystem" }
-"wasi:clocks" = { path = "wit/deps/clocks" }
-"wasi:cli" = { path = "wit/deps/cli" }
-"wasi:sockets" = { path = "wit/deps/sockets" }
-"wasi:random" = { path = "wit/deps/random" }
+"wasi:io" = { path = "../../wit/deps/io" }
+"wasi:filesystem" = { path = "../../wit/deps/filesystem" }
+"wasi:clocks" = { path = "../../wit/deps/clocks" }
+"wasi:cli" = { path = "../../wit/deps/cli" }
+"wasi:sockets" = { path = "../../wit/deps/sockets" }
+"wasi:random" = { path = "../../wit/deps/random" }

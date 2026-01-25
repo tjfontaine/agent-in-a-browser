@@ -1,0 +1,17 @@
+// Terminal info interface - provides terminal dimensions for TUI applications
+package terminal:info@0.1.0;
+
+interface size {
+    /// Terminal dimensions record
+    record terminal-dimensions {
+        cols: u32,
+        rows: u32,
+    }
+    
+    /// Get the current terminal width and height in characters
+    get-terminal-size: func() -> terminal-dimensions;
+}
+
+world terminal-info {
+    export size;
+}

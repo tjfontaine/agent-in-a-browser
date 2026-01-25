@@ -785,14 +785,6 @@ const symbolDispose = Symbol.dispose || Symbol.for('dispose');
 
 const handleTables = [];
 
-class ComponentError extends Error {
-  constructor (value) {
-    const enumerable = typeof value !== 'string';
-    super(enumerable ? `${String(value)} (see error.payload)` : value);
-    Object.defineProperty(this, 'payload', { value, enumerable });
-  }
-}
-
 function getErrorPayload(e) {
   if (e && hasOwnProperty.call(e, 'payload')) return e.payload;
   if (e instanceof Error) throw e;
@@ -872,15 +864,15 @@ function trampoline0() {
   return ret ? 1 : 0;
 }
 
-const handleTable1 = [T_FLAG, 0];
-const captureTable1= new Map();
-let captureCnt1 = 0;
-handleTables[1] = handleTable1;
+const handleTable23 = [T_FLAG, 0];
+const captureTable23= new Map();
+let captureCnt23 = 0;
+handleTables[23] = handleTable23;
 
 function trampoline1(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -908,8 +900,8 @@ function trampoline1(arg0, arg1) {
 
 function trampoline2(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -949,10 +941,10 @@ function trampoline3() {
   return toUint64(ret);
 }
 
-const handleTable5 = [T_FLAG, 0];
-const captureTable5= new Map();
-let captureCnt5 = 0;
-handleTables[5] = handleTable5;
+const handleTable6 = [T_FLAG, 0];
+const captureTable6= new Map();
+let captureCnt6 = 0;
+handleTables[6] = handleTable6;
 
 function trampoline5() {
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]fields"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -965,9 +957,9 @@ function trampoline5() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt5;
-    captureTable5.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable5, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt6;
+    captureTable6.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable6, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]fields"][Instruction::Return]', {
     funcName: '[constructor]fields',
@@ -978,24 +970,24 @@ function trampoline5() {
   return handle0;
 }
 
-const handleTable6 = [T_FLAG, 0];
-const captureTable6= new Map();
-let captureCnt6 = 0;
-handleTables[6] = handleTable6;
+const handleTable7 = [T_FLAG, 0];
+const captureTable7= new Map();
+let captureCnt7 = 0;
+handleTables[7] = handleTable7;
 
 function trampoline6(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable5.delete(rep2);
+    captureTable6.delete(rep2);
   }
-  rscTableRemove(handleTable5, handle1);
+  rscTableRemove(handleTable6, handle1);
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-request"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]outgoing-request');
   const ret = new OutgoingRequest(rsc0);
@@ -1006,9 +998,9 @@ function trampoline6(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt6;
-    captureTable6.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable6, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt7;
+    captureTable7.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable7, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-request"][Instruction::Return]', {
     funcName: '[constructor]outgoing-request',
@@ -1019,19 +1011,19 @@ function trampoline6(arg0) {
   return handle3;
 }
 
-const handleTable4 = [T_FLAG, 0];
-const captureTable4= new Map();
-let captureCnt4 = 0;
-handleTables[4] = handleTable4;
-const handleTable0 = [T_FLAG, 0];
-const captureTable0= new Map();
-let captureCnt0 = 0;
-handleTables[0] = handleTable0;
+const handleTable3 = [T_FLAG, 0];
+const captureTable3= new Map();
+let captureCnt3 = 0;
+handleTables[3] = handleTable3;
+const handleTable1 = [T_FLAG, 0];
+const captureTable1= new Map();
+let captureCnt1 = 0;
+handleTables[1] = handleTable1;
 
 function trampoline7(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1052,9 +1044,9 @@ function trampoline7(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]output-stream.subscribe"][Instruction::Return]', {
     funcName: '[method]output-stream.subscribe',
@@ -1065,15 +1057,15 @@ function trampoline7(arg0) {
   return handle3;
 }
 
-const handleTable9 = [T_FLAG, 0];
-const captureTable9= new Map();
-let captureCnt9 = 0;
-handleTables[9] = handleTable9;
+const handleTable10 = [T_FLAG, 0];
+const captureTable10= new Map();
+let captureCnt10 = 0;
+handleTables[10] = handleTable10;
 
 function trampoline8(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable9.get(rep2);
+  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1098,15 +1090,15 @@ function trampoline8(arg0) {
   return toUint16(ret);
 }
 
-const handleTable3 = [T_FLAG, 0];
-const captureTable3= new Map();
-let captureCnt3 = 0;
-handleTables[3] = handleTable3;
+const handleTable2 = [T_FLAG, 0];
+const captureTable2= new Map();
+let captureCnt2 = 0;
+handleTables[2] = handleTable2;
 
 function trampoline9(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1127,9 +1119,9 @@ function trampoline9(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="wasi:io/streams@0.2.9", function="[method]input-stream.subscribe"][Instruction::Return]', {
     funcName: '[method]input-stream.subscribe',
@@ -1152,9 +1144,9 @@ function trampoline12(arg0) {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"][Instruction::Return]', {
     funcName: 'subscribe-duration',
@@ -1168,8 +1160,8 @@ function trampoline12(arg0) {
 
 function trampoline13(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1190,9 +1182,9 @@ function trampoline13(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="[method]lazy-process.get-ready-pollable"][Instruction::Return]', {
     funcName: '[method]lazy-process.get-ready-pollable',
@@ -1206,8 +1198,8 @@ function trampoline13(arg0) {
 
 function trampoline14(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1235,8 +1227,8 @@ function trampoline14(arg0) {
 
 const trampoline15 = new WebAssembly.Suspending(async function(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable0.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Pollable.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1260,15 +1252,15 @@ const trampoline15 = new WebAssembly.Suspending(async function(arg0) {
   });
 }
 );
-const handleTable11 = [T_FLAG, 0];
-const captureTable11= new Map();
-let captureCnt11 = 0;
-handleTables[11] = handleTable11;
+const handleTable12 = [T_FLAG, 0];
+const captureTable12= new Map();
+let captureCnt12 = 0;
+handleTables[12] = handleTable12;
 
 function trampoline25(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable11.get(rep2);
+  var rep2 = handleTable12[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable12.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1289,9 +1281,9 @@ function trampoline25(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt5;
-    captureTable5.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable5, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt6;
+    captureTable6.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable6, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[method]incoming-request.headers"][Instruction::Return]', {
     funcName: '[method]incoming-request.headers',
@@ -1302,28 +1294,28 @@ function trampoline25(arg0) {
   return handle3;
 }
 
-const handleTable10 = [T_FLAG, 0];
-const captureTable10= new Map();
-let captureCnt10 = 0;
-handleTables[10] = handleTable10;
-const handleTable12 = [T_FLAG, 0];
-const captureTable12= new Map();
-let captureCnt12 = 0;
-handleTables[12] = handleTable12;
+const handleTable11 = [T_FLAG, 0];
+const captureTable11= new Map();
+let captureCnt11 = 0;
+handleTables[11] = handleTable11;
+const handleTable13 = [T_FLAG, 0];
+const captureTable13= new Map();
+let captureCnt13 = 0;
+handleTables[13] = handleTable13;
 
 function trampoline26(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable10.get(rep2);
+  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable11.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable10.delete(rep2);
+    captureTable11.delete(rep2);
   }
-  rscTableRemove(handleTable10, handle1);
+  rscTableRemove(handleTable11, handle1);
   _debugLog('[iface="wasi:http/types@0.2.9", function="[static]incoming-body.finish"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[static]incoming-body.finish');
   const ret = IncomingBody.finish(rsc0);
@@ -1334,9 +1326,9 @@ function trampoline26(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt12;
-    captureTable12.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable12, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt13;
+    captureTable13.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable13, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[static]incoming-body.finish"][Instruction::Return]', {
     funcName: '[static]incoming-body.finish',
@@ -1347,24 +1339,24 @@ function trampoline26(arg0) {
   return handle3;
 }
 
-const handleTable13 = [T_FLAG, 0];
-const captureTable13= new Map();
-let captureCnt13 = 0;
-handleTables[13] = handleTable13;
+const handleTable14 = [T_FLAG, 0];
+const captureTable14= new Map();
+let captureCnt14 = 0;
+handleTables[14] = handleTable14;
 
 function trampoline28(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable5.delete(rep2);
+    captureTable6.delete(rep2);
   }
-  rscTableRemove(handleTable5, handle1);
+  rscTableRemove(handleTable6, handle1);
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-response"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, '[constructor]outgoing-response');
   const ret = new OutgoingResponse(rsc0);
@@ -1375,9 +1367,9 @@ function trampoline28(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt13;
-    captureTable13.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable13, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt14;
+    captureTable14.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable14, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[constructor]outgoing-response"][Instruction::Return]', {
     funcName: '[constructor]outgoing-response',
@@ -1391,8 +1383,8 @@ function trampoline28(arg0) {
 
 function trampoline29(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable13[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable13.get(rep2);
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1441,31 +1433,6 @@ function trampoline29(arg0, arg1) {
 
 
 function trampoline33() {
-  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
-  const ret = getStdout();
-  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.9#OutputStream')])) {
-    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
-  }
-  var handle0 = ret[symbolRscHandle];
-  if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable4, rep);
-  }
-  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"][Instruction::Return]', {
-    funcName: 'get-stdout',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  return handle0;
-}
-
-
-function trampoline34() {
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'now');
   const ret = now();
@@ -1481,7 +1448,7 @@ function trampoline34() {
 }
 
 
-function trampoline35() {
+function trampoline34() {
   _debugLog('[iface="wasi:cli/stderr@0.2.9", function="get-stderr"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stderr');
   const ret = getStderr();
@@ -1492,9 +1459,9 @@ function trampoline35() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable4, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable3, rep);
   }
   _debugLog('[iface="wasi:cli/stderr@0.2.9", function="get-stderr"][Instruction::Return]', {
     funcName: 'get-stderr',
@@ -1507,7 +1474,7 @@ function trampoline35() {
 
 let exports1;
 
-function trampoline43() {
+function trampoline42() {
   _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdin');
   const ret = getStdin();
@@ -1518,12 +1485,37 @@ function trampoline43() {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
+    const rep = ret[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable2, rep);
+  }
+  _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"][Instruction::Return]', {
+    funcName: 'get-stdin',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return handle0;
+}
+
+
+function trampoline43() {
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-stdout');
+  const ret = getStdout();
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  if (!(ret ?.[Symbol.for('wasi:io/streams@0.2.9#OutputStream')])) {
+    throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
+  }
+  var handle0 = ret[symbolRscHandle];
+  if (!handle0) {
     const rep = ret[symbolRscRep] || ++captureCnt3;
     captureTable3.set(rep, ret);
     handle0 = rscTableCreateOwn(handleTable3, rep);
   }
-  _debugLog('[iface="wasi:cli/stdin@0.2.9", function="get-stdin"][Instruction::Return]', {
-    funcName: 'get-stdin',
+  _debugLog('[iface="wasi:cli/stdout@0.2.9", function="get-stdout"][Instruction::Return]', {
+    funcName: 'get-stdout',
     paramCount: 1,
     async: false,
     postReturn: false
@@ -1660,9 +1652,9 @@ const trampoline47 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
-    const rep = ret[symbolRscRep] || ++captureCnt1;
-    captureTable1.set(rep, ret);
-    handle8 = rscTableCreateOwn(handleTable1, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt23;
+    captureTable23.set(rep, ret);
+    handle8 = rscTableCreateOwn(handleTable23, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-interactive"][Instruction::Return]', {
     funcName: 'spawn-interactive',
@@ -1717,9 +1709,9 @@ const trampoline48 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle7 = ret[symbolRscHandle];
   if (!handle7) {
-    const rep = ret[symbolRscRep] || ++captureCnt1;
-    captureTable1.set(rep, ret);
-    handle7 = rscTableCreateOwn(handleTable1, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt23;
+    captureTable23.set(rep, ret);
+    handle7 = rscTableCreateOwn(handleTable23, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-worker-command"][Instruction::Return]', {
     funcName: 'spawn-worker-command',
@@ -1777,9 +1769,9 @@ const trampoline49 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
-    const rep = ret[symbolRscRep] || ++captureCnt1;
-    captureTable1.set(rep, ret);
-    handle8 = rscTableCreateOwn(handleTable1, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt23;
+    captureTable23.set(rep, ret);
+    handle8 = rscTableCreateOwn(handleTable23, rep);
   }
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-lazy-command"][Instruction::Return]', {
     funcName: 'spawn-lazy-command',
@@ -1793,8 +1785,8 @@ const trampoline49 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 function trampoline50(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1825,8 +1817,8 @@ function trampoline50(arg0, arg1, arg2) {
 
 function trampoline51(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1860,8 +1852,8 @@ function trampoline51(arg0, arg1, arg2) {
 
 function trampoline52(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1895,8 +1887,8 @@ function trampoline52(arg0, arg1, arg2) {
 
 const trampoline53 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable23[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable23.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(LazyProcess.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1950,10 +1942,10 @@ function trampoline54(arg0, arg1) {
   });
 }
 
-const handleTable17 = [T_FLAG, 0];
-const captureTable17= new Map();
-let captureCnt17 = 0;
-handleTables[17] = handleTable17;
+const handleTable18 = [T_FLAG, 0];
+const captureTable18= new Map();
+let captureCnt18 = 0;
+handleTables[18] = handleTable18;
 
 function trampoline55(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdout@0.2.9", function="get-terminal-stdout"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -1972,9 +1964,9 @@ function trampoline55(arg0) {
     }
     var handle0 = e[symbolRscHandle];
     if (!handle0) {
-      const rep = e[symbolRscRep] || ++captureCnt17;
-      captureTable17.set(rep, e);
-      handle0 = rscTableCreateOwn(handleTable17, rep);
+      const rep = e[symbolRscRep] || ++captureCnt18;
+      captureTable18.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable18, rep);
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
@@ -1989,8 +1981,8 @@ function trampoline55(arg0) {
 
 function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2062,8 +2054,8 @@ function trampoline56(arg0, arg1, arg2, arg3, arg4, arg5) {
 
 function trampoline57(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2180,8 +2172,8 @@ function trampoline57(arg0, arg1, arg2, arg3) {
 
 function trampoline58(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2262,8 +2254,8 @@ function trampoline58(arg0, arg1, arg2, arg3, arg4) {
 
 function trampoline59(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2322,8 +2314,8 @@ function trampoline59(arg0, arg1, arg2, arg3) {
 
 function trampoline60(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2379,15 +2371,15 @@ function trampoline60(arg0, arg1, arg2, arg3) {
   return variant5_0;
 }
 
-const handleTable7 = [T_FLAG, 0];
-const captureTable7= new Map();
-let captureCnt7 = 0;
-handleTables[7] = handleTable7;
+const handleTable8 = [T_FLAG, 0];
+const captureTable8= new Map();
+let captureCnt8 = 0;
+handleTables[8] = handleTable8;
 
 function trampoline61(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2418,9 +2410,9 @@ function trampoline61(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt7;
-        captureTable7.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable7, rep);
+        const rep = e[symbolRscRep] || ++captureCnt8;
+        captureTable8.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable8, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -2442,15 +2434,15 @@ function trampoline61(arg0, arg1) {
   });
 }
 
-const handleTable8 = [T_FLAG, 0];
-const captureTable8= new Map();
-let captureCnt8 = 0;
-handleTables[8] = handleTable8;
+const handleTable9 = [T_FLAG, 0];
+const captureTable9= new Map();
+let captureCnt9 = 0;
+handleTables[9] = handleTable9;
 
 const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable8.get(rep2);
+  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable9.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(FutureIncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2487,9 +2479,9 @@ const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
             }
             var handle3 = e[symbolRscHandle];
             if (!handle3) {
-              const rep = e[symbolRscRep] || ++captureCnt9;
-              captureTable9.set(rep, e);
-              handle3 = rscTableCreateOwn(handleTable9, rep);
+              const rep = e[symbolRscRep] || ++captureCnt10;
+              captureTable10.set(rep, e);
+              handle3 = rscTableCreateOwn(handleTable10, rep);
             }
             dataView(memory0).setInt32(arg1 + 24, handle3, true);
             break;
@@ -2911,8 +2903,8 @@ const trampoline62 = new WebAssembly.Suspending(async function(arg0, arg1) {
 
 function trampoline63(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable9.get(rep2);
+  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable10.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -2943,9 +2935,9 @@ function trampoline63(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt10;
-        captureTable10.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable10, rep);
+        const rep = e[symbolRscRep] || ++captureCnt11;
+        captureTable11.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable11, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -2970,8 +2962,8 @@ function trampoline63(arg0, arg1) {
 
 function trampoline64(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable10.get(rep2);
+  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable11.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3002,9 +2994,9 @@ function trampoline64(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt3;
-        captureTable3.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable3, rep);
+        const rep = e[symbolRscRep] || ++captureCnt2;
+        captureTable2.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable2, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3029,8 +3021,8 @@ function trampoline64(arg0, arg1) {
 
 function trampoline65(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable7.get(rep2);
+  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable8.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3061,9 +3053,9 @@ function trampoline65(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt4;
-        captureTable4.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable4, rep);
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3088,31 +3080,31 @@ function trampoline65(arg0, arg1) {
 
 function trampoline66(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable7.get(rep2);
+  var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable8.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingBody.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable7.delete(rep2);
+    captureTable8.delete(rep2);
   }
-  rscTableRemove(handleTable7, handle1);
+  rscTableRemove(handleTable8, handle1);
   let variant6;
   if (arg1) {
     var handle4 = arg2;
-    var rep5 = handleTable5[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable5.get(rep5);
+    var rep5 = handleTable6[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable6.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(Fields.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable5.delete(rep5);
+      captureTable6.delete(rep5);
     }
-    rscTableRemove(handleTable5, handle4);
+    rscTableRemove(handleTable6, handle4);
     variant6 = rsc3;
   } else {
     variant6 = undefined;
@@ -3539,8 +3531,8 @@ function trampoline66(arg0, arg1, arg2, arg3) {
 
 function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3619,8 +3611,8 @@ function trampoline67(arg0, arg1, arg2, arg3, arg4, arg5) {
 
 function trampoline68(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable11.get(rep2);
+  var rep2 = handleTable12[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable12.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3658,8 +3650,8 @@ function trampoline68(arg0, arg1) {
 
 function trampoline69(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable11[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable11.get(rep2);
+  var rep2 = handleTable12[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable12.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(IncomingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3690,9 +3682,9 @@ function trampoline69(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt10;
-        captureTable10.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable10, rep);
+        const rep = e[symbolRscRep] || ++captureCnt11;
+        captureTable11.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable11, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3717,8 +3709,8 @@ function trampoline69(arg0, arg1) {
 
 function trampoline70(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable5.get(rep2);
+  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable6.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Fields.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3765,8 +3757,8 @@ function trampoline70(arg0, arg1) {
 
 function trampoline71(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable13[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable13.get(rep2);
+  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable14.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingResponse.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3797,9 +3789,9 @@ function trampoline71(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt7;
-        captureTable7.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable7, rep);
+        const rep = e[symbolRscRep] || ++captureCnt8;
+        captureTable8.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable8, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -3821,24 +3813,24 @@ function trampoline71(arg0, arg1) {
   });
 }
 
-const handleTable14 = [T_FLAG, 0];
-const captureTable14= new Map();
-let captureCnt14 = 0;
-handleTables[14] = handleTable14;
+const handleTable15 = [T_FLAG, 0];
+const captureTable15= new Map();
+let captureCnt15 = 0;
+handleTables[15] = handleTable15;
 
 function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   var handle1 = arg0;
-  var rep2 = handleTable14[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable14.get(rep2);
+  var rep2 = handleTable15[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable15.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(ResponseOutparam.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable14.delete(rep2);
+    captureTable15.delete(rep2);
   }
-  rscTableRemove(handleTable14, handle1);
+  rscTableRemove(handleTable15, handle1);
   let variant38;
   if (arg1) {
     let variant37;
@@ -4276,17 +4268,17 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
     };
   } else {
     var handle4 = arg2;
-    var rep5 = handleTable13[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable13.get(rep5);
+    var rep5 = handleTable14[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable14.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(OutgoingResponse.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable13.delete(rep5);
+      captureTable14.delete(rep5);
     }
-    rscTableRemove(handleTable13, handle4);
+    rscTableRemove(handleTable14, handle4);
     variant38= {
       tag: 'ok',
       val: rsc3
@@ -4305,15 +4297,15 @@ function trampoline72(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   });
 }
 
-const handleTable2 = [T_FLAG, 0];
-const captureTable2= new Map();
-let captureCnt2 = 0;
-handleTables[2] = handleTable2;
+const handleTable0 = [T_FLAG, 0];
+const captureTable0= new Map();
+let captureCnt0 = 0;
+handleTables[0] = handleTable0;
 
 function trampoline73(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4357,9 +4349,9 @@ function trampoline73(arg0, arg1, arg2, arg3) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg3 + 8, handle4, true);
           break;
@@ -4389,8 +4381,8 @@ function trampoline73(arg0, arg1, arg2, arg3) {
 
 function trampoline74(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4438,9 +4430,9 @@ function trampoline74(arg0, arg1, arg2) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -4470,8 +4462,8 @@ function trampoline74(arg0, arg1, arg2) {
 
 const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4519,9 +4511,9 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -4551,8 +4543,8 @@ const trampoline75 = new WebAssembly.Suspending(async function(arg0, arg1, arg2)
 
 const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -4596,9 +4588,9 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg3 + 8, handle4, true);
           break;
@@ -4625,38 +4617,38 @@ const trampoline76 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   });
 }
 );
-const handleTable15 = [T_FLAG, 0];
-const captureTable15= new Map();
-let captureCnt15 = 0;
-handleTables[15] = handleTable15;
+const handleTable16 = [T_FLAG, 0];
+const captureTable16= new Map();
+let captureCnt16 = 0;
+handleTables[16] = handleTable16;
 
 function trampoline77(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable6.get(rep2);
+  var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable7.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutgoingRequest.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
     Object.defineProperty(rsc0, symbolRscRep, { writable: true, value: rep2});
   }
   else {
-    captureTable6.delete(rep2);
+    captureTable7.delete(rep2);
   }
-  rscTableRemove(handleTable6, handle1);
+  rscTableRemove(handleTable7, handle1);
   let variant6;
   if (arg1) {
     var handle4 = arg2;
-    var rep5 = handleTable15[(handle4 << 1) + 1] & ~T_FLAG;
-    var rsc3 = captureTable15.get(rep5);
+    var rep5 = handleTable16[(handle4 << 1) + 1] & ~T_FLAG;
+    var rsc3 = captureTable16.get(rep5);
     if (!rsc3) {
       rsc3 = Object.create(RequestOptions.prototype);
       Object.defineProperty(rsc3, symbolRscHandle, { writable: true, value: handle4});
       Object.defineProperty(rsc3, symbolRscRep, { writable: true, value: rep5});
     }
     else {
-      captureTable15.delete(rep5);
+      captureTable16.delete(rep5);
     }
-    rscTableRemove(handleTable15, handle4);
+    rscTableRemove(handleTable16, handle4);
     variant6 = rsc3;
   } else {
     variant6 = undefined;
@@ -4681,9 +4673,9 @@ function trampoline77(arg0, arg1, arg2, arg3) {
       }
       var handle7 = e[symbolRscHandle];
       if (!handle7) {
-        const rep = e[symbolRscRep] || ++captureCnt8;
-        captureTable8.set(rep, e);
-        handle7 = rscTableCreateOwn(handleTable8, rep);
+        const rep = e[symbolRscRep] || ++captureCnt9;
+        captureTable9.set(rep, e);
+        handle7 = rscTableCreateOwn(handleTable9, rep);
       }
       dataView(memory0).setInt32(arg3 + 8, handle7, true);
       break;
@@ -5109,10 +5101,28 @@ function trampoline78(arg0) {
 }
 
 
-function trampoline79(arg0, arg1) {
+function trampoline79(arg0) {
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
+  const ret = insecureSeed();
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var [tuple0_0, tuple0_1] = ret;
+  dataView(memory0).setBigInt64(arg0 + 0, toUint64(tuple0_0), true);
+  dataView(memory0).setBigInt64(arg0 + 8, toUint64(tuple0_1), true);
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"][Instruction::Return]', {
+    funcName: 'insecure-seed',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline80(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable0.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -5134,24 +5144,6 @@ function trampoline79(arg0, arg1) {
   dataView(memory0).setUint32(arg1 + 0, ptr3, true);
   _debugLog('[iface="wasi:io/error@0.2.9", function="[method]error.to-debug-string"][Instruction::Return]', {
     funcName: '[method]error.to-debug-string',
-    paramCount: 0,
-    async: false,
-    postReturn: false
-  });
-}
-
-
-function trampoline80(arg0) {
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
-  const ret = insecureSeed();
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  var [tuple0_0, tuple0_1] = ret;
-  dataView(memory0).setBigInt64(arg0 + 0, toUint64(tuple0_0), true);
-  dataView(memory0).setBigInt64(arg0 + 8, toUint64(tuple0_1), true);
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"][Instruction::Return]', {
-    funcName: 'insecure-seed',
     paramCount: 0,
     async: false,
     postReturn: false
@@ -5190,15 +5182,15 @@ function trampoline81(arg0) {
   });
 }
 
-const handleTable19 = [T_FLAG, 0];
-const captureTable19= new Map();
-let captureCnt19 = 0;
-handleTables[19] = handleTable19;
+const handleTable5 = [T_FLAG, 0];
+const captureTable5= new Map();
+let captureCnt5 = 0;
+handleTables[5] = handleTable5;
 
 function trampoline82(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -5403,8 +5395,8 @@ function trampoline82(arg0, arg1, arg2) {
 
 function trampoline83(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable2.get(rep2);
+  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable0.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -5592,15 +5584,15 @@ function trampoline83(arg0, arg1) {
   });
 }
 
-const handleTable18 = [T_FLAG, 0];
-const captureTable18= new Map();
-let captureCnt18 = 0;
-handleTables[18] = handleTable18;
+const handleTable4 = [T_FLAG, 0];
+const captureTable4= new Map();
+let captureCnt4 = 0;
+handleTables[4] = handleTable4;
 
 const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -5631,9 +5623,9 @@ const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt18;
-        captureTable18.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable18, rep);
+        const rep = e[symbolRscRep] || ++captureCnt4;
+        captureTable4.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable4, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -5815,8 +5807,8 @@ const trampoline84 = new WebAssembly.Suspending(async function(arg0, arg1) {
 
 function trampoline85(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable18[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable18.get(rep2);
+  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable4.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(DirectoryEntryStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -6074,8 +6066,8 @@ function trampoline85(arg0, arg1) {
 
 const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -6283,8 +6275,8 @@ const trampoline86 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -6569,8 +6561,8 @@ const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -6584,8 +6576,8 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   var len4 = arg3;
   var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
   var handle6 = arg4;
-  var rep7 = handleTable19[(handle6 << 1) + 1] & ~T_FLAG;
-  var rsc5 = captureTable19.get(rep7);
+  var rep7 = handleTable5[(handle6 << 1) + 1] & ~T_FLAG;
+  var rsc5 = captureTable5.get(rep7);
   if (!rsc5) {
     rsc5 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc5, symbolRscHandle, { writable: true, value: handle6});
@@ -6793,8 +6785,8 @@ function trampoline88(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
 
 const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -6844,9 +6836,9 @@ const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
       }
       var handle7 = e[symbolRscHandle];
       if (!handle7) {
-        const rep = e[symbolRscRep] || ++captureCnt19;
-        captureTable19.set(rep, e);
-        handle7 = rscTableCreateOwn(handleTable19, rep);
+        const rep = e[symbolRscRep] || ++captureCnt5;
+        captureTable5.set(rep, e);
+        handle7 = rscTableCreateOwn(handleTable5, rep);
       }
       dataView(memory0).setInt32(arg6 + 4, handle7, true);
       break;
@@ -7028,8 +7020,8 @@ const trampoline89 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -7237,8 +7229,8 @@ const trampoline90 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -7249,8 +7241,8 @@ const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   var len3 = arg2;
   var result3 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr3, len3));
   var handle5 = arg3;
-  var rep6 = handleTable19[(handle5 << 1) + 1] & ~T_FLAG;
-  var rsc4 = captureTable19.get(rep6);
+  var rep6 = handleTable5[(handle5 << 1) + 1] & ~T_FLAG;
+  var rsc4 = captureTable5.get(rep6);
   if (!rsc4) {
     rsc4 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc4, symbolRscHandle, { writable: true, value: handle5});
@@ -7458,8 +7450,8 @@ const trampoline91 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -7667,8 +7659,8 @@ const trampoline92 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
 
 function trampoline93(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -7699,9 +7691,9 @@ function trampoline93(arg0, arg1, arg2) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt3;
-        captureTable3.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable3, rep);
+        const rep = e[symbolRscRep] || ++captureCnt2;
+        captureTable2.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable2, rep);
       }
       dataView(memory0).setInt32(arg2 + 4, handle3, true);
       break;
@@ -7883,8 +7875,8 @@ function trampoline93(arg0, arg1, arg2) {
 
 function trampoline94(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -7915,9 +7907,9 @@ function trampoline94(arg0, arg1, arg2) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt4;
-        captureTable4.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable4, rep);
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
       }
       dataView(memory0).setInt32(arg2 + 4, handle3, true);
       break;
@@ -8099,8 +8091,8 @@ function trampoline94(arg0, arg1, arg2) {
 
 function trampoline95(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -8131,9 +8123,9 @@ function trampoline95(arg0, arg1) {
       }
       var handle3 = e[symbolRscHandle];
       if (!handle3) {
-        const rep = e[symbolRscRep] || ++captureCnt4;
-        captureTable4.set(rep, e);
-        handle3 = rscTableCreateOwn(handleTable4, rep);
+        const rep = e[symbolRscRep] || ++captureCnt3;
+        captureTable3.set(rep, e);
+        handle3 = rscTableCreateOwn(handleTable3, rep);
       }
       dataView(memory0).setInt32(arg1 + 4, handle3, true);
       break;
@@ -8315,8 +8307,8 @@ function trampoline95(arg0, arg1) {
 
 function trampoline96(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -8562,8 +8554,8 @@ function trampoline96(arg0, arg1) {
 
 const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -8842,8 +8834,8 @@ const trampoline97 = new WebAssembly.Suspending(async function(arg0, arg1) {
 
 function trampoline98(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9055,8 +9047,8 @@ function trampoline98(arg0, arg1, arg2, arg3) {
 
 function trampoline99(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9264,8 +9256,8 @@ function trampoline99(arg0, arg1) {
 
 function trampoline100(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
-  var rep2 = handleTable19[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable19.get(rep2);
+  var rep2 = handleTable5[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable5.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Descriptor.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9479,8 +9471,8 @@ function trampoline100(arg0, arg1, arg2, arg3, arg4) {
 
 const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9528,9 +9520,9 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -9560,8 +9552,8 @@ const trampoline101 = new WebAssembly.Suspending(async function(arg0, arg1, arg2
 
 function trampoline102(arg0, arg1, arg2) {
   var handle1 = arg0;
-  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable3.get(rep2);
+  var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable2.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(InputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9609,9 +9601,9 @@ function trampoline102(arg0, arg1, arg2) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -9641,8 +9633,8 @@ function trampoline102(arg0, arg1, arg2) {
 
 function trampoline103(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9684,9 +9676,9 @@ function trampoline103(arg0, arg1) {
           }
           var handle3 = e[symbolRscHandle];
           if (!handle3) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle3 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg1 + 12, handle3, true);
           break;
@@ -9716,8 +9708,8 @@ function trampoline103(arg0, arg1) {
 
 function trampoline104(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable4.get(rep2);
+  var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable3.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(OutputStream.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -9758,9 +9750,9 @@ function trampoline104(arg0, arg1) {
           }
           var handle3 = e[symbolRscHandle];
           if (!handle3) {
-            const rep = e[symbolRscRep] || ++captureCnt2;
-            captureTable2.set(rep, e);
-            handle3 = rscTableCreateOwn(handleTable2, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle3 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg1 + 8, handle3, true);
           break;
@@ -9804,9 +9796,9 @@ function trampoline105(arg0) {
     }
     var handle1 = tuple0_0[symbolRscHandle];
     if (!handle1) {
-      const rep = tuple0_0[symbolRscRep] || ++captureCnt19;
-      captureTable19.set(rep, tuple0_0);
-      handle1 = rscTableCreateOwn(handleTable19, rep);
+      const rep = tuple0_0[symbolRscRep] || ++captureCnt5;
+      captureTable5.set(rep, tuple0_0);
+      handle1 = rscTableCreateOwn(handleTable5, rep);
     }
     dataView(memory0).setInt32(base + 0, handle1, true);
     var ptr2 = utf8Encode(tuple0_1, realloc1, memory0);
@@ -9824,10 +9816,10 @@ function trampoline105(arg0) {
   });
 }
 
-const handleTable16 = [T_FLAG, 0];
-const captureTable16= new Map();
-let captureCnt16 = 0;
-handleTables[16] = handleTable16;
+const handleTable17 = [T_FLAG, 0];
+const captureTable17= new Map();
+let captureCnt17 = 0;
+handleTables[17] = handleTable17;
 
 function trampoline106(arg0) {
   _debugLog('[iface="wasi:cli/terminal-stdin@0.2.9", function="get-terminal-stdin"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -9846,9 +9838,9 @@ function trampoline106(arg0) {
     }
     var handle0 = e[symbolRscHandle];
     if (!handle0) {
-      const rep = e[symbolRscRep] || ++captureCnt16;
-      captureTable16.set(rep, e);
-      handle0 = rscTableCreateOwn(handleTable16, rep);
+      const rep = e[symbolRscRep] || ++captureCnt17;
+      captureTable17.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable17, rep);
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
@@ -9878,9 +9870,9 @@ function trampoline107(arg0) {
     }
     var handle0 = e[symbolRscHandle];
     if (!handle0) {
-      const rep = e[symbolRscRep] || ++captureCnt17;
-      captureTable17.set(rep, e);
-      handle0 = rscTableCreateOwn(handleTable17, rep);
+      const rep = e[symbolRscRep] || ++captureCnt18;
+      captureTable18.set(rep, e);
+      handle0 = rscTableCreateOwn(handleTable18, rep);
     }
     dataView(memory0).setInt32(arg0 + 4, handle0, true);
   }
@@ -9895,97 +9887,19 @@ function trampoline107(arg0) {
 let exports3;
 let postReturn0;
 function trampoline4(handle) {
-  const handleEntry = rscTableRemove(handleTable17, handle);
+  const handleEntry = rscTableRemove(handleTable18, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable17.get(handleEntry.rep);
+    const rsc = captureTable18.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable17.delete(handleEntry.rep);
+      captureTable18.delete(handleEntry.rep);
     } else if (TerminalOutput[symbolCabiDispose]) {
       TerminalOutput[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
 function trampoline10(handle) {
-  const handleEntry = rscTableRemove(handleTable9, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable9.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable9.delete(handleEntry.rep);
-    } else if (IncomingResponse[symbolCabiDispose]) {
-      IncomingResponse[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline11(handle) {
-  const handleEntry = rscTableRemove(handleTable8, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable8.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable8.delete(handleEntry.rep);
-    } else if (FutureIncomingResponse[symbolCabiDispose]) {
-      FutureIncomingResponse[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline16(handle) {
-  const handleEntry = rscTableRemove(handleTable0, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable0.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable0.delete(handleEntry.rep);
-    } else if (Pollable[symbolCabiDispose]) {
-      Pollable[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline17(handle) {
-  const handleEntry = rscTableRemove(handleTable5, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable5.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable5.delete(handleEntry.rep);
-    } else if (Fields[symbolCabiDispose]) {
-      Fields[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline18(handle) {
-  const handleEntry = rscTableRemove(handleTable3, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable3.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable3.delete(handleEntry.rep);
-    } else if (InputStream[symbolCabiDispose]) {
-      InputStream[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline19(handle) {
-  const handleEntry = rscTableRemove(handleTable2, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable2.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable2.delete(handleEntry.rep);
-    } else if (Error$1[symbolCabiDispose]) {
-      Error$1[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline20(handle) {
   const handleEntry = rscTableRemove(handleTable10, handle);
   if (handleEntry.own) {
     
@@ -9993,51 +9907,25 @@ function trampoline20(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable10.delete(handleEntry.rep);
-    } else if (IncomingBody[symbolCabiDispose]) {
-      IncomingBody[symbolCabiDispose](handleEntry.rep);
+    } else if (IncomingResponse[symbolCabiDispose]) {
+      IncomingResponse[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline21(handle) {
-  const handleEntry = rscTableRemove(handleTable7, handle);
+function trampoline11(handle) {
+  const handleEntry = rscTableRemove(handleTable9, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable7.get(handleEntry.rep);
+    const rsc = captureTable9.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable7.delete(handleEntry.rep);
-    } else if (OutgoingBody[symbolCabiDispose]) {
-      OutgoingBody[symbolCabiDispose](handleEntry.rep);
+      captureTable9.delete(handleEntry.rep);
+    } else if (FutureIncomingResponse[symbolCabiDispose]) {
+      FutureIncomingResponse[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline22(handle) {
-  const handleEntry = rscTableRemove(handleTable4, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable4.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable4.delete(handleEntry.rep);
-    } else if (OutputStream[symbolCabiDispose]) {
-      OutputStream[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline23(handle) {
-  const handleEntry = rscTableRemove(handleTable6, handle);
-  if (handleEntry.own) {
-    
-    const rsc = captureTable6.get(handleEntry.rep);
-    if (rsc) {
-      if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable6.delete(handleEntry.rep);
-    } else if (OutgoingRequest[symbolCabiDispose]) {
-      OutgoingRequest[symbolCabiDispose](handleEntry.rep);
-    }
-  }
-}
-function trampoline24(handle) {
+function trampoline16(handle) {
   const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
     
@@ -10045,51 +9933,51 @@ function trampoline24(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable1.delete(handleEntry.rep);
-    } else if (LazyProcess[symbolCabiDispose]) {
-      LazyProcess[symbolCabiDispose](handleEntry.rep);
+    } else if (Pollable[symbolCabiDispose]) {
+      Pollable[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline27(handle) {
-  const handleEntry = rscTableRemove(handleTable12, handle);
+function trampoline17(handle) {
+  const handleEntry = rscTableRemove(handleTable6, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable12.get(handleEntry.rep);
+    const rsc = captureTable6.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable12.delete(handleEntry.rep);
-    } else if (FutureTrailers[symbolCabiDispose]) {
-      FutureTrailers[symbolCabiDispose](handleEntry.rep);
+      captureTable6.delete(handleEntry.rep);
+    } else if (Fields[symbolCabiDispose]) {
+      Fields[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline30(handle) {
-  const handleEntry = rscTableRemove(handleTable13, handle);
+function trampoline18(handle) {
+  const handleEntry = rscTableRemove(handleTable2, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable13.get(handleEntry.rep);
+    const rsc = captureTable2.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable13.delete(handleEntry.rep);
-    } else if (OutgoingResponse[symbolCabiDispose]) {
-      OutgoingResponse[symbolCabiDispose](handleEntry.rep);
+      captureTable2.delete(handleEntry.rep);
+    } else if (InputStream[symbolCabiDispose]) {
+      InputStream[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline31(handle) {
-  const handleEntry = rscTableRemove(handleTable14, handle);
+function trampoline19(handle) {
+  const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable14.get(handleEntry.rep);
+    const rsc = captureTable0.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable14.delete(handleEntry.rep);
-    } else if (ResponseOutparam[symbolCabiDispose]) {
-      ResponseOutparam[symbolCabiDispose](handleEntry.rep);
+      captureTable0.delete(handleEntry.rep);
+    } else if (Error$1[symbolCabiDispose]) {
+      Error$1[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline32(handle) {
+function trampoline20(handle) {
   const handleEntry = rscTableRemove(handleTable11, handle);
   if (handleEntry.own) {
     
@@ -10097,9 +9985,123 @@ function trampoline32(handle) {
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
       captureTable11.delete(handleEntry.rep);
+    } else if (IncomingBody[symbolCabiDispose]) {
+      IncomingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline21(handle) {
+  const handleEntry = rscTableRemove(handleTable8, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable8.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable8.delete(handleEntry.rep);
+    } else if (OutgoingBody[symbolCabiDispose]) {
+      OutgoingBody[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline22(handle) {
+  const handleEntry = rscTableRemove(handleTable3, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable3.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable3.delete(handleEntry.rep);
+    } else if (OutputStream[symbolCabiDispose]) {
+      OutputStream[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline23(handle) {
+  const handleEntry = rscTableRemove(handleTable7, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable7.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable7.delete(handleEntry.rep);
+    } else if (OutgoingRequest[symbolCabiDispose]) {
+      OutgoingRequest[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline24(handle) {
+  const handleEntry = rscTableRemove(handleTable23, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable23.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable23.delete(handleEntry.rep);
+    } else if (LazyProcess[symbolCabiDispose]) {
+      LazyProcess[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline27(handle) {
+  const handleEntry = rscTableRemove(handleTable13, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable13.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable13.delete(handleEntry.rep);
+    } else if (FutureTrailers[symbolCabiDispose]) {
+      FutureTrailers[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline30(handle) {
+  const handleEntry = rscTableRemove(handleTable14, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable14.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable14.delete(handleEntry.rep);
+    } else if (OutgoingResponse[symbolCabiDispose]) {
+      OutgoingResponse[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline31(handle) {
+  const handleEntry = rscTableRemove(handleTable15, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable15.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable15.delete(handleEntry.rep);
+    } else if (ResponseOutparam[symbolCabiDispose]) {
+      ResponseOutparam[symbolCabiDispose](handleEntry.rep);
+    }
+  }
+}
+function trampoline32(handle) {
+  const handleEntry = rscTableRemove(handleTable12, handle);
+  if (handleEntry.own) {
+    
+    const rsc = captureTable12.get(handleEntry.rep);
+    if (rsc) {
+      if (rsc[symbolDispose]) rsc[symbolDispose]();
+      captureTable12.delete(handleEntry.rep);
     } else if (IncomingRequest[symbolCabiDispose]) {
       IncomingRequest[symbolCabiDispose](handleEntry.rep);
     }
+  }
+}
+const handleTable19 = [T_FLAG, 0];
+const captureTable19= new Map();
+let captureCnt19 = 0;
+handleTables[19] = handleTable19;
+function trampoline35(handle) {
+  const handleEntry = rscTableRemove(handleTable19, handle);
+  if (handleEntry.own) {
+    throw new TypeError('unreachable trampoline for resource [ResourceIndex(19)]')
   }
 }
 const handleTable20 = [T_FLAG, 0];
@@ -10132,56 +10134,46 @@ function trampoline38(handle) {
     throw new TypeError('unreachable trampoline for resource [ResourceIndex(22)]')
   }
 }
-const handleTable23 = [T_FLAG, 0];
-const captureTable23= new Map();
-let captureCnt23 = 0;
-handleTables[23] = handleTable23;
 function trampoline39(handle) {
-  const handleEntry = rscTableRemove(handleTable23, handle);
-  if (handleEntry.own) {
-    throw new TypeError('unreachable trampoline for resource [ResourceIndex(23)]')
-  }
-}
-function trampoline40(handle) {
-  const handleEntry = rscTableRemove(handleTable18, handle);
+  const handleEntry = rscTableRemove(handleTable4, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable18.get(handleEntry.rep);
+    const rsc = captureTable4.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable18.delete(handleEntry.rep);
+      captureTable4.delete(handleEntry.rep);
     } else if (DirectoryEntryStream[symbolCabiDispose]) {
       DirectoryEntryStream[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline41(handle) {
-  const handleEntry = rscTableRemove(handleTable19, handle);
+function trampoline40(handle) {
+  const handleEntry = rscTableRemove(handleTable5, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable19.get(handleEntry.rep);
+    const rsc = captureTable5.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable19.delete(handleEntry.rep);
+      captureTable5.delete(handleEntry.rep);
     } else if (Descriptor[symbolCabiDispose]) {
       Descriptor[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-function trampoline42(handle) {
-  const handleEntry = rscTableRemove(handleTable16, handle);
+function trampoline41(handle) {
+  const handleEntry = rscTableRemove(handleTable17, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable16.get(handleEntry.rep);
+    const rsc = captureTable17.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable16.delete(handleEntry.rep);
+      captureTable17.delete(handleEntry.rep);
     } else if (TerminalInput[symbolCabiDispose]) {
       TerminalInput[symbolCabiDispose](handleEntry.rep);
     }
   }
 }
-let incomingHandler024Handle;
+let incomingHandler029Handle;
 
 async function handle$1(arg0, arg1) {
   if (!(arg0 instanceof IncomingRequest)) {
@@ -10189,29 +10181,29 @@ async function handle$1(arg0, arg1) {
   }
   var handle0 = arg0[symbolRscHandle];
   if (!handle0) {
-    const rep = arg0[symbolRscRep] || ++captureCnt11;
-    captureTable11.set(rep, arg0);
-    handle0 = rscTableCreateOwn(handleTable11, rep);
+    const rep = arg0[symbolRscRep] || ++captureCnt12;
+    captureTable12.set(rep, arg0);
+    handle0 = rscTableCreateOwn(handleTable12, rep);
   }
   if (!(arg1 instanceof ResponseOutparam)) {
     throw new TypeError('Resource error: Not a valid "ResponseOutparam" resource.');
   }
   var handle1 = arg1[symbolRscHandle];
   if (!handle1) {
-    const rep = arg1[symbolRscRep] || ++captureCnt14;
-    captureTable14.set(rep, arg1);
-    handle1 = rscTableCreateOwn(handleTable14, rep);
+    const rep = arg1[symbolRscRep] || ++captureCnt15;
+    captureTable15.set(rep, arg1);
+    handle1 = rscTableCreateOwn(handleTable15, rep);
   }
-  _debugLog('[iface="wasi:http/incoming-handler@0.2.4", function="handle"][Instruction::CallWasm] enter', {
+  _debugLog('[iface="wasi:http/incoming-handler@0.2.9", function="handle"][Instruction::CallWasm] enter', {
     funcName: 'handle',
     paramCount: 2,
     async: false,
     postReturn: false,
   });
-  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'incomingHandler024Handle');
-  await incomingHandler024Handle(handle0, handle1);
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'incomingHandler029Handle');
+  await incomingHandler029Handle(handle0, handle1);
   endCurrentTask(0);
-  _debugLog('[iface="wasi:http/incoming-handler@0.2.4", function="handle"][Instruction::Return]', {
+  _debugLog('[iface="wasi:http/incoming-handler@0.2.9", function="handle"][Instruction::Return]', {
     funcName: 'handle',
     paramCount: 0,
     async: false,
@@ -10256,27 +10248,27 @@ async function run(arg0, arg1, arg2, arg3, arg4, arg5) {
   }
   var handle9 = arg3[symbolRscHandle];
   if (!handle9) {
-    const rep = arg3[symbolRscRep] || ++captureCnt3;
-    captureTable3.set(rep, arg3);
-    handle9 = rscTableCreateOwn(handleTable3, rep);
+    const rep = arg3[symbolRscRep] || ++captureCnt2;
+    captureTable2.set(rep, arg3);
+    handle9 = rscTableCreateOwn(handleTable2, rep);
   }
   if (!(arg4 ?.[Symbol.for('wasi:io/streams@0.2.9#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle10 = arg4[symbolRscHandle];
   if (!handle10) {
-    const rep = arg4[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, arg4);
-    handle10 = rscTableCreateOwn(handleTable4, rep);
+    const rep = arg4[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, arg4);
+    handle10 = rscTableCreateOwn(handleTable3, rep);
   }
   if (!(arg5 ?.[Symbol.for('wasi:io/streams@0.2.9#OutputStream')])) {
     throw new TypeError('Resource error: Not a valid "OutputStream" resource.');
   }
   var handle11 = arg5[symbolRscHandle];
   if (!handle11) {
-    const rep = arg5[symbolRscRep] || ++captureCnt4;
-    captureTable4.set(rep, arg5);
-    handle11 = rscTableCreateOwn(handleTable4, rep);
+    const rep = arg5[symbolRscRep] || ++captureCnt3;
+    captureTable3.set(rep, arg5);
+    handle11 = rscTableCreateOwn(handleTable3, rep);
   }
   _debugLog('[iface="shell:unix/command@0.1.0", function="run"][Instruction::CallWasm] enter', {
     funcName: 'run',
@@ -10332,51 +10324,13 @@ function listCommands() {
   return retCopy;
   
 }
-let run026Run;
-
-async function run$1() {
-  _debugLog('[iface="wasi:cli/run@0.2.6", function="run"][Instruction::CallWasm] enter', {
-    funcName: 'run',
-    paramCount: 0,
-    async: false,
-    postReturn: false,
-  });
-  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'run026Run');
-  const ret = await run026Run();
-  endCurrentTask(0);
-  let variant0;
-  if (ret) {
-    variant0= {
-      tag: 'err',
-      val: undefined
-    };
-  } else {
-    variant0= {
-      tag: 'ok',
-      val: undefined
-    };
-  }
-  _debugLog('[iface="wasi:cli/run@0.2.6", function="run"][Instruction::Return]', {
-    funcName: 'run',
-    paramCount: 1,
-    async: false,
-    postReturn: false
-  });
-  const retCopy = variant0;
-  
-  if (typeof retCopy === 'object' && retCopy.tag === 'err') {
-    throw new ComponentError(retCopy.val);
-  }
-  return retCopy.val;
-  
-}
 
 const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./ts-runtime-mcp.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./ts-runtime-mcp.core2.wasm', import.meta.url));
     const module2 = fetchCompile(new URL('./ts-runtime-mcp.core3.wasm', import.meta.url));
-    const module3 = base64Compile('AGFzbQEAAAABjQIgYAN/f38AYAJ/fwF/YAx/f39/f39/f39/f38Bf2AIf39/f39/f38Bf2AKf39/f39/f39/fwF/YAN/f38BfmADf35/AGACf38AYAJ+fwBgAX8AYAZ/f39/f38Bf2AEf35/fwF/YAJ/fgF/YAN/f38Bf2AFf39/fn8Bf2AHf39/f39/fwF/YAJ/fwF/YAV/f39/fwF/YAR/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAZ/f39/f38AYAR/f39/AX9gBX9/f39/AX9gBH9/f38AYAl/f39/fn9/f38AYAR/f39/AGAFf39/f38AYAh/f39/f39/fwBgB39/f39/f38AYAd/f39/f39/AAKWBFkAATAAAAABMQABAAEyAAIAATMAAwABNAAEAAE1AAUAATYABgABNwAGAAE4AAcAATkACAACMTAACQACMTEACgACMTIACwACMTMADAACMTQADQACMTUADgACMTYADwACMTcACgACMTgAEAACMTkADQACMjAAEQACMjEADQACMjIAEgACMjMAEAACMjQAEgACMjUAEwACMjYAEAACMjcAEAACMjgAFAACMjkAEAACMzAADQACMzEAFQACMzIAFAACMzMAFgACMzQAFwACMzUAGAACMzYAFwACMzcAFwACMzgABwACMzkABwACNDAABwACNDEABwACNDIABwACNDMAGQACNDQAFgACNDUABwACNDYABwACNDcABwACNDgABwACNDkAGgACNTAAGwACNTEABgACNTIABgACNTMAGwACNTQAGQACNTUACQACNTYABwACNTcACQACNTgACQACNTkABgACNjAABwACNjEABwACNjIABwACNjMAGwACNjQAHAACNjUAHQACNjYAHgACNjcAGwACNjgAHwACNjkAGwACNzAABgACNzEABgACNzIABwACNzMABwACNzQABwACNzUAGwACNzYABwACNzcAHAACNzgABgACNzkABgACODAABwACODEAGwACODIABwACODMAGwACODQACQACODUACQACODYACQACODcACQAIJGltcG9ydHMBcAFYWAleAQBBAAtYAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWVwAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
+    const module3 = base64Compile('AGFzbQEAAAABjQIgYAN/f38AYAJ/fwF/YAx/f39/f39/f39/f38Bf2AIf39/f39/f38Bf2AKf39/f39/f39/fwF/YAN/f38BfmADf35/AGACf38AYAJ+fwBgAX8AYAZ/f39/f38Bf2AEf35/fwF/YAJ/fgF/YAN/f38Bf2AFf39/fn8Bf2AHf39/f39/fwF/YAJ/fwF/YAV/f39/fwF/YAR/f39/AX9gCX9/f39/fn5/fwF/YAF/AX9gAX8AYAZ/f39/f38AYAR/f39/AX9gBX9/f39/AX9gBH9/f38AYAl/f39/fn9/f38AYAR/f39/AGAFf39/f38AYAh/f39/f39/fwBgB39/f39/f38AYAd/f39/f39/AAKWBFkAATAAAAABMQABAAEyAAIAATMAAwABNAAEAAE1AAUAATYABgABNwAGAAE4AAcAATkACAACMTAACQACMTEACgACMTIACwACMTMADAACMTQADQACMTUADgACMTYADwACMTcACgACMTgAEAACMTkADQACMjAAEQACMjEADQACMjIAEgACMjMAEAACMjQAEgACMjUAEwACMjYAEAACMjcAEAACMjgAFAACMjkAEAACMzAADQACMzEAFQACMzIAFAACMzMAFgACMzQAFwACMzUAGAACMzYAFwACMzcAFwACMzgABwACMzkABwACNDAABwACNDEABwACNDIABwACNDMAGQACNDQAFgACNDUABwACNDYABwACNDcABwACNDgABwACNDkAGgACNTAAGwACNTEABgACNTIABgACNTMAGwACNTQAGQACNTUACQACNTYACQACNTcABwACNTgACQACNTkABgACNjAABwACNjEABwACNjIABwACNjMAGwACNjQAHAACNjUAHQACNjYAHgACNjcAGwACNjgAHwACNjkAGwACNzAABgACNzEABgACNzIABwACNzMABwACNzQABwACNzUAGwACNzYABwACNzcAHAACNzgABgACNzkABgACODAABwACODEAGwACODIABwACODMAGwACODQACQACODUACQACODYACQACODcACQAIJGltcG9ydHMBcAFYWAleAQBBAAtYAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWVwAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'mcp:module-loader/loader@0.1.0': {
@@ -10397,28 +10351,27 @@ const $init = (() => {
         'spawn-worker-command': exports0['3'],
       },
       'wasi:cli/stderr@0.2.4': {
-        'get-stderr': trampoline35,
+        'get-stderr': trampoline34,
       },
-      'wasi:cli/stdout@0.2.4': {
-        'get-stdout': trampoline33,
-      },
-      'wasi:cli/terminal-output@0.2.4': {
+      'wasi:cli/terminal-output@0.2.9': {
         '[resource-drop]terminal-output': trampoline4,
       },
-      'wasi:cli/terminal-stdout@0.2.4': {
+      'wasi:cli/terminal-stdout@0.2.9': {
         'get-terminal-stdout': exports0['10'],
       },
       'wasi:clocks/monotonic-clock@0.2.4': {
-        now: trampoline34,
+        now: trampoline33,
+      },
+      'wasi:clocks/monotonic-clock@0.2.9': {
         'subscribe-duration': trampoline12,
       },
-      'wasi:clocks/wall-clock@0.2.4': {
+      'wasi:clocks/wall-clock@0.2.9': {
         now: exports0['55'],
       },
-      'wasi:http/outgoing-handler@0.2.4': {
+      'wasi:http/outgoing-handler@0.2.9': {
         handle: exports0['54'],
       },
-      'wasi:http/types@0.2.4': {
+      'wasi:http/types@0.2.9': {
         '[constructor]fields': trampoline5,
         '[constructor]outgoing-request': trampoline6,
         '[constructor]outgoing-response': trampoline28,
@@ -10455,13 +10408,16 @@ const $init = (() => {
         '[static]response-outparam.set': exports0['49'],
       },
       'wasi:io/error@0.2.4': {
-        '[method]error.to-debug-string': exports0['56'],
+        '[method]error.to-debug-string': exports0['57'],
+        '[resource-drop]error': trampoline19,
+      },
+      'wasi:io/error@0.2.9': {
         '[resource-drop]error': trampoline19,
       },
       'wasi:io/poll@0.2.0': {
         '[resource-drop]pollable': trampoline16,
       },
-      'wasi:io/poll@0.2.4': {
+      'wasi:io/poll@0.2.9': {
         '[method]pollable.block': trampoline15,
         '[resource-drop]pollable': trampoline16,
       },
@@ -10470,6 +10426,10 @@ const $init = (() => {
         '[resource-drop]output-stream': trampoline22,
       },
       'wasi:io/streams@0.2.4': {
+        '[method]output-stream.blocking-write-and-flush': exports0['53'],
+        '[resource-drop]output-stream': trampoline22,
+      },
+      'wasi:io/streams@0.2.9': {
         '[method]input-stream.blocking-read': exports0['52'],
         '[method]input-stream.read': exports0['51'],
         '[method]input-stream.subscribe': trampoline9,
@@ -10480,19 +10440,19 @@ const $init = (() => {
         '[resource-drop]output-stream': trampoline22,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['57'],
+        'insecure-seed': exports0['56'],
       },
-      'wasi:random/random@0.2.4': {
+      'wasi:random/random@0.2.9': {
         'get-random-bytes': exports0['9'],
         'get-random-u64': trampoline3,
       },
       'wasi:sockets/tcp@0.2.0': {
-        '[resource-drop]tcp-socket': trampoline39,
+        '[resource-drop]tcp-socket': trampoline38,
       },
       'wasi:sockets/udp@0.2.0': {
-        '[resource-drop]incoming-datagram-stream': trampoline37,
-        '[resource-drop]outgoing-datagram-stream': trampoline38,
-        '[resource-drop]udp-socket': trampoline36,
+        '[resource-drop]incoming-datagram-stream': trampoline36,
+        '[resource-drop]outgoing-datagram-stream': trampoline37,
+        '[resource-drop]udp-socket': trampoline35,
       },
       wasi_snapshot_preview1: {
         adapter_close_badfd: exports0['32'],
@@ -10521,7 +10481,6 @@ const $init = (() => {
     }));
     ({ exports: exports2 } = yield instantiateCore(yield module1, {
       __main_module__: {
-        _start: exports1._start,
         cabi_realloc: exports1.cabi_realloc,
       },
       env: {
@@ -10534,16 +10493,16 @@ const $init = (() => {
         exit: trampoline44,
       },
       'wasi:cli/stderr@0.2.6': {
-        'get-stderr': trampoline35,
+        'get-stderr': trampoline34,
       },
       'wasi:cli/stdin@0.2.6': {
-        'get-stdin': trampoline43,
+        'get-stdin': trampoline42,
       },
       'wasi:cli/stdout@0.2.6': {
-        'get-stdout': trampoline33,
+        'get-stdout': trampoline43,
       },
       'wasi:cli/terminal-input@0.2.6': {
-        '[resource-drop]terminal-input': trampoline42,
+        '[resource-drop]terminal-input': trampoline41,
       },
       'wasi:cli/terminal-output@0.2.6': {
         '[resource-drop]terminal-output': trampoline4,
@@ -10579,8 +10538,8 @@ const $init = (() => {
         '[method]descriptor.unlink-file-at': exports0['69'],
         '[method]descriptor.write-via-stream': exports0['71'],
         '[method]directory-entry-stream.read-directory-entry': exports0['62'],
-        '[resource-drop]descriptor': trampoline41,
-        '[resource-drop]directory-entry-stream': trampoline40,
+        '[resource-drop]descriptor': trampoline40,
+        '[resource-drop]directory-entry-stream': trampoline39,
         'filesystem-error-code': exports0['60'],
       },
       'wasi:io/error@0.2.6': {
@@ -10694,10 +10653,9 @@ const $init = (() => {
       },
     }));
     postReturn0 = exports1['cabi_post_shell:unix/command@0.1.0#list-commands'];
-    incomingHandler024Handle = WebAssembly.promising(exports1['wasi:http/incoming-handler@0.2.4#handle']);
+    incomingHandler029Handle = WebAssembly.promising(exports1['wasi:http/incoming-handler@0.2.9#handle']);
     command010Run = WebAssembly.promising(exports1['shell:unix/command@0.1.0#run']);
     command010ListCommands = exports1['shell:unix/command@0.1.0#list-commands'];
-    run026Run = WebAssembly.promising(exports2['wasi:cli/run@0.2.6#run']);
   })();
   let promise, resolve, reject;
   function runNext (value) {
@@ -10728,13 +10686,9 @@ const command010 = {
   run: run,
   
 };
-const run026 = {
-  run: run$1,
-  
-};
-const incomingHandler024 = {
+const incomingHandler029 = {
   handle: handle$1,
   
 };
 
-export { command010 as command, incomingHandler024 as incomingHandler, run026 as run, command010 as 'shell:unix/command@0.1.0', run026 as 'wasi:cli/run@0.2.6', incomingHandler024 as 'wasi:http/incoming-handler@0.2.4',  }
+export { command010 as command, incomingHandler029 as incomingHandler, command010 as 'shell:unix/command@0.1.0', incomingHandler029 as 'wasi:http/incoming-handler@0.2.9',  }

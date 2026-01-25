@@ -3,10 +3,8 @@ name = "ts-runtime-mcp"
 version.workspace = true
 edition.workspace = true
 
-[[bin]]
-name = "ts-runtime-mcp"
-path = "src/main.rs"
-required-features = []
+[lib]
+crate-type = ["cdylib"]
 
 [features]
 # Default: Core + Archive (shell + http + fs + gzip/tar/zip)

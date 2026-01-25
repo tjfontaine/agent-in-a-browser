@@ -919,10 +919,10 @@ function trampoline2(arg0) {
   return handle3;
 }
 
-const handleTable0 = [T_FLAG, 0];
-const captureTable0= new Map();
-let captureCnt0 = 0;
-handleTables[0] = handleTable0;
+const handleTable1 = [T_FLAG, 0];
+const captureTable1= new Map();
+let captureCnt1 = 0;
+handleTables[1] = handleTable1;
 
 function trampoline3(arg0) {
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"] [Instruction::CallInterface] (async? sync, @ enter)');
@@ -935,9 +935,9 @@ function trampoline3(arg0) {
   }
   var handle0 = ret[symbolRscHandle];
   if (!handle0) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle0 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle0 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="subscribe-duration"][Instruction::Return]', {
     funcName: 'subscribe-duration',
@@ -951,8 +951,8 @@ function trampoline3(arg0) {
 
 function trampoline4(arg0) {
   var handle1 = arg0;
-  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable0.get(rep2);
+  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable1.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Pollable.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -1075,9 +1075,9 @@ function trampoline8(arg0) {
   }
   var handle3 = ret[symbolRscHandle];
   if (!handle3) {
-    const rep = ret[symbolRscRep] || ++captureCnt0;
-    captureTable0.set(rep, ret);
-    handle3 = rscTableCreateOwn(handleTable0, rep);
+    const rep = ret[symbolRscRep] || ++captureCnt1;
+    captureTable1.set(rep, ret);
+    handle3 = rscTableCreateOwn(handleTable1, rep);
   }
   _debugLog('[iface="wasi:http/types@0.2.9", function="[method]future-incoming-response.subscribe"][Instruction::Return]', {
     funcName: '[method]future-incoming-response.subscribe',
@@ -2751,10 +2751,10 @@ function trampoline32(arg0, arg1, arg2, arg3, arg4, arg5) {
   });
 }
 
-const handleTable1 = [T_FLAG, 0];
-const captureTable1= new Map();
-let captureCnt1 = 0;
-handleTables[1] = handleTable1;
+const handleTable0 = [T_FLAG, 0];
+const captureTable0= new Map();
+let captureCnt0 = 0;
+handleTables[0] = handleTable0;
 
 function trampoline33(arg0, arg1, arg2) {
   var handle1 = arg0;
@@ -2807,9 +2807,9 @@ function trampoline33(arg0, arg1, arg2) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg2 + 8, handle4, true);
           break;
@@ -2884,9 +2884,9 @@ function trampoline34(arg0, arg1, arg2, arg3) {
           }
           var handle4 = e[symbolRscHandle];
           if (!handle4) {
-            const rep = e[symbolRscRep] || ++captureCnt1;
-            captureTable1.set(rep, e);
-            handle4 = rscTableCreateOwn(handleTable1, rep);
+            const rep = e[symbolRscRep] || ++captureCnt0;
+            captureTable0.set(rep, e);
+            handle4 = rscTableCreateOwn(handleTable0, rep);
           }
           dataView(memory0).setInt32(arg3 + 8, handle4, true);
           break;
@@ -3375,10 +3375,28 @@ function trampoline35(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline36(arg0, arg1) {
+function trampoline36(arg0) {
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
+  const ret = insecureSeed();
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  var [tuple0_0, tuple0_1] = ret;
+  dataView(memory0).setBigInt64(arg0 + 0, toUint64(tuple0_0), true);
+  dataView(memory0).setBigInt64(arg0 + 8, toUint64(tuple0_1), true);
+  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"][Instruction::Return]', {
+    funcName: 'insecure-seed',
+    paramCount: 0,
+    async: false,
+    postReturn: false
+  });
+}
+
+
+function trampoline37(arg0, arg1) {
   var handle1 = arg0;
-  var rep2 = handleTable1[(handle1 << 1) + 1] & ~T_FLAG;
-  var rsc0 = captureTable1.get(rep2);
+  var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
+  var rsc0 = captureTable0.get(rep2);
   if (!rsc0) {
     rsc0 = Object.create(Error$1.prototype);
     Object.defineProperty(rsc0, symbolRscHandle, { writable: true, value: handle1});
@@ -3400,24 +3418,6 @@ function trampoline36(arg0, arg1) {
   dataView(memory0).setUint32(arg1 + 0, ptr3, true);
   _debugLog('[iface="wasi:io/error@0.2.9", function="[method]error.to-debug-string"][Instruction::Return]', {
     funcName: '[method]error.to-debug-string',
-    paramCount: 0,
-    async: false,
-    postReturn: false
-  });
-}
-
-
-function trampoline37(arg0) {
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
-  const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
-  const ret = insecureSeed();
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (sync, @ post-call)');
-  endCurrentTask(0);
-  var [tuple0_0, tuple0_1] = ret;
-  dataView(memory0).setBigInt64(arg0 + 0, toUint64(tuple0_0), true);
-  dataView(memory0).setBigInt64(arg0 + 8, toUint64(tuple0_1), true);
-  _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"][Instruction::Return]', {
-    funcName: 'insecure-seed',
     paramCount: 0,
     async: false,
     postReturn: false
@@ -3461,13 +3461,13 @@ let postReturn0;
 let postReturn1;
 let postReturn2;
 function trampoline5(handle) {
-  const handleEntry = rscTableRemove(handleTable0, handle);
+  const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable0.get(handleEntry.rep);
+    const rsc = captureTable1.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable0.delete(handleEntry.rep);
+      captureTable1.delete(handleEntry.rep);
     } else if (Pollable[symbolCabiDispose]) {
       Pollable[symbolCabiDispose](handleEntry.rep);
     }
@@ -3513,13 +3513,13 @@ function trampoline11(handle) {
   }
 }
 function trampoline12(handle) {
-  const handleEntry = rscTableRemove(handleTable1, handle);
+  const handleEntry = rscTableRemove(handleTable0, handle);
   if (handleEntry.own) {
     
-    const rsc = captureTable1.get(handleEntry.rep);
+    const rsc = captureTable0.get(handleEntry.rep);
     if (rsc) {
       if (rsc[symbolDispose]) rsc[symbolDispose]();
-      captureTable1.delete(handleEntry.rep);
+      captureTable0.delete(handleEntry.rep);
     } else if (Error$1[symbolCabiDispose]) {
       Error$1[symbolCabiDispose](handleEntry.rep);
     }
@@ -4204,8 +4204,8 @@ export const $init = (() => {
   let gen = (function* _initGenerator () {
     const module0 = fetchCompile(new URL('./web-headless-agent.core.wasm', import.meta.url));
     const module1 = fetchCompile(new URL('./web-headless-agent.core2.wasm', import.meta.url));
-    const module2 = base64Compile('AGFzbQEAAAABQgpgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAMXFgAAAAECAwICAAAABAUGAQAHCAgJBwYEBQFwARYWB3AXATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQgkaW1wb3J0cwEACq8CFgsAIAAgAUEAEQAACwsAIAAgAUEBEQAACwsAIAAgAUECEQAACw8AIAAgASACIANBAxEBAAsPACAAIAEgAiADQQQRAgALEQAgACABIAIgAyAEQQURAwALDwAgACABIAIgA0EGEQIACw8AIAAgASACIANBBxECAAsLACAAIAFBCBEAAAsLACAAIAFBCREAAAsLACAAIAFBChEAAAsTACAAIAEgAiADIAQgBUELEQQACw0AIAAgASACQQwRBQALDwAgACABIAIgA0ENEQYACw8AIAAgASACIANBDhEBAAsLACAAIAFBDxEAAAsJACAAQRARBwALCwAgACABQRERCAALCwAgACABQRIRCAALCQAgAEETEQkACwkAIABBFBEHAAsPACAAIAEgAiADQRURBgALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMADgCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAcMKFgA1aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2RdZmllbGRzLmVudHJpZXMBO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWluY29taW5nLWJvZHkuc3RyZWFtAjppbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1ib2R5LndyaXRlAztpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW3N0YXRpY11vdXRnb2luZy1ib2R5LmZpbmlzaARCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtbWV0aG9kBUJpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1zY2hlbWUGRWluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LWF1dGhvcml0eQdLaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi40LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtcGF0aC13aXRoLXF1ZXJ5CDxpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjQtW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LmJvZHkJQGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWluY29taW5nLXJlc3BvbnNlLmNvbnN1bWUKQ2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWZ1dHVyZS1pbmNvbWluZy1yZXNwb25zZS5nZXQLNGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuNC1bbWV0aG9kXWZpZWxkcy5hcHBlbmQMQWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNC1bbWV0aG9kXWlucHV0LXN0cmVhbS5ibG9ja2luZy1yZWFkDU1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjQtW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaA4waW5kaXJlY3Qtd2FzaTpodHRwL291dGdvaW5nLWhhbmRsZXJAMC4yLjQtaGFuZGxlDzppbmRpcmVjdC13YXNpOmlvL2Vycm9yQDAuMi40LVttZXRob2RdZXJyb3IudG8tZGVidWctc3RyaW5nEDZpbmRpcmVjdC13YXNpOnJhbmRvbS9pbnNlY3VyZS1zZWVkQDAuMi40LWluc2VjdXJlLXNlZWQRKGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9nZXQSLmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9zaXplc19nZXQTJmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcHJvY19leGl0FDNpbmRpcmVjdC13YXNpOmNsaS9lbnZpcm9ubWVudEAwLjIuNi1nZXQtZW52aXJvbm1lbnQVTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNo');
-    const module3 = base64Compile('AGFzbQEAAAABQgpgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAKKARcAATAAAAABMQAAAAEyAAAAATMAAQABNAACAAE1AAMAATYAAgABNwACAAE4AAAAATkAAAACMTAAAAACMTEABAACMTIABQACMTMABgACMTQAAQACMTUAAAACMTYABwACMTcACAACMTgACAACMTkACQACMjAABwACMjEABgAIJGltcG9ydHMBcAEWFgkcAQBBAAsWAAECAwQFBgcICQoLDA0ODxAREhMUFQAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
+    const module2 = base64Compile('AGFzbQEAAAABQgpgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAMXFgAAAAECAwICAAAABAUGAQcACAgJBwYEBQFwARYWB3AXATAAAAExAAEBMgACATMAAwE0AAQBNQAFATYABgE3AAcBOAAIATkACQIxMAAKAjExAAsCMTIADAIxMwANAjE0AA4CMTUADwIxNgAQAjE3ABECMTgAEgIxOQATAjIwABQCMjEAFQgkaW1wb3J0cwEACq8CFgsAIAAgAUEAEQAACwsAIAAgAUEBEQAACwsAIAAgAUECEQAACw8AIAAgASACIANBAxEBAAsPACAAIAEgAiADQQQRAgALEQAgACABIAIgAyAEQQURAwALDwAgACABIAIgA0EGEQIACw8AIAAgASACIANBBxECAAsLACAAIAFBCBEAAAsLACAAIAFBCREAAAsLACAAIAFBChEAAAsTACAAIAEgAiADIAQgBUELEQQACw0AIAAgASACQQwRBQALDwAgACABIAIgA0ENEQYACw8AIAAgASACIANBDhEBAAsJACAAQQ8RBwALCwAgACABQRARAAALCwAgACABQRERCAALCwAgACABQRIRCAALCQAgAEETEQkACwkAIABBFBEHAAsPACAAIAEgAiADQRURBgALAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21wb25lbnQHMC4yMzkuMADgCgRuYW1lABMSd2l0LWNvbXBvbmVudDpzaGltAcMKFgA1aW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi45LVttZXRob2RdZmllbGRzLmVudHJpZXMBO2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuOS1bbWV0aG9kXWluY29taW5nLWJvZHkuc3RyZWFtAjppbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjktW21ldGhvZF1vdXRnb2luZy1ib2R5LndyaXRlAztpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjktW3N0YXRpY11vdXRnb2luZy1ib2R5LmZpbmlzaARCaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi45LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtbWV0aG9kBUJpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjktW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LnNldC1zY2hlbWUGRWluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuOS1bbWV0aG9kXW91dGdvaW5nLXJlcXVlc3Quc2V0LWF1dGhvcml0eQdLaW5kaXJlY3Qtd2FzaTpodHRwL3R5cGVzQDAuMi45LVttZXRob2Rdb3V0Z29pbmctcmVxdWVzdC5zZXQtcGF0aC13aXRoLXF1ZXJ5CDxpbmRpcmVjdC13YXNpOmh0dHAvdHlwZXNAMC4yLjktW21ldGhvZF1vdXRnb2luZy1yZXF1ZXN0LmJvZHkJQGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuOS1bbWV0aG9kXWluY29taW5nLXJlc3BvbnNlLmNvbnN1bWUKQ2luZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuOS1bbWV0aG9kXWZ1dHVyZS1pbmNvbWluZy1yZXNwb25zZS5nZXQLNGluZGlyZWN0LXdhc2k6aHR0cC90eXBlc0AwLjIuOS1bbWV0aG9kXWZpZWxkcy5hcHBlbmQMQWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuOS1bbWV0aG9kXWlucHV0LXN0cmVhbS5ibG9ja2luZy1yZWFkDU1pbmRpcmVjdC13YXNpOmlvL3N0cmVhbXNAMC4yLjktW21ldGhvZF1vdXRwdXQtc3RyZWFtLmJsb2NraW5nLXdyaXRlLWFuZC1mbHVzaA4waW5kaXJlY3Qtd2FzaTpodHRwL291dGdvaW5nLWhhbmRsZXJAMC4yLjktaGFuZGxlDzZpbmRpcmVjdC13YXNpOnJhbmRvbS9pbnNlY3VyZS1zZWVkQDAuMi40LWluc2VjdXJlLXNlZWQQOmluZGlyZWN0LXdhc2k6aW8vZXJyb3JAMC4yLjQtW21ldGhvZF1lcnJvci50by1kZWJ1Zy1zdHJpbmcRKGFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9nZXQSLmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtZW52aXJvbl9zaXplc19nZXQTJmFkYXB0LXdhc2lfc25hcHNob3RfcHJldmlldzEtcHJvY19leGl0FDNpbmRpcmVjdC13YXNpOmNsaS9lbnZpcm9ubWVudEAwLjIuNi1nZXQtZW52aXJvbm1lbnQVTWluZGlyZWN0LXdhc2k6aW8vc3RyZWFtc0AwLjIuNi1bbWV0aG9kXW91dHB1dC1zdHJlYW0uYmxvY2tpbmctd3JpdGUtYW5kLWZsdXNo');
+    const module3 = base64Compile('AGFzbQEAAAABQgpgAn9/AGAEf39/fwBgBH9/f38Bf2AFf39/f38Bf2AGf39/f39/AGADf35/AGAEf39/fwBgAX8AYAJ/fwF/YAF/AAKKARcAATAAAAABMQAAAAEyAAAAATMAAQABNAACAAE1AAMAATYAAgABNwACAAE4AAAAATkAAAACMTAAAAACMTEABAACMTIABQACMTMABgACMTQAAQACMTUABwACMTYAAAACMTcACAACMTgACAACMTkACQACMjAABwACMjEABgAIJGltcG9ydHMBcAEWFgkcAQBBAAsWAAECAwQFBgcICQoLDA0ODxAREhMUFQAvCXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ13aXQtY29tcG9uZW50BzAuMjM5LjAAHARuYW1lABUUd2l0LWNvbXBvbmVudDpmaXh1cHM');
     ({ exports: exports0 } = yield instantiateCore(yield module2));
     ({ exports: exports1 } = yield instantiateCore(yield module0, {
       'wasi:cli/stderr@0.2.4': {
@@ -4214,10 +4214,10 @@ export const $init = (() => {
       'wasi:clocks/monotonic-clock@0.2.4': {
         'subscribe-duration': trampoline3,
       },
-      'wasi:http/outgoing-handler@0.2.4': {
+      'wasi:http/outgoing-handler@0.2.9': {
         handle: exports0['14'],
       },
-      'wasi:http/types@0.2.4': {
+      'wasi:http/types@0.2.9': {
         '[constructor]fields': trampoline0,
         '[constructor]outgoing-request': trampoline6,
         '[constructor]request-options': trampoline1,
@@ -4245,21 +4245,32 @@ export const $init = (() => {
         '[static]outgoing-body.finish': exports0['3'],
       },
       'wasi:io/error@0.2.4': {
-        '[method]error.to-debug-string': exports0['15'],
+        '[method]error.to-debug-string': exports0['16'],
+        '[resource-drop]error': trampoline12,
+      },
+      'wasi:io/error@0.2.9': {
         '[resource-drop]error': trampoline12,
       },
       'wasi:io/poll@0.2.4': {
         '[method]pollable.block': trampoline4,
         '[resource-drop]pollable': trampoline5,
       },
+      'wasi:io/poll@0.2.9': {
+        '[method]pollable.block': trampoline4,
+        '[resource-drop]pollable': trampoline5,
+      },
       'wasi:io/streams@0.2.4': {
+        '[method]output-stream.blocking-write-and-flush': exports0['13'],
+        '[resource-drop]output-stream': trampoline15,
+      },
+      'wasi:io/streams@0.2.9': {
         '[method]input-stream.blocking-read': exports0['12'],
         '[method]output-stream.blocking-write-and-flush': exports0['13'],
         '[resource-drop]input-stream': trampoline11,
         '[resource-drop]output-stream': trampoline15,
       },
       'wasi:random/insecure-seed@0.2.4': {
-        'insecure-seed': exports0['16'],
+        'insecure-seed': exports0['15'],
       },
       wasi_snapshot_preview1: {
         environ_get: exports0['17'],

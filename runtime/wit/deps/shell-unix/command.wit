@@ -4,7 +4,7 @@
 package shell:unix@0.1.0;
 
 interface command {
-    use wasi:io/streams@0.2.4.{input-stream, output-stream};
+    use wasi:io/streams@0.2.9.{input-stream, output-stream};
     
     /// Execution environment
     record exec-env {

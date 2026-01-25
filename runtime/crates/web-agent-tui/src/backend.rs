@@ -136,7 +136,7 @@ impl<W: Write> Backend for WasiBackend<W> {
         // Poll terminal size from JS via WIT import
         use crate::bindings::terminal::info::size::get_terminal_size;
         let dims = get_terminal_size();
-        Ok(Size::new(dims.cols, dims.rows))
+        Ok(Size::new(dims.cols as u16, dims.rows as u16))
     }
 
     fn flush(&mut self) -> IOResult<()> {

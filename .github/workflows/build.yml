@@ -72,14 +72,14 @@ jobs:
             -p web-headless-agent
 
       - name: Verify main component
-        run: wasm-tools component wit target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+        run: wasm-tools component wit target/wasm32-wasip2/release/ts_runtime_mcp.wasm
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-component
           path: |
-            target/wasm32-wasip2/release/ts-runtime-mcp.wasm
+            target/wasm32-wasip2/release/ts_runtime_mcp.wasm
             target/wasm32-wasip2/release/tsx_engine.wasm
             target/wasm32-wasip2/release/sqlite_module.wasm
             target/wasm32-wasip2/release/ratatui_demo.wasm

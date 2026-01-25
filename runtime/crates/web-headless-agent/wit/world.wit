@@ -3,14 +3,14 @@ package agent:headless@0.1.0;
 /// Headless agent world - embeddable agent without TUI
 world headless-agent {
     // HTTP for LLM API calls
-    import wasi:io/error@0.2.4;
-    import wasi:io/poll@0.2.4;
-    import wasi:io/streams@0.2.4;
-    import wasi:http/types@0.2.4;
-    import wasi:http/outgoing-handler@0.2.4;
-    import wasi:clocks/monotonic-clock@0.2.4;
-    import wasi:clocks/wall-clock@0.2.4;
-    import wasi:random/insecure-seed@0.2.4;
+    import wasi:io/error@0.2.9;
+    import wasi:io/poll@0.2.9;
+    import wasi:io/streams@0.2.9;
+    import wasi:http/types@0.2.9;
+    import wasi:http/outgoing-handler@0.2.9;
+    import wasi:clocks/monotonic-clock@0.2.9;
+    import wasi:clocks/wall-clock@0.2.9;
+    import wasi:random/insecure-seed@0.2.9;
     
     // Agent configuration
     

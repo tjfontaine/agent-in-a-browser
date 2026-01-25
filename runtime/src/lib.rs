@@ -12,20 +12,20 @@ mod shell;
 // Interactive shell module
 mod interactive;
 
-use bindings::exports::wasi::http::incoming_handler::Guest as HttpGuest;
-use bindings::exports::shell::unix::command::Guest as CommandGuest;
 use bindings::exports::shell::unix::command::ExecEnv;
-use bindings::wasi::io::streams::{InputStream, OutputStream};
+use bindings::exports::shell::unix::command::Guest as CommandGuest;
+use bindings::exports::wasi::http::incoming_handler::Guest as HttpGuest;
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
+use bindings::wasi::io::streams::{InputStream, OutputStream};
 use mcp_server::{JsonRpcRequest, JsonRpcResponse, ToolResult};
 use runtime_macros::mcp_tool_router;
 use serde_json::json;
 
 /// The Shell-based MCP Server (stateless, created per-request)
 /// Pure shell implementation - no JavaScript runtime
-/// 
+///
 /// Note: This struct has no state - all state is created per-request in ShellEnv.
 /// We create a new instance per request to avoid RefCell borrow conflicts in sync mode,
 /// where WASI calls during shell execution can trigger re-entrant behavior.
@@ -54,7 +54,9 @@ impl ShellMcpServer {
         }
     }
 
-    #[mcp_tool(description = "Write content to a file at the given path. Creates parent directories if needed.")]
+    #[mcp_tool(
+        description = "Write content to a file at the given path. Creates parent directories if needed."
+    )]
     fn write_file(&self, path: String, content: String) -> ToolResult {
         use std::fs;
         use std::path::Path;
@@ -141,7 +143,12 @@ impl ShellMcpServer {
                                 } else {
                                     line.to_string()
                                 };
-                                matches.push(format!("{}:{}: {}", path_str, line_num + 1, trimmed.trim()));
+                                matches.push(format!(
+                                    "{}:{}: {}",
+                                    path_str,
+                                    line_num + 1,
+                                    trimmed.trim()
+                                ));
                             }
                         }
                     }
@@ -161,7 +168,9 @@ impl ShellMcpServer {
         }
     }
 
-    #[mcp_tool(description = "Execute shell commands with pipe support. Supports 50+ commands including: echo, ls, cat, grep, sed, awk, jq, curl, sqlite3, tsx, tar, gzip, and more. Example: 'ls /data | head -n 5'")]
+    #[mcp_tool(
+        description = "Execute shell commands with pipe support. Supports 50+ commands including: echo, ls, cat, grep, sed, awk, jq, curl, sqlite3, tsx, tar, gzip, and more. Example: 'ls /data | head -n 5'"
+    )]
     fn shell_eval(&self, command: String) -> ToolResult {
         if command.is_empty() {
             return ToolResult::error("No command provided");
@@ -181,14 +190,14 @@ impl ShellMcpServer {
         } else {
             ToolResult::error(format!(
                 "Exit code {}: {}{}\n",
-                result.code,
-                result.stderr,
-                result.stdout
+                result.code, result.stderr, result.stdout
             ))
         }
     }
 
-    #[mcp_tool(description = "Edit a file by replacing old_str with new_str. The old_str must match exactly and uniquely in the file. For multiple edits, call this tool multiple times. Use read_file first to see the current content.")]
+    #[mcp_tool(
+        description = "Edit a file by replacing old_str with new_str. The old_str must match exactly and uniquely in the file. For multiple edits, call this tool multiple times. Use read_file first to see the current content."
+    )]
     fn edit_file(&self, path: String, old_str: String, new_str: String) -> ToolResult {
         use std::fs;
 
@@ -196,7 +205,9 @@ impl ShellMcpServer {
             return ToolResult::error("No path provided");
         }
         if old_str.is_empty() {
-            return ToolResult::error("old_str cannot be empty (use write_file for creating new files)");
+            return ToolResult::error(
+                "old_str cannot be empty (use write_file for creating new files)",
+            );
         }
 
         // Read the current file content
@@ -207,7 +218,7 @@ impl ShellMcpServer {
 
         // Count occurrences of old_str
         let count = content.matches(&old_str).count();
-        
+
         if count == 0 {
             // Provide helpful context about what's in the file
             let preview_lines: Vec<&str> = content.lines().take(10).collect();
@@ -217,14 +228,21 @@ impl ShellMcpServer {
                 preview
             ));
         }
-        
+
         if count > 1 {
             // Find line numbers where matches occur to help user be more specific
             let mut match_lines = Vec::new();
             for (line_num, line) in content.lines().enumerate() {
                 if line.contains(&old_str) {
-                    match_lines.push(format!("  Line {}: {}", line_num + 1, 
-                        if line.len() > 60 { format!("{}...", &line[..60]) } else { line.to_string() }));
+                    match_lines.push(format!(
+                        "  Line {}: {}",
+                        line_num + 1,
+                        if line.len() > 60 {
+                            format!("{}...", &line[..60])
+                        } else {
+                            line.to_string()
+                        }
+                    ));
                 }
             }
             return ToolResult::error(format!(
@@ -253,7 +271,7 @@ impl ShellMcpServer {
 }
 
 /// Handle JSON-RPC request
-/// 
+///
 /// Creates a fresh ShellMcpServer instance per request to avoid RefCell borrow
 /// conflicts in sync mode (Safari). The server is stateless, so this is safe.
 fn handle_mcp_request(request_str: &str) -> String {
@@ -364,10 +382,7 @@ fn handle_sse_connection(_request_bytes: &[u8]) -> String {
     format!("event: message\ndata: {}\n\n", init_event)
 }
 
-// WASI component entry point - no main needed, export handles it
-fn main() {
-    // Component exports handle the actual entry point
-}
+// cdylib component entry point - exports handle the actual entry point
 
 /// Interactive shell implementation
 impl CommandGuest for Component {

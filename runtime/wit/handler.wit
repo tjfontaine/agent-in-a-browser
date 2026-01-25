@@ -3,7 +3,7 @@ package mcp:ts-runtime@0.2.0;
 /// This interface defines a handler of incoming HTTP Requests. It should
 /// be exported by components which can respond to HTTP Requests.
 interface incoming-handler {
-  use wasi:http/types@0.2.4.{incoming-request, response-outparam};
+  use wasi:http/types@0.2.9.{incoming-request, response-outparam};
 
   /// This function is invoked with an incoming HTTP Request, and a resource
   /// `response-outparam` which provides the capability to reply with an HTTP

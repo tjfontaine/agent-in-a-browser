@@ -142,14 +142,14 @@ const SYNC_SHIMS = {
 // ============================================================
 const MODULES = {
     'ts-runtime-mcp': {
-        wasm: 'ts-runtime-mcp.wasm',
+        wasm: 'ts_runtime_mcp.wasm',
         jspiOut: `${PACKAGES}/mcp-wasm-server/mcp-server-jspi`,
         syncOut: `${PACKAGES}/mcp-wasm-server/mcp-server-sync`,
         shims: {
             ...SHIMS,
             'mcp:module-loader/loader': '../../../frontend/src/wasm/lazy-loading/module-loader-impl.js'
         },
-        exports: ['wasi:cli/run@0.2.6#run', 'wasi:http/incoming-handler@0.2.4#handle', 'shell:unix/command@0.1.0#run'],
+        exports: ['wasi:cli/run@0.2.9#run', 'wasi:http/incoming-handler@0.2.9#handle', 'shell:unix/command@0.1.0#run'],
     },
     'tsx-engine': {
         wasm: 'tsx_engine.wasm',

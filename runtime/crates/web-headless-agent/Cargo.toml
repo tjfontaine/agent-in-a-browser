@@ -41,10 +41,10 @@ path = "wit"
 world = "headless-agent"
 
 [package.metadata.component.target.dependencies]
-"wasi:http" = { path = "wit/deps/http" }
-"wasi:clocks" = { path = "wit/deps/clocks" }
-"wasi:io" = { path = "wit/deps/io" }
-"wasi:random" = { path = "wit/deps/random" }
-"wasi:cli" = { path = "wit/deps/cli" }
-"wasi:filesystem" = { path = "wit/deps/filesystem" }
-"wasi:sockets" = { path = "wit/deps/sockets" }
+"wasi:http" = { path = "../../wit/deps/http" }
+"wasi:clocks" = { path = "../../wit/deps/clocks" }
+"wasi:io" = { path = "../../wit/deps/io" }
+"wasi:random" = { path = "../../wit/deps/random" }
+"wasi:cli" = { path = "../../wit/deps/cli" }
+"wasi:filesystem" = { path = "../../wit/deps/filesystem" }
+"wasi:sockets" = { path = "../../wit/deps/sockets" }

@@ -5,7 +5,7 @@
 package shell:unix@0.1.0;
 
 interface command {
-    use wasi:io/streams@0.2.4.{input-stream, output-stream};
+    use wasi:io/streams@0.2.9.{input-stream, output-stream};
     
     record exec-env {
         cwd: string,
@@ -25,25 +25,45 @@ interface command {
 }
 
 world tsx-engine {
-    // WASI core
-    import wasi:io/streams@0.2.4;
-    import wasi:io/poll@0.2.4;
-    import wasi:io/error@0.2.4;
-    import wasi:filesystem/types@0.2.4;
-    import wasi:filesystem/preopens@0.2.4;
-    import wasi:clocks/wall-clock@0.2.4;
-    import wasi:clocks/monotonic-clock@0.2.4;
-    import wasi:random/random@0.2.4;
+    // WASI core IO
+    import wasi:io/error@0.2.9;
+    import wasi:io/poll@0.2.9;
+    import wasi:io/streams@0.2.9;
+    
+    // WASI filesystem
+    import wasi:filesystem/types@0.2.9;
+    import wasi:filesystem/preopens@0.2.9;
+    
+    // WASI clocks
+    import wasi:clocks/wall-clock@0.2.9;
+    import wasi:clocks/monotonic-clock@0.2.9;
+    
+    // WASI random (all interfaces to prevent adapter injection)
+    import wasi:random/random@0.2.9;
+    import wasi:random/insecure@0.2.9;
+    import wasi:random/insecure-seed@0.2.9;
     
     // WASI HTTP for fetch shim
-    import wasi:http/types@0.2.4;
-    import wasi:http/outgoing-handler@0.2.4;
+    import wasi:http/types@0.2.9;
+    import wasi:http/outgoing-handler@0.2.9;
     
-    // Terminal detection for isatty-style checks
-    import wasi:cli/terminal-input@0.2.4;
-    import wasi:cli/terminal-output@0.2.4;
-    import wasi:cli/terminal-stdout@0.2.4;
-    import wasi:cli/terminal-stderr@0.2.4;
+    // WASI CLI (all interfaces to prevent adapter injection)
+    import wasi:cli/environment@0.2.9;
+    import wasi:cli/exit@0.2.9;
+    import wasi:cli/stdin@0.2.9;
+    import wasi:cli/stdout@0.2.9;
+    import wasi:cli/stderr@0.2.9;
+    import wasi:cli/terminal-input@0.2.9;
+    import wasi:cli/terminal-output@0.2.9;
+    import wasi:cli/terminal-stdin@0.2.9;
+    import wasi:cli/terminal-stdout@0.2.9;
+    import wasi:cli/terminal-stderr@0.2.9;
+    
+    // WASI sockets (all interfaces to prevent adapter injection)
+    import wasi:sockets/network@0.2.9;
+    import wasi:sockets/udp@0.2.9;
+    import wasi:sockets/tcp@0.2.9;
+    import wasi:sockets/ip-name-lookup@0.2.9;
     
     export command;
 }

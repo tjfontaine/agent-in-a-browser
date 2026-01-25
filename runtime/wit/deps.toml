@@ -1,7 +1,39 @@
-cli = "https://github.com/WebAssembly/wasi-cli/archive/v0.2.4.tar.gz"
-clocks = "https://github.com/WebAssembly/wasi-clocks/archive/v0.2.4.tar.gz"
-random = "https://github.com/WebAssembly/wasi-random/archive/v0.2.4.tar.gz"
-io = "https://github.com/WebAssembly/wasi-io/archive/v0.2.4.tar.gz"
-filesystem = "https://github.com/WebAssembly/wasi-filesystem/archive/v0.2.4.tar.gz"
-sockets = "https://github.com/WebAssembly/wasi-sockets/archive/v0.2.4.tar.gz"
-http = "https://github.com/WebAssembly/wasi-http/archive/v0.2.4.tar.gz"
+# WASI Dependencies - centralized for all runtime crates
+# Update versions here, then run: wit-deps update
+# All crates should reference these via Cargo.toml paths: "../../wit/deps/*"
+# v0.2.9+ uses unified WebAssembly/WASI repo (individual repos archived at v0.2.8)
+
+[cli]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/cli/wit"
+
+[clocks]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/clocks/wit"
+
+[random]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/random/wit"
+
+[io]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/io/wit"
+
+[filesystem]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/filesystem/wit"
+
+[sockets]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/sockets/wit"
+
+[http]
+url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
+sha256 = ""
+subdir = "WASI-0.2.9/proposals/http/wit"

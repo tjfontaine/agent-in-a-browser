@@ -60,10 +60,11 @@ path = "wit"
 world = "tsx-engine"
 
 [package.metadata.component.target.dependencies]
-"wasi:io" = { path = "wit/deps/io" }
-"wasi:filesystem" = { path = "wit/deps/filesystem" }
-"wasi:clocks" = { path = "wit/deps/clocks" }
-"wasi:http" = { path = "wit/deps/http" }
-"wasi:sockets" = { path = "wit/deps/sockets" }
-"wasi:random" = { path = "wit/deps/random" }
-"wasi:cli" = { path = "wit/deps/cli" }
+# Use shared wit/deps from runtime to ensure consistent WASI versions
+"wasi:io" = { path = "../../wit/deps/io" }
+"wasi:filesystem" = { path = "../../wit/deps/filesystem" }
+"wasi:clocks" = { path = "../../wit/deps/clocks" }
+"wasi:http" = { path = "../../wit/deps/http" }
+"wasi:sockets" = { path = "../../wit/deps/sockets" }
+"wasi:random" = { path = "../../wit/deps/random" }
+"wasi:cli" = { path = "../../wit/deps/cli" }
