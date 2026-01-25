@@ -209,6 +209,32 @@ impl<R: PollableRead, W: Write> App<R, W> {
             .push(crate::display::TimelineEntry::error(text));
     }
 
+    /// Show the ProviderWizard overlay for API key entry
+    /// This is the single, canonical way to prompt for an API key
+    fn show_api_key_wizard(&mut self) {
+        use crate::ui::server_manager::{Overlay, ProviderWizardStep, PROVIDERS};
+
+        let current_provider = self.agent.config().current_provider();
+        let settings = self.agent.config().current_provider_settings();
+        let provider_idx = PROVIDERS
+            .iter()
+            .position(|(id, _, _)| *id == current_provider)
+            .unwrap_or(0);
+
+        self.overlay = Some(Overlay::ProviderWizard {
+            step: ProviderWizardStep::EditApiKey,
+            selected_provider: provider_idx,
+            selected_api_format: 0,
+            selected_model: 0,
+            selected_field: 2, // API Key field
+            base_url_input: settings.base_url.clone().unwrap_or_default(),
+            model_input: settings.model.clone(),
+            api_key_input: String::new(),
+            fetched_models: None,
+            standalone: true, // Close overlay when done
+        });
+    }
+
     /// Add a user message to both agent history and timeline
     fn add_user_message(&mut self, content: &str) {
         self.agent.add_user_message(content);
@@ -817,18 +843,10 @@ impl<R: PollableRead, W: Write> App<R, W> {
         // Check for API key
         if !self.agent.has_api_key() {
             self.add_user_message(input);
-            self.timeline.push(crate::display::TimelineEntry::info(
-                "Please set your API key to proceed.",
-            ));
+            self.notice("Please set your API key to proceed.");
             self.pending_message = Some(input.to_string());
             self.state = AppState::NeedsApiKey;
-            self.overlay = Some(crate::ui::Overlay::ServerManager(
-                crate::ui::server_manager::ServerManagerView::SetToken {
-                    server_id: "__local__".to_string(),
-                    token_input: String::new(),
-                    error: None,
-                },
-            ));
+            self.show_api_key_wizard();
             return;
         }
 
@@ -973,29 +991,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     // If this is an authentication error (401, invalid API key, etc.),
                     // prompt the user to re-enter their API key
                     if is_auth_error(&error) {
-                        use crate::ui::server_manager::{Overlay, ProviderWizardStep};
-
-                        // Get current provider to populate wizard
-                        let current_provider = self.agent.config().current_provider();
-                        let settings = self.agent.config().current_provider_settings();
-                        let provider_idx = crate::ui::server_manager::PROVIDERS
-                            .iter()
-                            .position(|(id, _, _)| *id == current_provider)
-                            .unwrap_or(0);
-
-                        self.overlay = Some(Overlay::ProviderWizard {
-                            step: ProviderWizardStep::EditApiKey,
-                            selected_provider: provider_idx,
-                            selected_api_format: 0,
-                            selected_model: 0,
-                            selected_field: 2, // API Key field
-                            base_url_input: settings.base_url.clone().unwrap_or_default(),
-                            model_input: settings.model.clone(),
-                            api_key_input: String::new(), // Clear the invalid key
-                            fetched_models: None,
-                            standalone: true, // Close overlay when done
-                        });
-
+                        self.show_api_key_wizard();
                         self.notice("API key invalid or expired. Please enter a new key:");
                     }
 
