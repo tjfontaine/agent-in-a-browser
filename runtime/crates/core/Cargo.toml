@@ -9,6 +9,10 @@ crate-type = ["rlib"]
 
 [dependencies]
 # AI Agent framework (wasip2 feature for WASI component model)
+# IMPORTANT: The "wasm" feature is required for rig-core's SSE code to compile on wasm32.
+# Without it, type aliases like ResponseFuture and EventStream are not defined.
+# However, "wasm" enables futures-timer/wasm-bindgen which panics in WASI.
+# We patch futures-timer in workspace Cargo.toml to disable wasm-bindgen.
 rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
     "wasip2",
     "wasm",
