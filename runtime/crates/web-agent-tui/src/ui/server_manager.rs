@@ -59,6 +59,21 @@ pub enum Overlay {
         /// If false, opened from /provider wizard - return to ProviderConfig on completion
         standalone: bool,
     },
+    /// Generic secret key input (unified interface for API keys and tokens)
+    SecretKeyInput {
+        target: SecretKeyTarget,
+        input: String,
+        error: Option<String>,
+    },
+}
+
+/// Target for a secret key input - what the key is for
+#[derive(Clone, Debug, PartialEq)]
+pub enum SecretKeyTarget {
+    /// Provider API key (Anthropic, OpenAI, etc.)
+    ProviderApiKey,
+    /// MCP server token
+    McpServer { server_id: String },
 }
 
 /// Steps in the provider wizard
@@ -461,6 +476,109 @@ pub fn render_set_token(
     );
 }
 
+/// Unified secret key input overlay
+/// Renders a consistent UI for entering any secret key (provider API key, MCP token, etc.)
+pub fn render_secret_key_input(
+    frame: &mut Frame,
+    area: Rect,
+    target: &SecretKeyTarget,
+    input: &str,
+    error: Option<&str>,
+    remote_servers: &[RemoteServerEntry],
+) {
+    let popup = centered_rect(60, 30, area);
+    frame.render_widget(Clear, popup);
+
+    // Determine title and instructions based on target
+    let (title, subtitle, instruction) = match target {
+        SecretKeyTarget::ProviderApiKey => (
+            "* Enter API Key",
+            "Provider Authentication".to_string(),
+            "Enter your API key for the AI provider.".to_string(),
+        ),
+        SecretKeyTarget::McpServer { server_id } => {
+            // Find server name and URL for display
+            let (name, url) = remote_servers
+                .iter()
+                .find(|s| &s.id == server_id)
+                .map(|s| (s.name.clone(), s.url.clone()))
+                .unwrap_or_else(|| (server_id.clone(), "".to_string()));
+            (
+                "* Enter Token",
+                format!("{}", name),
+                format!("Enter API key/token for {}", url),
+            )
+        }
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+
+    // Build content lines
+    let mut lines = vec![
+        Line::from(Span::styled(subtitle, Style::default().fg(Color::Yellow))),
+        Line::from(""),
+        Line::from(Span::styled(
+            instruction,
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(""),
+    ];
+
+    // Input field - show masked chars
+    let masked = "*".repeat(input.len().min(40));
+    lines.push(Line::from(vec![
+        Span::styled("Key: ", Style::default().fg(Color::Cyan)),
+        Span::raw(masked),
+        Span::styled("▋", Style::default().fg(Color::White)),
+    ]));
+
+    // Provider-specific hints
+    if let SecretKeyTarget::McpServer { server_id: _ } = target {
+        // Check if this is a known service with a dashboard
+        let url = remote_servers
+            .iter()
+            .find(|s| match target {
+                SecretKeyTarget::McpServer { server_id } => &s.id == server_id,
+                _ => false,
+            })
+            .map(|s| s.url.as_str())
+            .unwrap_or("");
+
+        if url.contains("stripe") {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "Get your key at: https://dashboard.stripe.com/apikeys",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+    }
+
+    // Error display
+    if let Some(err) = error {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("✗ {}", err),
+            Style::default().fg(Color::Red),
+        )));
+    }
+
+    // Instructions
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "Enter to save │ Esc to cancel",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let content = Paragraph::new(lines);
+    frame.render_widget(content, inner);
+}
+
 /// Render the appropriate overlay based on state
 pub fn render_overlay(
     frame: &mut Frame,
@@ -533,6 +651,13 @@ pub fn render_overlay(
                 api_key_input,
                 fetched_models.as_ref(),
             );
+        }
+        Overlay::SecretKeyInput {
+            target,
+            input,
+            error,
+        } => {
+            render_secret_key_input(frame, area, target, input, error.as_deref(), remote_servers);
         }
     }
 }
@@ -1304,5 +1429,152 @@ mod tests {
             // All ASCII, predictable 1-cell-per-char width
             assert!(alt.is_ascii(), "{} should be ASCII", alt);
         }
+    }
+
+    // === SecretKeyTarget and SecretKeyInput Tests ===
+    // Testing the unified secret key input overlay
+
+    #[test]
+    fn test_secret_key_target_provider() {
+        let target = SecretKeyTarget::ProviderApiKey;
+        assert_eq!(format!("{:?}", target), "ProviderApiKey");
+    }
+
+    #[test]
+    fn test_secret_key_target_mcp_server() {
+        let target = SecretKeyTarget::McpServer {
+            server_id: "stripe-mcp".to_string(),
+        };
+        if let SecretKeyTarget::McpServer { server_id } = target {
+            assert_eq!(server_id, "stripe-mcp");
+        } else {
+            panic!("Expected McpServer variant");
+        }
+    }
+
+    #[test]
+    fn test_secret_key_target_clone() {
+        let original = SecretKeyTarget::McpServer {
+            server_id: "test-server".to_string(),
+        };
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn test_secret_key_input_overlay_creation() {
+        let overlay = Overlay::SecretKeyInput {
+            target: SecretKeyTarget::ProviderApiKey,
+            input: String::new(),
+            error: None,
+        };
+        if let Overlay::SecretKeyInput {
+            target,
+            input,
+            error,
+        } = overlay
+        {
+            assert!(matches!(target, SecretKeyTarget::ProviderApiKey));
+            assert!(input.is_empty());
+            assert!(error.is_none());
+        } else {
+            panic!("Expected SecretKeyInput variant");
+        }
+    }
+
+    #[test]
+    fn test_secret_key_input_with_mcp_target() {
+        let overlay = Overlay::SecretKeyInput {
+            target: SecretKeyTarget::McpServer {
+                server_id: "github-mcp".to_string(),
+            },
+            input: "ghp_abc123".to_string(),
+            error: None,
+        };
+        if let Overlay::SecretKeyInput {
+            target,
+            input,
+            error,
+        } = overlay
+        {
+            if let SecretKeyTarget::McpServer { server_id } = target {
+                assert_eq!(server_id, "github-mcp");
+            } else {
+                panic!("Expected McpServer target");
+            }
+            assert_eq!(input, "ghp_abc123");
+            assert!(error.is_none());
+        } else {
+            panic!("Expected SecretKeyInput variant");
+        }
+    }
+
+    #[test]
+    fn test_secret_key_input_with_error() {
+        let overlay = Overlay::SecretKeyInput {
+            target: SecretKeyTarget::ProviderApiKey,
+            input: "invalid-key".to_string(),
+            error: Some("401 Unauthorized".to_string()),
+        };
+        if let Overlay::SecretKeyInput { error, .. } = overlay {
+            assert_eq!(error, Some("401 Unauthorized".to_string()));
+        } else {
+            panic!("Expected SecretKeyInput variant");
+        }
+    }
+
+    #[test]
+    fn test_secret_key_input_masked_rendering() {
+        // Test that we correctly mask input
+        let input = "sk-abc123secret";
+        let masked = "*".repeat(input.len().min(40));
+        assert_eq!(masked.len(), 15); // "sk-abc123secret" is 15 chars
+        assert_eq!(masked, "***************");
+        // All characters are the same
+        assert!(masked.chars().all(|c| c == '*'));
+    }
+
+    #[test]
+    fn test_secret_key_input_max_mask_length() {
+        // Very long keys should be truncated in display
+        let long_input = "a".repeat(100);
+        let masked = "*".repeat(long_input.len().min(40));
+        assert_eq!(masked.len(), 40);
+    }
+
+    #[test]
+    fn test_secret_key_target_equality() {
+        let a = SecretKeyTarget::ProviderApiKey;
+        let b = SecretKeyTarget::ProviderApiKey;
+        assert_eq!(a, b);
+
+        let c = SecretKeyTarget::McpServer {
+            server_id: "x".to_string(),
+        };
+        let d = SecretKeyTarget::McpServer {
+            server_id: "x".to_string(),
+        };
+        assert_eq!(c, d);
+
+        let e = SecretKeyTarget::McpServer {
+            server_id: "y".to_string(),
+        };
+        assert_ne!(c, e);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_overlay_secret_key_input_replaces_set_token() {
+        // Verify that SecretKeyInput can be used for MCP server tokens
+        // (same use case as the deprecated SetToken)
+        let overlay = Overlay::SecretKeyInput {
+            target: SecretKeyTarget::McpServer {
+                server_id: "legacy-server".to_string(),
+            },
+            input: String::new(),
+            error: None,
+        };
+        // This should compile and work - proving SecretKeyInput replaces SetToken
+        assert!(matches!(overlay, Overlay::SecretKeyInput { .. }));
     }
 }

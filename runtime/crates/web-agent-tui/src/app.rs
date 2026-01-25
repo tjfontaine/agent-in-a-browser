@@ -209,29 +209,15 @@ impl<R: PollableRead, W: Write> App<R, W> {
             .push(crate::display::TimelineEntry::error(text));
     }
 
-    /// Show the ProviderWizard overlay for API key entry
+    /// Show the SecretKeyInput overlay for API key entry
     /// This is the single, canonical way to prompt for an API key
     fn show_api_key_wizard(&mut self) {
-        use crate::ui::server_manager::{Overlay, ProviderWizardStep, PROVIDERS};
+        use crate::ui::server_manager::{Overlay, SecretKeyTarget};
 
-        let current_provider = self.agent.config().current_provider();
-        let settings = self.agent.config().current_provider_settings();
-        let provider_idx = PROVIDERS
-            .iter()
-            .position(|(id, _, _)| *id == current_provider)
-            .unwrap_or(0);
-
-        self.overlay = Some(Overlay::ProviderWizard {
-            step: ProviderWizardStep::EditApiKey,
-            selected_provider: provider_idx,
-            selected_api_format: 0,
-            selected_model: 0,
-            selected_field: 2, // API Key field
-            base_url_input: settings.base_url.clone().unwrap_or_default(),
-            model_input: settings.model.clone(),
-            api_key_input: String::new(),
-            fetched_models: None,
-            standalone: true, // Close overlay when done
+        self.overlay = Some(Overlay::SecretKeyInput {
+            target: SecretKeyTarget::ProviderApiKey,
+            input: String::new(),
+            error: None,
         });
     }
 
@@ -1195,14 +1181,14 @@ impl<R: PollableRead, W: Write> App<R, W> {
                                             }
                                         }
                                         1 => {
-                                            // Set API Key
-                                            self.overlay = Some(Overlay::ServerManager(
-                                                ServerManagerView::SetToken {
+                                            // Set API Key - use SecretKeyInput
+                                            self.overlay = Some(Overlay::SecretKeyInput {
+                                                target: crate::ui::server_manager::SecretKeyTarget::McpServer {
                                                     server_id: sid,
-                                                    token_input: String::new(),
-                                                    error: None,
                                                 },
-                                            ));
+                                                input: String::new(),
+                                                error: None,
+                                            });
                                         }
                                         2 => {
                                             // Remove
@@ -1268,42 +1254,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
                             _ => {}
                         }
                     }
-                    ServerManagerView::SetToken {
-                        server_id,
-                        token_input,
-                        error: _error,
-                    } => {
-                        match byte {
-                            0x1B => {
-                                // Esc - cancel
-                                self.overlay = Some(Overlay::ServerManager(
-                                    ServerManagerView::ServerActions {
-                                        server_id: server_id.clone(),
-                                        selected: 0,
-                                    },
-                                ));
-                            }
-                            0x0D => {
-                                // Enter - set token and try to connect
-                                let sid = server_id.clone();
-                                let token = token_input.clone();
-                                if !token.is_empty() {
-                                    self.set_server_token(&sid, &token);
-                                    // Try to connect with the new token
-                                    self.try_connect_new_server_in_wizard(&sid);
-                                }
-                            }
-                            0x7F | 0x08 => {
-                                // Backspace
-                                token_input.pop();
-                            }
-                            0x20..=0x7E => {
-                                // Printable character
-                                token_input.push(byte as char);
-                            }
-                            _ => {}
-                        }
-                    }
+                    // SetToken is deprecated - use SecretKeyInput overlay instead
+                    ServerManagerView::SetToken { .. } => {}
                 }
             }
 
@@ -1770,6 +1722,70 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                 }
             }
+            Overlay::SecretKeyInput {
+                target,
+                input,
+                error: _,
+            } => {
+                use crate::ui::server_manager::SecretKeyTarget;
+
+                match byte {
+                    0x1B => {
+                        // Esc - cancel and close
+                        self.overlay = None;
+                        self.state = AppState::Ready;
+                    }
+                    0x0D => {
+                        // Clone data we need before releasing borrow
+                        let input_val = input.clone();
+                        let target_val = target.clone();
+
+                        // Enter - save the key
+                        if !input_val.is_empty() {
+                            self.overlay = None; // Release overlay borrow first
+
+                            match target_val {
+                                SecretKeyTarget::ProviderApiKey => {
+                                    self.set_api_key(&input_val);
+                                    self.notice("API key set and saved.");
+                                    self.state = AppState::Ready;
+
+                                    // If we have a pending message, send it now
+                                    if let Some(pending) = self.pending_message.take() {
+                                        self.send_to_ai(&pending);
+                                        return;
+                                    }
+                                }
+                                SecretKeyTarget::McpServer { server_id } => {
+                                    // Set token for this MCP server
+                                    if let Some(server) = self
+                                        .agent
+                                        .remote_servers_mut()
+                                        .iter_mut()
+                                        .find(|s| s.id == server_id)
+                                    {
+                                        server.bearer_token = Some(input_val.clone());
+                                    }
+                                    // Try to connect
+                                    self.connect_remote_server_by_id(&server_id);
+                                    self.notice("Token set. Connecting...");
+                                }
+                            }
+                        } else {
+                            self.overlay = None;
+                        }
+                    }
+                    0x7F | 0x08 => {
+                        // Backspace
+                        input.pop();
+                    }
+                    b if b >= 0x20 && b < 0x7F => {
+                        // Printable character
+                        input.push(b as char);
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -1824,11 +1840,6 @@ impl<R: PollableRead, W: Write> App<R, W> {
 
     fn remove_remote_server(&mut self, id: &str) {
         ServerManager::remove_server(self.agent.remote_servers_mut(), id);
-        self.save_servers();
-    }
-
-    fn set_server_token(&mut self, id: &str, token: &str) {
-        ServerManager::set_token(self.agent.remote_servers_mut(), id, token);
         self.save_servers();
     }
 
@@ -1918,19 +1929,21 @@ impl<R: PollableRead, W: Write> App<R, W> {
                     }
                 }
                 Err(e) => {
-                    // Connection failed - offer to set bearer token
+                    // Connection failed - offer to set bearer token via SecretKeyInput
                     self.agent.remote_servers_mut()[idx].status =
                         ServerConnectionStatus::Error(e.to_string());
                     self.notice(format!(
                         "Connection failed: {}. Enter API key if required.",
                         e
                     ));
-                    // Flow to SetToken dialog
-                    self.overlay = Some(Overlay::ServerManager(ServerManagerView::SetToken {
-                        server_id: server_id.clone(),
-                        token_input: String::new(),
+                    // Flow to SecretKeyInput dialog
+                    self.overlay = Some(Overlay::SecretKeyInput {
+                        target: crate::ui::server_manager::SecretKeyTarget::McpServer {
+                            server_id: server_id.clone(),
+                        },
+                        input: String::new(),
                         error: Some(e.to_string()),
-                    }));
+                    });
                 }
             }
         }
