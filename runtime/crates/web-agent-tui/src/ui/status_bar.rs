@@ -54,7 +54,7 @@ impl<'a> Widget for StatusBarWidget<'a> {
         let (state_str, state_style) = match self.state {
             AppState::Ready => ("", Style::default()),
             AppState::NeedsApiKey => (
-                " ⚿ KEY ", // U+26BF KEY (1 cell wide)
+                " * KEY ", // ASCII - safe width
                 Style::default().bg(Color::Yellow).fg(Color::Black),
             ),
             AppState::Processing => (

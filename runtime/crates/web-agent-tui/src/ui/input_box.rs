@@ -31,7 +31,7 @@ impl<'a> StatefulWidget for InputBoxWidget<'a> {
         let (prompt, title, display_input) = match self.state {
             AppState::NeedsApiKey => {
                 let masked: String = "•".repeat(self.input.len());
-                ("⚿ ", " API Key ", masked) // U+26BF KEY (1 cell)
+                ("* ", " API Key ", masked) // ASCII - safe width
             }
             AppState::Processing => ("⧖ ", " Processing ", self.input.to_string()), // U+29D6 (1 cell)
             AppState::Streaming => ("◉ ", " Streaming ", self.input.to_string()), // U+25C9 FISHEYE (1 cell)

@@ -155,7 +155,7 @@ pub fn render_server_list(
         let (icon, color) = match &server.status {
             ServerConnectionStatus::Connected => ("● ", Color::Green),
             ServerConnectionStatus::Connecting => ("◐ ", Color::Yellow),
-            ServerConnectionStatus::AuthRequired => ("⚿ ", Color::Yellow), // U+26BF KEY (1 cell)
+            ServerConnectionStatus::AuthRequired => ("* ", Color::Yellow), // ASCII - safe width
             ServerConnectionStatus::Error(_) => ("✗ ", Color::Red),
             ServerConnectionStatus::Disconnected => ("○ ", Color::DarkGray),
         };
@@ -271,7 +271,7 @@ pub fn render_server_actions(
     } else {
         actions.push(ListItem::new("⚡ Connect")); // U+26A1 (1 cell)
     }
-    actions.push(ListItem::new("⚿ Set API Key")); // U+26BF KEY (1 cell)
+    actions.push(ListItem::new("* Set API Key")); // ASCII - safe width
     actions.push(ListItem::new("✗ Remove")); // U+2717 BALLOT X (1 cell)
     actions.push(ListItem::new("← Back"));
 
@@ -453,7 +453,7 @@ pub fn render_set_token(
     frame.render_widget(
         Paragraph::new(lines).block(
             Block::default()
-                .title("⚿ Set API Key") // U+26BF KEY (1 cell)
+                .title("* Set API Key") // ASCII - safe width
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         ),
@@ -985,7 +985,7 @@ pub fn render_provider_wizard(
             frame.render_widget(Clear, popup);
 
             let block = Block::default()
-                .title("⚿ Edit API Key") // U+26BF KEY (1 cell)
+                .title("* Edit API Key") // ASCII - safe width
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
 
@@ -1273,6 +1273,36 @@ mod tests {
             assert_eq!(error, Some("Invalid token format".to_string()));
         } else {
             panic!("Expected SetToken variant");
+        }
+    }
+
+    // === Icon Width Tests ===
+    // TUI layout depends on correct character widths. Emojis like 🔑 are 2 cells wide
+    // which breaks layout assumptions. We use text labels instead of icons.
+
+    #[test]
+    fn test_key_icon_width_issues() {
+        // PROBLEM: U+26BF (⚿) has inconsistent width across terminals:
+        // - unicode_width reports 1 cell
+        // - Many terminals (macOS Terminal, iTerm2) render it as 2 cells
+        // - This breaks TUI layout calculations
+        //
+        // SOLUTION: Use text labels like "[Key]" or just omit icons
+        // that have inconsistent rendering
+
+        // The characters we're checking
+        let key_icon = "⚿"; // U+26BF - problematic
+        let emoji_key = "🔑"; // U+1F511 - definitely 2 cells
+
+        // These are the byte lengths (not display width)
+        assert_eq!(key_icon.len(), 3); // 3 bytes UTF-8
+        assert_eq!(emoji_key.len(), 4); // 4 bytes UTF-8
+
+        // For safe TUI layout, prefer ASCII or known-safe alternatives:
+        let safe_alternatives = ["[Key]", "*", "K"];
+        for alt in safe_alternatives {
+            // All ASCII, predictable 1-cell-per-char width
+            assert!(alt.is_ascii(), "{} should be ASCII", alt);
         }
     }
 }
