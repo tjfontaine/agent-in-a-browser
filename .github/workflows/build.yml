@@ -129,6 +129,7 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
+          include-hidden-files: true
           retention-days: 7
 
   website:
