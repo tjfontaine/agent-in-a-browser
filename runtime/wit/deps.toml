@@ -6,34 +6,34 @@
 [cli]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/cli/wit"
+prefix = "WASI-0.2.9/proposals/cli/wit"
 
 [clocks]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/clocks/wit"
+prefix = "WASI-0.2.9/proposals/clocks/wit"
 
 [random]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/random/wit"
+prefix = "WASI-0.2.9/proposals/random/wit"
 
 [io]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/io/wit"
+prefix = "WASI-0.2.9/proposals/io/wit"
 
 [filesystem]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/filesystem/wit"
+prefix = "WASI-0.2.9/proposals/filesystem/wit"
 
 [sockets]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/sockets/wit"
+prefix = "WASI-0.2.9/proposals/sockets/wit"
 
 [http]
 url = "https://github.com/WebAssembly/WASI/archive/v0.2.9.tar.gz"
 sha256 = "8c52624aebed805e29aa1e64053fd3171159bbe8a195e90982f87edae789a6e8"
-subdir = "WASI-0.2.9/proposals/http/wit"
+prefix = "WASI-0.2.9/proposals/http/wit"
