@@ -1,0 +1,6 @@
+# Exclude large WASM files from Cloudflare Workers assets
+# These files exceed the 25MB asset size limit
+# The app lazy-loads these modules from CDN/R2 instead
+
+# SQLite module (33MB) - exceeds 25MB limit
+**/sqlite-module.core*.wasm
