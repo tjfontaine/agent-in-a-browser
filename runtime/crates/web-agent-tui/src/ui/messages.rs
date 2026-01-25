@@ -86,7 +86,7 @@ impl<'a> Widget for MessagesWidget<'a> {
         if self.state == AppState::Processing {
             lines.push(Line::from(vec![
                 Span::styled(
-                    "⏳ ",
+                    "⧖ ", // U+29D6 WHITE HOURGLASS (1 cell)
                     Style::default()
                         .fg(Color::Blue)
                         .add_modifier(Modifier::SLOW_BLINK),
@@ -167,4 +167,61 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     }
 
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_text_empty() {
+        assert_eq!(wrap_text("", 40), vec![""]);
+    }
+
+    #[test]
+    fn wrap_text_short_line() {
+        assert_eq!(wrap_text("hello world", 40), vec!["hello world"]);
+    }
+
+    #[test]
+    fn wrap_text_exact_fit() {
+        assert_eq!(wrap_text("hello world", 11), vec!["hello world"]);
+    }
+
+    #[test]
+    fn wrap_text_needs_wrap() {
+        assert_eq!(wrap_text("hello world", 8), vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn wrap_text_long_word() {
+        // Word longer than max width should stay on its own line
+        assert_eq!(
+            wrap_text("supercalifragilisticexpialidocious", 10),
+            vec!["supercalifragilisticexpialidocious"]
+        );
+    }
+
+    #[test]
+    fn wrap_text_multiple_paragraphs() {
+        let text = "line one\n\nline three";
+        let result = wrap_text(text, 40);
+        assert_eq!(result, vec!["line one", "", "line three"]);
+    }
+
+    #[test]
+    fn wrap_text_zero_width() {
+        // Edge case: zero width should return original text
+        assert_eq!(wrap_text("hello", 0), vec!["hello"]);
+    }
+
+    #[test]
+    fn wrap_text_complex() {
+        let text = "The quick brown fox jumps over the lazy dog";
+        let result = wrap_text(text, 10);
+        assert_eq!(
+            result,
+            vec!["The quick", "brown fox", "jumps over", "the lazy", "dog"]
+        );
+    }
 }

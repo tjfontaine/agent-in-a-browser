@@ -1,0 +1,28 @@
+---
+source: runtime/crates/web-agent-tui/src/ui/mod.rs
+expression: output
+---
+"╭ Messages ────────────────────────────────────────────╮┌MCP Servers───────────┐"
+"│ℹ Entered shell mode. Type 'exit' to return.          ││● Local (sandbox) [5 t│"
+"│› pwd                                                 ││○ No remote servers   │"
+"│◆ /home/user                                          ││                      │"
+"│                                                      │└──────────────────────┘"
+"│                                                      │┌Auxiliary─────────────┐"
+"│                                                      ││Tool output will      │"
+"│                                                      ││appear here.          │"
+"│                                                      ││                      │"
+"│                                                      ││Try running a command!│"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"╰──────────────────────────────────────────────────────╯│                      │"
+"╭ Shell ───────────────────────────────────────────────╮│                      │"
+"│$ ls -la                                              ││                      │"
+"╰──────────────────────────────────────────────────────╯└──────────────────────┘"
+" SHELL  │ claude-sonnet-4 │ L:● R:○ │ ^C quit  /help                            "

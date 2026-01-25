@@ -353,7 +353,8 @@ impl ActiveStream {
                                     *pending = Some(name.clone());
                                 }
                                 self.buffer
-                                    .set_tool_activity(Some(format!("🔧 Calling {}...", name)));
+                                    .set_tool_activity(Some(format!("⚙ Calling {}...", name)));
+                                // U+2699 (1 cell)
                             }
                             StreamItem::ToolResult {
                                 tool_name: _,

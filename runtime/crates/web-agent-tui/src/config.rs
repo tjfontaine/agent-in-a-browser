@@ -462,3 +462,81 @@ fn ensure_config_dir() -> Result<(), std::io::Error> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_default_provider_is_anthropic() {
+        let config = Config::default();
+        assert_eq!(config.current_provider(), "anthropic");
+    }
+
+    #[test]
+    fn config_from_toml_empty() {
+        let config = Config::from_toml("");
+        assert_eq!(config.current_provider(), "anthropic");
+    }
+
+    #[test]
+    fn config_from_toml_basic() {
+        let toml = r#"
+[providers]
+default = "openai"
+
+[providers.openai]
+model = "gpt-4"
+api_key = "sk-test"
+"#;
+        let config = Config::from_toml(toml);
+        assert_eq!(config.current_provider(), "openai");
+        let settings = config.current_provider_settings();
+        assert_eq!(settings.model, "gpt-4");
+        assert_eq!(settings.api_key, Some("sk-test".to_string()));
+    }
+
+    #[test]
+    fn config_roundtrip_toml() {
+        let mut config = Config::default();
+        config.provider_settings_mut("anthropic").api_key = Some("test-key".to_string());
+
+        let toml = config.to_toml().expect("should serialize");
+        let parsed = Config::from_toml(&toml);
+
+        assert_eq!(
+            parsed.provider_settings("anthropic").api_key,
+            Some("test-key".to_string())
+        );
+    }
+
+    #[test]
+    fn config_unknown_provider_returns_default_settings() {
+        let config = Config::default();
+        let settings = config.provider_settings("custom-provider");
+        // Should return empty default settings
+        assert!(settings.model.is_empty());
+    }
+
+    #[test]
+    fn config_ui_defaults() {
+        let config = Config::default();
+        assert_eq!(config.ui.theme, "dark");
+        assert!(config.ui.aux_panel);
+        assert_eq!(config.ui.max_turns, 25);
+    }
+
+    #[test]
+    fn add_to_history_skips_duplicates() {
+        let mut history = vec!["first".to_string(), "second".to_string()];
+        add_to_history(&mut history, "second".to_string());
+        assert_eq!(history.len(), 2); // No duplicate added
+    }
+
+    #[test]
+    fn add_to_history_skips_empty() {
+        let mut history = vec!["first".to_string()];
+        add_to_history(&mut history, "   ".to_string());
+        assert_eq!(history.len(), 1); // Empty not added
+    }
+}

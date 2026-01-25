@@ -1,0 +1,28 @@
+---
+source: runtime/crates/web-agent-tui/src/ui/mod.rs
+expression: output
+---
+"╭ Messages ────────────────────────────────────────────╮┌MCP Servers───────────┐"
+"│› List files                                          ││● Local (sandbox) [5 t│"
+"│⚙ Calling shell_eval...                               ││○ No remote servers   │"
+"│✓ shell_eval: file1.txt file2.txt file3.txt           ││                      │"
+"│◆ Found 3 files.                                      │└──────────────────────┘"
+"│                                                      │┌Auxiliary─────────────┐"
+"│                                                      ││Tool output will      │"
+"│                                                      ││appear here.          │"
+"│                                                      ││                      │"
+"│                                                      ││Try running a command!│"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"╰──────────────────────────────────────────────────────╯│                      │"
+"╭ Agent ───────────────────────────────────────────────╮│                      │"
+"│›                                                     ││                      │"
+"╰──────────────────────────────────────────────────────╯└──────────────────────┘"
+" AGENT  │ claude-sonnet-4 │ L:● R:○ │ ^C quit  /help                            "

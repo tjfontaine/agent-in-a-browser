@@ -55,28 +55,43 @@ impl InputBuffer {
     /// Insert character at cursor
     pub fn insert_char(&mut self, c: char) {
         self.text.insert(self.cursor_pos, c);
-        self.cursor_pos += 1;
+        self.cursor_pos += c.len_utf8();
     }
 
     /// Delete character before cursor (backspace)
     pub fn delete_char_before(&mut self) {
         if self.cursor_pos > 0 {
-            self.cursor_pos -= 1;
-            self.text.remove(self.cursor_pos);
+            // Find the previous char boundary
+            let prev_boundary = self.text[..self.cursor_pos]
+                .char_indices()
+                .map(|(i, _)| i)
+                .last()
+                .unwrap_or(0);
+            let removed_char = self.text.remove(prev_boundary);
+            self.cursor_pos = prev_boundary;
+            let _ = removed_char; // consume
         }
     }
 
     /// Move cursor left
     pub fn move_left(&mut self) {
         if self.cursor_pos > 0 {
-            self.cursor_pos -= 1;
+            // Find the previous char boundary
+            self.cursor_pos = self.text[..self.cursor_pos]
+                .char_indices()
+                .map(|(i, _)| i)
+                .last()
+                .unwrap_or(0);
         }
     }
 
     /// Move cursor right
     pub fn move_right(&mut self) {
         if self.cursor_pos < self.text.len() {
-            self.cursor_pos += 1;
+            // Find the next char boundary
+            if let Some(c) = self.text[self.cursor_pos..].chars().next() {
+                self.cursor_pos += c.len_utf8();
+            }
         }
     }
 
@@ -205,5 +220,206 @@ mod tests {
 
         buf.yank();
         assert_eq!(buf.text(), "hello world");
+    }
+
+    // === Control Key Event Injection Tests ===
+
+    #[test]
+    fn ctrl_a_moves_to_start() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+        assert_eq!(buf.cursor_pos(), 11);
+
+        assert!(buf.handle_control(0x01)); // Ctrl+A
+        assert_eq!(buf.cursor_pos(), 0);
+    }
+
+    #[test]
+    fn ctrl_e_moves_to_end() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+        buf.cursor_pos = 0;
+
+        assert!(buf.handle_control(0x05)); // Ctrl+E
+        assert_eq!(buf.cursor_pos(), 11);
+    }
+
+    #[test]
+    fn ctrl_u_clears_line() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+
+        assert!(buf.handle_control(0x15)); // Ctrl+U
+        assert_eq!(buf.text(), "");
+        assert_eq!(buf.yank_buffer, "hello world");
+    }
+
+    #[test]
+    fn ctrl_w_deletes_word() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+
+        assert!(buf.handle_control(0x17)); // Ctrl+W
+        assert_eq!(buf.text(), "hello ");
+        assert_eq!(buf.yank_buffer, "world");
+    }
+
+    #[test]
+    fn ctrl_k_kills_to_end() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+        buf.cursor_pos = 6;
+
+        assert!(buf.handle_control(0x0B)); // Ctrl+K
+        assert_eq!(buf.text(), "hello ");
+        assert_eq!(buf.yank_buffer, "world");
+    }
+
+    #[test]
+    fn ctrl_y_yanks_buffer() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello".to_string());
+        buf.yank_buffer = " world".to_string();
+
+        assert!(buf.handle_control(0x19)); // Ctrl+Y
+        assert_eq!(buf.text(), "hello world");
+    }
+
+    #[test]
+    fn backspace_deletes_char() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello".to_string());
+
+        assert!(buf.handle_control(0x7F)); // Backspace
+        assert_eq!(buf.text(), "hell");
+    }
+
+    #[test]
+    fn unhandled_control_returns_false() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello".to_string());
+
+        assert!(!buf.handle_control(0x02)); // Ctrl+B - not handled
+        assert_eq!(buf.text(), "hello"); // Unchanged
+    }
+
+    #[test]
+    fn sequence_of_control_keys() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("hello world".to_string());
+
+        // Simulate: Ctrl+A (start), then type "say ", then Ctrl+E (end), Ctrl+K (kill)
+        buf.handle_control(0x01); // Ctrl+A
+        assert_eq!(buf.cursor_pos(), 0);
+
+        // Insert "say "
+        for c in "say ".chars() {
+            buf.insert_char(c);
+        }
+        assert_eq!(buf.text(), "say hello world");
+        assert_eq!(buf.cursor_pos(), 4);
+
+        buf.handle_control(0x05); // Ctrl+E (end)
+        assert_eq!(buf.cursor_pos(), 15);
+
+        buf.handle_control(0x0B); // Ctrl+K (kill to end - no-op at end)
+        assert_eq!(buf.text(), "say hello world");
+    }
+
+    // === Unicode Edge Cases ===
+
+    #[test]
+    fn unicode_emoji_input() {
+        let mut buf = InputBuffer::new();
+        buf.insert_char('👍');
+        buf.insert_char('🎉');
+
+        assert_eq!(buf.text(), "👍🎉");
+        assert_eq!(buf.text().chars().count(), 2);
+        // cursor_pos is byte position, not char position
+        // 👍 = 4 bytes, 🎉 = 4 bytes
+        assert_eq!(buf.cursor_pos(), 8);
+    }
+
+    #[test]
+    fn unicode_mixed_input() {
+        let mut buf = InputBuffer::new();
+        for c in "hello 世界 🌍".chars() {
+            buf.insert_char(c);
+        }
+
+        assert_eq!(buf.text(), "hello 世界 🌍");
+        // Move cursor back and insert
+        buf.move_left(); // Before 🌍
+        buf.insert_char('!');
+        assert_eq!(buf.text(), "hello 世界 !🌍");
+    }
+
+    #[test]
+    fn unicode_cursor_navigation() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("αβγ".to_string()); // 3 Greek characters, each 2 bytes
+
+        buf.move_left(); // Before γ
+        buf.move_left(); // Before β
+        buf.insert_char('x');
+
+        assert_eq!(buf.text(), "αxβγ");
+    }
+
+    #[test]
+    fn unicode_backspace() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("日本語".to_string()); // 3 Japanese characters
+
+        buf.delete_char_before(); // Delete 語
+        assert_eq!(buf.text(), "日本");
+
+        buf.delete_char_before(); // Delete 本
+        assert_eq!(buf.text(), "日");
+    }
+
+    // === Long Line Edge Cases ===
+
+    #[test]
+    fn very_long_line() {
+        let mut buf = InputBuffer::new();
+        let long_text = "x".repeat(10000);
+        buf.set_text(long_text.clone());
+
+        assert_eq!(buf.text().len(), 10000);
+        assert_eq!(buf.cursor_pos(), 10000);
+
+        // Navigate to start and back
+        buf.move_to_start();
+        assert_eq!(buf.cursor_pos(), 0);
+
+        buf.move_to_end();
+        assert_eq!(buf.cursor_pos(), 10000);
+    }
+
+    #[test]
+    fn word_deletion_at_line_boundaries() {
+        let mut buf = InputBuffer::new();
+        buf.set_text("".to_string());
+
+        // Delete word on empty - should be no-op
+        buf.delete_word_back();
+        assert_eq!(buf.text(), "");
+
+        buf.set_text("single".to_string());
+        buf.delete_word_back();
+        assert_eq!(buf.text(), "");
+    }
+
+    #[test]
+    fn clear_and_yank_empty() {
+        let mut buf = InputBuffer::new();
+
+        // Kill and yank on empty should be no-ops
+        buf.kill_to_end();
+        buf.yank();
+
+        assert_eq!(buf.text(), "");
     }
 }

@@ -1,0 +1,28 @@
+---
+source: runtime/crates/web-agent-tui/src/ui/mod.rs
+expression: output
+---
+"╭ Messages ────────────────────────────────────────────╮┌MCP Servers───────────┐"
+"│› Tell me about Rust                                  ││● Local (sandbox) [5 t│"
+"│⚙ Calling thinking...                                 ││○ No remote servers   │"
+"│                                                      ││                      │"
+"│                                                      │└──────────────────────┘"
+"│                                                      │┌Auxiliary─────────────┐"
+"│                                                      ││Tool output will      │"
+"│                                                      ││appear here.          │"
+"│                                                      ││                      │"
+"│                                                      ││Try running a command!│"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"╰──────────────────────────────────────────────────────╯│                      │"
+"╭ Streaming ───────────────────────────────────────────╮│                      │"
+"│◉                                                     ││                      │"
+"╰──────────────────────────────────────────────────────╯└──────────────────────┘"
+" AGENT  ◉ STREAMING  │ claude-sonnet-4 │ L:● R:○ │ ^C quit  /help               "

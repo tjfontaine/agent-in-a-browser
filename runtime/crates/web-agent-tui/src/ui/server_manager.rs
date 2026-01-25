@@ -137,7 +137,7 @@ pub fn render_server_list(
     // Local server (always first)
     items.push(ListItem::new(Line::from(vec![
         Span::styled("● ", Style::default().fg(Color::Green)),
-        Span::raw("📦 Local (sandbox)"),
+        Span::raw("☐ Local (sandbox)"), // U+2610 BALLOT BOX (1 cell)
         Span::styled(
             format!(" [{} tools]", local_tool_count),
             Style::default().fg(Color::DarkGray),
@@ -146,7 +146,7 @@ pub fn render_server_list(
 
     // Add new option (second)
     items.push(ListItem::new(Line::from(vec![
-        Span::styled("➕ ", Style::default().fg(Color::Blue)),
+        Span::styled("+ ", Style::default().fg(Color::Blue)), // ASCII plus (1 cell)
         Span::raw("Add new server..."),
     ])));
 
@@ -155,14 +155,14 @@ pub fn render_server_list(
         let (icon, color) = match &server.status {
             ServerConnectionStatus::Connected => ("● ", Color::Green),
             ServerConnectionStatus::Connecting => ("◐ ", Color::Yellow),
-            ServerConnectionStatus::AuthRequired => ("🔒 ", Color::Yellow),
+            ServerConnectionStatus::AuthRequired => ("⚿ ", Color::Yellow), // U+26BF KEY (1 cell)
             ServerConnectionStatus::Error(_) => ("✗ ", Color::Red),
             ServerConnectionStatus::Disconnected => ("○ ", Color::DarkGray),
         };
 
         items.push(ListItem::new(Line::from(vec![
             Span::styled(icon, Style::default().fg(color)),
-            Span::raw(format!("🌐 {}", server.name)),
+            Span::raw(format!("◎ {}", server.name)), // U+25CE BULLSEYE (1 cell)
             Span::styled(
                 format!(" [{} tools]", server.tools.len()),
                 Style::default().fg(Color::DarkGray),
@@ -173,7 +173,7 @@ pub fn render_server_list(
     let list = List::new(items)
         .block(
             Block::default()
-                .title("🌐 MCP Servers")
+                .title("◎ MCP Servers") // U+25CE BULLSEYE (1 cell)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         )
@@ -269,10 +269,10 @@ pub fn render_server_actions(
     if server.status == ServerConnectionStatus::Connected {
         actions.push(ListItem::new("⏹ Disconnect"));
     } else {
-        actions.push(ListItem::new("🔌 Connect"));
+        actions.push(ListItem::new("⚡ Connect")); // U+26A1 (1 cell)
     }
-    actions.push(ListItem::new("🔑 Set API Key"));
-    actions.push(ListItem::new("🗑 Remove"));
+    actions.push(ListItem::new("⚿ Set API Key")); // U+26BF KEY (1 cell)
+    actions.push(ListItem::new("✗ Remove")); // U+2717 BALLOT X (1 cell)
     actions.push(ListItem::new("← Back"));
 
     let action_list = List::new(actions)
@@ -453,7 +453,7 @@ pub fn render_set_token(
     frame.render_widget(
         Paragraph::new(lines).block(
             Block::default()
-                .title("🔑 Set API Key")
+                .title("⚿ Set API Key") // U+26BF KEY (1 cell)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         ),
@@ -652,7 +652,7 @@ fn render_provider_selector(frame: &mut Frame, area: Rect, selected: usize) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title("🔧 Select Provider")
+                .title("⚙ Select Provider") // U+2699 GEAR (1 cell)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         )
@@ -985,7 +985,7 @@ pub fn render_provider_wizard(
             frame.render_widget(Clear, popup);
 
             let block = Block::default()
-                .title("🔑 Edit API Key")
+                .title("⚿ Edit API Key") // U+26BF KEY (1 cell)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
 

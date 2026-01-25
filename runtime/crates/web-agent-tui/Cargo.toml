@@ -55,3 +55,9 @@ world = "tui"
 "mcp:module-loader" = { path = "../../wit/deps/module-loader" }
 "shell:unix" = { path = "../../wit/deps/shell-unix" }
 "terminal:info" = { path = "../../wit/deps/terminal-info" }
+
+[dev-dependencies]
+# Mocking framework for trait-based testing
+mockall = "0.13"
+# Snapshot testing for UI visual verification  
+insta = { version = "1.42", features = ["colors"] }

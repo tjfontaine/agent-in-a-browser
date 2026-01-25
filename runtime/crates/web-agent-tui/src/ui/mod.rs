@@ -27,7 +27,7 @@ pub use server_manager::{render_overlay, Overlay, ServerManagerView};
 pub use status_bar::StatusBarWidget;
 
 /// Application mode
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Mode {
     Agent,
     Shell,
@@ -179,4 +179,308 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.overlay.as_ref(),
         app.agent.remote_servers(),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::display::TimelineEntry;
+    use insta::assert_snapshot;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn render_to_string(
+        mode: Mode,
+        state: AppState,
+        input: &str,
+        cursor_pos: usize,
+        timeline: &[TimelineEntry],
+        width: u16,
+        height: u16,
+    ) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    mode,
+                    state,
+                    input,
+                    cursor_pos,
+                    &[], // No messages for simple tests
+                    timeline,
+                    &AuxContent::default(),
+                    &ServerStatus {
+                        local_connected: true,
+                        local_tool_count: 5,
+                        remote_servers: vec![],
+                    },
+                    "claude-sonnet-4",
+                    None,
+                    &[],
+                );
+            })
+            .unwrap();
+
+        terminal.backend().to_string()
+    }
+
+    #[test]
+    fn ui_welcome_screen() {
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Ready,
+            "",
+            0,
+            &[TimelineEntry::info(
+                "Welcome to Agent in a Browser! Type /help for commands.",
+            )],
+            80,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_shell_mode() {
+        let output = render_to_string(
+            Mode::Shell,
+            AppState::Ready,
+            "ls -la",
+            6,
+            &[
+                TimelineEntry::info("Entered shell mode. Type 'exit' to return."),
+                TimelineEntry::user_message("pwd"),
+                TimelineEntry::assistant_message("/home/user"),
+            ],
+            80,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_streaming_state() {
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Streaming,
+            "",
+            0,
+            &[
+                TimelineEntry::user_message("Tell me about Rust"),
+                TimelineEntry::Display(crate::display::DisplayItem::ToolActivity {
+                    tool_name: "thinking".to_string(),
+                    status: crate::display::ToolStatus::Calling,
+                }),
+            ],
+            80,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_long_message_wrapping() {
+        let long_msg = "This is a very long message that should wrap across multiple lines when displayed in the terminal. It contains enough text to test the wrapping behavior of the messages widget.";
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Ready,
+            "",
+            0,
+            &[
+                TimelineEntry::user_message("What is Rust?"),
+                TimelineEntry::assistant_message(long_msg),
+            ],
+            80,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_narrow_terminal() {
+        // 40 columns - should hide aux panel
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Ready,
+            "hello",
+            5,
+            &[TimelineEntry::info("Welcome!")],
+            40,
+            20,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_tool_results() {
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Ready,
+            "",
+            0,
+            &[
+                TimelineEntry::user_message("List files"),
+                TimelineEntry::tool_activity("shell_eval"),
+                TimelineEntry::tool_result("shell_eval", "file1.txt\nfile2.txt\nfile3.txt", false),
+                TimelineEntry::assistant_message("Found 3 files."),
+            ],
+            80,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_large_terminal() {
+        // 120x40 - more realistic modern terminal size
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Ready,
+            "",
+            0,
+            &[
+                TimelineEntry::info("Welcome to Agent in a Browser! Type /help for commands."),
+                TimelineEntry::user_message("List all files in the current directory"),
+                TimelineEntry::tool_activity("shell_eval"),
+                TimelineEntry::tool_result("shell_eval", "total 24\n-rw-r--r-- 1 user user  156 Jan 25 10:00 Cargo.toml\n-rw-r--r-- 1 user user  892 Jan 25 10:00 README.md\ndrwxr-xr-x 3 user user 4096 Jan 25 10:00 src/", false),
+                TimelineEntry::assistant_message("The directory contains 3 items: Cargo.toml, README.md, and a src/ directory."),
+            ],
+            120,
+            40,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_mcp_servers_panel_text() {
+        // Test that MCP servers panel shows full text
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[TimelineEntry::info("Testing MCP panel display")],
+                    &AuxContent::default(),
+                    &ServerStatus {
+                        local_connected: true,
+                        local_tool_count: 15,
+                        remote_servers: vec![],
+                    },
+                    "claude-sonnet-4",
+                    None,
+                    &[],
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_server_manager() {
+        // Test with ServerManager overlay visible
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[TimelineEntry::info("Welcome")],
+                    &AuxContent::default(),
+                    &ServerStatus {
+                        local_connected: true,
+                        local_tool_count: 5,
+                        remote_servers: vec![],
+                    },
+                    "claude-sonnet-4",
+                    Some(&Overlay::ServerManager(ServerManagerView::ServerList {
+                        selected: 0,
+                    })),
+                    &[],
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_overlay_provider_selector() {
+        // Test with ProviderSelector overlay visible
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|frame| {
+                render_ui(
+                    frame,
+                    Mode::Agent,
+                    AppState::Ready,
+                    "",
+                    0,
+                    &[],
+                    &[TimelineEntry::info("Welcome")],
+                    &AuxContent::default(),
+                    &ServerStatus {
+                        local_connected: true,
+                        local_tool_count: 5,
+                        remote_servers: vec![],
+                    },
+                    "claude-sonnet-4",
+                    Some(&Overlay::ProviderSelector { selected: 0 }),
+                    &[],
+                );
+            })
+            .unwrap();
+
+        let output = terminal.backend().to_string();
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_needs_api_key_state() {
+        // Test NeedsApiKey state display
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::NeedsApiKey,
+            "sk-ant-",
+            7,
+            &[TimelineEntry::info("Enter your API key:")],
+            100,
+            24,
+        );
+        assert_snapshot!(output);
+    }
+
+    #[test]
+    fn ui_processing_state() {
+        // Test Processing state display
+        let output = render_to_string(
+            Mode::Agent,
+            AppState::Processing,
+            "",
+            0,
+            &[TimelineEntry::user_message("What is 2+2?")],
+            100,
+            24,
+        );
+        assert_snapshot!(output);
+    }
 }

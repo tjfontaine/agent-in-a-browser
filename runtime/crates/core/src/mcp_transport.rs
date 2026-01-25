@@ -113,10 +113,56 @@ impl From<serde_json::Error> for McpError {
 /// - Local sandbox (OPFS filesystem, browser APIs)
 /// - Remote MCP servers (HTTP/SSE)
 /// - Mock implementations for testing
+#[cfg_attr(test, mockall::automock)]
 pub trait McpTransport: Send + Sync {
     /// List available tools from this MCP source
     fn list_tools(&self) -> Result<Vec<ToolDefinition>, McpError>;
 
     /// Call a tool with the given arguments
     fn call_tool(&self, name: &str, arguments: Value) -> Result<String, McpError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mock_list_tools_returns_configured_tools() {
+        let mut mock = MockMcpTransport::new();
+        mock.expect_list_tools().returning(|| {
+            Ok(vec![ToolDefinition {
+                name: "shell_eval".to_string(),
+                description: "Execute shell command".to_string(),
+                input_schema: serde_json::json!({}),
+                title: None,
+            }])
+        });
+
+        let tools = mock.list_tools().unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "shell_eval");
+    }
+
+    #[test]
+    fn mock_call_tool_returns_configured_result() {
+        let mut mock = MockMcpTransport::new();
+        mock.expect_call_tool()
+            .withf(|name, _args| name == "shell_eval")
+            .returning(|_name, _args| Ok("Hello, World!".to_string()));
+
+        let result = mock
+            .call_tool("shell_eval", serde_json::json!({"command": "echo hello"}))
+            .unwrap();
+        assert_eq!(result, "Hello, World!");
+    }
+
+    #[test]
+    fn mock_call_tool_returns_error() {
+        let mut mock = MockMcpTransport::new();
+        mock.expect_call_tool()
+            .returning(|name, _args| Err(McpError::ToolNotFound(name.to_string())));
+
+        let result = mock.call_tool("unknown_tool", serde_json::json!({}));
+        assert!(matches!(result, Err(McpError::ToolNotFound(_))));
+    }
 }

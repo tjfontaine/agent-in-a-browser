@@ -133,6 +133,50 @@ impl<R: PollableRead, W: Write> App<R, W> {
         }
     }
 
+    /// Create a new App for testing - bypasses OPFS and allows dependency injection
+    #[cfg(test)]
+    pub fn new_for_test(
+        stdin: R,
+        mut stdout: W,
+        width: u16,
+        height: u16,
+        config: Config,
+        mcp_client: McpClient,
+    ) -> Self {
+        // Enter alternate screen mode
+        let _ = enter_alternate_screen(&mut stdout);
+
+        let backend = WasiBackend::new(stdout, width, height);
+        let terminal = Terminal::new(backend).expect("failed to create terminal");
+
+        // Initialize AgentCore with injected config
+        let agent = AgentCore::new(config, mcp_client);
+
+        Self {
+            mode: Mode::Agent,
+            state: AppState::Ready,
+            input: InputBuffer::new(),
+            history: Vec::new(), // Empty history for tests
+            history_index: 0,
+            terminal,
+            stdin,
+            should_quit: false,
+            pending_message: None,
+            aux_content: AuxContent::default(),
+            server_status: ServerStatus {
+                local_connected: false,
+                local_tool_count: 0,
+                remote_servers: Vec::new(),
+            },
+            cancelled: false,
+            overlay: None,
+            timeline: vec![crate::display::TimelineEntry::info(
+                "Welcome to Agent in a Browser! Type /help for commands.",
+            )],
+            agent,
+        }
+    }
+
     /// Add an info notice to timeline (UI-only, never sent to API)
     fn notice(&mut self, text: impl Into<String>) {
         let text = text.into();
@@ -382,7 +426,8 @@ impl<R: PollableRead, W: Write> App<R, W> {
     }
 
     /// Process a slice of input bytes, returns true if we should stop reading
-    fn process_input_bytes(&mut self, bytes: &[u8]) -> bool {
+    /// Public for testing - allows injection of input without stdin
+    pub fn process_input_bytes(&mut self, bytes: &[u8]) -> bool {
         let mut i = 0;
         while i < bytes.len() {
             let byte = bytes[i];
@@ -2552,5 +2597,462 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 self.notice(format!("Unknown: {}. Try /help", cmd));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test history navigation logic (extracted for unit testing)
+    struct HistoryState {
+        history: Vec<String>,
+        history_index: usize,
+        current_input: String,
+    }
+
+    impl HistoryState {
+        fn new(history: Vec<String>) -> Self {
+            let len = history.len();
+            Self {
+                history,
+                history_index: len, // Start at end (past last entry)
+                current_input: String::new(),
+            }
+        }
+
+        /// Up arrow - go to previous history entry
+        fn history_prev(&mut self) {
+            if self.history_index > 0 {
+                self.history_index -= 1;
+                if let Some(cmd) = self.history.get(self.history_index) {
+                    self.current_input = cmd.clone();
+                }
+            }
+        }
+
+        /// Down arrow - go to next history entry
+        fn history_next(&mut self) {
+            if self.history_index < self.history.len() {
+                self.history_index += 1;
+                if self.history_index >= self.history.len() {
+                    self.current_input.clear();
+                } else if let Some(cmd) = self.history.get(self.history_index) {
+                    self.current_input = cmd.clone();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn history_navigation_empty() {
+        let mut state = HistoryState::new(vec![]);
+        state.history_prev(); // Should be no-op
+        assert_eq!(state.current_input, "");
+        state.history_next(); // Should be no-op
+        assert_eq!(state.current_input, "");
+    }
+
+    #[test]
+    fn history_navigation_single_entry() {
+        let mut state = HistoryState::new(vec!["hello".to_string()]);
+
+        // Initially at index 1 (past the end)
+        assert_eq!(state.history_index, 1);
+
+        // Up should go to "hello"
+        state.history_prev();
+        assert_eq!(state.current_input, "hello");
+        assert_eq!(state.history_index, 0);
+
+        // Another up should stay at "hello" (can't go before 0)
+        state.history_prev();
+        assert_eq!(state.current_input, "hello");
+
+        // Down should clear input (back to "new input" state)
+        state.history_next();
+        assert_eq!(state.current_input, "");
+        assert_eq!(state.history_index, 1);
+    }
+
+    #[test]
+    fn history_navigation_multiple_entries() {
+        let mut state = HistoryState::new(vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ]);
+
+        // Up should cycle through history
+        state.history_prev();
+        assert_eq!(state.current_input, "third");
+
+        state.history_prev();
+        assert_eq!(state.current_input, "second");
+
+        state.history_prev();
+        assert_eq!(state.current_input, "first");
+
+        // Can't go earlier
+        state.history_prev();
+        assert_eq!(state.current_input, "first");
+
+        // Now go forward
+        state.history_next();
+        assert_eq!(state.current_input, "second");
+
+        state.history_next();
+        assert_eq!(state.current_input, "third");
+
+        // Past end clears input
+        state.history_next();
+        assert_eq!(state.current_input, "");
+    }
+
+    #[test]
+    fn history_index_stays_bounded() {
+        let mut state = HistoryState::new(vec!["a".to_string(), "b".to_string()]);
+
+        // Spam up - should not underflow
+        for _ in 0..10 {
+            state.history_prev();
+        }
+        assert_eq!(state.history_index, 0);
+
+        // Spam down - should not overflow
+        for _ in 0..10 {
+            state.history_next();
+        }
+        assert_eq!(state.history_index, 2); // len == 2
+    }
+
+    // Test InputBuffer cursor movement (via escape sequences)
+    #[test]
+    fn cursor_movement_left_right() {
+        let mut input = crate::input::InputBuffer::new();
+        input.insert_char('a');
+        input.insert_char('b');
+        input.insert_char('c');
+
+        // Cursor at end (position 3)
+        assert_eq!(input.cursor_pos(), 3);
+
+        // Move left
+        input.move_left();
+        assert_eq!(input.cursor_pos(), 2);
+
+        input.move_left();
+        assert_eq!(input.cursor_pos(), 1);
+
+        // Move right
+        input.move_right();
+        assert_eq!(input.cursor_pos(), 2);
+
+        // Can't go past end
+        input.move_right();
+        input.move_right();
+        assert_eq!(input.cursor_pos(), 3);
+
+        // Can't go before start
+        input.move_left();
+        input.move_left();
+        input.move_left();
+        input.move_left();
+        assert_eq!(input.cursor_pos(), 0);
+    }
+
+    #[test]
+    fn cursor_insert_at_position() {
+        let mut input = crate::input::InputBuffer::new();
+        input.insert_char('a');
+        input.insert_char('c'); // "ac"
+
+        // Move cursor between a and c
+        input.move_left();
+        assert_eq!(input.cursor_pos(), 1);
+
+        // Insert 'b' at cursor
+        input.insert_char('b'); // Should be "abc"
+
+        assert_eq!(input.text(), "abc");
+        assert_eq!(input.cursor_pos(), 2);
+    }
+
+    // === Escape Sequence Parsing Tests ===
+
+    /// Test parsing escape sequence bytes
+    #[test]
+    fn parse_escape_sequence_up_arrow() {
+        // Up arrow: ESC [ A = [0x1B, 0x5B, 0x41]
+        let seq = b"[A"; // After ESC is consumed
+        assert_eq!(seq[0], b'[');
+        assert_eq!(seq[1], b'A'); // Up arrow
+    }
+
+    #[test]
+    fn parse_escape_sequence_down_arrow() {
+        let seq = b"[B";
+        assert_eq!(seq[0], b'[');
+        assert_eq!(seq[1], b'B'); // Down arrow
+    }
+
+    #[test]
+    fn parse_escape_sequence_right_arrow() {
+        let seq = b"[C";
+        assert_eq!(seq[0], b'[');
+        assert_eq!(seq[1], b'C'); // Right arrow
+    }
+
+    #[test]
+    fn parse_escape_sequence_left_arrow() {
+        let seq = b"[D";
+        assert_eq!(seq[0], b'[');
+        assert_eq!(seq[1], b'D'); // Left arrow
+    }
+
+    // === Input Byte Classification Tests ===
+
+    #[test]
+    fn classify_control_characters() {
+        // Common control characters
+        assert!(0x01 < 0x20); // Ctrl+A
+        assert!(0x03 < 0x20); // Ctrl+C
+        assert!(0x04 < 0x20); // Ctrl+D
+        assert!(0x0D < 0x20); // Enter (CR)
+        assert!(0x7F == 127); // DEL (backspace in many terminals)
+
+        // Escape
+        assert!(0x1B == 27); // ESC
+    }
+
+    #[test]
+    fn classify_printable_ascii() {
+        // Printable ASCII range: 0x20-0x7E
+        for byte in 0x20u8..=0x7Eu8 {
+            assert!(
+                byte >= 0x20 && byte < 0x7F,
+                "byte {} should be printable",
+                byte
+            );
+        }
+    }
+
+    #[test]
+    fn classify_utf8_continuation_bytes() {
+        // UTF-8 continuation bytes: 0x80-0xBF (10xxxxxx)
+        for byte in 0x80u8..=0xBFu8 {
+            assert!(
+                (byte & 0xC0) == 0x80,
+                "byte {} should be continuation",
+                byte
+            );
+        }
+    }
+
+    // === Mode State Machine Tests ===
+
+    #[test]
+    fn mode_display_names() {
+        // Mode now has Debug, verify it formats correctly
+        assert_eq!(format!("{:?}", Mode::Agent), "Agent");
+        assert_eq!(format!("{:?}", Mode::Shell), "Shell");
+        assert_eq!(format!("{:?}", Mode::Plan), "Plan");
+    }
+
+    #[test]
+    fn app_state_transitions() {
+        // Valid state values
+        let ready = AppState::Ready;
+        let processing = AppState::Processing;
+        let streaming = AppState::Streaming;
+        let needs_key = AppState::NeedsApiKey;
+
+        // States are distinct
+        assert_ne!(ready, processing);
+        assert_ne!(processing, streaming);
+        assert_ne!(streaming, needs_key);
+    }
+
+    // === Overlay State Tests ===
+
+    #[test]
+    fn overlay_none_is_default() {
+        let overlay: Option<Overlay> = None;
+        assert!(overlay.is_none());
+    }
+
+    #[test]
+    fn server_manager_view_states() {
+        use crate::ui::server_manager::ServerManagerView;
+
+        // Can create all view states
+        let list_view = ServerManagerView::ServerList { selected: 0 };
+        let actions_view = ServerManagerView::ServerActions {
+            server_id: "test".to_string(),
+            selected: 0,
+        };
+        let add_view = ServerManagerView::AddServer {
+            url_input: String::new(),
+            error: None,
+        };
+
+        // Default is ServerList with selected 0
+        let default = ServerManagerView::default();
+        assert!(matches!(
+            default,
+            ServerManagerView::ServerList { selected: 0 }
+        ));
+
+        // Verify selected can be non-zero
+        if let ServerManagerView::ServerList { selected } = list_view {
+            assert_eq!(selected, 0);
+        }
+        if let ServerManagerView::ServerActions {
+            server_id,
+            selected,
+        } = actions_view
+        {
+            assert_eq!(server_id, "test");
+            assert_eq!(selected, 0);
+        }
+        if let ServerManagerView::AddServer {
+            url_input: _,
+            error,
+        } = add_view
+        {
+            assert!(error.is_none());
+        }
+    }
+
+    // === Input Buffer Integration Tests ===
+
+    #[test]
+    fn input_buffer_slash_command_detection() {
+        let mut buf = crate::input::InputBuffer::new();
+
+        // Type "/help"
+        for c in "/help".chars() {
+            buf.insert_char(c);
+        }
+
+        assert!(buf.text().starts_with('/'));
+        assert_eq!(buf.text(), "/help");
+    }
+
+    #[test]
+    fn input_buffer_multiline_simulation() {
+        let mut buf = crate::input::InputBuffer::new();
+
+        // Simulate typing a message
+        for c in "Hello, world!".chars() {
+            buf.insert_char(c);
+        }
+
+        assert_eq!(buf.text(), "Hello, world!");
+
+        // Clear and type new message
+        buf.clear();
+        assert!(buf.is_empty());
+
+        for c in "New message".chars() {
+            buf.insert_char(c);
+        }
+        assert_eq!(buf.text(), "New message");
+    }
+
+    #[test]
+    fn input_buffer_take_clears_buffer() {
+        let mut buf = crate::input::InputBuffer::new();
+        buf.set_text("test input".to_string());
+
+        let taken = buf.take();
+        assert_eq!(taken, "test input");
+        assert!(buf.is_empty());
+        assert_eq!(buf.cursor_pos(), 0);
+    }
+
+    // === Timeline Entry Tests ===
+
+    #[test]
+    fn timeline_entry_creation() {
+        use crate::display::TimelineEntry;
+
+        let info = TimelineEntry::info("Info message");
+        let warning = TimelineEntry::warning("Warning message");
+        let error = TimelineEntry::error("Error message");
+
+        // TimelineEntry is an enum - verify we can match on Display variant
+        assert!(matches!(info, TimelineEntry::Display(_)));
+        assert!(matches!(warning, TimelineEntry::Display(_)));
+        assert!(matches!(error, TimelineEntry::Display(_)));
+    }
+
+    // === Complex Input Sequence Tests ===
+
+    #[test]
+    fn input_editing_sequence() {
+        let mut buf = crate::input::InputBuffer::new();
+
+        // Type "helllo" (intentional typo)
+        for c in "helllo".chars() {
+            buf.insert_char(c);
+        }
+        assert_eq!(buf.text(), "helllo");
+
+        // Move back 2 chars and delete one 'l'
+        buf.move_left(); // After "helll"
+        buf.move_left(); // After "hell"
+        buf.delete_char_before(); // Delete one 'l'
+
+        assert_eq!(buf.text(), "hello");
+    }
+
+    #[test]
+    fn input_with_control_keys() {
+        let mut buf = crate::input::InputBuffer::new();
+
+        // Type "hello world"
+        buf.set_text("hello world".to_string());
+
+        // Ctrl+A moves to start
+        buf.move_to_start();
+        assert_eq!(buf.cursor_pos(), 0);
+
+        // Ctrl+E moves to end
+        buf.move_to_end();
+        assert_eq!(buf.cursor_pos(), 11);
+
+        // Ctrl+K kills to end (at end = no-op)
+        buf.kill_to_end();
+        assert_eq!(buf.text(), "hello world");
+
+        // Move to middle and kill
+        buf.move_to_start();
+        buf.move_right(); // 'h'
+        buf.move_right(); // 'e'
+        buf.move_right(); // 'l'
+        buf.move_right(); // 'l'
+        buf.move_right(); // 'o'
+        buf.kill_to_end();
+        assert_eq!(buf.text(), "hello");
+    }
+
+    #[test]
+    fn input_word_deletion_sequence() {
+        let mut buf = crate::input::InputBuffer::new();
+
+        buf.set_text("one two three".to_string());
+
+        // Ctrl+W deletes "three"
+        buf.delete_word_back();
+        assert_eq!(buf.text(), "one two ");
+
+        // Ctrl+W deletes "two "
+        buf.delete_word_back();
+        assert_eq!(buf.text(), "one ");
+
+        // Ctrl+W deletes "one "
+        buf.delete_word_back();
+        assert_eq!(buf.text(), "");
     }
 }

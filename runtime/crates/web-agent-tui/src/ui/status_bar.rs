@@ -50,21 +50,22 @@ impl<'a> Widget for StatusBarWidget<'a> {
         };
 
         // State indicator with animation hint
+        // Using single-width symbols to avoid column alignment issues
         let (state_str, state_style) = match self.state {
             AppState::Ready => ("", Style::default()),
             AppState::NeedsApiKey => (
-                " 🔑 KEY ",
+                " ⚿ KEY ", // U+26BF KEY (1 cell wide)
                 Style::default().bg(Color::Yellow).fg(Color::Black),
             ),
             AppState::Processing => (
-                " ⏳ WORKING ",
+                " ⧖ WORKING ", // U+29D6 WHITE HOURGLASS (1 cell)
                 Style::default()
                     .bg(Color::Magenta)
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
             AppState::Streaming => (
-                " 📡 STREAMING ",
+                " ◉ STREAMING ", // U+25C9 FISHEYE (1 cell wide)
                 Style::default()
                     .bg(Color::Cyan)
                     .fg(Color::Black)

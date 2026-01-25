@@ -1,0 +1,34 @@
+[package]
+name = "wasmtime-runner"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wasm-tui"
+path = "src/main.rs"
+
+[features]
+default = ["embed-wasm"]
+# Bundle all WASM components into the binary (requires WASM to be built first)
+embed-wasm = []
+# Development mode: load WASM from files at runtime
+no-embed = []
+
+[dependencies]
+wasmtime = { version = "41", features = ["component-model"] }
+wasmtime-wasi = "41"
+wasmtime-wasi-http = "41"
+terminal_size = "0.4"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+# expectrl: expect-like PTY testing (recommended for TUI e2e testing)
+# https://docs.rs/expectrl/latest/expectrl/
+expectrl = "0.8"
+# insta: snapshot testing for visual regression
+insta = "1.42"

@@ -1,0 +1,28 @@
+---
+source: runtime/crates/web-agent-tui/src/ui/mod.rs
+expression: output
+---
+"╭ Messages ────────────────────────────────────────────╮┌MCP Servers───────────┐"
+"│› What is Rust?                                       ││● Local (sandbox) [5 t│"
+"│◆ This is a very long message that should wrap        ││○ No remote servers   │"
+"│  across multiple lines when displayed in the         ││                      │"
+"│  terminal. It contains enough text to test the       │└──────────────────────┘"
+"│  wrapping behavior of the messages widget.           │┌Auxiliary─────────────┐"
+"│                                                      ││Tool output will      │"
+"│                                                      ││appear here.          │"
+"│                                                      ││                      │"
+"│                                                      ││Try running a command!│"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"│                                                      ││                      │"
+"╰──────────────────────────────────────────────────────╯│                      │"
+"╭ Agent ───────────────────────────────────────────────╮│                      │"
+"│›                                                     ││                      │"
+"╰──────────────────────────────────────────────────────╯└──────────────────────┘"
+" AGENT  │ claude-sonnet-4 │ L:● R:○ │ ^C quit  /help                            "

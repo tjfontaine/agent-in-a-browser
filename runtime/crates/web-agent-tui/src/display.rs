@@ -92,10 +92,12 @@ impl DisplayItem {
     pub fn display_text(&self) -> String {
         match self {
             DisplayItem::ToolActivity { tool_name, status } => {
+                // Using single-width symbols instead of multi-width emojis
+                // to avoid column alignment issues in terminal rendering
                 let icon = match status {
-                    ToolStatus::Calling => "🔧",
-                    ToolStatus::Success => "✅",
-                    ToolStatus::Error => "❌",
+                    ToolStatus::Calling => "⚙", // U+2699 GEAR (1 cell wide)
+                    ToolStatus::Success => "✓", // U+2713 CHECK MARK (1 cell wide)
+                    ToolStatus::Error => "✗",   // U+2717 BALLOT X (1 cell wide)
                 };
                 format!("{} Calling {}...", icon, tool_name)
             }
@@ -104,7 +106,7 @@ impl DisplayItem {
                 result,
                 is_error,
             } => {
-                let icon = if *is_error { "❌" } else { "✅" };
+                let icon = if *is_error { "✗" } else { "✓" };
                 // Truncate result for display
                 let preview = if result.len() > 100 {
                     format!("{}...", &result[..100])
@@ -117,9 +119,9 @@ impl DisplayItem {
             }
             DisplayItem::Notice { text, kind } => {
                 let prefix = match kind {
-                    NoticeKind::Info => "ℹ️",
-                    NoticeKind::Warning => "⚠️",
-                    NoticeKind::Error => "❌",
+                    NoticeKind::Info => "ℹ",    // U+2139 INFO (1 cell wide)
+                    NoticeKind::Warning => "⚠", // U+26A0 WARNING (1 cell wide)
+                    NoticeKind::Error => "✗",   // U+2717 BALLOT X (1 cell wide)
                 };
                 format!("{} {}", prefix, text)
             }
@@ -185,5 +187,69 @@ impl TimelineEntry {
             result: result.into(),
             is_error,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta::assert_snapshot;
+
+    #[test]
+    fn display_item_tool_activity_calling() {
+        let item = DisplayItem::tool_activity("shell_eval");
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_tool_result_success() {
+        let item = DisplayItem::ToolResult {
+            tool_name: "shell_eval".to_string(),
+            result: "Hello, World!".to_string(),
+            is_error: false,
+        };
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_tool_result_error() {
+        let item = DisplayItem::ToolResult {
+            tool_name: "shell_eval".to_string(),
+            result: "Command not found".to_string(),
+            is_error: true,
+        };
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_notice_info() {
+        let item = DisplayItem::info("Welcome to Web Agent");
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_notice_warning() {
+        let item = DisplayItem::warning("API key not set");
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_notice_error() {
+        let item = DisplayItem::error("Connection failed");
+        assert_snapshot!(item.display_text());
+    }
+
+    #[test]
+    fn display_item_long_result_truncates() {
+        let long_result = "x".repeat(200);
+        let item = DisplayItem::ToolResult {
+            tool_name: "read_file".to_string(),
+            result: long_result,
+            is_error: false,
+        };
+        let text = item.display_text();
+        // Should truncate at 100 chars + "..."
+        assert!(text.contains("..."));
+        assert!(text.len() < 200);
     }
 }

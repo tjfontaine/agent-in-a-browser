@@ -10,6 +10,7 @@ members = [
     "runtime/crates/web-headless-agent",
     "runtime/crates/mcp-server-core",
     "runtime/crates/edtui-module",
+    "runtime/crates/wasmtime-runner",
 ]
 resolver = "2"
 

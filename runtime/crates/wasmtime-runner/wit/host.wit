@@ -1,0 +1,16 @@
+// TUI guest world - describes what the TUI component imports/exports
+// We use this to generate Host traits for the imports we need to provide
+
+package wasmtime:runner@0.1.0;
+
+/// TUI component guest world
+/// bindgen! with this world will generate Host traits for the imports
+world tui-guest {
+    // Imports that WE provide (become Host traits)
+    import terminal:info/size@0.1.0;
+    import shell:unix/command@0.1.0;
+    import mcp:module-loader/loader@0.1.0;
+
+    // Export the TUI runs (we call this)
+    export run: func() -> s32;
+}

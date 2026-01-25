@@ -1,0 +1,5 @@
+---
+source: runtime/crates/web-agent-tui/src/display.rs
+expression: item.display_text()
+---
+✗ shell_eval: Command not found

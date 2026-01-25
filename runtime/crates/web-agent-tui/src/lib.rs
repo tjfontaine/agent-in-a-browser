@@ -138,3 +138,99 @@ impl Guest for TuiComponent {
 }
 
 bindings::__export_world_tui_cabi!(TuiComponent with_types_in bindings);
+
+// =============================================================================
+// TEST HARNESS - Mock infrastructure for native testing
+// =============================================================================
+
+#[cfg(test)]
+pub mod test_harness {
+    use std::io::{Cursor, Read, Write};
+    use std::sync::{Arc, Mutex};
+
+    /// Mock Pollable for testing (replaces WIT Pollable)
+    pub struct MockPollable;
+
+    /// Test-friendly stdin that can be pre-filled with input bytes
+    pub struct TestStdin {
+        buffer: Arc<Mutex<Cursor<Vec<u8>>>>,
+    }
+
+    impl TestStdin {
+        /// Create a new TestStdin with the given input bytes
+        pub fn new(input: &[u8]) -> Self {
+            Self {
+                buffer: Arc::new(Mutex::new(Cursor::new(input.to_vec()))),
+            }
+        }
+
+        /// Push more input bytes (simulates user typing)
+        pub fn push(&self, input: &[u8]) {
+            let mut buf = self.buffer.lock().unwrap();
+            let pos = buf.position();
+            let mut data = buf.get_ref().clone();
+            data.extend_from_slice(input);
+            *buf = Cursor::new(data);
+            buf.set_position(pos);
+        }
+    }
+
+    impl Read for TestStdin {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().read(buf)
+        }
+    }
+
+    impl super::PollableRead for TestStdin {
+        fn subscribe(&self) -> super::Pollable {
+            // Return a mock pollable - in tests we don't actually poll
+            // This is a workaround since Pollable is a WIT type
+            // Tests should use process_input_bytes directly instead of run()
+            panic!("subscribe() not supported in tests - use direct method calls")
+        }
+
+        fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().read(buf)
+        }
+    }
+
+    /// Test-friendly stdout that captures output
+    pub struct TestStdout {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl TestStdout {
+        pub fn new() -> Self {
+            Self {
+                buffer: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// Get captured output as string
+        pub fn output(&self) -> String {
+            String::from_utf8_lossy(&self.buffer.lock().unwrap()).to_string()
+        }
+
+        /// Clear the output buffer
+        pub fn clear(&self) {
+            self.buffer.lock().unwrap().clear();
+        }
+    }
+
+    impl Write for TestStdout {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Default for TestStdout {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
