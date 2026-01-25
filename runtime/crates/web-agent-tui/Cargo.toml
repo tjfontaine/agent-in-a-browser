@@ -13,10 +13,10 @@ agent-bridge = { path = "../core" }
 # TUI framework - no default features to avoid crossterm
 ratatui = { version = "0.30", default-features = false }
 
-# AI Agent framework (wasip2 feature for WASI component model + wasm for relaxed Send bounds)
+# AI Agent framework (wasip2 feature for WASI component model)
+# NOTE: DO NOT enable "wasm" feature - it enables futures-timer/wasm-bindgen which panics in WASI
 rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
     "wasip2",
-    "wasm",
 ] }
 
 # WASM support with async features for streaming
