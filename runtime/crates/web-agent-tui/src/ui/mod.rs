@@ -25,6 +25,7 @@ pub use panels::{
 };
 pub use server_manager::{render_overlay, Overlay, ServerManagerView};
 pub use status_bar::StatusBarWidget;
+pub use theme::Theme;
 
 /// Application mode
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -57,6 +58,7 @@ pub fn render_ui(
     model_name: &str,
     overlay: Option<&Overlay>,
     remote_servers: &[RemoteServerEntry],
+    theme: &Theme,
 ) {
     let area = frame.area();
 
@@ -88,6 +90,7 @@ pub fn render_ui(
             cursor_pos,
             messages,
             timeline,
+            theme,
         );
         render_aux_panel(frame, h_chunks[1], aux_content, server_status);
     } else {
@@ -101,6 +104,7 @@ pub fn render_ui(
             cursor_pos,
             messages,
             timeline,
+            theme,
         );
     }
 
@@ -132,6 +136,7 @@ fn render_main_panel(
     cursor_pos: usize,
     messages: &[Message],
     timeline: &[crate::display::TimelineEntry],
+    theme: &Theme,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -142,7 +147,10 @@ fn render_main_panel(
         .split(area);
 
     // Messages
-    frame.render_widget(MessagesWidget::new(messages, timeline, state), chunks[0]);
+    frame.render_widget(
+        MessagesWidget::new(messages, timeline, state, theme),
+        chunks[0],
+    );
 
     // Input Box
     let mut cursor_state = None;
@@ -165,6 +173,7 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
     frame: &mut Frame,
     app: &crate::app::App<R, W>,
 ) {
+    let theme = Theme::by_name(&app.agent.config().ui.theme);
     render_ui(
         frame,
         app.mode,
@@ -178,6 +187,7 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.agent.model(),
         app.overlay.as_ref(),
         app.agent.remote_servers(),
+        &theme,
     );
 }
 
@@ -199,6 +209,7 @@ mod tests {
     ) -> String {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::dark(); // Default theme for tests
 
         terminal
             .draw(|frame| {
@@ -219,6 +230,7 @@ mod tests {
                     "claude-sonnet-4",
                     None,
                     &[],
+                    &theme,
                 );
             })
             .unwrap();
@@ -358,6 +370,7 @@ mod tests {
         // Test that MCP servers panel shows full text
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::dark();
 
         terminal
             .draw(|frame| {
@@ -378,6 +391,7 @@ mod tests {
                     "claude-sonnet-4",
                     None,
                     &[],
+                    &theme,
                 );
             })
             .unwrap();
@@ -391,6 +405,7 @@ mod tests {
         // Test with ServerManager overlay visible
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::dark();
 
         terminal
             .draw(|frame| {
@@ -413,6 +428,7 @@ mod tests {
                         selected: 0,
                     })),
                     &[],
+                    &theme,
                 );
             })
             .unwrap();
@@ -426,6 +442,7 @@ mod tests {
         // Test with ProviderSelector overlay visible
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
+        let theme = Theme::dark();
 
         terminal
             .draw(|frame| {
@@ -446,6 +463,7 @@ mod tests {
                     "claude-sonnet-4",
                     Some(&Overlay::ProviderSelector { selected: 0 }),
                     &[],
+                    &theme,
                 );
             })
             .unwrap();

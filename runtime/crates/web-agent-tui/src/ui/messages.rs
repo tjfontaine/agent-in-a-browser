@@ -5,20 +5,28 @@ use ratatui::{
 
 use crate::app::AppState;
 use crate::display::{DisplayItem, TimelineEntry};
+use crate::ui::Theme;
 use crate::{Message, Role};
 
 pub struct MessagesWidget<'a> {
     pub messages: &'a [Message],
     pub timeline: &'a [TimelineEntry],
     pub state: AppState,
+    pub theme: &'a Theme,
 }
 
 impl<'a> MessagesWidget<'a> {
-    pub fn new(messages: &'a [Message], timeline: &'a [TimelineEntry], state: AppState) -> Self {
+    pub fn new(
+        messages: &'a [Message],
+        timeline: &'a [TimelineEntry],
+        state: AppState,
+        theme: &'a Theme,
+    ) -> Self {
         Self {
             messages,
             timeline,
             state,
+            theme,
         }
     }
 }
@@ -39,10 +47,10 @@ impl<'a> Widget for MessagesWidget<'a> {
                         Role::User => (
                             "› ",
                             Style::default()
-                                .fg(Color::Cyan)
+                                .fg(self.theme.user_msg)
                                 .add_modifier(Modifier::BOLD),
                         ),
-                        Role::Assistant => ("◆ ", Style::default().fg(Color::Green)),
+                        Role::Assistant => ("◆ ", Style::default().fg(self.theme.assistant_msg)),
                     };
 
                     // Word-wrap the content manually for better control
@@ -60,21 +68,25 @@ impl<'a> Widget for MessagesWidget<'a> {
                     let text = display_item.display_text();
                     let style = match display_item {
                         DisplayItem::ToolActivity { .. } => Style::default()
-                            .fg(Color::Magenta)
+                            .fg(self.theme.accent)
                             .add_modifier(Modifier::ITALIC),
                         DisplayItem::ToolResult { is_error, .. } => {
                             if *is_error {
-                                Style::default().fg(Color::Red)
+                                Style::default().fg(self.theme.error)
                             } else {
-                                Style::default().fg(Color::Green)
+                                Style::default().fg(self.theme.success)
                             }
                         }
                         DisplayItem::Notice { kind, .. } => match kind {
-                            crate::display::NoticeKind::Info => Style::default().fg(Color::Blue),
-                            crate::display::NoticeKind::Warning => {
-                                Style::default().fg(Color::Yellow)
+                            crate::display::NoticeKind::Info => {
+                                Style::default().fg(self.theme.accent)
                             }
-                            crate::display::NoticeKind::Error => Style::default().fg(Color::Red),
+                            crate::display::NoticeKind::Warning => {
+                                Style::default().fg(self.theme.warning)
+                            }
+                            crate::display::NoticeKind::Error => {
+                                Style::default().fg(self.theme.error)
+                            }
                         },
                     };
                     lines.push(Line::from(Span::styled(text, style)));
@@ -88,12 +100,14 @@ impl<'a> Widget for MessagesWidget<'a> {
                 Span::styled(
                     "⧖ ", // U+29D6 WHITE HOURGLASS (1 cell)
                     Style::default()
-                        .fg(Color::Blue)
+                        .fg(self.theme.accent)
                         .add_modifier(Modifier::SLOW_BLINK),
                 ),
                 Span::styled(
                     "Thinking...",
-                    Style::default().fg(Color::Blue).add_modifier(Modifier::DIM),
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::DIM),
                 ),
             ]));
         }

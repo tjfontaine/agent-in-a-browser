@@ -422,3 +422,151 @@ impl AgentCore {
         tools
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> Config {
+        Config::default()
+    }
+
+    fn test_mcp_client() -> McpClient {
+        McpClient::new("")
+    }
+
+    // === Message Management Tests ===
+
+    #[test]
+    fn test_add_user_message() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        core.add_user_message("Hello, world!");
+
+        assert_eq!(core.messages().len(), 1);
+        assert_eq!(core.messages()[0].role, Role::User);
+        assert_eq!(core.messages()[0].content, "Hello, world!");
+    }
+
+    #[test]
+    fn test_add_assistant_message() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        core.add_assistant_message("I'm an assistant.");
+
+        assert_eq!(core.messages().len(), 1);
+        assert_eq!(core.messages()[0].role, Role::Assistant);
+        assert_eq!(core.messages()[0].content, "I'm an assistant.");
+    }
+
+    #[test]
+    fn test_update_last_assistant() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        core.add_assistant_message("Partial...");
+        core.update_last_assistant("Full response.");
+
+        assert_eq!(core.messages().len(), 1);
+        assert_eq!(core.messages()[0].content, "Full response.");
+    }
+
+    #[test]
+    fn test_update_last_assistant_on_empty_adds_message() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        core.update_last_assistant("New message");
+
+        // Should add a new assistant message
+        assert_eq!(core.messages().len(), 1);
+        assert_eq!(core.messages()[0].role, Role::Assistant);
+    }
+
+    #[test]
+    fn test_clear_messages() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        core.add_user_message("One");
+        core.add_assistant_message("Two");
+        core.clear_messages();
+
+        assert!(core.messages().is_empty());
+    }
+
+    // === Events Queue Tests ===
+
+    #[test]
+    fn test_events_queue_fifo() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+
+        core.emit(AgentEvent::StreamStart);
+        core.emit(AgentEvent::StreamComplete {
+            final_text: "done".to_string(),
+        });
+
+        // FIFO order - events come out in order they were emitted
+        assert!(matches!(core.pop_event(), Some(AgentEvent::StreamStart)));
+        assert!(matches!(
+            core.pop_event(),
+            Some(AgentEvent::StreamComplete { .. })
+        ));
+        assert!(core.pop_event().is_none());
+    }
+
+    #[test]
+    fn test_pop_event_empty() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        assert!(core.pop_event().is_none());
+    }
+
+    // === Config Access Tests ===
+
+    #[test]
+    fn test_provider_default() {
+        let core = AgentCore::new(test_config(), test_mcp_client());
+        assert_eq!(core.provider(), "anthropic");
+    }
+
+    #[test]
+    fn test_has_api_key_false_by_default() {
+        let core = AgentCore::new(test_config(), test_mcp_client());
+        assert!(!core.has_api_key());
+    }
+
+    #[test]
+    fn test_invalidate_agent_increments_counter() {
+        let mut core = AgentCore::new(test_config(), test_mcp_client());
+        assert_eq!(core.invalidation_count, 0);
+
+        core.invalidate_agent();
+        assert_eq!(core.invalidation_count, 1);
+
+        core.invalidate_agent();
+        assert_eq!(core.invalidation_count, 2);
+    }
+
+    // === Server Status Tests ===
+
+    #[test]
+    fn test_server_status_default() {
+        let core = AgentCore::new(test_config(), test_mcp_client());
+        assert!(!core.server_status().local_connected);
+        assert_eq!(core.server_status().local_tool_count, 0);
+    }
+
+    #[test]
+    fn test_remote_servers_empty() {
+        let core = AgentCore::new(test_config(), test_mcp_client());
+        assert!(core.remote_servers().is_empty());
+    }
+
+    // === Streaming State Tests ===
+
+    #[test]
+    fn test_is_streaming_default_false() {
+        let core = AgentCore::new(test_config(), test_mcp_client());
+        assert!(!core.is_streaming());
+    }
+
+    // === Role Debug Tests ===
+
+    #[test]
+    fn test_role_debug_format() {
+        assert_eq!(format!("{:?}", Role::User), "User");
+        assert_eq!(format!("{:?}", Role::Assistant), "Assistant");
+    }
+}

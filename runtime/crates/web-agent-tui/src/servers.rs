@@ -436,4 +436,188 @@ mod tests {
             "read_file"
         );
     }
+
+    #[test]
+    fn test_format_tool_for_display_remote() {
+        // Remote server tools use IDs derived from URLs
+        // (dots and slashes become hyphens, so weather.api.com → weather-api-com)
+        assert_eq!(
+            ToolRouter::format_tool_for_display("weather-api-com_get_forecast"),
+            "weather-api-com → get_forecast"
+        );
+        assert_eq!(
+            ToolRouter::format_tool_for_display("github-com-api_list_repos"),
+            "github-com-api → list_repos"
+        );
+    }
+
+    // === ServerManager Tests ===
+
+    #[test]
+    fn test_add_server_normalizes_url() {
+        let mut servers = Vec::new();
+
+        // Should add https:// prefix
+        assert!(ServerManager::add_server(&mut servers, "example.com/mcp"));
+        assert_eq!(servers[0].url, "https://example.com/mcp");
+
+        // Should remove trailing slash
+        servers.clear();
+        assert!(ServerManager::add_server(
+            &mut servers,
+            "https://example.com/"
+        ));
+        assert_eq!(servers[0].url, "https://example.com");
+    }
+
+    #[test]
+    fn test_add_server_generates_id() {
+        let mut servers = Vec::new();
+        ServerManager::add_server(&mut servers, "https://api.example.com/mcp");
+
+        // ID should be derived from URL
+        assert!(!servers[0].id.is_empty());
+        assert!(servers[0].id.contains("api-example-com"));
+    }
+
+    #[test]
+    fn test_add_server_rejects_duplicate() {
+        let mut servers = Vec::new();
+
+        assert!(ServerManager::add_server(
+            &mut servers,
+            "https://example.com"
+        ));
+        // Same URL should be rejected
+        assert!(!ServerManager::add_server(
+            &mut servers,
+            "https://example.com"
+        ));
+        assert_eq!(servers.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_server() {
+        let mut servers = Vec::new();
+        ServerManager::add_server(&mut servers, "https://example.com");
+        let id = servers[0].id.clone();
+
+        ServerManager::remove_server(&mut servers, &id);
+        assert!(servers.is_empty());
+    }
+
+    #[test]
+    fn test_set_token() {
+        let mut servers = Vec::new();
+        ServerManager::add_server(&mut servers, "https://example.com");
+        let id = servers[0].id.clone();
+
+        ServerManager::set_token(&mut servers, &id, "my-secret-token");
+        assert_eq!(servers[0].bearer_token, Some("my-secret-token".to_string()));
+    }
+
+    #[test]
+    fn test_toggle_connection_disconnected_to_connecting() {
+        let mut servers = Vec::new();
+        ServerManager::add_server(&mut servers, "https://example.com");
+        let id = servers[0].id.clone();
+
+        assert_eq!(servers[0].status, ServerConnectionStatus::Disconnected);
+        ServerManager::toggle_connection(&mut servers, &id);
+        assert_eq!(servers[0].status, ServerConnectionStatus::Connecting);
+    }
+
+    #[test]
+    fn test_toggle_connection_connected_to_disconnected() {
+        let mut servers = vec![RemoteServerEntry {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            url: "https://example.com".to_string(),
+            status: ServerConnectionStatus::Connected,
+            tools: vec![],
+            bearer_token: None,
+        }];
+
+        ServerManager::toggle_connection(&mut servers, "test");
+        assert_eq!(servers[0].status, ServerConnectionStatus::Disconnected);
+    }
+
+    // === ToolCollector Tests ===
+
+    #[test]
+    fn test_collect_all_tools_prefixes_sandbox() {
+        let remote_servers = vec![];
+
+        // Mock sandbox tool list
+        let (tools, connected, count) = ToolCollector::collect_all_tools(&remote_servers, || {
+            Ok(vec![crate::bridge::mcp_client::ToolDefinition {
+                name: "read_file".to_string(),
+                description: "Read a file".to_string(),
+                input_schema: serde_json::json!({}),
+                title: None,
+            }])
+        });
+
+        assert!(connected);
+        assert_eq!(count, 1);
+        assert!(tools.iter().any(|t| t.name == "__sandbox__read_file"));
+    }
+
+    #[test]
+    fn test_collect_all_tools_includes_local() {
+        let remote_servers = vec![];
+
+        let (tools, _, _) = ToolCollector::collect_all_tools(&remote_servers, || Ok(vec![]));
+
+        // Should include local tools with __local__ prefix
+        assert!(tools.iter().any(|t| t.name.starts_with("__local__")));
+    }
+
+    #[test]
+    fn test_collect_all_tools_includes_remote() {
+        let remote_servers = vec![RemoteServerEntry {
+            id: "weather".to_string(),
+            name: "Weather".to_string(),
+            url: "https://weather.example.com".to_string(),
+            status: ServerConnectionStatus::Connected,
+            tools: vec![crate::bridge::mcp_client::ToolDefinition {
+                name: "get_forecast".to_string(),
+                description: "Get weather forecast".to_string(),
+                input_schema: serde_json::json!({}),
+                title: None,
+            }],
+            bearer_token: None,
+        }];
+
+        let (tools, _, _) = ToolCollector::collect_all_tools(&remote_servers, || Ok(vec![]));
+
+        // Should include remote tool with server prefix
+        assert!(tools.iter().any(|t| t.name == "weather_get_forecast"));
+    }
+
+    // === ServerConnectionStatus Display Tests ===
+
+    #[test]
+    fn test_server_connection_status_display() {
+        assert_eq!(
+            format!("{}", ServerConnectionStatus::Disconnected),
+            "disconnected"
+        );
+        assert_eq!(
+            format!("{}", ServerConnectionStatus::Connecting),
+            "connecting"
+        );
+        assert_eq!(
+            format!("{}", ServerConnectionStatus::Connected),
+            "connected"
+        );
+        assert_eq!(
+            format!("{}", ServerConnectionStatus::AuthRequired),
+            "auth required"
+        );
+        assert_eq!(
+            format!("{}", ServerConnectionStatus::Error("timeout".to_string())),
+            "error: timeout"
+        );
+    }
 }

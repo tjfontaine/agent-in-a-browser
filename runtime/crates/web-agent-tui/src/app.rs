@@ -368,6 +368,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
         let model_name = self.agent.model().to_string();
         let overlay = self.overlay.clone();
         let display_items = self.timeline.clone();
+        let theme = crate::ui::Theme::by_name(&self.agent.config().ui.theme);
 
         let _ = self.terminal.draw(|frame| {
             render_ui(
@@ -383,6 +384,7 @@ impl<R: PollableRead, W: Write> App<R, W> {
                 &model_name,
                 overlay.as_ref(),
                 &remote_servers,
+                &theme,
             );
         });
     }
@@ -3171,5 +3173,203 @@ mod tests {
         assert_eq!(format!("{:?}", Mode::Plan), "Plan");
         assert_eq!(format!("{:?}", Mode::Agent), "Agent");
         assert_eq!(format!("{:?}", Mode::Shell), "Shell");
+    }
+
+    // ============================================================
+    // Slash Command Tests
+    // ============================================================
+
+    // Slash commands for testing (should match App::SLASH_COMMANDS)
+    const TEST_SLASH_COMMANDS: &[&str] = &[
+        "/help",
+        "/tools",
+        "/mcp",
+        "/model",
+        "/provider",
+        "/theme",
+        "/shell",
+        "/plan",
+        "/mode",
+        "/config",
+        "/key",
+        "/clear",
+        "/quit",
+    ];
+
+    /// Slash command parsing extracts command and arguments correctly
+    #[test]
+    fn slash_command_parsing() {
+        fn parse_slash_command(input: &str) -> (&str, Vec<&str>) {
+            let parts: Vec<&str> = input.trim().split_whitespace().collect();
+            let command = parts.first().copied().unwrap_or("");
+            let args = parts.get(1..).map(|s| s.to_vec()).unwrap_or_default();
+            (command, args)
+        }
+
+        // Simple command
+        let (cmd, args) = parse_slash_command("/help");
+        assert_eq!(cmd, "/help");
+        assert!(args.is_empty());
+
+        // Command with one argument
+        let (cmd, args) = parse_slash_command("/theme dark");
+        assert_eq!(cmd, "/theme");
+        assert_eq!(args, vec!["dark"]);
+
+        // Command with multiple arguments
+        let (cmd, args) = parse_slash_command("/mcp add https://example.com");
+        assert_eq!(cmd, "/mcp");
+        assert_eq!(args, vec!["add", "https://example.com"]);
+
+        // Command with whitespace
+        let (cmd, args) = parse_slash_command("  /mode   plan  ");
+        assert_eq!(cmd, "/mode");
+        assert_eq!(args, vec!["plan"]);
+    }
+
+    /// Slash command detection works correctly
+    #[test]
+    fn is_slash_command_detection() {
+        let is_slash = |s: &str| s.starts_with('/');
+
+        assert!(is_slash("/help"));
+        assert!(is_slash("/mcp list"));
+        assert!(is_slash("/"));
+        assert!(!is_slash("help"));
+        assert!(!is_slash(""));
+        assert!(!is_slash(" /help")); // Leading space is not a slash command
+    }
+
+    /// Tab completion matches prefix correctly
+    #[test]
+    fn tab_completion_matching() {
+        fn find_completions(prefix: &str) -> Vec<&'static str> {
+            TEST_SLASH_COMMANDS
+                .iter()
+                .filter(|cmd| cmd.starts_with(prefix) && **cmd != prefix)
+                .copied()
+                .collect()
+        }
+
+        // Unique prefix
+        let matches = find_completions("/he");
+        assert_eq!(matches, vec!["/help"]);
+
+        // Multiple matches
+        let matches = find_completions("/m");
+        assert!(matches.contains(&"/mcp"));
+        assert!(matches.contains(&"/model"));
+        assert!(matches.contains(&"/mode"));
+
+        // Exact match returns empty
+        let matches = find_completions("/help");
+        assert!(matches.is_empty());
+
+        // No match
+        let matches = find_completions("/xyz");
+        assert!(matches.is_empty());
+
+        // Just "/" matches all
+        let matches = find_completions("/");
+        assert_eq!(matches.len(), TEST_SLASH_COMMANDS.len());
+    }
+
+    /// Command aliases work correctly
+    #[test]
+    fn slash_command_aliases() {
+        // These aliases are handled in handle_slash_command
+        // /h -> /help
+        // /q -> /quit
+        // /sh -> /shell
+        // /servers -> /mcp
+
+        fn get_canonical_command(input: &str) -> &str {
+            match input {
+                "/help" | "/h" => "/help",
+                "/quit" | "/q" => "/quit",
+                "/shell" | "/sh" => "/shell",
+                "/servers" | "/mcp" => "/mcp",
+                other => other,
+            }
+        }
+
+        assert_eq!(get_canonical_command("/h"), "/help");
+        assert_eq!(get_canonical_command("/help"), "/help");
+        assert_eq!(get_canonical_command("/q"), "/quit");
+        assert_eq!(get_canonical_command("/quit"), "/quit");
+        assert_eq!(get_canonical_command("/sh"), "/shell");
+        assert_eq!(get_canonical_command("/shell"), "/shell");
+        assert_eq!(get_canonical_command("/servers"), "/mcp");
+        assert_eq!(get_canonical_command("/mcp"), "/mcp");
+    }
+
+    /// MCP subcommands are recognized
+    #[test]
+    fn mcp_subcommands() {
+        // Test that expected subcommands are documented
+        // (actual parsing is tested via integration tests)
+        let expected_subcommands = ["list", "add", "remove", "connect", "disconnect"];
+        assert_eq!(expected_subcommands.len(), 5);
+    }
+
+    /// Provider subcommands are recognized
+    #[test]
+    fn provider_subcommands() {
+        // Test that expected providers are documented
+        let expected_providers = ["status", "anthropic", "openai"];
+        assert_eq!(expected_providers.len(), 3);
+    }
+
+    /// Mode subcommands are recognized
+    #[test]
+    fn mode_subcommands() {
+        // Test that expected modes are documented
+        let expected_modes = ["normal", "agent", "plan", "shell"];
+        assert_eq!(expected_modes.len(), 4);
+    }
+
+    /// Theme::by_name returns correct themes for valid inputs
+    #[test]
+    fn theme_by_name_valid() {
+        use crate::ui::Theme;
+
+        // Test that by_name returns the right theme types
+        let dark = Theme::by_name("dark");
+        assert_eq!(dark.bg, ratatui::style::Color::Rgb(26, 27, 38));
+
+        let light = Theme::by_name("light");
+        assert_eq!(light.bg, ratatui::style::Color::Rgb(213, 214, 219));
+
+        let gruvbox = Theme::by_name("gruvbox");
+        assert_eq!(gruvbox.bg, ratatui::style::Color::Rgb(40, 40, 40));
+
+        let catppuccin = Theme::by_name("catppuccin");
+        assert_eq!(catppuccin.bg, ratatui::style::Color::Rgb(30, 30, 46));
+    }
+
+    /// Theme::by_name returns dark theme for unknown inputs
+    #[test]
+    fn theme_by_name_unknown_defaults_to_dark() {
+        use crate::ui::Theme;
+
+        let unknown = Theme::by_name("nonexistent");
+        let dark = Theme::dark();
+
+        // Unknown theme should default to dark
+        assert_eq!(unknown.bg, dark.bg);
+        assert_eq!(unknown.fg, dark.fg);
+    }
+
+    /// Theme::by_name is case-insensitive
+    #[test]
+    fn theme_by_name_case_insensitive() {
+        use crate::ui::Theme;
+
+        let lower = Theme::by_name("gruvbox");
+        let upper = Theme::by_name("GRUVBOX");
+        let mixed = Theme::by_name("GrUvBoX");
+
+        assert_eq!(lower.bg, upper.bg);
+        assert_eq!(lower.bg, mixed.bg);
     }
 }

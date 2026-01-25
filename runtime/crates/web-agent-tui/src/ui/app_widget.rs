@@ -9,7 +9,7 @@ use std::io::Write;
 
 use crate::app::App;
 
-use crate::ui::{InputBoxWidget, MessagesWidget, StatusBarWidget};
+use crate::ui::{InputBoxWidget, MessagesWidget, StatusBarWidget, Theme};
 
 /// Widget wrapper for rendering the entire App UI
 pub struct AppWidget<'a, R: PollableRead, W: Write> {
@@ -62,11 +62,15 @@ impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
             ])
             .split(area);
 
+        // Get theme from config
+        let theme = Theme::by_name(&self.app.agent.config().ui.theme);
+
         // Messages
         MessagesWidget::new(
             self.app.agent.messages(),
             &self.app.timeline,
             self.app.state,
+            &theme,
         )
         .render(chunks[0], buf);
 

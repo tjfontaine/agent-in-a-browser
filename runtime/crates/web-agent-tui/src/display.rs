@@ -252,4 +252,66 @@ mod tests {
         assert!(text.contains("..."));
         assert!(text.len() < 200);
     }
+
+    // === TimelineEntry Factory Method Tests ===
+
+    #[test]
+    fn timeline_entry_user_message() {
+        let entry = TimelineEntry::user_message("Hello!");
+        if let TimelineEntry::Message(msg) = entry {
+            assert_eq!(msg.role, Role::User);
+            assert_eq!(msg.content, "Hello!");
+        } else {
+            panic!("Expected Message variant");
+        }
+    }
+
+    #[test]
+    fn timeline_entry_assistant_message() {
+        let entry = TimelineEntry::assistant_message("Hi there!");
+        if let TimelineEntry::Message(msg) = entry {
+            assert_eq!(msg.role, Role::Assistant);
+            assert_eq!(msg.content, "Hi there!");
+        } else {
+            panic!("Expected Message variant");
+        }
+    }
+
+    #[test]
+    fn timeline_entry_tool_result_success() {
+        let entry = TimelineEntry::tool_result("read_file", "file contents", false);
+        if let TimelineEntry::Display(DisplayItem::ToolResult {
+            tool_name,
+            result,
+            is_error,
+        }) = entry
+        {
+            assert_eq!(tool_name, "read_file");
+            assert_eq!(result, "file contents");
+            assert!(!is_error);
+        } else {
+            panic!("Expected Display(ToolResult) variant");
+        }
+    }
+
+    #[test]
+    fn timeline_entry_tool_result_error() {
+        let entry = TimelineEntry::tool_result("write_file", "permission denied", true);
+        if let TimelineEntry::Display(DisplayItem::ToolResult { is_error, .. }) = entry {
+            assert!(is_error);
+        } else {
+            panic!("Expected Display(ToolResult) variant");
+        }
+    }
+
+    #[test]
+    fn timeline_entry_tool_activity() {
+        let entry = TimelineEntry::tool_activity("shell_eval");
+        if let TimelineEntry::Display(DisplayItem::ToolActivity { tool_name, status }) = entry {
+            assert_eq!(tool_name, "shell_eval");
+            assert_eq!(status, ToolStatus::Calling);
+        } else {
+            panic!("Expected Display(ToolActivity) variant");
+        }
+    }
 }
