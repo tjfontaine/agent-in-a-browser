@@ -329,12 +329,46 @@ export function createInputStreamFromBytes(bytes: Uint8Array): unknown {
 
 /**
  * Create an InputStream that reads from a fetch ReadableStreamReader
- * This enables true streaming via JSPI - each read suspends until data arrives
+ * This enables true streaming via JSPI - each read suspends until data arrives.
+ * 
+ * For non-JSPI (iOS), it uses async-aware polling:
+ * - subscribe() returns AsyncPollable that tracks pending read
+ * - ready() returns true when data is buffered or stream is done
+ * - read() returns buffered data
  */
 export function createStreamingInputStream(reader: ReadableStreamDefaultReader<Uint8Array>): unknown {
     // Buffer for leftover bytes when we read more than requested
     let buffer: Uint8Array = new Uint8Array(0);
     let done = false;
+
+    // For async polling pattern (iOS): track pending read promise
+    let pendingRead: Promise<void> | null = null;
+    let readyState = false;
+
+    // Start a background read to fill buffer
+    const startRead = () => {
+        if (pendingRead !== null || done) return;
+
+        readyState = false;
+        pendingRead = (async () => {
+            try {
+                const { value, done: streamDone } = await reader.read();
+                done = streamDone;
+                if (value && value.length > 0) {
+                    // Append to buffer
+                    const newBuffer = new Uint8Array(buffer.length + value.length);
+                    newBuffer.set(buffer);
+                    newBuffer.set(value, buffer.length);
+                    buffer = newBuffer;
+                }
+                readyState = true;
+            } catch {
+                done = true;
+                readyState = true;
+            }
+            pendingRead = null;
+        })();
+    };
 
     return new InputStream({
         read(len: bigint): Uint8Array {
@@ -343,8 +377,19 @@ export function createStreamingInputStream(reader: ReadableStreamDefaultReader<U
                 const n = Math.min(Number(len), buffer.length);
                 const result = buffer.slice(0, n);
                 buffer = buffer.slice(n);
+
+                // If buffer drained and not done, start background read
+                if (buffer.length === 0 && !done) {
+                    startRead();
+                }
                 return result;
             }
+
+            // If not done and no pending read, start one for next poll
+            if (!done && pendingRead === null) {
+                startRead();
+            }
+
             return new Uint8Array(0);
         },
 
@@ -378,6 +423,29 @@ export function createStreamingInputStream(reader: ReadableStreamDefaultReader<U
             }
 
             return value;
+        },
+
+        subscribe(): ReadyPollable {
+            // For async polling: return pollable that reflects actual readiness
+            if (done || buffer.length > 0) {
+                return new ReadyPollable();
+            }
+
+            // Start a read if not already pending
+            if (pendingRead === null) {
+                startRead();
+            }
+
+            // Return AsyncPollable that will be ready when read completes
+            if (pendingRead !== null) {
+                // Create a simple pollable that checks readyState
+                return {
+                    ready: () => readyState || done || buffer.length > 0,
+                    block: () => pendingRead
+                } as ReadyPollable;
+            }
+
+            return new ReadyPollable();
         }
     });
 }
@@ -843,38 +911,96 @@ export function createJsonRpcRequest(body: string): IncomingRequest {
 
 // ============ Outgoing HTTP Handler ============
 
-// AsyncPollable extends ReadyPollable from ./streams (imported at top of file)
-
 /**
  * AsyncPollable - a pollable that waits on a Promise
  * Must extend ReadyPollable for JCO instanceof checks to pass.
+ * 
+ * In JSPI mode: block() actually awaits the promise
+ * In non-JSPI mode: block() returns immediately, and the caller
+ * should use a polling loop with ready() to check completion.
  */
 class AsyncPollable extends ReadyPollable {
     private _ready: boolean = false;
     private _promise: Promise<void>;
 
+    // Throttling state for non-JSPI mode
+    private _lastPollTime: number = 0;
+    private _pollThrottleMs: number = 16; // ~60fps, matching requestAnimationFrame timing
+    private _throttledPollCount: number = 0;
+
     constructor(promise: Promise<void>) {
         super();
-        console.log('[AsyncPollable] constructor called');
         this._promise = promise;
         promise.then(() => {
-            console.log('[AsyncPollable] promise resolved, setting ready=true');
             this._ready = true;
         }).catch((err) => {
-            console.log('[AsyncPollable] promise rejected:', err);
             this._ready = true; // Ready on error too
         });
     }
 
     override ready(): boolean {
-        console.log('[AsyncPollable] ready() called, returning:', this._ready);
+        // In JSPI mode, just return the actual state
+        if (hasJSPI) {
+            return this._ready;
+        }
+
+        // If already ready, return immediately
+        if (this._ready) {
+            if (this._throttledPollCount > 0) {
+            }
+            this._throttledPollCount = 0;
+            return true;
+        }
+
+        // Non-JSPI mode: throttle polling to ~60fps to reduce CPU usage
+        // Uses performance.now() for high-resolution timing
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const elapsed = now - this._lastPollTime;
+
+        if (elapsed < this._pollThrottleMs) {
+            // Within throttle window - return cached false without logging (to reduce spam)
+            this._throttledPollCount++;
+            return false;
+        }
+
+        // Throttle window passed - log and update timestamp
+        this._lastPollTime = now;
+        if (this._throttledPollCount > 0) {
+            this._throttledPollCount = 0;
+        } else {
+        }
         return this._ready;
     }
 
-    override async block(): Promise<void> {
-        console.log('[AsyncPollable] block() called, awaiting promise...');
-        await this._promise;
-        console.log('[AsyncPollable] block() completed');
+    /**
+     * Block until the pollable is ready.
+     * 
+     * In JSPI mode: actually awaits the promise (JSPI suspends WASM stack)
+     * In non-JSPI mode: returns immediately (void) - the caller must use a
+     * polling loop that checks ready() and retries poll().
+     * 
+     * This enables universal async support across all environments:
+     * - Chrome with JSPI: true blocking via stack suspension
+     * - Safari/iOS/Workers: non-blocking with polling retry pattern
+     */
+    override block(): Promise<void> | void {
+
+        if (hasJSPI) {
+            // JSPI mode: return Promise that jco will properly await
+            return this._promise;
+        }
+
+        // Non-JSPI mode: return immediately (no blocking possible)
+        // The caller (Rust poll_once) will get Pending and retry later
+        // This enables the universal polling pattern:
+        //   1. send() starts HTTP request
+        //   2. poll() is called, block() returns immediately
+        //   3. get() returns undefined (not ready)
+        //   4. Rust returns PollResult::Pending
+        //   5. Host calls poll() again after short delay
+        //   6. Eventually HTTP completes, ready() returns true
+        //   7. get() returns the response
+        return;
     }
 }
 
@@ -948,7 +1074,7 @@ export class FutureIncomingResponse {
     }
 
     subscribe(): unknown {
-        console.log('[FutureIncomingResponse] subscribe() called, returning pollable:', this._pollable);
+        // Note: No logging here to avoid console spam during polling
         return this._pollable;
     }
 
@@ -963,20 +1089,12 @@ export class FutureIncomingResponse {
      * - JSPI mode: If _result not ready, returns Promise that resolves to result
      */
     get(): { tag: 'ok', val: WasmResult<IncomingResponse> } | undefined | Promise<{ tag: 'ok', val: WasmResult<IncomingResponse> } | undefined> {
-        console.log('[FutureIncomingResponse] get() called, result:', this._result ? 'ready' : 'not ready');
 
         // If result is already available, return immediately (works for both modes)
         // WIT spec: option<result<result<incoming-response, error-code>>>
         // - outer result wraps the inner _result for "at most once" call semantics
         if (this._result !== null) {
-            console.log('[FutureIncomingResponse] _result.tag:', this._result.tag);
-            console.log('[FutureIncomingResponse] _result.val:', this._result.val?.constructor?.name);
             const returnVal = { tag: 'ok' as const, val: this._result };
-            console.log('[FutureIncomingResponse] returning:', JSON.stringify({
-                tag: returnVal.tag,
-                valTag: returnVal.val?.tag,
-                valValClass: returnVal.val?.val?.constructor?.name
-            }));
             return returnVal;
         }
 
@@ -984,7 +1102,6 @@ export class FutureIncomingResponse {
         // In JSPI mode: return Promise that jco can await
         // In sync mode: return undefined - jco expects poll()/block() to be called first
         if (hasJSPI && this._promise) {
-            console.log('[FutureIncomingResponse] JSPI mode - returning Promise');
             return this._promise.then(() => {
                 if (this._result === null) {
                     return undefined;
@@ -995,7 +1112,6 @@ export class FutureIncomingResponse {
 
         // Sync mode: result not ready, return undefined (option::none)
         // The caller should use subscribe().block() first to wait for the result
-        console.log('[FutureIncomingResponse] Sync mode - returning undefined (not ready)');
         return undefined;
     }
 }
@@ -1154,7 +1270,6 @@ export const outgoingHandler = {
         // Build the URL
         const scheme = request.scheme();
         // DEBUG: Log raw scheme value
-        console.log('[http] DEBUG raw scheme:', JSON.stringify(scheme));
 
         // Handle WASI scheme tags - may be 'HTTPS', 'https', or { tag: 'https' }
         // Preserve custom schemes like 'wasm' for local MCP routing
@@ -1162,7 +1277,6 @@ export const outgoingHandler = {
         if (scheme) {
             const tag = (typeof scheme === 'string' ? scheme : scheme.tag) || '';
             const tagLower = tag.toLowerCase();
-            console.log('[http] DEBUG scheme tag:', tag, 'tagLower:', tagLower);
 
             if (tagLower === 'https') {
                 schemeStr = 'https';
@@ -1171,17 +1285,14 @@ export const outgoingHandler = {
             } else if (tagLower === 'other' && typeof scheme === 'object' && 'val' in scheme) {
                 // Custom scheme from WASI { tag: 'other', val: 'wasm' }
                 schemeStr = (scheme as { tag: string; val: string }).val || 'http';
-                console.log('[http] DEBUG using other.val:', schemeStr);
             } else if (tagLower && tagLower !== 'other') {
                 // Non-standard scheme passed directly (e.g., 'wasm')
                 schemeStr = tagLower;
-                console.log('[http] DEBUG using tagLower:', schemeStr);
             }
         }
         const authority = request.authority() || '';
         const path = request.pathWithQuery() || '/';
         const url = `${schemeStr}://${authority}${path}`;
-        console.log('[http] DEBUG constructed URL:', url);
 
         // Build method
         const methodObj = request.method();
@@ -1204,7 +1315,6 @@ export const outgoingHandler = {
         const globalWindow = typeof window !== 'undefined' ? window as any : null;
 
         if (url.startsWith('wasm://') && globalWindow?._wasmMcpRequestSync) {
-            console.log('[http] Using sync local MCP transport:', method, url);
             try {
                 // Call local MCP handler synchronously
                 const syncResult = globalWindow._wasmMcpRequestSync(method, url, headers, body) as {
@@ -1236,7 +1346,6 @@ export const outgoingHandler = {
         // Route ALL HTTP requests through Swift URLSession to avoid CORS
         // This is detected by the presence of window._iosHttpRequest set by web-runtime.html
         if (globalWindow?._iosHttpRequest) {
-            console.log('[http] Using iOS native transport:', method, url);
 
             // Make async request through Swift bridge
             // The Promise will be resolved when Swift calls _httpCallback
@@ -1259,7 +1368,6 @@ export const outgoingHandler = {
 
         // Route WebLLM requests to local inference engine
         if (isWebLLMUrl(url)) {
-            console.log('[http] Routing to WebLLM:', method, url);
 
             // WebLLM always uses async path (requires model loading)
             const webllmPromise = handleWebLLMRequest(method, url, headers, body);
@@ -1282,11 +1390,9 @@ export const outgoingHandler = {
         // Check if we should route through transport handler
         // Prefer streaming transport handler over legacy sync transport
         if (shouldIntercept(url)) {
-            console.log('[http] Intercepting request:', method, url);
 
             // Use streaming transport handler if available (enables true streaming)
             if (streamingTransportHandler) {
-                console.log('[http] Using streaming transport handler');
 
                 // Create streaming generator
                 const generator = streamingTransportHandler(method, url, headers, body);
@@ -1313,7 +1419,6 @@ export const outgoingHandler = {
                     generator
                 );
 
-                console.log('[http] Streaming response: status=', status);
                 return new FutureIncomingResponse({
                     status,
                     headers: responseHeaders,
@@ -1323,14 +1428,12 @@ export const outgoingHandler = {
 
             // Fallback to legacy transport handler
             if (transportHandler) {
-                console.log('[http] Routing via legacy transport handler:', method, url);
 
                 // Call the transport handler
                 const result = transportHandler(method, url, headers, body);
 
                 // Check if this is a sync result (Safari mode) or async Promise (JSPI mode)
                 if (isSyncTransportResult(result)) {
-                    console.log('[http] Using sync body path - $sync marker');
                     const response = result.value;
                     return new FutureIncomingResponse({
                         status: response.status,
@@ -1341,7 +1444,6 @@ export const outgoingHandler = {
 
                 // Legacy sync pattern
                 if ('syncValue' in result) {
-                    console.log('[http] Using sync body path - legacy syncValue');
                     const response = (result as { syncValue: TransportResponse }).syncValue;
                     return new FutureIncomingResponse({
                         status: response.status,
@@ -1351,7 +1453,6 @@ export const outgoingHandler = {
                 }
 
                 // Async path for JSPI mode - use lazy body stream with async/await
-                console.log('[http] Using lazy body stream (JSPI mode)');
                 const asyncResult = result as AsyncTransportResult;
                 const bodyStream = createLazyBufferStream(
                     asyncResult.then((r: TransportResponse) => r.body)
@@ -1368,7 +1469,6 @@ export const outgoingHandler = {
         // Handle OAuth popup requests from WASM
         // URL format: https://__oauth_popup__/start?auth_url=<encoded_auth_url>&server_id=<id>&server_url=<url>&code_verifier=<verifier>&state=<state>
         if (authority === '__oauth_popup__') {
-            console.log('[http] OAuth popup request:', path);
 
             const oauthPromise = (async (): Promise<StreamingResponse> => {
                 try {
@@ -1443,9 +1543,7 @@ export const outgoingHandler = {
             const isProxied = shouldProxyViaCors(url);
             if (isProxied) {
                 fetchUrl = getCorsProxyUrl(url);
-                console.log('[http] Routing through CORS proxy:', method, url, '->', fetchUrl);
             } else {
-                console.log('[http] Using async fetch (streaming body):', method, url);
             }
 
             // In sync mode (Safari/no JSPI), use streaming transport if available
@@ -1453,11 +1551,9 @@ export const outgoingHandler = {
             // Detect automatically: if JSPI is not supported OR explicit syncModeTransport is set
             const useSyncMode = !hasJSPI || syncModeTransport;
             if (useSyncMode) {
-                console.log('[http] Sync mode detected for HTTPS:', method, url);
 
                 // Check if streaming transport handler is available (registered by Worker)
                 if (streamingTransportHandler) {
-                    console.log('[http] Using streaming transport handler for HTTPS');
 
                     // Create streaming generator
                     const generator = streamingTransportHandler(method, fetchUrl, headers, body);
@@ -1484,7 +1580,6 @@ export const outgoingHandler = {
                         generator
                     );
 
-                    console.log('[http] Streaming response: status=', status);
                     return new FutureIncomingResponse({
                         status,
                         headers: responseHeaders,
@@ -1493,8 +1588,6 @@ export const outgoingHandler = {
                 }
 
                 // Fallback to XHR if no streaming handler
-                console.log('[http] No streaming handler, falling back to sync XHR for HTTPS:', method, url);
-                console.log('[http] Headers to set:', Object.keys(headers), headers);
 
                 const xhr = new XMLHttpRequest();
                 xhr.open(method, fetchUrl, false); // false = synchronous
@@ -1503,7 +1596,6 @@ export const outgoingHandler = {
                 for (const [name, value] of Object.entries(headers)) {
                     if (name.toLowerCase() !== 'user-agent' && name.toLowerCase() !== 'host') {
                         try {
-                            console.log(`[http] Setting header: ${name} = ${value.substring?.(0, 20) || value}...`);
                             xhr.setRequestHeader(name, value);
                         } catch (e) {
                             console.warn(`[http] Could not set header ${name}:`, e);
@@ -1538,9 +1630,7 @@ export const outgoingHandler = {
                         }
                     });
 
-                console.log('[http] Sync XHR complete, status:', xhr.status, 'body len:', responseBody.length);
                 if (xhr.status >= 400) {
-                    console.log('[http] Error response body:', xhr.responseText);
                 }
                 return new FutureIncomingResponse({ status: xhr.status, headers: responseHeaders, body: responseBody });
             }
@@ -1614,10 +1704,6 @@ export const outgoingHandler = {
             // Return async FutureIncomingResponse that await the fetch
             // JSPI will suspend on Pollable.block() until fetch completes
             const result = new FutureIncomingResponse(fetchPromise);
-            console.log('[http] Returning FutureIncomingResponse:',
-                'constructor:', result.constructor.name,
-                'instanceof:', result instanceof FutureIncomingResponse,
-                'symbolCheck:', isFutureIncomingResponse(result));
             return result;
         }
 
@@ -1628,14 +1714,11 @@ export const outgoingHandler = {
         if (authority === 'localhost:3000' || authority === '127.0.0.1:3000') {
             // Just use the path for relative resolution
             localUrl = path;
-            console.log('[http] HTTP request (MCP sentinel):', method, url, '->', localUrl);
         } else {
-            console.log('[http] HTTP request:', method, url);
         }
 
         // Check if streaming transport handler is available (registered by Worker)
         if (streamingTransportHandler) {
-            console.log('[http] Using streaming transport handler for HTTP localhost');
 
             // Create streaming generator
             const generator = streamingTransportHandler(method, localUrl, headers, body);
@@ -1662,7 +1745,6 @@ export const outgoingHandler = {
                 generator
             );
 
-            console.log('[http] Streaming HTTP response: status=', status);
             return new FutureIncomingResponse({
                 status,
                 headers: responseHeaders,
@@ -1673,7 +1755,6 @@ export const outgoingHandler = {
         // In JSPI mode, use async fetch for localhost HTTP (same as HTTPS path)
         // This avoids blocking the main thread with sync XHR
         if (hasJSPI) {
-            console.log('[http] Using async fetch for HTTP localhost (JSPI mode):', method, localUrl);
 
             // Build fetch options
             const filteredHeaders = Object.fromEntries(
@@ -1737,7 +1818,6 @@ export const outgoingHandler = {
         }
 
         // Fallback to sync XHR for non-JSPI environments (Safari)
-        console.log('[http] No streaming handler, falling back to sync XHR');
         const xhr = new XMLHttpRequest();
         xhr.open(method, localUrl, false); // false = synchronous
 

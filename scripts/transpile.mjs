@@ -254,17 +254,11 @@ function build(name, mod, syncMode) {
         // No async handling needed since sync shims don't return Promises
         args.push('--async-mode', 'sync', '--tla-compat');
     } else if (syncMode && isIosTarget) {
-        // iOS sync mode: Use JSPI mode transpile to generate JavaScript async/await code.
-        // Even though Safari doesn't have WebAssembly JSPI, the generated JavaScript
-        // async/await code WILL work - it just uses regular JavaScript Promises.
-        // This is critical for iOS where HTTP is inherently async (callback-based).
-        console.log(`📦 iOS target - using JSPI transpile for JavaScript async/await`);
-        args.push('--async-mode', 'jspi');
-        const wasiVersion = detectWasiVersion(input);
-        const asyncImports = buildAsyncImports(wasiVersion);
-        console.log(`📦 Detected WASI version: ${wasiVersion}`);
-        for (const imp of asyncImports) args.push('--async-imports', `'${imp}'`);
-        for (const exp of (mod.exports || [])) args.push('--async-exports', `'${exp}'`);
+        // iOS sync mode: Use true sync mode - Safari/iOS doesn't have WebAssembly JSPI.
+        // The shims use JavaScript async/await and the polling pattern handles pending.
+        // When block() returns (as a no-op), poll() gets Pending and the host retries.
+        console.log(`📦 iOS target - using sync mode (no JSPI on Safari)`);
+        args.push('--async-mode', 'sync', '--tla-compat');
     } else {
         args.push('--async-mode', 'jspi');
         // Detect WASI version from the WASM file and build ASYNC_IMPORTS with matching version

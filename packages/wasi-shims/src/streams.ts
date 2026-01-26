@@ -33,7 +33,11 @@ export interface InputStreamHandler {
     blockingRead: (len: bigint) => Uint8Array | Promise<Uint8Array>;
     skip?: (len: bigint) => bigint;
     blockingSkip?: (len: bigint) => bigint;
-    subscribe?: () => void;
+    /** 
+     * Optional subscribe that returns a Pollable for async-aware polling.
+     * If not provided, subscribe() returns ReadyPollable (always ready).
+     */
+    subscribe?: () => ReadyPollable | void;
     drop?: () => void;
 }
 
@@ -99,6 +103,14 @@ export class InputStream {
     }
 
     subscribe(): ReadyPollable {
+        // If handler provides a subscribe, use it (may return async-aware Pollable)
+        if (this.handler.subscribe) {
+            const pollable = this.handler.subscribe();
+            if (pollable) {
+                return pollable;
+            }
+        }
+        // Default: always ready
         return new ReadyPollable();
     }
 

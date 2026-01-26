@@ -187,11 +187,13 @@ macro_rules! define_wasi_http_client {
                 Ok((status, Bytes::from(result)))
             }
 
-            /// Internal method to execute a streaming request
-            fn execute_streaming_request<T: Into<Bytes>>(
+            /// Internal method to prepare a streaming request (async-compatible)
+            /// This starts the HTTP request but does NOT wait for the response.
+            /// Returns the FutureIncomingResponse which can be polled.
+            fn prepare_streaming_request<T: Into<Bytes>>(
                 &self,
                 req: Request<T>,
-            ) -> RigResult<(u16, http::HeaderMap, WasiBodyStream)> {
+            ) -> RigResult<wasi_http::types::FutureIncomingResponse> {
                 let (parts, body) = req.into_parts();
                 let body_bytes: Bytes = body.into();
                 let url = parts.uri.to_string();
@@ -230,20 +232,79 @@ macro_rules! define_wasi_http_client {
                     })?;
                 }
 
-                // Send request
+                // Send request - returns FutureIncomingResponse
                 let options = RequestOptions::new();
                 let future_response = outgoing_handler::handle(request, Some(options))
                     .map_err(|e| _wasi_http_instance_error(format!("Handle failed: {:?}", e)))?;
 
-                // Wait for response
-                let pollable = future_response.subscribe();
-                pollable.block();
+                Ok(future_response)
+            }
+        }
 
-                let response_result = future_response
-                    .get()
-                    .ok_or_else(|| _wasi_http_instance_error("No response"))?
-                    .map_err(|_| _wasi_http_instance_error("Response error"))?
-                    .map_err(|e| _wasi_http_instance_error(format!("HTTP error: {:?}", e)))?;
+        /// Poll-based async future for streaming HTTP response
+        /// This struct implements Future and polls the WASI FutureIncomingResponse
+        pub struct WasiStreamingResponseFuture {
+            future_response: Option<wasi_http::types::FutureIncomingResponse>,
+            resolved: bool,
+        }
+
+        impl WasiStreamingResponseFuture {
+            fn new(future_response: wasi_http::types::FutureIncomingResponse) -> Self {
+                Self {
+                    future_response: Some(future_response),
+                    resolved: false,
+                }
+            }
+        }
+
+        // WasiStreamingResponseFuture needs Send for rig's trait bounds
+        unsafe impl Send for WasiStreamingResponseFuture {}
+
+        impl Future for WasiStreamingResponseFuture {
+            type Output = RigResult<(u16, http::HeaderMap, WasiBodyStream)>;
+
+            fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+                if self.resolved {
+                    return Poll::Ready(Err(_wasi_http_instance_error("Already resolved")));
+                }
+
+                // First, check if ready (without taking ownership)
+                {
+                    let future_response = match &self.future_response {
+                        Some(f) => f,
+                        None => return Poll::Ready(Err(_wasi_http_instance_error("No future"))),
+                    };
+
+                    // Check if response is ready using non-blocking ready()
+                    let pollable = future_response.subscribe();
+                    if !pollable.ready() {
+                        // Not ready yet - return Pending so caller can poll again
+                        // On iOS, this allows the JS event loop to run and deliver HTTP data
+                        return Poll::Pending;
+                    }
+                }
+
+                // Response is ready - now take ownership
+                self.resolved = true;
+                let future_response = self.future_response.take().unwrap();
+
+                let response_result = match future_response.get() {
+                    Some(Ok(Ok(r))) => r,
+                    Some(Ok(Err(e))) => {
+                        return Poll::Ready(Err(_wasi_http_instance_error(format!(
+                            "HTTP error: {:?}",
+                            e
+                        ))))
+                    }
+                    Some(Err(_)) => {
+                        return Poll::Ready(Err(_wasi_http_instance_error("Response error")))
+                    }
+                    None => {
+                        return Poll::Ready(Err(_wasi_http_instance_error(
+                            "Response not ready after ready()",
+                        )))
+                    }
+                };
 
                 let status = response_result.status();
 
@@ -259,22 +320,30 @@ macro_rules! define_wasi_http_client {
                 }
 
                 // Get stream
-                let incoming_body = response_result
-                    .consume()
-                    .map_err(|_| _wasi_http_instance_error("Failed to consume body"))?;
+                let incoming_body = match response_result.consume() {
+                    Ok(b) => b,
+                    Err(_) => {
+                        return Poll::Ready(Err(_wasi_http_instance_error(
+                            "Failed to consume body",
+                        )))
+                    }
+                };
 
-                let stream = incoming_body
-                    .stream()
-                    .map_err(|_| _wasi_http_instance_error("Failed to get stream"))?;
+                let stream = match incoming_body.stream() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return Poll::Ready(Err(_wasi_http_instance_error("Failed to get stream")))
+                    }
+                };
 
-                Ok((
+                Poll::Ready(Ok((
                     status,
                     headers,
                     WasiBodyStream {
                         stream,
                         _body: incoming_body,
                     },
-                ))
+                )))
             }
         }
 
@@ -308,10 +377,21 @@ macro_rules! define_wasi_http_client {
             type Item = RigResult<Bytes>;
 
             fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-                // JSPI makes blocking_read async from JavaScript's perspective
-                match self.stream.blocking_read(8192) {
+                // Use non-blocking pattern: check ready() first, then read()
+                // This works on both JSPI (where block() suspends) and iOS (where block() returns immediately)
+                let pollable = self.stream.subscribe();
+
+                if !pollable.ready() {
+                    // Not ready yet - return Pending so caller can poll again
+                    // On iOS, this allows the JS event loop to run and deliver HTTP data
+                    return Poll::Pending;
+                }
+
+                // Data is available, do non-blocking read
+                match self.stream.read(8192) {
                     Ok(chunk) => {
                         if chunk.is_empty() {
+                            // Empty read after ready() means stream is done
                             Poll::Ready(None)
                         } else {
                             Poll::Ready(Some(Ok(Bytes::from(chunk))))
@@ -409,10 +489,16 @@ macro_rules! define_wasi_http_client {
             where
                 T: Into<Bytes>,
             {
-                let result = self.execute_streaming_request(req);
+                // Prepare the request (sync) - this starts the HTTP request
+                let prepare_result = self.prepare_streaming_request(req);
 
                 async move {
-                    let (status, headers, wasi_stream) = result?;
+                    // Get the future response from prepare
+                    let future_response = prepare_result?;
+
+                    // Use the async polling future to wait for response
+                    let (status, headers, wasi_stream) =
+                        WasiStreamingResponseFuture::new(future_response).await?;
 
                     let status_code = http::StatusCode::from_u16(status)
                         .map_err(|e| _wasi_http_instance_error(format!("Invalid status: {}", e)))?;

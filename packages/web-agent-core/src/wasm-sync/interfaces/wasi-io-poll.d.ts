@@ -5,5 +5,6 @@ export class Pollable {
    * This type does not have a public constructor.
    */
   private constructor();
+  ready(): boolean;
   block(): void;
 }
