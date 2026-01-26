@@ -11,6 +11,9 @@ importers:
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
+      esbuild:
+        specifier: ^0.20.0
+        version: 0.20.2
       turbo:
         specifier: ^2.5.3
         version: 2.7.5

@@ -19,6 +19,8 @@ pub mod events;
 pub mod http_transport;
 pub mod local_tools;
 pub mod mcp_transport;
+pub mod models;
+pub mod models_api;
 pub mod remote_mcp_client;
 pub mod rig_agent;
 pub mod rig_tools;
@@ -44,6 +46,8 @@ pub use local_tools::{
 pub use mcp_transport::{
     JsonRpcError, JsonRpcResponse, McpError, McpTransport, ToolContent, ToolDefinition, ToolResult,
 };
+pub use models::{get_models_for_provider, ModelInfo, ProviderInfo, PROVIDERS};
+pub use models_api::{fetch_models_for_provider, FetchedModel, ModelFetchHttp};
 pub use remote_mcp_client::RemoteMcpClient;
 pub use rig_agent::{process_stream, EventCollector, StreamEventHandler};
 pub use rig_tools::{build_tool_set, McpToolAdapter};

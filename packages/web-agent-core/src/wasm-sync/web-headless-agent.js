@@ -5,7 +5,8 @@ import { Pollable } from '@tjfontaine/wasi-shims/poll-impl.js';
 import { insecureSeed as insecureSeed$1 } from '@tjfontaine/wasi-shims/random.js';
 import { InputStream, OutputStream } from '@tjfontaine/wasi-shims/streams.js';
 import { Fields, FutureIncomingResponse, IncomingBody, IncomingResponse, OutgoingBody, OutgoingRequest, RequestOptions, outgoingHandler } from '@tjfontaine/wasi-shims/wasi-http-impl.js';
-const { subscribeDuration } = monotonicClock;
+const { now,
+  subscribeDuration } = monotonicClock;
 const { Error: Error$1 } = error;
 const { getEnvironment } = environment;
 const { exit } = exit$1;
@@ -1117,9 +1118,25 @@ function trampoline19() {
   return handle0;
 }
 
+
+function trampoline20() {
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"] [Instruction::CallInterface] (async? sync, @ enter)');
+  const _interface_call_currentTaskID = startCurrentTask(0, false, 'now');
+  const ret = now();
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"] [Instruction::CallInterface] (sync, @ post-call)');
+  endCurrentTask(0);
+  _debugLog('[iface="wasi:clocks/monotonic-clock@0.2.9", function="now"][Instruction::Return]', {
+    funcName: 'now',
+    paramCount: 1,
+    async: false,
+    postReturn: false
+  });
+  return toUint64(ret);
+}
+
 let exports1;
 
-function trampoline20(arg0) {
+function trampoline21(arg0) {
   let variant0;
   if (arg0) {
     variant0= {
@@ -1150,7 +1167,7 @@ let memory0;
 let realloc0;
 let realloc1;
 
-function trampoline21(arg0, arg1) {
+function trampoline22(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable4.get(rep2);
@@ -1206,7 +1223,7 @@ const captureTable2= new Map();
 let captureCnt2 = 0;
 handleTables[2] = handleTable2;
 
-function trampoline22(arg0, arg1) {
+function trampoline23(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable7[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable7.get(rep2);
@@ -1269,7 +1286,7 @@ const captureTable8= new Map();
 let captureCnt8 = 0;
 handleTables[8] = handleTable8;
 
-function trampoline23(arg0, arg1) {
+function trampoline24(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -1328,7 +1345,7 @@ function trampoline23(arg0, arg1) {
 }
 
 
-function trampoline24(arg0, arg1, arg2, arg3) {
+function trampoline25(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable8[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable8.get(rep2);
@@ -1779,7 +1796,7 @@ function trampoline24(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline25(arg0, arg1, arg2, arg3) {
+function trampoline26(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -1897,7 +1914,7 @@ function trampoline25(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline26(arg0, arg1, arg2, arg3, arg4) {
+function trampoline27(arg0, arg1, arg2, arg3, arg4) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -1979,7 +1996,7 @@ function trampoline26(arg0, arg1, arg2, arg3, arg4) {
 }
 
 
-function trampoline27(arg0, arg1, arg2, arg3) {
+function trampoline28(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -2039,7 +2056,7 @@ function trampoline27(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline28(arg0, arg1, arg2, arg3) {
+function trampoline29(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -2099,7 +2116,7 @@ function trampoline28(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline29(arg0, arg1) {
+function trampoline30(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -2158,7 +2175,7 @@ function trampoline29(arg0, arg1) {
 }
 
 
-function trampoline30(arg0, arg1) {
+function trampoline31(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable6[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable6.get(rep2);
@@ -2217,7 +2234,7 @@ function trampoline30(arg0, arg1) {
 }
 
 
-function trampoline31(arg0, arg1) {
+function trampoline32(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable10[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable10.get(rep2);
@@ -2679,7 +2696,7 @@ function trampoline31(arg0, arg1) {
 }
 
 
-function trampoline32(arg0, arg1, arg2, arg3, arg4, arg5) {
+function trampoline33(arg0, arg1, arg2, arg3, arg4, arg5) {
   var handle1 = arg0;
   var rep2 = handleTable4[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable4.get(rep2);
@@ -2756,7 +2773,7 @@ const captureTable0= new Map();
 let captureCnt0 = 0;
 handleTables[0] = handleTable0;
 
-function trampoline33(arg0, arg1, arg2) {
+function trampoline34(arg0, arg1, arg2) {
   var handle1 = arg0;
   var rep2 = handleTable2[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable2.get(rep2);
@@ -2837,7 +2854,7 @@ function trampoline33(arg0, arg1, arg2) {
 }
 
 
-function trampoline34(arg0, arg1, arg2, arg3) {
+function trampoline35(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable3[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable3.get(rep2);
@@ -2914,7 +2931,7 @@ function trampoline34(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline35(arg0, arg1, arg2, arg3) {
+function trampoline36(arg0, arg1, arg2, arg3) {
   var handle1 = arg0;
   var rep2 = handleTable9[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable9.get(rep2);
@@ -3375,7 +3392,7 @@ function trampoline35(arg0, arg1, arg2, arg3) {
 }
 
 
-function trampoline36(arg0) {
+function trampoline37(arg0) {
   _debugLog('[iface="wasi:random/insecure-seed@0.2.9", function="insecure-seed"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'insecure-seed');
   const ret = insecureSeed();
@@ -3393,7 +3410,7 @@ function trampoline36(arg0) {
 }
 
 
-function trampoline37(arg0, arg1) {
+function trampoline38(arg0, arg1) {
   var handle1 = arg0;
   var rep2 = handleTable0[(handle1 << 1) + 1] & ~T_FLAG;
   var rsc0 = captureTable0.get(rep2);
@@ -3425,7 +3442,7 @@ function trampoline37(arg0, arg1) {
 }
 
 
-function trampoline38(arg0) {
+function trampoline39(arg0) {
   _debugLog('[iface="wasi:cli/environment@0.2.9", function="get-environment"] [Instruction::CallInterface] (async? sync, @ enter)');
   const _interface_call_currentTaskID = startCurrentTask(0, false, 'get-environment');
   const ret = getEnvironment();
@@ -3460,6 +3477,9 @@ let exports3;
 let postReturn0;
 let postReturn1;
 let postReturn2;
+let postReturn3;
+let postReturn4;
+let postReturn5;
 function trampoline5(handle) {
   const handleEntry = rscTableRemove(handleTable1, handle);
   if (handleEntry.own) {
@@ -4198,6 +4218,191 @@ function clearHistory(arg0) {
     postReturn: false
   });
 }
+let exports1ListProviders;
+
+function listProviders() {
+  if (!_initialized) throwUninitialized();
+  _debugLog('[iface="list-providers", function="list-providers"][Instruction::CallWasm] enter', {
+    funcName: 'list-providers',
+    paramCount: 0,
+    async: false,
+    postReturn: true,
+  });
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'exports1ListProviders');
+  const ret = exports1ListProviders();
+  endCurrentTask(0);
+  var len4 = dataView(memory0).getUint32(ret + 4, true);
+  var base4 = dataView(memory0).getUint32(ret + 0, true);
+  var result4 = [];
+  for (let i = 0; i < len4; i++) {
+    const base = base4 + i * 28;
+    var ptr0 = dataView(memory0).getUint32(base + 0, true);
+    var len0 = dataView(memory0).getUint32(base + 4, true);
+    var result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
+    var ptr1 = dataView(memory0).getUint32(base + 8, true);
+    var len1 = dataView(memory0).getUint32(base + 12, true);
+    var result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
+    let variant3;
+    if (dataView(memory0).getUint8(base + 16, true)) {
+      var ptr2 = dataView(memory0).getUint32(base + 20, true);
+      var len2 = dataView(memory0).getUint32(base + 24, true);
+      var result2 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr2, len2));
+      variant3 = result2;
+    } else {
+      variant3 = undefined;
+    }
+    result4.push({
+      id: result0,
+      name: result1,
+      defaultBaseUrl: variant3,
+    });
+  }
+  _debugLog('[iface="list-providers", function="list-providers"][Instruction::Return]', {
+    funcName: 'list-providers',
+    paramCount: 1,
+    async: false,
+    postReturn: true
+  });
+  const retCopy = result4;
+  
+  let cstate = getOrCreateAsyncState(0);
+  cstate.mayLeave = false;
+  postReturn3(ret);
+  cstate.mayLeave = true;
+  return retCopy;
+  
+}
+let exports1ListModels;
+
+function listModels(arg0) {
+  if (!_initialized) throwUninitialized();
+  var ptr0 = utf8Encode(arg0, realloc0, memory0);
+  var len0 = utf8EncodedLen;
+  _debugLog('[iface="list-models", function="list-models"][Instruction::CallWasm] enter', {
+    funcName: 'list-models',
+    paramCount: 2,
+    async: false,
+    postReturn: true,
+  });
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'exports1ListModels');
+  const ret = exports1ListModels(ptr0, len0);
+  endCurrentTask(0);
+  var len3 = dataView(memory0).getUint32(ret + 4, true);
+  var base3 = dataView(memory0).getUint32(ret + 0, true);
+  var result3 = [];
+  for (let i = 0; i < len3; i++) {
+    const base = base3 + i * 16;
+    var ptr1 = dataView(memory0).getUint32(base + 0, true);
+    var len1 = dataView(memory0).getUint32(base + 4, true);
+    var result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
+    var ptr2 = dataView(memory0).getUint32(base + 8, true);
+    var len2 = dataView(memory0).getUint32(base + 12, true);
+    var result2 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr2, len2));
+    result3.push({
+      id: result1,
+      name: result2,
+    });
+  }
+  _debugLog('[iface="list-models", function="list-models"][Instruction::Return]', {
+    funcName: 'list-models',
+    paramCount: 1,
+    async: false,
+    postReturn: true
+  });
+  const retCopy = result3;
+  
+  let cstate = getOrCreateAsyncState(0);
+  cstate.mayLeave = false;
+  postReturn4(ret);
+  cstate.mayLeave = true;
+  return retCopy;
+  
+}
+let exports1FetchModels;
+
+function fetchModels(arg0, arg1, arg2) {
+  if (!_initialized) throwUninitialized();
+  var ptr0 = utf8Encode(arg0, realloc0, memory0);
+  var len0 = utf8EncodedLen;
+  var ptr1 = utf8Encode(arg1, realloc0, memory0);
+  var len1 = utf8EncodedLen;
+  var variant3 = arg2;
+  let variant3_0;
+  let variant3_1;
+  let variant3_2;
+  if (variant3 === null || variant3=== undefined) {
+    variant3_0 = 0;
+    variant3_1 = 0;
+    variant3_2 = 0;
+  } else {
+    const e = variant3;
+    var ptr2 = utf8Encode(e, realloc0, memory0);
+    var len2 = utf8EncodedLen;
+    variant3_0 = 1;
+    variant3_1 = ptr2;
+    variant3_2 = len2;
+  }
+  _debugLog('[iface="fetch-models", function="fetch-models"][Instruction::CallWasm] enter', {
+    funcName: 'fetch-models',
+    paramCount: 7,
+    async: false,
+    postReturn: true,
+  });
+  const _wasm_call_currentTaskID = startCurrentTask(0, false, 'exports1FetchModels');
+  const ret = exports1FetchModels(ptr0, len0, ptr1, len1, variant3_0, variant3_1, variant3_2);
+  endCurrentTask(0);
+  let variant8;
+  if (dataView(memory0).getUint8(ret + 0, true)) {
+    var ptr7 = dataView(memory0).getUint32(ret + 4, true);
+    var len7 = dataView(memory0).getUint32(ret + 8, true);
+    var result7 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr7, len7));
+    variant8= {
+      tag: 'err',
+      val: result7
+    };
+  } else {
+    var len6 = dataView(memory0).getUint32(ret + 8, true);
+    var base6 = dataView(memory0).getUint32(ret + 4, true);
+    var result6 = [];
+    for (let i = 0; i < len6; i++) {
+      const base = base6 + i * 16;
+      var ptr4 = dataView(memory0).getUint32(base + 0, true);
+      var len4 = dataView(memory0).getUint32(base + 4, true);
+      var result4 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr4, len4));
+      var ptr5 = dataView(memory0).getUint32(base + 8, true);
+      var len5 = dataView(memory0).getUint32(base + 12, true);
+      var result5 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr5, len5));
+      result6.push({
+        id: result4,
+        name: result5,
+      });
+    }
+    variant8= {
+      tag: 'ok',
+      val: result6
+    };
+  }
+  _debugLog('[iface="fetch-models", function="fetch-models"][Instruction::Return]', {
+    funcName: 'fetch-models',
+    paramCount: 1,
+    async: false,
+    postReturn: true
+  });
+  const retCopy = variant8;
+  
+  let cstate = getOrCreateAsyncState(0);
+  cstate.mayLeave = false;
+  postReturn5(ret);
+  cstate.mayLeave = true;
+  
+  
+  
+  if (typeof retCopy === 'object' && retCopy.tag === 'err') {
+    throw new ComponentError(retCopy.val);
+  }
+  return retCopy.val;
+  
+}
 
 let _initialized = false;
 export const $init = (() => {
@@ -4212,6 +4417,7 @@ export const $init = (() => {
         'get-stderr': trampoline19,
       },
       'wasi:clocks/monotonic-clock@0.2.4': {
+        now: trampoline20,
         'subscribe-duration': trampoline3,
       },
       'wasi:http/outgoing-handler@0.2.9': {
@@ -4289,7 +4495,7 @@ export const $init = (() => {
         'get-environment': exports0['20'],
       },
       'wasi:cli/exit@0.2.6': {
-        exit: trampoline20,
+        exit: trampoline21,
       },
       'wasi:cli/stderr@0.2.6': {
         'get-stderr': trampoline19,
@@ -4308,33 +4514,36 @@ export const $init = (() => {
     ({ exports: exports3 } = yield instantiateCore(yield module3, {
       '': {
         $imports: exports0.$imports,
-        '0': trampoline21,
-        '1': trampoline22,
-        '10': trampoline31,
-        '11': trampoline32,
-        '12': trampoline33,
-        '13': trampoline34,
-        '14': trampoline35,
-        '15': trampoline36,
-        '16': trampoline37,
+        '0': trampoline22,
+        '1': trampoline23,
+        '10': trampoline32,
+        '11': trampoline33,
+        '12': trampoline34,
+        '13': trampoline35,
+        '14': trampoline36,
+        '15': trampoline37,
+        '16': trampoline38,
         '17': exports2.environ_get,
         '18': exports2.environ_sizes_get,
         '19': exports2.proc_exit,
-        '2': trampoline23,
-        '20': trampoline38,
-        '21': trampoline34,
-        '3': trampoline24,
-        '4': trampoline25,
-        '5': trampoline26,
-        '6': trampoline27,
-        '7': trampoline28,
-        '8': trampoline29,
-        '9': trampoline30,
+        '2': trampoline24,
+        '20': trampoline39,
+        '21': trampoline35,
+        '3': trampoline25,
+        '4': trampoline26,
+        '5': trampoline27,
+        '6': trampoline28,
+        '7': trampoline29,
+        '8': trampoline30,
+        '9': trampoline31,
       },
     }));
     postReturn0 = exports1.cabi_post_create;
     postReturn1 = exports1.cabi_post_poll;
     postReturn2 = exports1['cabi_post_get-history'];
+    postReturn3 = exports1['cabi_post_list-providers'];
+    postReturn4 = exports1['cabi_post_list-models'];
+    postReturn5 = exports1['cabi_post_fetch-models'];
     _initialized = true;
     exports1Create = exports1.create;
     exports1Destroy = exports1.destroy;
@@ -4345,6 +4554,9 @@ export const $init = (() => {
     exports1Execute = exports1.execute;
     exports1GetHistory = exports1['get-history'];
     exports1ClearHistory = exports1['clear-history'];
+    exports1ListProviders = exports1['list-providers'];
+    exports1ListModels = exports1['list-models'];
+    exports1FetchModels = exports1['fetch-models'];
   })();
   let promise, resolve, reject;
   function runNext (value) {
@@ -4369,4 +4581,4 @@ export const $init = (() => {
   return promise || maybeSyncReturn;
 })();
 
-export { cancel, clearHistory, create, destroy, execute, getHistory, plan, poll, send,  }
+export { cancel, clearHistory, create, destroy, execute, fetchModels, getHistory, listModels, listProviders, plan, poll, send,  }

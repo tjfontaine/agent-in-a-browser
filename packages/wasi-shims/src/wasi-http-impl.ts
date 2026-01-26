@@ -954,28 +954,49 @@ export class FutureIncomingResponse {
 
     /**
      * Get the response. Returns:
-     * - undefined: not ready (sync mode only - in JSPI mode we await)
-     * - { tag: 'ok', val: { tag: 'ok', val: IncomingResponse } }: success
-     * - { tag: 'ok', val: { tag: 'err', val: ErrorCode } }: HTTP error
+     * - undefined: not ready yet (sync mode - call subscribe().block() first)
+     * - { tag: 'ok', val: result }: success
+     * - Promise<...>: JSPI mode - await for result
      * 
-     * In JSPI mode, this method is async and will block until the response is ready.
-     * This allows callers that don't properly use subscribe() + block() to still work.
+     * This method works in BOTH sync and JSPI modes:
+     * - Sync mode: After subscribe().block(), _result is set, returns immediately
+     * - JSPI mode: If _result not ready, returns Promise that resolves to result
      */
-    async get(): Promise<{ tag: 'ok', val: WasmResult<IncomingResponse> } | undefined> {
+    get(): { tag: 'ok', val: WasmResult<IncomingResponse> } | undefined | Promise<{ tag: 'ok', val: WasmResult<IncomingResponse> } | undefined> {
         console.log('[FutureIncomingResponse] get() called, result:', this._result ? 'ready' : 'not ready');
 
-        // If we have a pending promise, await it to let JSPI suspend
-        // This is the key fix: callers spinning on get() will suspend here
-        if (this._result === null && this._promise) {
-            console.log('[FutureIncomingResponse] get() awaiting promise...');
-            await this._promise;
-            console.log('[FutureIncomingResponse] get() promise resolved');
+        // If result is already available, return immediately (works for both modes)
+        // WIT spec: option<result<result<incoming-response, error-code>>>
+        // - outer result wraps the inner _result for "at most once" call semantics
+        if (this._result !== null) {
+            console.log('[FutureIncomingResponse] _result.tag:', this._result.tag);
+            console.log('[FutureIncomingResponse] _result.val:', this._result.val?.constructor?.name);
+            const returnVal = { tag: 'ok' as const, val: this._result };
+            console.log('[FutureIncomingResponse] returning:', JSON.stringify({
+                tag: returnVal.tag,
+                valTag: returnVal.val?.tag,
+                valValClass: returnVal.val?.val?.constructor?.name
+            }));
+            return returnVal;
         }
 
-        if (this._result === null) {
-            return undefined; // Not ready (shouldn't happen after await above)
+        // Result not ready
+        // In JSPI mode: return Promise that jco can await
+        // In sync mode: return undefined - jco expects poll()/block() to be called first
+        if (hasJSPI && this._promise) {
+            console.log('[FutureIncomingResponse] JSPI mode - returning Promise');
+            return this._promise.then(() => {
+                if (this._result === null) {
+                    return undefined;
+                }
+                return { tag: 'ok', val: this._result };
+            });
         }
-        return { tag: 'ok', val: this._result };
+
+        // Sync mode: result not ready, return undefined (option::none)
+        // The caller should use subscribe().block() first to wait for the result
+        console.log('[FutureIncomingResponse] Sync mode - returning undefined (not ready)');
+        return undefined;
     }
 }
 
@@ -1132,19 +1153,35 @@ export const outgoingHandler = {
     handle(request: OutgoingRequest, _options: RequestOptions | null): FutureIncomingResponse {
         // Build the URL
         const scheme = request.scheme();
+        // DEBUG: Log raw scheme value
+        console.log('[http] DEBUG raw scheme:', JSON.stringify(scheme));
+
         // Handle WASI scheme tags - may be 'HTTPS', 'https', or { tag: 'https' }
+        // Preserve custom schemes like 'wasm' for local MCP routing
         let schemeStr = 'http';
         if (scheme) {
             const tag = (typeof scheme === 'string' ? scheme : scheme.tag) || '';
-            if (tag.toLowerCase() === 'https') {
+            const tagLower = tag.toLowerCase();
+            console.log('[http] DEBUG scheme tag:', tag, 'tagLower:', tagLower);
+
+            if (tagLower === 'https') {
                 schemeStr = 'https';
-            } else if (tag.toLowerCase() === 'http') {
+            } else if (tagLower === 'http') {
                 schemeStr = 'http';
+            } else if (tagLower === 'other' && typeof scheme === 'object' && 'val' in scheme) {
+                // Custom scheme from WASI { tag: 'other', val: 'wasm' }
+                schemeStr = (scheme as { tag: string; val: string }).val || 'http';
+                console.log('[http] DEBUG using other.val:', schemeStr);
+            } else if (tagLower && tagLower !== 'other') {
+                // Non-standard scheme passed directly (e.g., 'wasm')
+                schemeStr = tagLower;
+                console.log('[http] DEBUG using tagLower:', schemeStr);
             }
         }
         const authority = request.authority() || '';
         const path = request.pathWithQuery() || '/';
         const url = `${schemeStr}://${authority}${path}`;
+        console.log('[http] DEBUG constructed URL:', url);
 
         // Build method
         const methodObj = request.method();
@@ -1159,6 +1196,66 @@ export const outgoingHandler = {
         // Get the request body
         const bodyBytes = request.getBodyBytes();
         const body = bodyBytes.length > 0 ? bodyBytes : null;
+
+        // ============ Synchronous Local MCP (wasm://) ============
+        // For wasm:// URLs, use synchronous local MCP handler if available
+        // This enables sync mode to work with local MCP servers
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const globalWindow = typeof window !== 'undefined' ? window as any : null;
+
+        if (url.startsWith('wasm://') && globalWindow?._wasmMcpRequestSync) {
+            console.log('[http] Using sync local MCP transport:', method, url);
+            try {
+                // Call local MCP handler synchronously
+                const syncResult = globalWindow._wasmMcpRequestSync(method, url, headers, body) as {
+                    status: number;
+                    headers: [string, Uint8Array][];
+                    body: Uint8Array;
+                };
+
+                // Return FutureIncomingResponse with resolved data (not Promise)
+                // This triggers the sync path in FutureIncomingResponse constructor
+                return new FutureIncomingResponse({
+                    status: syncResult.status,
+                    headers: syncResult.headers,
+                    body: syncResult.body
+                });
+            } catch (err) {
+                console.error('[http] Sync local MCP error:', err);
+                // Return error response
+                const errorBody = new TextEncoder().encode(String(err));
+                return new FutureIncomingResponse({
+                    status: 500,
+                    headers: [['content-type', new TextEncoder().encode('text/plain')]],
+                    body: errorBody
+                });
+            }
+        }
+
+        // ============ iOS Native Transport ============
+        // Route ALL HTTP requests through Swift URLSession to avoid CORS
+        // This is detected by the presence of window._iosHttpRequest set by web-runtime.html
+        if (globalWindow?._iosHttpRequest) {
+            console.log('[http] Using iOS native transport:', method, url);
+
+            // Make async request through Swift bridge
+            // The Promise will be resolved when Swift calls _httpCallback
+            const iosPromise = globalWindow._iosHttpRequest(method, url, headers, body) as Promise<{
+                status: number;
+                headers: [string, Uint8Array][];
+                body: Uint8Array;
+            }>;
+
+            // Return FutureIncomingResponse with the iOS promise
+            return new FutureIncomingResponse(
+                iosPromise.then((response) => ({
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body
+                }))
+            );
+        }
+
 
         // Route WebLLM requests to local inference engine
         if (isWebLLMUrl(url)) {

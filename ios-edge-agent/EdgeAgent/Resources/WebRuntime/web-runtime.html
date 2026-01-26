@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="module">
+        // iOS Edge Agent Web Runtime
+        // Loads the WASM headless agent and bridges to Swift via WKScriptMessageHandler
+
+        // ============ Console Log Forwarding ============
+        // Override console methods to forward to Swift for debugging
+        const originalConsole = {
+            log: console.log.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console),
+            info: console.info.bind(console)
+        };
+
+        function forwardToSwift(level, args) {
+            try {
+                const message = args.map(arg => {
+                    if (typeof arg === 'object') {
+                        try { return JSON.stringify(arg); } catch { return String(arg); }
+                    }
+                    return String(arg);
+                }).join(' ');
+                window.webkit?.messageHandlers?.console?.postMessage({ level, message });
+            } catch (e) {
+                // Ignore forwarding errors
+            }
+        }
+
+        console.log = (...args) => { originalConsole.log(...args); forwardToSwift('log', args); };
+        console.warn = (...args) => { originalConsole.warn(...args); forwardToSwift('warn', args); };
+        console.error = (...args) => { originalConsole.error(...args); forwardToSwift('error', args); };
+        console.info = (...args) => { originalConsole.info(...args); forwardToSwift('info', args); };
+
+        let agentHandle = null;
+        let pollInterval = null;
+
+        // ============ iOS HTTP Bridge ============
+        // Routes HTTP requests through native Swift URLSession to avoid CORS
+        // OR through local MCP WASM module for wasm:// URLs
+        const pendingHttpRequests = new Map();
+        let httpRequestId = 0;
+
+        // MCP WASM module reference (loaded during init) - stored on window for global access
+        window._mcpIncomingHandler = null;
+
+        // Pre-loaded HTTP shim for sync MCP calls (loaded during init)
+        let httpShimCache = null;
+
+        // MCP server's HTTP shim - MUST use these classes when calling MCP handler
+        // to avoid cross-module instanceof check failures
+        let mcpHttpShimCache = null;
+
+        // Called by wasi-http-impl.js to make HTTP request
+        // Routes wasm:// URLs to local MCP handler, others to Swift
+        window._iosHttpRequest = async (method, url, headers, body) => {
+            // Route wasm:// URLs to local MCP WASM module
+            if (url.startsWith('wasm://')) {
+                console.log('[WebRuntime] Local MCP request:', method, url);
+                return _handleLocalMcpRequest(method, url, headers, body);
+            }
+
+            // Route to Swift for real HTTP requests
+            const id = String(httpRequestId++);
+            console.log('[WebRuntime] iOS HTTP request:', id, method, url);
+
+            return new Promise((resolve, reject) => {
+                pendingHttpRequests.set(id, { resolve, reject });
+
+                // Send to Swift via message handler
+                window.webkit.messageHandlers.agent.postMessage({
+                    type: 'http',
+                    id,
+                    method,
+                    url,
+                    headers,
+                    body: body ? Array.from(body) : null
+                });
+            });
+        };
+
+        // SYNCHRONOUS local MCP request handler - called by wasi-http-impl for wasm:// URLs
+        // This is the key function that enables sync mode to work with local MCP
+        window._wasmMcpRequestSync = function (method, url, headers, body) {
+            console.log('[WebRuntime] _wasmMcpRequestSync called:', method, url);
+
+            if (!window._mcpIncomingHandler) {
+                throw new Error('MCP handler not loaded');
+            }
+            // Use MCP server's HTTP types to avoid cross-module instanceof failures
+            if (!mcpHttpShimCache) {
+                throw new Error('MCP HTTP shim not loaded - call must happen after init');
+            }
+            const { Fields, ResponseOutparam, createIncomingRequest } = mcpHttpShimCache;
+
+            // Convert headers to Fields format
+            const fields = new Fields();
+            for (const [key, value] of Object.entries(headers)) {
+                fields.set(key, [new TextEncoder().encode(value)]);
+            }
+
+            // Create WASI IncomingRequest
+            const bodyText = body ? new TextDecoder().decode(body) : '';
+            const incomingRequest = createIncomingRequest(method, url, fields, bodyText);
+
+            // Capture response via ResponseOutparam
+            let wasmResponse = null;
+            const responseOutparam = new ResponseOutparam((result) => {
+                if (result.tag === 'err') {
+                    throw result.val;
+                }
+                wasmResponse = result.val;
+            });
+
+            // Call MCP handler SYNCHRONOUSLY
+            console.log('[WebRuntime] Calling MCP incomingHandler.handle (sync)...');
+            window._mcpIncomingHandler.handle(incomingRequest, responseOutparam);
+
+            // Get response if not set via callback
+            if (!wasmResponse) {
+                wasmResponse = responseOutparam.getResponse();
+            }
+
+            if (!wasmResponse) {
+                throw new Error('No response from MCP handler');
+            }
+
+            console.log('[WebRuntime] Sync MCP response status:', wasmResponse.statusCode());
+
+            // Convert response to expected format
+            const respHeaders = wasmResponse.headers().entries().map(([k, v]) => {
+                return [String(k), v];
+            });
+
+            // Collect body chunks
+            const bodyChunks = wasmResponse._bodyChunks || [];
+            const totalLength = bodyChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            const responseBody = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of bodyChunks) {
+                responseBody.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return {
+                status: wasmResponse.statusCode(),
+                headers: respHeaders,
+                body: responseBody
+            };
+        };
+
+        // Handle local MCP requests via in-process WASM module (async version for iOS transport)
+        async function _handleLocalMcpRequest(method, url, headers, body) {
+            if (!window._mcpIncomingHandler) {
+                throw new Error('MCP handler not loaded');
+            }
+
+            // Use MCP server's HTTP types to avoid cross-module instanceof failures
+            const httpShim = mcpHttpShimCache || await import('local://mcp-server-sync/shims/wasi-http-impl.js');
+            const { Fields, ResponseOutparam, createIncomingRequest } = httpShim;
+
+            // Convert headers to Fields format
+            const fields = new Fields();
+            for (const [key, value] of Object.entries(headers)) {
+                fields.set(key, [new TextEncoder().encode(value)]);
+            }
+
+            // Create WASI IncomingRequest
+            const bodyText = body ? new TextDecoder().decode(body) : '';
+            const incomingRequest = createIncomingRequest(method, url, fields, bodyText);
+
+            // Capture response via ResponseOutparam
+            let wasmResponse = null;
+            const responseOutparam = new ResponseOutparam((result) => {
+                if (result.tag === 'err') {
+                    throw result.val;
+                }
+                wasmResponse = result.val;
+            });
+
+            // Call MCP handler (sync mode - no Promise)
+            console.log('[WebRuntime] Calling MCP incomingHandler.handle...');
+            window._mcpIncomingHandler.handle(incomingRequest, responseOutparam);
+
+            // Get response if not set via callback
+            if (!wasmResponse) {
+                wasmResponse = responseOutparam.getResponse();
+            }
+
+            if (!wasmResponse) {
+                throw new Error('No response from MCP handler');
+            }
+
+            console.log('[WebRuntime] MCP response status:', wasmResponse.statusCode());
+
+            // Convert response to expected format
+            const respHeaders = wasmResponse.headers().entries().map(([k, v]) => {
+                return [String(k), v];
+            });
+
+            // Collect body chunks
+            const bodyChunks = wasmResponse._bodyChunks || [];
+            const totalLength = bodyChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            const responseBody = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of bodyChunks) {
+                responseBody.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return {
+                status: wasmResponse.statusCode(),
+                headers: respHeaders,
+                body: responseBody
+            };
+        }
+
+        // Called by Swift when HTTP response is ready
+        window._httpCallback = (id, responseJson) => {
+            console.log('[WebRuntime] HTTP callback:', id);
+            const pending = pendingHttpRequests.get(id);
+            if (pending) {
+                pendingHttpRequests.delete(id);
+                try {
+                    const response = typeof responseJson === 'string'
+                        ? JSON.parse(responseJson)
+                        : responseJson;
+
+                    if (response.error) {
+                        pending.reject(new Error(response.error));
+                    } else {
+                        // Convert body array back to Uint8Array
+                        const body = response.body
+                            ? new Uint8Array(response.body)
+                            : new Uint8Array(0);
+
+                        // Convert header arrays to proper format
+                        const headers = (response.headers || []).map(([name, value]) => {
+                            const valueBytes = Array.isArray(value)
+                                ? new Uint8Array(value)
+                                : new TextEncoder().encode(value);
+                            return [name, valueBytes];
+                        });
+
+                        pending.resolve({
+                            status: response.status,
+                            headers,
+                            body
+                        });
+                    }
+                } catch (err) {
+                    pending.reject(err);
+                }
+            } else {
+                console.warn('[WebRuntime] No pending request for id:', id);
+            }
+        };
+
+        // Check if we're in iOS environment
+        window._isIOSEnvironment = () => {
+            return typeof window.webkit?.messageHandlers?.agent !== 'undefined';
+        };
+
+        // Import the headless agent directly
+        // For iOS, we don't need the lazy-modules layer (tsx-engine, sqlite, etc.)
+        // since we only run the headless AI agent
+        (async () => {
+            try {
+                // IMPORTANT: Load MCP server FIRST so mcpIncomingHandler is set
+                // before headless agent makes any wasm:// HTTP calls during agent.create()
+                console.log('[WebRuntime] Loading MCP server first...');
+                try {
+                    // Pre-load HTTP shim for sync MCP calls
+                    console.log('[WebRuntime] Pre-loading HTTP shim...');
+                    httpShimCache = await import('local://web-headless-agent-sync/shims/wasi-http-impl.js');
+                    console.log('[WebRuntime] HTTP shim cached');
+
+                    const mcpModule = await import('local://mcp-server-sync/ts-runtime-mcp.js');
+                    console.log('[WebRuntime] MCP module imported, exports:', Object.keys(mcpModule));
+                    // With --tla-compat, await $init before accessing exports
+                    if (mcpModule.$init) {
+                        console.log('[WebRuntime] Awaiting MCP $init...');
+                        await mcpModule.$init;
+                        console.log('[WebRuntime] MCP $init completed');
+                    } else {
+                        console.log('[WebRuntime] No $init export, module should be ready');
+                    }
+                    window._mcpIncomingHandler = mcpModule.incomingHandler;
+                    console.log('[WebRuntime] mcpIncomingHandler set:', window._mcpIncomingHandler ? 'OK' : 'NULL!');
+                    if (!window._mcpIncomingHandler) {
+                        console.error('[WebRuntime] Available MCP exports:', Object.keys(mcpModule));
+                    }
+                    console.log('[WebRuntime] MCP server loaded');
+
+                    // Load MCP server's HTTP shim for calling its handler
+                    console.log('[WebRuntime] Loading MCP HTTP shim...');
+                    mcpHttpShimCache = await import('local://mcp-server-sync/shims/wasi-http-impl.js');
+                    console.log('[WebRuntime] MCP HTTP shim cached');
+                } catch (mcpError) {
+                    console.warn('[WebRuntime] MCP server not available:', mcpError.message);
+                    console.error('[WebRuntime] MCP load error stack:', mcpError.stack);
+                    // Continue without MCP - agent can still work with remote tools
+                }
+
+                console.log('[WebRuntime] Loading headless agent...');
+
+                // Import using local:// scheme - use sync build (no JSPI required for Safari/iOS)
+                const headlessAgent = await import('local://web-headless-agent-sync/web-headless-agent-ios.js');
+
+                // Store for later use
+                window._headlessAgent = headlessAgent;
+
+                console.log('[WebRuntime] Headless agent loaded');
+
+                // Signal ready to Swift
+                window.webkit.messageHandlers.agent.postMessage({ type: 'ready' });
+
+            } catch (error) {
+                console.error('[WebRuntime] Initialization error:', error);
+                window.webkit.messageHandlers.agent.postMessage({
+                    type: 'error',
+                    error: error.message
+                });
+            }
+        })();
+
+        // Create agent with configuration (called from Swift)
+        // NOTE: Must NOT be async - WKWebView can't handle Promise returns
+        window.agentCreate = (configJson) => {
+            // Use IIFE to handle async work without returning a Promise
+            (async () => {
+                try {
+                    console.log('[WebRuntime] Raw configJson:', configJson);
+                    const config = JSON.parse(configJson);
+                    console.log('[WebRuntime] Parsed config:', JSON.stringify(config, null, 2));
+                    console.log('[WebRuntime] Creating agent with provider:', config.provider, 'model:', config.model);
+
+                    const result = await window._headlessAgent.create(config);
+                    console.log('[WebRuntime] create() result:', JSON.stringify(result), typeof result);
+
+                    // Handle both Result<handle, err> and plain number returns
+                    if (typeof result === 'number') {
+                        // Plain number return - use it directly as handle
+                        agentHandle = result;
+                    } else if (result && result.tag === 'err') {
+                        throw new Error(result.val);
+                    } else if (result && result.tag === 'ok') {
+                        agentHandle = result.val;
+                    } else {
+                        throw new Error('Unexpected create() result type: ' + JSON.stringify(result));
+                    }
+
+                    console.log('[WebRuntime] agentHandle:', agentHandle, typeof agentHandle);
+
+                    window.webkit.messageHandlers.agent.postMessage({
+                        type: 'handle',
+                        handle: agentHandle
+                    });
+
+                    startPolling();
+
+                } catch (error) {
+                    console.error('[WebRuntime] agentCreate error:', error);
+                    window.webkit.messageHandlers.agent.postMessage({
+                        type: 'error',
+                        error: error.message
+                    });
+                }
+            })();
+            // Return undefined (simple type that WKWebView can handle)
+            return undefined;
+        };
+
+        // Send message to agent (called from Swift)
+        // NOTE: Uses IIFE for async because WKWebView can't handle Promise returns
+        window.agentSend = (message) => {
+            console.log('[WebRuntime] agentSend called with message:', message.substring(0, 100) + '...');
+            console.log('[WebRuntime] agentSend agentHandle:', agentHandle, typeof agentHandle);
+
+            if (agentHandle === null) {
+                console.warn('[WebRuntime] No agent handle');
+                return;
+            }
+
+            // Use IIFE for async since JSPI transpile makes send() return a Promise
+            (async () => {
+                try {
+                    console.log('[WebRuntime] Calling _headlessAgent.send (async)...');
+                    const result = await window._headlessAgent.send(agentHandle, message);
+                    console.log('[WebRuntime] send() result:', JSON.stringify(result), typeof result);
+                    if (result && result.tag === 'err') {
+                        window.webkit.messageHandlers.agent.postMessage({
+                            type: 'event',
+                            event: { type: 'stream_error', error: result.val }
+                        });
+                    }
+                } catch (error) {
+                    console.error('[WebRuntime] agentSend error:', error);
+                    window.webkit.messageHandlers.agent.postMessage({
+                        type: 'event',
+                        event: { type: 'stream_error', error: error.message }
+                    });
+                }
+            })();
+        };
+
+        // Cancel current operation (called from Swift)
+        window.agentCancel = () => {
+            if (agentHandle !== null) {
+                try {
+                    window._headlessAgent.cancel(agentHandle);
+                } catch (error) {
+                    console.error('[WebRuntime] agentCancel error:', error);
+                }
+            }
+        };
+
+        // Clear conversation history (called from Swift)
+        window.agentClearHistory = () => {
+            if (agentHandle !== null) {
+                try {
+                    window._headlessAgent.clearHistory(agentHandle);
+                } catch (error) {
+                    console.error('[WebRuntime] agentClearHistory error:', error);
+                }
+            }
+        };
+
+        // Get list of available providers (called from Swift)
+        // Returns JSON array of {id, name, defaultBaseUrl} objects
+        window.listProviders = () => {
+            try {
+                const providers = window._headlessAgent.listProviders();
+                return JSON.stringify(providers);
+            } catch (error) {
+                console.error('[WebRuntime] listProviders error:', error);
+                return '[]';
+            }
+        };
+
+        // Get list of models for a provider (called from Swift)
+        // Returns JSON array of {id, name} objects
+        window.listModels = (providerId) => {
+            try {
+                const models = window._headlessAgent.listModels(providerId);
+                return JSON.stringify(models);
+            } catch (error) {
+                console.error('[WebRuntime] listModels error:', error);
+                return '[]';
+            }
+        };
+
+        // Poll for events and relay to Swift
+        // NOTE: poll() is async with JSPI transpile, so we use an async loop
+        function startPolling() {
+            if (pollInterval) {
+                cancelAnimationFrame(pollInterval);
+            }
+
+            const poll = async () => {
+                if (agentHandle === null) {
+                    pollInterval = requestAnimationFrame(poll);
+                    return;
+                }
+
+                try {
+                    // poll() returns a Promise now, so we await it
+                    let event;
+                    while ((event = await window._headlessAgent.poll(agentHandle)) !== undefined && event !== null) {
+                        const mapped = mapEvent(event);
+                        if (mapped) {
+                            window.webkit.messageHandlers.agent.postMessage({
+                                type: 'event',
+                                event: mapped
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error('[WebRuntime] poll error:', error, 'message:', error?.message, 'stack:', error?.stack);
+                }
+
+                pollInterval = requestAnimationFrame(poll);
+            };
+
+            poll();
+        }
+
+        // Map WIT AgentEvent variants to plain JS objects
+        function mapEvent(e) {
+            if (!e) return null;
+
+            // Handle tagged union format from jco
+            if (e.tag !== undefined) {
+                switch (e.tag) {
+                    case 'stream-start': return { type: 'stream_start' };
+                    case 'stream-chunk': return { type: 'stream_chunk', text: e.val };
+                    case 'stream-complete': return { type: 'stream_complete', text: e.val };
+                    case 'stream-error': return { type: 'stream_error', error: e.val };
+                    case 'tool-call': return { type: 'tool_call', name: e.val };
+                    case 'tool-result': return {
+                        type: 'tool_result',
+                        name: e.val.name,
+                        output: e.val.output,
+                        is_error: e.val.isError
+                    };
+                    case 'plan-generated': return { type: 'plan_generated', content: e.val };
+                    case 'task-start': return {
+                        type: 'task_start',
+                        id: e.val.id,
+                        name: e.val.name,
+                        description: e.val.description
+                    };
+                    case 'task-update': return {
+                        type: 'task_update',
+                        id: e.val.id,
+                        status: e.val.status,
+                        progress: e.val.progress
+                    };
+                    case 'task-complete': return {
+                        type: 'task_complete',
+                        id: e.val.id,
+                        success: e.val.success,
+                        output: e.val.output
+                    };
+                    case 'model-loading': return {
+                        type: 'model_loading',
+                        text: e.val.text,
+                        progress: e.val.progress
+                    };
+                    case 'ready': return { type: 'ready' };
+                    default:
+                        console.warn('[WebRuntime] Unknown event tag:', e.tag);
+                        return null;
+                }
+            }
+
+            // Handle object property format (fallback)
+            if ('streamStart' in e) return { type: 'stream_start' };
+            if ('streamChunk' in e) return { type: 'stream_chunk', text: e.streamChunk };
+            if ('streamComplete' in e) return { type: 'stream_complete', text: e.streamComplete };
+            if ('streamError' in e) return { type: 'stream_error', error: e.streamError };
+            if ('toolCall' in e) return { type: 'tool_call', name: e.toolCall };
+            if ('toolResult' in e) return {
+                type: 'tool_result',
+                name: e.toolResult.name,
+                output: e.toolResult.output,
+                is_error: e.toolResult.isError
+            };
+            if ('ready' in e) return { type: 'ready' };
+
+            console.warn('[WebRuntime] Unknown event format:', e);
+            return null;
+        }
+    </script>
+</head>
+
+<body>
+    <!-- Hidden runtime, no UI needed -->
+</body>
+
+</html>

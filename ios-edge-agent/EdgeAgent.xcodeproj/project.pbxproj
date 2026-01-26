@@ -1,0 +1,538 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */; };
+		A1000001201A0001 /* EdgeAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000001101A0001 /* EdgeAgentApp.swift */; };
+		A1000002201A0001 /* ConfigManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002101A0001 /* ConfigManager.swift */; };
+		A1000003201A0001 /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003101A0001 /* AgentEvent.swift */; };
+		A1000004201A0001 /* AgentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004101A0001 /* AgentBridge.swift */; };
+		A1000005201A0001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000005101A0001 /* SettingsView.swift */; };
+		A1000006201A0001 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000006101A0001 /* ChatView.swift */; };
+		A1000007201A0001 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000007101A0001 /* ChatViewModel.swift */; };
+		A1000008201A0001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000008101A0001 /* Assets.xcassets */; };
+		A1000009201A0001 /* WebRuntime in Resources */ = {isa = PBXBuildFile; fileRef = A1000009101A0001 /* WebRuntime */; };
+		A2000001201A0001 /* ConfigManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001101A0001 /* ConfigManagerTests.swift */; };
+		A2000002201A0001 /* AgentEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002101A0001 /* AgentEventTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A2000003101A0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000801A0001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000000401A0001;
+			remoteInfo = EdgeAgent;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalFileSchemeHandler.swift; sourceTree = "<group>"; };
+		A1000000101A0001 /* EdgeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EdgeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000001101A0001 /* EdgeAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAgentApp.swift; sourceTree = "<group>"; };
+		A1000002101A0001 /* ConfigManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManager.swift; sourceTree = "<group>"; };
+		A1000003101A0001 /* AgentEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEvent.swift; sourceTree = "<group>"; };
+		A1000004101A0001 /* AgentBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentBridge.swift; sourceTree = "<group>"; };
+		A1000005101A0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1000006101A0001 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		A1000007101A0001 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		A1000008101A0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1000009101A0001 /* WebRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebRuntime; sourceTree = "<group>"; };
+		A100000A101A0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000000101A0001 /* EdgeAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EdgeAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001101A0001 /* ConfigManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManagerTests.swift; sourceTree = "<group>"; };
+		A2000002101A0001 /* AgentEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1000000301A0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2000000301A0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1000000001A0001 = {
+			isa = PBXGroup;
+			children = (
+				A1000000011A0001 /* EdgeAgent */,
+				A2000000091A0001 /* EdgeAgentTests */,
+				A1000000021A0001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1000000011A0001 /* EdgeAgent */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000031A0001 /* App */,
+				A1000000041A0001 /* Views */,
+				A1000000051A0001 /* ViewModels */,
+				A1000000061A0001 /* Bridge */,
+				A1000000071A0001 /* Models */,
+				A1000000081A0001 /* Resources */,
+				A100000A101A0001 /* Info.plist */,
+			);
+			path = EdgeAgent;
+			sourceTree = "<group>";
+		};
+		A1000000021A0001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000101A0001 /* EdgeAgent.app */,
+				A2000000101A0001 /* EdgeAgentTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1000000031A0001 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A1000001101A0001 /* EdgeAgentApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A1000000041A0001 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A1000005101A0001 /* SettingsView.swift */,
+				A1000006101A0001 /* ChatView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A1000000051A0001 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A1000007101A0001 /* ChatViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		A1000000061A0001 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				A1000003101A0001 /* AgentEvent.swift */,
+				A1000004101A0001 /* AgentBridge.swift */,
+				30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
+		A1000000071A0001 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1000002101A0001 /* ConfigManager.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A1000000081A0001 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A1000008101A0001 /* Assets.xcassets */,
+				A1000009101A0001 /* WebRuntime */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A2000000091A0001 /* EdgeAgentTests */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001101A0001 /* ConfigManagerTests.swift */,
+				A2000002101A0001 /* AgentEventTests.swift */,
+			);
+			path = EdgeAgentTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1000000401A0001 /* EdgeAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000601A0001 /* Build configuration list for PBXNativeTarget "EdgeAgent" */;
+			buildPhases = (
+				A1000000501A0001 /* Sources */,
+				A1000000301A0001 /* Frameworks */,
+				A1000000701A0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EdgeAgent;
+			productName = EdgeAgent;
+			productReference = A1000000101A0001 /* EdgeAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A2000000401A0001 /* EdgeAgentTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2000000601A0001 /* Build configuration list for PBXNativeTarget "EdgeAgentTests" */;
+			buildPhases = (
+				A2000000501A0001 /* Sources */,
+				A2000000301A0001 /* Frameworks */,
+				A2000000701A0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A2000004101A0001 /* PBXTargetDependency */,
+			);
+			name = EdgeAgentTests;
+			productName = EdgeAgentTests;
+			productReference = A2000000101A0001 /* EdgeAgentTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1000000801A0001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A1000000401A0001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					A2000000401A0001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1000000401A0001;
+					};
+				};
+			};
+			buildConfigurationList = A1000000901A0001 /* Build configuration list for PBXProject "EdgeAgent" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1000000001A0001;
+			productRefGroup = A1000000021A0001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1000000401A0001 /* EdgeAgent */,
+				A2000000401A0001 /* EdgeAgentTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1000000701A0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000008201A0001 /* Assets.xcassets in Resources */,
+				A1000009201A0001 /* WebRuntime in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2000000701A0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1000000501A0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001201A0001 /* EdgeAgentApp.swift in Sources */,
+				A1000002201A0001 /* ConfigManager.swift in Sources */,
+				A1000003201A0001 /* AgentEvent.swift in Sources */,
+				A1000004201A0001 /* AgentBridge.swift in Sources */,
+				A1000005201A0001 /* SettingsView.swift in Sources */,
+				A1000006201A0001 /* ChatView.swift in Sources */,
+				A1000007201A0001 /* ChatViewModel.swift in Sources */,
+				5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2000000501A0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2000001201A0001 /* ConfigManagerTests.swift in Sources */,
+				A2000002201A0001 /* AgentEventTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A2000004101A0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000000401A0001 /* EdgeAgent */;
+			targetProxy = A2000003101A0001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A1000000A01A0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1000000B01A0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1000000C01A0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EdgeAgent/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1000000D01A0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EdgeAgent/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A2000000C01A0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
+			};
+			name = Debug;
+		};
+		A2000000D01A0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1000000601A0001 /* Build configuration list for PBXNativeTarget "EdgeAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000C01A0001 /* Debug */,
+				A1000000D01A0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000901A0001 /* Build configuration list for PBXProject "EdgeAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000A01A0001 /* Debug */,
+				A1000000B01A0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2000000601A0001 /* Build configuration list for PBXNativeTarget "EdgeAgentTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2000000C01A0001 /* Debug */,
+				A2000000D01A0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1000000801A0001 /* Project object */;
+}

@@ -79,7 +79,11 @@ frontend/src/wasm/edtui-module/
 packages/web-agent-core/dist/
 packages/web-agent-core/wasm/
 packages/web-agent-core/src/wasm/
+packages/web-agent-core/src/wasm-sync/
 packages/web-agent-core/node_modules/
+
+# Generated WASM for headless agent (jco transpile)
+frontend/src/wasm/web-headless-agent/
 
 # Generated WIT bindings
 runtime/crates/*/src/bindings.rs
@@ -93,3 +97,12 @@ website/node_modules/
 
 # pnpm store
 .pnpm-store
+
+# iOS/Xcode
+ios-edge-agent/EdgeAgent.xcodeproj/project.xcworkspace/xcuserdata/
+ios-edge-agent/EdgeAgent.xcodeproj/xcuserdata/
+ios-edge-agent/EdgeAgent/Resources/WebRuntime/mcp-server-sync/
+ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent-sync/
+ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent/
+*.xcuserstate
+DerivedData/

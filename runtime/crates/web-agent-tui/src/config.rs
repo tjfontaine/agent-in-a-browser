@@ -2,6 +2,7 @@
 //!
 //! Reads/writes config from OPFS at .config/web-agent/
 
+use agent_bridge::models::{get_default_model, get_provider};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -83,7 +84,9 @@ pub struct ProviderSettings {
 impl ProviderSettings {
     pub fn default_anthropic() -> Self {
         Self {
-            model: "claude-sonnet-4-20250514".to_string(),
+            model: get_default_model("anthropic")
+                .map(|m| m.id.to_string())
+                .unwrap_or_else(|| "claude-sonnet-4-20250514".to_string()),
             api_key: None,
             base_url: None,
             api_format: Some("anthropic".to_string()),
@@ -92,7 +95,9 @@ impl ProviderSettings {
 
     pub fn default_openai() -> Self {
         Self {
-            model: "gpt-4o".to_string(),
+            model: get_default_model("openai")
+                .map(|m| m.id.to_string())
+                .unwrap_or_else(|| "gpt-4o".to_string()),
             api_key: None,
             base_url: None,
             api_format: Some("openai".to_string()),
@@ -101,7 +106,9 @@ impl ProviderSettings {
 
     pub fn default_gemini() -> Self {
         Self {
-            model: "gemini-3-flash-preview".to_string(),
+            model: get_default_model("gemini")
+                .map(|m| m.id.to_string())
+                .unwrap_or_else(|| "gemini-2.0-flash".to_string()),
             api_key: None,
             base_url: None,
             api_format: Some("gemini".to_string()),
@@ -115,6 +122,31 @@ impl ProviderSettings {
             api_key: None, // Not needed for local inference
             base_url: Some("http://webllm.local/v1".to_string()),
             api_format: Some("openai".to_string()), // OpenAI-compatible wrapper
+        }
+    }
+
+    /// Create default settings for any provider using shared data
+    pub fn default_for_provider(provider_id: &str) -> Self {
+        match provider_id {
+            "anthropic" => Self::default_anthropic(),
+            "openai" => Self::default_openai(),
+            "gemini" | "google" => Self::default_gemini(),
+            "webllm" => Self::default_webllm(),
+            _ => {
+                // Check if provider exists in shared data
+                if let Some(provider) = get_provider(provider_id) {
+                    Self {
+                        model: get_default_model(provider_id)
+                            .map(|m| m.id.to_string())
+                            .unwrap_or_default(),
+                        api_key: None,
+                        base_url: provider.default_base_url.map(|s| s.to_string()),
+                        api_format: Some(provider.api_format.to_string()),
+                    }
+                } else {
+                    Self::default()
+                }
+            }
         }
     }
 
@@ -326,14 +358,10 @@ impl ProvidersConfig {
     /// Get or create provider settings
     pub fn get_or_create(&mut self, provider: &str) -> &mut ProviderSettings {
         if !self.providers.contains_key(provider) {
-            let default = match provider {
-                "anthropic" => ProviderSettings::default_anthropic(),
-                "openai" => ProviderSettings::default_openai(),
-                "gemini" | "google" => ProviderSettings::default_gemini(),
-                "webllm" => ProviderSettings::default_webllm(),
-                _ => ProviderSettings::default(),
-            };
-            self.providers.insert(provider.to_string(), default);
+            self.providers.insert(
+                provider.to_string(),
+                ProviderSettings::default_for_provider(provider),
+            );
         }
         self.providers.get_mut(provider).unwrap()
     }

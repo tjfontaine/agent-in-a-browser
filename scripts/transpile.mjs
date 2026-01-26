@@ -199,7 +199,43 @@ const MODULES = {
         syncOut: `${PACKAGES}/web-agent-core/src/wasm-sync`,
         shims: SHIMS,
         // All exported functions that may suspend need --async-exports for JSPI
-        exports: ['create', 'send', 'poll'],
+        exports: ['create', 'send', 'poll', 'listProviders', 'listModels', 'fetchModels'],
+    },
+    // iOS-specific build: uses local:// scheme for ES module imports via WKURLSchemeHandler
+    'web-headless-agent-ios': {
+        wasm: 'web_headless_agent.wasm',
+        jspiOut: `${ROOT}/ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent`,
+        syncOut: `${ROOT}/ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent-sync`,
+        // local:// scheme paths served by WKURLSchemeHandler with CORS headers
+        // JSPI mode uses web-headless-agent path
+        shims: {
+            'wasi:cli/*': 'local://web-headless-agent/shims/ghostty-cli-shim.js#*',
+            'wasi:clocks/*': 'local://web-headless-agent/shims/clocks-impl.js#*',
+            'wasi:filesystem/*': 'local://web-headless-agent/shims/opfs-filesystem-impl.js#*',
+            'wasi:io/poll': 'local://web-headless-agent/shims/poll-impl.js',
+            'wasi:io/streams': 'local://web-headless-agent/shims/streams.js',
+            'wasi:io/*': 'local://web-headless-agent/shims/error.js#*',
+            'wasi:random/*': 'local://web-headless-agent/shims/random.js#*',
+            'wasi:sockets/*': 'local://web-headless-agent/shims/sockets-stub.js#*',
+            'wasi:http/types': 'local://web-headless-agent/shims/wasi-http-impl.js',
+            'wasi:http/outgoing-handler': 'local://web-headless-agent/shims/wasi-http-impl.js#outgoingHandler',
+            'terminal:info/size': 'local://web-headless-agent/shims/ghostty-cli-shim.js#size',
+        },
+        // Sync mode uses web-headless-agent-sync path (must match output directory)
+        syncShims: {
+            'wasi:cli/*': 'local://web-headless-agent-sync/shims/ghostty-cli-shim.js#*',
+            'wasi:clocks/*': 'local://web-headless-agent-sync/shims/clocks-impl.js#*',
+            'wasi:filesystem/*': 'local://web-headless-agent-sync/shims/opfs-filesystem-sync-impl.js#*',
+            'wasi:io/poll': 'local://web-headless-agent-sync/shims/poll-impl.js',
+            'wasi:io/streams': 'local://web-headless-agent-sync/shims/streams.js',
+            'wasi:io/*': 'local://web-headless-agent-sync/shims/error.js#*',
+            'wasi:random/*': 'local://web-headless-agent-sync/shims/random.js#*',
+            'wasi:sockets/*': 'local://web-headless-agent-sync/shims/sockets-stub.js#*',
+            'wasi:http/types': 'local://web-headless-agent-sync/shims/wasi-http-impl.js',
+            'wasi:http/outgoing-handler': 'local://web-headless-agent-sync/shims/wasi-http-impl.js#outgoingHandler',
+            'terminal:info/size': 'local://web-headless-agent-sync/shims/ghostty-cli-shim.js#size',
+        },
+        exports: ['create', 'send', 'poll', 'listProviders', 'listModels', 'fetchModels'],
     },
 };
 
@@ -211,10 +247,24 @@ function build(name, mod, syncMode) {
     const output = syncMode ? (mod.syncOut || mod.jspiOut.replace('jspi', 'sync')) : mod.jspiOut;
     const args = ['npx', '@bytecodealliance/jco', 'transpile', input, '-o', output];
 
-    if (syncMode) {
-        // Sync mode: use synchronous shims that block via Atomics.wait
-        // No --async-imports needed since sync shims don't return Promises
+    const isIosTarget = name.includes('ios');
+
+    if (syncMode && !isIosTarget) {
+        // Non-iOS sync mode: use synchronous shims that block via Atomics.wait
+        // No async handling needed since sync shims don't return Promises
         args.push('--async-mode', 'sync', '--tla-compat');
+    } else if (syncMode && isIosTarget) {
+        // iOS sync mode: Use JSPI mode transpile to generate JavaScript async/await code.
+        // Even though Safari doesn't have WebAssembly JSPI, the generated JavaScript
+        // async/await code WILL work - it just uses regular JavaScript Promises.
+        // This is critical for iOS where HTTP is inherently async (callback-based).
+        console.log(`📦 iOS target - using JSPI transpile for JavaScript async/await`);
+        args.push('--async-mode', 'jspi');
+        const wasiVersion = detectWasiVersion(input);
+        const asyncImports = buildAsyncImports(wasiVersion);
+        console.log(`📦 Detected WASI version: ${wasiVersion}`);
+        for (const imp of asyncImports) args.push('--async-imports', `'${imp}'`);
+        for (const exp of (mod.exports || [])) args.push('--async-exports', `'${exp}'`);
     } else {
         args.push('--async-mode', 'jspi');
         // Detect WASI version from the WASM file and build ASYNC_IMPORTS with matching version
@@ -331,6 +381,36 @@ function _descriptorDiag(obj) {
 }
 
 // ============================================================
+// POST-TRANSPILE SHIM COPYING FOR iOS
+// ============================================================
+// iOS targets use local:// URLs for shims, served by WKURLSchemeHandler.
+// Since jco clears the output directory, we need to copy the browser-bundled
+// shims AFTER transpile completes.
+import { mkdirSync, cpSync, readdirSync as readdirSyncFs } from 'fs';
+
+function copyShimsForIOS(outputDir, name) {
+    // Only copy shims for iOS targets
+    if (!name.includes('ios')) return;
+
+    const shimsSource = `${PACKAGES}/wasi-shims/browser-dist`;
+    const shimsTarget = `${outputDir}/shims`;
+
+    // Check if browser-dist exists
+    if (!existsSync(shimsSource)) {
+        console.warn(`   ⚠ wasi-shims/browser-dist not found - run 'pnpm run build:browser' in packages/wasi-shims`);
+        return;
+    }
+
+    // Create shims directory and copy all JS files
+    mkdirSync(shimsTarget, { recursive: true });
+    const files = readdirSyncFs(shimsSource).filter(f => f.endsWith('.js'));
+    for (const file of files) {
+        cpSync(`${shimsSource}/${file}`, `${shimsTarget}/${file}`);
+    }
+    console.log(`   ↳ Copied ${files.length} shims to ${shimsTarget.replace(ROOT + '/', '')}`);
+}
+
+// ============================================================
 // MAIN
 // ============================================================
 import { existsSync, rmSync } from 'fs';
@@ -371,6 +451,8 @@ for (const name of targets) {
         execSync(cmd, { cwd: FRONTEND, stdio: 'inherit', shell: true });
         // Patch instanceof checks to use Symbol-based validation
         patchInstanceofChecks(outputDir);
+        // Copy shims for iOS targets (after jco clears output dir)
+        copyShimsForIOS(outputDir, name);
     } catch {
         console.error(`   ✗ Failed`);
         process.exit(1);

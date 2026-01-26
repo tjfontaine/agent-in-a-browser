@@ -143,3 +143,38 @@ cd frontend && pnpm run build
 ```bash
 cd packages/wasi-shims && pnpm run build && pnpm run build:browser && cd ../../frontend && pnpm run copy:wasi-shims
 ```
+
+## iOS Build
+
+### Build iOS WebRuntime Bundle
+
+// turbo
+
+```bash
+./ios-edge-agent/scripts/build-ios.sh
+```
+
+This builds the complete iOS WebRuntime bundle:
+
+1. Builds Rust WASM components targeting `wasm32-wasip2`
+2. Transpiles WASM to JavaScript using `jco` (sync mode for Safari - no JSPI)
+3. Bundles files to `ios-edge-agent/EdgeAgent/Resources/WebRuntime/`
+
+Output includes:
+
+- `web-headless-agent-sync/` - Headless agent with WASI shims
+- `mcp-server-sync/` - MCP server WASM component
+
+### Clean iOS Build (bypass turbo cache)
+
+```bash
+rm -rf .turbo frontend/.turbo && ./ios-edge-agent/scripts/build-ios.sh
+```
+
+Use this after modifying Rust code in `runtime/crates/` to ensure the new WASM is transpiled.
+
+### Run in Xcode
+
+1. Open `ios-edge-agent/EdgeAgent.xcodeproj` in Xcode
+2. Set Development Team in Signing & Capabilities
+3. Build and run (Cmd+R) on Simulator or device

@@ -22,6 +22,24 @@ world headless-agent {
         name: option<string>,
     }
     
+    /// Information about an AI provider
+    record provider-info {
+        /// Provider ID (e.g., "anthropic", "openai")
+        id: string,
+        /// Display name (e.g., "Anthropic (Claude)")
+        name: string,
+        /// Default base URL (empty if using provider's built-in default)
+        default-base-url: option<string>,
+    }
+    
+    /// Information about a model
+    record model-info {
+        /// Model ID used in API calls
+        id: string,
+        /// Human-readable display name
+        name: string,
+    }
+    
     record agent-config {
         provider: string,
         model: string,
@@ -135,4 +153,19 @@ world headless-agent {
     // History management
     export get-history: func(handle: agent-handle) -> list<message>;
     export clear-history: func(handle: agent-handle);
+    
+    // Provider/Model discovery (no agent required)
+    /// Get list of available AI providers
+    export list-providers: func() -> list<provider-info>;
+    
+    /// Get static list of models for a provider (no API key required)
+    export list-models: func(provider-id: string) -> list<model-info>;
+    
+    /// Fetch models from provider API (requires API key)
+    /// Returns fresh model list from the provider's API
+    export fetch-models: func(
+        provider-id: string,
+        api-key: string,
+        base-url: option<string>
+    ) -> result<list<model-info>, string>;
 }

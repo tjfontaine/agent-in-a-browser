@@ -64,19 +64,19 @@ macro_rules! define_wasi_http_client {
             }
 
             /// Parse URL into (scheme, authority, path)
+            /// Supports http://, https://, and custom schemes like wasm://
             fn parse_url(url: &str) -> RigResult<(Scheme, String, String)> {
-                let (scheme_str, rest) = if url.starts_with("https://") {
-                    ("https", &url[8..])
-                } else if url.starts_with("http://") {
-                    ("http", &url[7..])
-                } else {
-                    return Err(_wasi_http_instance_error("Invalid URL scheme"));
-                };
+                // Find :// to extract scheme
+                let scheme_end = url
+                    .find("://")
+                    .ok_or_else(|| _wasi_http_instance_error("Invalid URL: missing ://"))?;
+                let scheme_str = &url[..scheme_end];
+                let rest = &url[scheme_end + 3..];
 
-                let scheme = if scheme_str == "https" {
-                    Scheme::Https
-                } else {
-                    Scheme::Http
+                let scheme = match scheme_str {
+                    "https" => Scheme::Https,
+                    "http" => Scheme::Http,
+                    other => Scheme::Other(other.to_string()),
                 };
 
                 let (authority, path) = if let Some(slash_pos) = rest.find('/') {
@@ -804,19 +804,19 @@ macro_rules! define_general_http_client {
                 Ok(future)
             }
 
+            /// Supports http://, https://, and custom schemes like wasm://
             fn parse_url(url: &str) -> Result<(Scheme, String, String), HttpError> {
-                let (scheme_str, rest) = if url.starts_with("https://") {
-                    ("https", &url[8..])
-                } else if url.starts_with("http://") {
-                    ("http", &url[7..])
-                } else {
-                    return Err(HttpError::RequestFailed("Invalid URL scheme".to_string()));
-                };
+                // Find :// to extract scheme
+                let scheme_end = url.find("://").ok_or_else(|| {
+                    HttpError::RequestFailed("Invalid URL: missing ://".to_string())
+                })?;
+                let scheme_str = &url[..scheme_end];
+                let rest = &url[scheme_end + 3..];
 
-                let scheme = if scheme_str == "https" {
-                    Scheme::Https
-                } else {
-                    Scheme::Http
+                let scheme = match scheme_str {
+                    "https" => Scheme::Https,
+                    "http" => Scheme::Http,
+                    other => Scheme::Other(other.to_string()),
                 };
 
                 let (authority, path) = if let Some(slash_pos) = rest.find('/') {

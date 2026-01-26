@@ -23,6 +23,7 @@ use bridge::wasi_completion_model::{
     create_anthropic_client, create_gemini_client, create_openai_client, AnthropicModel,
     GeminiModel, OpenAIModel,
 };
+use bridge::HeadlessHttpClient;
 
 // ============================================================================
 // Agent Storage - Uses thread_local for single-threaded WASM (no Send needed)
@@ -68,6 +69,14 @@ where
     F: FnOnce(&mut AgentStorage) -> R,
 {
     AGENTS.with(|storage| f(&mut storage.borrow_mut()))
+}
+
+/// Try to access storage, returning None if already borrowed (reentrant call)
+fn try_with_storage<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&mut AgentStorage) -> R,
+{
+    AGENTS.with(|storage| storage.try_borrow_mut().ok().map(|mut s| f(&mut s)))
 }
 
 // ============================================================================
@@ -620,7 +629,9 @@ impl Guest for HeadlessAgentComponent {
     }
 
     fn poll(handle: AgentHandle) -> Option<AgentEvent> {
-        with_storage(|s| s.get_mut(handle).and_then(|a| a.poll()))
+        // Use try_with_storage to handle reentrant calls gracefully
+        // If storage is already borrowed (e.g., during send()), just return None
+        try_with_storage(|s| s.get_mut(handle).and_then(|a| a.poll())).flatten()
     }
 
     fn cancel(handle: AgentHandle) {
@@ -665,6 +676,50 @@ impl Guest for HeadlessAgentComponent {
                 agent.clear_history();
             }
         });
+    }
+
+    fn list_providers() -> Vec<bindings::ProviderInfo> {
+        agent_bridge::PROVIDERS
+            .iter()
+            .map(|p| bindings::ProviderInfo {
+                id: p.id.to_string(),
+                name: p.name.to_string(),
+                default_base_url: p.default_base_url.map(|s| s.to_string()),
+            })
+            .collect()
+    }
+
+    fn list_models(provider_id: String) -> Vec<bindings::ModelInfo> {
+        agent_bridge::get_models_for_provider(&provider_id)
+            .into_iter()
+            .map(|m| bindings::ModelInfo {
+                id: m.id.to_string(),
+                name: m.name.to_string(),
+            })
+            .collect()
+    }
+
+    fn fetch_models(
+        provider_id: String,
+        api_key: String,
+        base_url: Option<String>,
+    ) -> Result<Vec<bindings::ModelInfo>, String> {
+        // Use the HTTP client to fetch models from provider API
+        let http = HeadlessHttpClient;
+        let models = agent_bridge::fetch_models_for_provider(
+            &http,
+            &provider_id,
+            &api_key,
+            base_url.as_deref(),
+        )?;
+
+        Ok(models
+            .into_iter()
+            .map(|m| bindings::ModelInfo {
+                id: m.id,
+                name: m.name,
+            })
+            .collect())
     }
 }
 

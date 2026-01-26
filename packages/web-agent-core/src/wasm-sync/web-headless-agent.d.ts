@@ -3,6 +3,15 @@ export interface McpServerConfig {
   url: string,
   name?: string,
 }
+export interface ProviderInfo {
+  id: string,
+  name: string,
+  defaultBaseUrl?: string,
+}
+export interface ModelInfo {
+  id: string,
+  name: string,
+}
 export interface AgentConfig {
   provider: string,
   model: string,
@@ -116,5 +125,8 @@ export function plan(handle: AgentHandle, message: string): void;
 export function execute(handle: AgentHandle): void;
 export function getHistory(handle: AgentHandle): Array<Message>;
 export function clearHistory(handle: AgentHandle): void;
+export function listProviders(): Array<ProviderInfo>;
+export function listModels(providerId: string): Array<ModelInfo>;
+export function fetchModels(providerId: string, apiKey: string, baseUrl: string | undefined): Array<ModelInfo>;
 
 export const $init: Promise<void>;
