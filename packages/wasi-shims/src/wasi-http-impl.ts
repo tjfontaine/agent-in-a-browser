@@ -2,8 +2,6 @@
 import { InputStream, OutputStream, ReadyPollable } from './streams';
 // Import JSPI detection for automatic sync mode
 import { hasJSPI } from './execution-mode';
-// Import HuggingFace transformers.js transport for local LLM inference
-import { isWebLLMUrl, handleWebLLMRequest } from './hf-transport.js';
 
 // Type for WASM Result-like return values
 type WasmResult<T> = { tag: 'ok'; val: T } | { tag: 'err'; val: unknown };
@@ -255,8 +253,8 @@ export function createSyncStreamingInputStreamFromChunks(
  * Returns true for localhost MCP endpoints.
  */
 function shouldIntercept(url: string): boolean {
-    // Intercept localhost MCP calls and WebLLM local inference
-    return (url.includes('localhost') && url.includes('/mcp')) || isWebLLMUrl(url);
+    // Intercept localhost MCP calls
+    return url.includes('localhost') && url.includes('/mcp');
 }
 
 // ============ CORS Proxy Configuration ============
@@ -1366,26 +1364,7 @@ export const outgoingHandler = {
         }
 
 
-        // Route WebLLM requests to local inference engine
-        if (isWebLLMUrl(url)) {
 
-            // WebLLM always uses async path (requires model loading)
-            const webllmPromise = handleWebLLMRequest(method, url, headers, body);
-
-            // Use lazy body stream for streaming responses
-            const bodyStream = createLazyBufferStream(
-                webllmPromise.then((r) => r.body)
-            );
-
-            // Return async response with lazy body stream
-            return new FutureIncomingResponse(
-                webllmPromise.then((r) => ({
-                    status: r.status,
-                    headers: r.headers,
-                    bodyStream: bodyStream
-                }))
-            );
-        }
 
         // Check if we should route through transport handler
         // Prefer streaming transport handler over legacy sync transport

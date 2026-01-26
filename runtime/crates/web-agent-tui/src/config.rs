@@ -115,23 +115,12 @@ impl ProviderSettings {
         }
     }
 
-    pub fn default_webllm() -> Self {
-        Self {
-            // Qwen3 0.6B ONNX - optimized for browser, ~300MB
-            model: "onnx-community/Qwen3-0.6B-ONNX".to_string(),
-            api_key: None, // Not needed for local inference
-            base_url: Some("http://webllm.local/v1".to_string()),
-            api_format: Some("openai".to_string()), // OpenAI-compatible wrapper
-        }
-    }
-
     /// Create default settings for any provider using shared data
     pub fn default_for_provider(provider_id: &str) -> Self {
         match provider_id {
             "anthropic" => Self::default_anthropic(),
             "openai" => Self::default_openai(),
             "gemini" | "google" => Self::default_gemini(),
-            "webllm" => Self::default_webllm(),
             _ => {
                 // Check if provider exists in shared data
                 if let Some(provider) = get_provider(provider_id) {
@@ -339,8 +328,6 @@ impl ProvidersConfig {
             std::sync::LazyLock::new(ProviderSettings::default_openai);
         static DEFAULT_GEMINI: std::sync::LazyLock<ProviderSettings> =
             std::sync::LazyLock::new(ProviderSettings::default_gemini);
-        static DEFAULT_WEBLLM: std::sync::LazyLock<ProviderSettings> =
-            std::sync::LazyLock::new(ProviderSettings::default_webllm);
         static DEFAULT_EMPTY: std::sync::LazyLock<ProviderSettings> =
             std::sync::LazyLock::new(ProviderSettings::default);
 
@@ -350,7 +337,6 @@ impl ProvidersConfig {
                 "anthropic" => &DEFAULT_ANTHROPIC,
                 "openai" => &DEFAULT_OPENAI,
                 "gemini" | "google" => &DEFAULT_GEMINI,
-                "webllm" => &DEFAULT_WEBLLM,
                 _ => &DEFAULT_EMPTY,
             })
     }

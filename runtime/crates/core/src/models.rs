@@ -53,12 +53,6 @@ pub const PROVIDERS: &[ProviderInfo] = &[
         api_format: "openai",
     },
     ProviderInfo {
-        id: "webllm",
-        name: "WebLLM (Local Browser)",
-        default_base_url: Some("http://webllm.local/v1"),
-        api_format: "openai",
-    },
-    ProviderInfo {
         id: "custom",
         name: "Custom (OpenAI-compatible)",
         default_base_url: None,
@@ -199,24 +193,6 @@ pub fn get_models_for_provider(provider: &str) -> Vec<ModelInfo> {
             ModelInfo {
                 id: "google/gemini-3-flash",
                 name: "Gemini 3 Flash",
-            },
-        ],
-        "webllm" => vec![
-            ModelInfo {
-                id: "onnx-community/Qwen3-0.6B-ONNX",
-                name: "Qwen3 0.6B (Recommended)",
-            },
-            ModelInfo {
-                id: "HuggingFaceTB/SmolLM2-360M-Instruct",
-                name: "SmolLM2 360M (Fast)",
-            },
-            ModelInfo {
-                id: "HuggingFaceTB/SmolLM2-1.7B-Instruct",
-                name: "SmolLM2 1.7B",
-            },
-            ModelInfo {
-                id: "Qwen/Qwen2.5-0.5B-Instruct",
-                name: "Qwen 2.5 0.5B (Tiny)",
             },
         ],
         _ => vec![],

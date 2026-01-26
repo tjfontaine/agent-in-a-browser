@@ -19,7 +19,6 @@ export { InputStream, OutputStream, ReadyPollable } from './streams.js';
 // Export shims
 export * from './ghostty-cli-shim.js';
 export * from './wasi-http-impl.js';
-export * from './hf-transport.js';
 export * from './poll-impl.js';
 
 // Export OPFS sync bridge

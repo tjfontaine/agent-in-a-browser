@@ -723,13 +723,6 @@ pub fn get_models_for_provider(provider: &str) -> Vec<(&'static str, &'static st
             ("openai/o4-mini", "o4-mini"),
             ("google/gemini-3-flash", "Gemini 3 Flash"),
         ],
-        "webllm" => vec![
-            // HuggingFace models for transformers.js (browser)
-            ("onnx-community/Qwen3-0.6B-ONNX", "Qwen3 0.6B (Recommended)"),
-            ("HuggingFaceTB/SmolLM2-360M-Instruct", "SmolLM2 360M (Fast)"),
-            ("HuggingFaceTB/SmolLM2-1.7B-Instruct", "SmolLM2 1.7B"),
-            ("Qwen/Qwen2.5-0.5B-Instruct", "Qwen 2.5 0.5B (Tiny)"),
-        ],
         _ => vec![],
     }
 }
@@ -743,11 +736,6 @@ pub const PROVIDERS: &[(&str, &str, Option<&str>)] = &[
         "gemini",
         "Google (Gemini)",
         None, // rig-core default: generativelanguage.googleapis.com
-    ),
-    (
-        "webllm",
-        "WebLLM (Local Browser)",
-        Some("http://webllm.local/v1"), // Intercepted by wasi-http transport
     ),
     ("custom", "Custom (OpenAI-compatible)", None),
 ];
