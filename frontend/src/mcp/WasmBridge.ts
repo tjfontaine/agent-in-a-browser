@@ -21,12 +21,26 @@ import {
 } from '@tjfontaine/wasi-shims/wasi-http-impl.js';
 import { prepareFileForSync } from '@tjfontaine/wasi-shims/opfs-filesystem-impl.js';
 
+/**
+ * Debug log helper that posts messages to main thread for visibility in test UI
+ */
+function workerLog(msg: string, data?: unknown): void {
+    console.log('[WasmBridge]', msg, data || '');
+    // Post to main thread so logs appear in error-context UI
+    try {
+        self.postMessage({ type: 'worker-log', msg: `[WasmBridge] ${msg}`, data, time: Date.now() });
+    } catch {
+        // Ignore if postMessage fails
+    }
+}
+
 // Type for WASM response objects
 interface WasmResponse {
     statusCode(): number;
     headers(): { entries(): [string, Uint8Array][] };
     _bodyChunks?: Uint8Array[];
 }
+
 
 // Re-export types for consumers
 export type { JsonRpcRequest, JsonRpcResponse } from './Client';
@@ -111,28 +125,37 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
     let wasmResponse: WasmResponse | null = null;
 
     const responseOutparam = new ResponseOutparam((result) => {
-        console.log('[WasmBridge] ResponseOutparam callback:', result);
+        console.log('[WasmBridge] >>> ResponseOutparam callback INVOKED at:', Date.now(), 'result tag:', result?.tag);
         if (result.tag === 'err') {
+            console.error('[WasmBridge] !!! ResponseOutparam error:', result.val);
             throw result.val;
         }
         wasmResponse = result.val;
+        console.log('[WasmBridge] >>> ResponseOutparam: wasmResponse set, status:', wasmResponse?.statusCode?.());
     });
 
-    console.log('[WasmBridge] Calling incomingHandler.handle...');
+    workerLog('>>> Step 1a: Getting incoming handler...');
+    const handleStartTime = Date.now();
     try {
+        workerLog('>>> Step 1a: Getting incoming handler...');
         const incomingHandler = getIncomingHandler();
+        workerLog(`>>> Step 1b: Got incomingHandler, hasJSPI: ${hasJSPI}, handler type: ${typeof incomingHandler}`);
+        workerLog('>>> Step 2: Calling handle() method...');
         // Cast to any because our IncomingRequest is compatible at runtime with the WASM-generated type
         // In JSPI mode, handle() returns a Promise; in Sync mode it returns void
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = incomingHandler.handle(incomingRequest as any, responseOutparam);
+        workerLog(`>>> Step 3: handle() returned, result type: ${typeof result}, isPromise: ${result instanceof Promise}, elapsed: ${Date.now() - handleStartTime}ms`);
         if (hasJSPI && result instanceof Promise) {
+            workerLog('>>> Step 4: Awaiting JSPI promise...');
             await result;
+            workerLog(`>>> Step 5: JSPI promise resolved, elapsed: ${Date.now() - handleStartTime}ms`);
         }
     } catch (error) {
-        console.error('[WasmBridge] Error in handle:', error);
+        workerLog(`!!! Error in handle: ${error}, elapsed: ${Date.now() - handleStartTime}ms`);
         throw error;
     }
-    console.log('[WasmBridge] incomingHandler.handle returned');
+    workerLog(`>>> Step 6: incomingHandler.handle completed, elapsed: ${Date.now() - handleStartTime}ms`);
 
     // 4. Get response from WASM
     if (!wasmResponse) {
@@ -156,14 +179,7 @@ export async function callWasmMcpServerFetch(req: Request): Promise<{ status: nu
     console.log('[WasmBridge] Body chunks:', bodyChunks.length);
 
     // Create a ReadableStream from the collected body
-    const stream = new ReadableStream({
-        start(controller) {
-            for (const chunk of bodyChunks) {
-                controller.enqueue(chunk);
-            }
-            controller.close();
-        }
-    });
+    const stream = new Blob(bodyChunks as any).stream();
 
     return {
         status: wasmResponse.statusCode(),

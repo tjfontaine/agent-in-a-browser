@@ -13,17 +13,20 @@ import path from 'path';
 // Skip on non-WebKit browsers - these tests are Safari-specific
 base.skip(({ browserName }) => browserName !== 'webkit', 'Safari-only test');
 
-// Create a custom test fixture that uses persistent context
+// Create a custom test fixture that uses persistent context with baseURL from config
 const test = base.extend<{ persistentPage: Page }>({
-    persistentPage: async ({ }, use) => {
+    persistentPage: async ({ baseURL }, use) => {
         // Create a temporary directory for user data
         const userDataDir = mkdtempSync(path.join(tmpdir(), 'playwright-webkit-opfs-'));
 
-        console.log(`[Test Setup] Using persistent context at: ${userDataDir}`);
+        // Use baseURL from Playwright config (typically http://localhost:8080)
+        const targetBaseURL = baseURL || 'http://localhost:8080';
+        console.log(`[Test Setup] Using persistent context at: ${userDataDir}, baseURL: ${targetBaseURL}`);
 
         // Launch WebKit with persistent context
         const context: BrowserContext = await webkit.launchPersistentContext(userDataDir, {
             headless: true,
+            baseURL: targetBaseURL,
             // These headers are required for SharedArrayBuffer (which our OPFS shim uses)
             // Note: In a real test, these would be set by the server
         });
@@ -61,9 +64,8 @@ test.describe('Safari OPFS with Persistent Context', () => {
             }
         });
 
-        // Navigate to the TUI page
-        // Note: The dev server must be running on localhost:3000
-        await page.goto('http://localhost:3000/');
+        // Navigate to the TUI page (using baseURL from config)
+        await page.goto('/');
 
         // Wait for the app to initialize
         await page.waitForTimeout(12000);
@@ -127,8 +129,8 @@ test.describe('Safari OPFS with Persistent Context', () => {
             }
         });
 
-        // Navigate to the TUI page
-        await page.goto('http://localhost:3000/');
+        // Navigate to the TUI page (using baseURL from config)
+        await page.goto('/');
 
         // Wait for TUI to fully start and render
         await page.waitForTimeout(5000);
@@ -208,8 +210,8 @@ test.describe('Safari OPFS with Persistent Context', () => {
             consoleLogs.push(msg.text());
         });
 
-        // Navigate to the TUI page
-        await page.goto('http://localhost:3000/');
+        // Navigate to the TUI page (using baseURL from config)
+        await page.goto('/');
 
         // Wait for TUI to initialize
         await page.waitForTimeout(5000);

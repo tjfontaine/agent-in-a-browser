@@ -98,6 +98,9 @@ export function initFilesystemSync(sharedBuffer: SharedArrayBuffer): Promise<voi
                 } catch (err) {
                     reject(err);
                 }
+            } else if (e.data.type === 'error') {
+                console.error('[opfs-sync] Helper worker initialization failed:', e.data.error);
+                reject(new Error(e.data.error || 'Helper worker initialization failed'));
             }
         };
 
@@ -692,14 +695,21 @@ export function _getCwd(): string {
 // Auto-initialize when first imported in a worker context
 let initPromise: Promise<void> | null = null;
 
-export function initFilesystem(): Promise<void> {
+/**
+ * Initialize the OPFS filesystem.
+ * @param sharedBuffer Optional SharedArrayBuffer for worker communication.
+ *                     If not provided, creates a new one (only works in contexts with SAB).
+ *                     For WebKit workers, SAB must be passed from main thread since
+ *                     SharedArrayBuffer is not available in Worker contexts.
+ */
+export function initFilesystem(sharedBuffer?: SharedArrayBuffer): Promise<void> {
     if (initPromise) return initPromise;
 
-    // Create shared buffer for communication
+    // Use provided buffer or create new one (only works in contexts where SAB is available)
     const bufferSize = 64 + 64 * 1024; // 64 bytes control + 64KB data
-    const sharedBuffer = new SharedArrayBuffer(bufferSize);
+    const buffer = sharedBuffer ?? new SharedArrayBuffer(bufferSize);
 
-    initPromise = initFilesystemSync(sharedBuffer);
+    initPromise = initFilesystemSync(buffer);
     return initPromise;
 }
 

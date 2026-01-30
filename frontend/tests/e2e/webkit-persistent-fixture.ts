@@ -30,14 +30,15 @@ export const test = base.extend<{ page: Page }>({
             // WebKit needs persistent context for OPFS
             const userDataDir = mkdtempSync(path.join(tmpdir(), 'playwright-webkit-opfs-'));
 
+            console.log(`[webkit-persistent-fixture] Creating persistent context for webkit at: ${userDataDir}, baseURL: ${baseURL}`);
+
             const context: BrowserContext = await webkit.launchPersistentContext(userDataDir, {
                 headless: true,
-                baseURL: baseURL || 'http://localhost:3000',
+                baseURL: baseURL || 'http://localhost:8080',
             });
 
             const persistentPage = context.pages()[0] || await context.newPage();
-
-            // Set up CORS proxy route interception for external HTTP requests
+            console.log(`[webkit-persistent-fixture] Persistent page created for webkit`);
             await persistentPage.route('**/cors-proxy*', async (route) => {
                 const url = new URL(route.request().url());
                 const targetUrl = url.searchParams.get('url');

@@ -299,6 +299,7 @@ function patchInstanceofChecks(outputDir) {
         { class: 'InputStream', symbol: 'wasi:io/streams@0.2.9#InputStream' },
         { class: 'OutputStream', symbol: 'wasi:io/streams@0.2.9#OutputStream' },
         { class: 'Descriptor', symbol: 'wasi:filesystem/types@0.2.9#Descriptor' },
+        { class: 'LazyProcess', symbol: 'mcp:module-loader/loader@0.1.0#LazyProcess' },
     ];
 
     // Find the main JS file in the output directory
@@ -314,12 +315,28 @@ function patchInstanceofChecks(outputDir) {
             // Match patterns like: instanceof ClassName
             // JCO generates: if (!(e instanceof ClassName)) { throw new TypeError('Resource error: Not a valid "ClassName" resource.'); }
 
-            // Pattern 1: Direct instanceof in conditional
-            const pattern1 = new RegExp(`instanceof\\s+${className}(?=[\\s;\\)\\]])`, 'g');
-            if (pattern1.test(content)) {
-                content = content.replace(pattern1, `?.[Symbol.for('${symbol}')]`);
-                modified = true;
-                patchCount++;
+            if (className === 'LazyProcess') {
+                // LazyProcess needs special handling because jco uses Object.create(LazyProcess.prototype)
+                // which bypasses the constructor where own-property Symbol markers are set.
+                // We use 'in' operator which checks the prototype chain for inherited properties.
+                // Pattern: (varName instanceof LazyProcess) => (varName && (Symbol.for('...') in varName))
+                const lazyProcessPattern = /(\w+)\s+instanceof\s+LazyProcess(?=[\s;\)\]])/g;
+                const newContent = content.replace(lazyProcessPattern, (match, varName) => {
+                    return `${varName} && (Symbol.for('${symbol}') in ${varName})`;
+                });
+                if (newContent !== content) {
+                    content = newContent;
+                    modified = true;
+                    patchCount++;
+                }
+            } else {
+                // Other classes use own-property Symbol marker (set in constructor)
+                const pattern1 = new RegExp(`instanceof\\s+${className}(?=[\\s;\\)\\]])`, 'g');
+                if (pattern1.test(content)) {
+                    content = content.replace(pattern1, `?.[Symbol.for('${symbol}')]`);
+                    modified = true;
+                    patchCount++;
+                }
             }
         }
 
@@ -361,6 +378,51 @@ function _descriptorDiag(obj) {
             const throwPattern = /if\s*\(\s*!\s*\((\w+)\s*\?\.\[Symbol\.for\('wasi:filesystem\/types@0\.2\.9#Descriptor'\)\]\)\s*\)\s*\{\s*throw new TypeError\('Resource error: Not a valid "Descriptor" resource\.'\);/g;
             content = content.replace(throwPattern, (match, varName) => {
                 return `if (!(${varName} ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) { throw new TypeError(_descriptorDiag(${varName}));`;
+            });
+            modified = true;
+        }
+
+        // DIAGNOSTIC INJECTION: Include LazyProcess diagnostic info IN the error message
+        // Similar to Descriptor, we need to understand why Symbol.for(...) in ret fails
+        if (content.includes('throw new TypeError(\'Resource error: Not a valid "LazyProcess" resource.\'')) {
+            // Add helper function at top of file  
+            const lazyProcessDiag = `
+function _lazyProcessDiag(obj) {
+  try {
+    const symKey = Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess');
+    const info = {
+      type: typeof obj,
+      isNull: obj === null,
+      isUndefined: obj === undefined,
+      ctor: obj?.constructor?.name,
+      hasSymbolIn: obj ? (symKey in obj) : false,
+      hasSymbolOwn: obj ? Object.prototype.hasOwnProperty.call(obj, symKey) : false,
+      prototypeHasSymbol: obj ? (symKey in Object.getPrototypeOf(obj) ?? {}) : false,
+      prototypeConstructor: obj ? Object.getPrototypeOf(obj)?.constructor?.name : null,
+      symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
+      protoSymbols: obj ? Object.getOwnPropertySymbols(Object.getPrototypeOf(obj) ?? {}).map(s => s.toString()).slice(0,3) : [],
+      keys: obj ? Object.keys(obj).slice(0,5) : []
+    };
+    return 'Resource error: Not a valid "LazyProcess" resource. DIAG: ' + JSON.stringify(info);
+  } catch (e) {
+    return 'Resource error: Not a valid "LazyProcess" resource. DIAG_ERROR: ' + e.message;
+  }
+}
+`;
+            // Insert after the first function or const declaration
+            const insertPoint = content.indexOf('function ');
+            if (insertPoint > 0 && !content.includes('_lazyProcessDiag')) {
+                content = content.slice(0, insertPoint) + lazyProcessDiag + content.slice(insertPoint);
+                modified = true;
+            }
+
+            // Now replace the throw statements to use the helper
+            // Match: if (!(varName && (Symbol.for('mcp:...#LazyProcess') in varName))) {
+            //   throw new TypeError('Resource error: Not a valid "LazyProcess" resource.');
+            // }
+            const lazyThrowPattern = /if\s*\(\s*!\s*\((\w+)\s*&&\s*\(Symbol\.for\('mcp:module-loader\/loader@0\.1\.0#LazyProcess'\)\s*in\s*\1\)\)\s*\)\s*\{\s*throw new TypeError\('Resource error: Not a valid "LazyProcess" resource\.'\);/g;
+            content = content.replace(lazyThrowPattern, (match, varName) => {
+                return `if (!(${varName} && (Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess') in ${varName}))) { throw new TypeError(_lazyProcessDiag(${varName}));`;
             });
             modified = true;
         }

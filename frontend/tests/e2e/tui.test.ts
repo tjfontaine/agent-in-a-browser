@@ -76,6 +76,15 @@ async function waitForTuiReady(page: Page, timeout = 30000): Promise<void> {
     await page.waitForTimeout(500);
 }
 
+// Helper to enter shell mode (like vim tests)
+async function enterShellMode(page: Page): Promise<void> {
+    await waitForTerminalOutput(page, '›');
+    await typeInTerminal(page, '/sh');
+    await pressKey(page, 'Enter');
+    // Wait for shell prompt
+    await waitForTerminalOutput(page, '$', 5000);
+}
+
 test.describe('TUI Launch and Fundamentals', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
@@ -130,10 +139,12 @@ test.describe('TUI Shell Commands', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
         await waitForTuiReady(page);
+        // Enter shell mode first (like vim tests)
+        await enterShellMode(page);
     });
 
     test('echo command works', async ({ page }) => {
-        await waitForTerminalOutput(page, '›');
+        // In shell mode, commands execute directly
         await typeInTerminal(page, 'echo hello world');
         await pressKey(page, 'Enter');
 
@@ -141,7 +152,7 @@ test.describe('TUI Shell Commands', () => {
     });
 
     test('ls command works', async ({ page }) => {
-        await waitForTerminalOutput(page, '›');
+        // In shell mode, commands execute directly
         await typeInTerminal(page, 'ls -la');
         await pressKey(page, 'Enter');
 
@@ -149,7 +160,7 @@ test.describe('TUI Shell Commands', () => {
         await page.waitForTimeout(1000);
         const text = await getTerminalText(page);
         // Just verify it executed and we got a prompt back
-        expect(text.split('›').length).toBeGreaterThan(1);
+        expect(text.split('$').length).toBeGreaterThan(1);
     });
 });
 

@@ -2,49 +2,162 @@
  * Sandbox Worker Management
  * 
  * Uses SharedWorker to ensure all code shares the same module context.
- * This fixes the Pollable instanceof issue where different bundles have different class instances.
+ * Falls back to regular Worker if SharedWorker is not supported or fails
+ * (e.g., OPFS not available in SharedWorker context in some browsers).
  */
 
 import { createWorkerFetch } from '../workers/Fetch';
 import { createWorkerFetchSimple } from '../workers/FetchSimple';
 
-// ============ SharedWorker Instance ============
+// ============ Worker Instance Management ============
 
 const moduleId = Math.random().toString(36).substring(7);
 console.log(`[Sandbox] Module loaded, moduleId: ${moduleId}`);
 
-// Try SharedWorker first, fall back to regular Worker if not supported
+// Worker state
 let sandboxPort: MessagePort;
 let isSharedWorker = false;
+let workerInstance: SharedWorker | Worker | null = null;
 
-try {
-    const sharedWorker = new SharedWorker(
-        new URL('../workers/SharedSandboxWorker.ts', import.meta.url),
-        { type: 'module', name: 'sandbox' }
-    );
-    sandboxPort = sharedWorker.port;
-    sandboxPort.start();
-    isSharedWorker = true;
-    console.log(`[Sandbox] SharedWorker created in moduleId: ${moduleId}`);
-} catch (e) {
-    console.warn('[Sandbox] SharedWorker not supported, falling back to Worker:', e);
-    const worker = new Worker(
-        new URL('../workers/SandboxWorker.ts', import.meta.url),
-        { type: 'module' }
-    );
+// Initialization state
+let isWorkerReady = false;
+let isInitialized = false;
+let workerReadyResolve: () => void;
+let workerReadyPromise = new Promise<void>((resolve) => {
+    workerReadyResolve = resolve;
+});
+
+// ============ Worker Creation ============
+
+function createMessagePortInterface(worker: Worker): MessagePort {
     // Create a MessagePort-like wrapper around Worker
-    sandboxPort = {
-        postMessage: (msg: unknown, transfer?: Transferable[]) => worker.postMessage(msg, transfer || []),
+    return {
+        postMessage: (msg: unknown, transfer?: Transferable[] | StructuredSerializeOptions) => {
+            if (Array.isArray(transfer)) {
+                worker.postMessage(msg, transfer);
+            } else if (transfer && typeof transfer === 'object' && 'transfer' in transfer) {
+                worker.postMessage(msg, transfer.transfer as Transferable[]);
+            } else {
+                worker.postMessage(msg);
+            }
+        },
         addEventListener: (type: string, listener: EventListener) => worker.addEventListener(type, listener),
         removeEventListener: (type: string, listener: EventListener) => worker.removeEventListener(type, listener),
-        start: () => { },
+        start: () => { /* no-op for Worker */ },
         close: () => worker.terminate(),
         onmessage: null,
         onmessageerror: null,
         dispatchEvent: (event: Event) => worker.dispatchEvent(event),
     } as MessagePort;
-    console.log(`[Sandbox] Worker fallback created in moduleId: ${moduleId}`);
 }
+
+function createSharedWorker(): { port: MessagePort; worker: SharedWorker } | null {
+    try {
+        const sharedWorker = new SharedWorker(
+            new URL('../workers/SharedSandboxWorker.ts', import.meta.url),
+            { type: 'module', name: 'sandbox' }
+        );
+        sharedWorker.port.start();
+        console.log(`[Sandbox] SharedWorker created in moduleId: ${moduleId}`);
+        return { port: sharedWorker.port, worker: sharedWorker };
+    } catch (e) {
+        console.warn('[Sandbox] SharedWorker not supported:', e);
+        return null;
+    }
+}
+
+function createDedicatedWorker(): { port: MessagePort; worker: Worker } {
+    const worker = new Worker(
+        new URL('../workers/SandboxWorker.ts', import.meta.url),
+        { type: 'module' }
+    );
+    console.log(`[Sandbox] Worker fallback created in moduleId: ${moduleId}`);
+    return { port: createMessagePortInterface(worker), worker };
+}
+
+// ============ Worker Ready Handler ============
+
+function setupReadyHandler(port: MessagePort): void {
+    const onReady = (event: MessageEvent) => {
+        if (event.data?.type === 'ready') {
+            console.log('[Sandbox] Worker ready signal received');
+            isWorkerReady = true;
+            workerReadyResolve();
+            port.removeEventListener('message', onReady);
+        }
+    };
+    port.addEventListener('message', onReady);
+
+    // Global handler for worker debug logs (stays active throughout)
+    port.addEventListener('message', (event: MessageEvent) => {
+        if (event.data?.type === 'worker-log') {
+            console.log('[WorkerLog]', event.data.msg, event.data.data || '', `(t=${event.data.time})`);
+        }
+    });
+}
+
+// ============ Worker Initialization ============
+
+async function initializeWorker(port: MessagePort): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            port.removeEventListener('message', handler);
+            reject(new Error('Worker initialization timeout'));
+        }, 30000);
+
+        const handler = (event: MessageEvent) => {
+            const { type, message } = event.data;
+
+            if (type === 'ready') {
+                console.log('[Sandbox] Worker ready (in init handler), sending init message');
+                isWorkerReady = true;
+                workerReadyResolve();
+                port.postMessage({ type: 'init', id: 'init-' + Date.now() });
+            } else if (type === 'init_complete') {
+                console.log('[Sandbox] Worker init complete!');
+                clearTimeout(timeoutId);
+                port.removeEventListener('message', handler);
+                resolve();
+            } else if (type === 'error') {
+                console.error('[Sandbox] Worker error during init:', message);
+                clearTimeout(timeoutId);
+                port.removeEventListener('message', handler);
+                reject(new Error(message || 'Worker initialization error'));
+            }
+        };
+
+        port.addEventListener('message', handler);
+
+        // If worker is already ready, send init immediately
+        if (isWorkerReady) {
+            console.log('[Sandbox] Worker already ready, sending init message');
+            port.postMessage({ type: 'init', id: 'init-' + Date.now() });
+        } else {
+            // Request a ping in case we missed the ready signal
+            console.log('[Sandbox] Waiting for worker ready signal...');
+            port.postMessage({ type: 'ping' });
+        }
+    });
+}
+
+// ============ Initial Worker Setup ============
+
+// Try SharedWorker first
+const sharedWorkerResult = createSharedWorker();
+if (sharedWorkerResult) {
+    sandboxPort = sharedWorkerResult.port;
+    workerInstance = sharedWorkerResult.worker;
+    isSharedWorker = true;
+} else {
+    // Fall back to dedicated worker immediately if SharedWorker not supported
+    const dedicatedWorkerResult = createDedicatedWorker();
+    sandboxPort = dedicatedWorkerResult.port;
+    workerInstance = dedicatedWorkerResult.worker;
+    isSharedWorker = false;
+}
+
+// Set up ready handler for current worker
+setupReadyHandler(sandboxPort);
 
 // Export the port for debugging
 export { sandboxPort, isSharedWorker };
@@ -71,12 +184,22 @@ sandboxPort.addEventListener('message', (event: MessageEvent) => {
 // ============ Worker Fetch ============
 
 // Wrapper that adapts MessagePort to Worker-like interface for existing utilities
+// Track listeners to support re-attaching on worker fallback
+const activeListeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
+
 const workerLikeInterface = {
     postMessage: (msg: unknown, transfer?: Transferable[]) => sandboxPort.postMessage(msg, transfer ? { transfer } : undefined),
-    addEventListener: (type: string, listener: EventListenerOrEventListenerObject) =>
-        sandboxPort.addEventListener(type, listener as EventListener),
-    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) =>
-        sandboxPort.removeEventListener(type, listener as EventListener),
+    addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (!activeListeners.has(type)) {
+            activeListeners.set(type, new Set());
+        }
+        activeListeners.get(type)?.add(listener);
+        sandboxPort.addEventListener(type, listener as EventListener);
+    },
+    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) => {
+        activeListeners.get(type)?.delete(listener);
+        sandboxPort.removeEventListener(type, listener as EventListener);
+    },
 };
 
 /**
@@ -102,70 +225,93 @@ export function debugPostToSandbox(message: unknown): void {
 // Legacy export for backwards compatibility
 export const sandboxWorker = workerLikeInterface as unknown as Worker;
 
-
-// ============ Initialization ============
-
-let workerReadyResolve: () => void;
-let isWorkerReady = false;
-new Promise<void>((resolve) => {
-    workerReadyResolve = resolve;
-});
-
-// Listen for ready signal immediately
-sandboxPort.addEventListener('message', function onReady(event: MessageEvent) {
-    if (event.data?.type === 'ready') {
-        console.log('[Sandbox] Worker ready signal received');
-        isWorkerReady = true;
-        workerReadyResolve();
-        sandboxPort.removeEventListener('message', onReady);
-    }
-});
+// ============ Public Initialization ============
 
 /**
  * Initialize the sandbox worker.
- * Waits for worker to have signaled ready, then sends init message.
+ * If SharedWorker init fails (e.g., OPFS not available), automatically
+ * falls back to dedicated Worker and retries initialization.
  */
-export function initializeSandbox(): Promise<void> {
-    console.log('[Sandbox] initializeSandbox() called');
-    return new Promise((resolve, reject) => {
-        const handler = (event: MessageEvent) => {
-            console.log('[Sandbox] Received message from worker:', event.data);
-            const { type } = event.data;
+export async function initializeSandbox(): Promise<void> {
+    console.log('[Sandbox] initializeSandbox() called, isSharedWorker:', isSharedWorker);
 
-            // Also handle ready here as fallback
-            if (type === 'ready') {
-                console.log('[Sandbox] Worker ready (fallback handler), sending init message');
-                isWorkerReady = true;
-                workerReadyResolve();
-                sandboxPort.postMessage({ type: 'init', id: 'init-' + Date.now() });
-            } else if (type === 'init_complete') {
-                console.log('[Sandbox] Worker init complete!');
-                sandboxPort.removeEventListener('message', handler);
+    if (isInitialized) {
+        console.log('[Sandbox] Already initialized');
+        return;
+    }
 
-                // Enable debug mode if requested via query string
-                if (debugMode) {
-                    sandboxPort.postMessage({ type: 'set_debug_mode', id: 'debug-' + Date.now(), enabled: true });
-                }
+    try {
+        await initializeWorker(sandboxPort);
+        isInitialized = true;
 
-                resolve();
-            } else if (type === 'error') {
-                console.error('[Sandbox] Worker error during init:', event.data);
-                sandboxPort.removeEventListener('message', handler);
-                reject(new Error(event.data.message || 'Worker error'));
-            }
-        };
-        sandboxPort.addEventListener('message', handler);
-
-        // If worker is already ready, send init immediately
-        if (isWorkerReady) {
-            console.log('[Sandbox] Worker already ready, sending init message');
-            sandboxPort.postMessage({ type: 'init', id: 'init-' + Date.now() });
-        } else {
-            // Request a ping in case we missed the ready signal
-            console.log('[Sandbox] Waiting for worker ready signal...');
-            sandboxPort.postMessage({ type: 'ping' });
+        // Enable debug mode if requested via query string
+        if (debugMode) {
+            sandboxPort.postMessage({ type: 'set_debug_mode', id: 'debug-' + Date.now(), enabled: true });
         }
-    });
+
+        console.log('[Sandbox] Initialization complete with', isSharedWorker ? 'SharedWorker' : 'Worker');
+    } catch (error) {
+        // If SharedWorker init failed, try falling back to dedicated Worker
+        if (isSharedWorker) {
+            console.warn('[Sandbox] SharedWorker init failed, falling back to dedicated Worker:', error);
+
+            // Terminate the failed SharedWorker
+            if (workerInstance && 'port' in workerInstance) {
+                try {
+                    (workerInstance as SharedWorker).port.close();
+                } catch (e) {
+                    console.warn('[Sandbox] Failed to close SharedWorker port:', e);
+                }
+            }
+
+            // Reset state for new worker
+            isWorkerReady = false;
+            isSharedWorker = false;
+            workerReadyPromise = new Promise<void>((resolve) => {
+                workerReadyResolve = resolve;
+            });
+
+            // Create dedicated worker
+            const dedicatedWorkerResult = createDedicatedWorker();
+            sandboxPort = dedicatedWorkerResult.port;
+            workerInstance = dedicatedWorkerResult.worker;
+
+            // Update the workerLikeInterface to use new port
+            // (Methods already reference 'sandboxPort' variable which is updated above)
+            // But we MUST re-attach all listeners that were registered on the old port
+            console.log('[Sandbox] Re-attaching listeners to fallback worker port...');
+            activeListeners.forEach((listeners, type) => {
+                listeners.forEach(listener => {
+                    sandboxPort.addEventListener(type, listener as EventListener);
+                });
+            });
+
+            // Set up ready handler for new worker
+            setupReadyHandler(sandboxPort);
+
+            // Set up debug listener on new port
+            sandboxPort.addEventListener('message', (event: MessageEvent) => {
+                if (event.data?.type === 'debug_stderr') {
+                    console.log('[WASM stderr]', event.data.text);
+                }
+            });
+
+            // Retry initialization with dedicated worker
+            console.log('[Sandbox] Retrying initialization with dedicated Worker');
+            await initializeWorker(sandboxPort);
+            isInitialized = true;
+
+            // Enable debug mode if requested
+            if (debugMode) {
+                sandboxPort.postMessage({ type: 'set_debug_mode', id: 'debug-' + Date.now(), enabled: true });
+            }
+
+            console.log('[Sandbox] Initialization complete with dedicated Worker (fallback)');
+        } else {
+            // Dedicated Worker also failed, propagate the error
+            throw error;
+        }
+    }
 }
 
 /**

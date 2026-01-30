@@ -189,6 +189,18 @@ export default defineConfig(({ mode }) => ({
             ],
 
             output: {
+                // Force Node polyfills into a dedicated chunk to prevent circular dependencies
+                // between worker and MCP modules (both need Buffer/process)
+                manualChunks: (id) => {
+                    if (id.includes('vite-plugin-node-polyfills/shims') ||
+                        id.includes('node_modules/buffer') ||
+                        id.includes('node_modules/process') ||
+                        id.includes('node_modules/events') ||
+                        id.includes('node_modules/stream')) {
+                        return 'node-polyfills';
+                    }
+                    return undefined;
+                },
                 paths: {
                     '@tjfontaine/wasi-shims': '/wasi-shims/index.js',
                     '@tjfontaine/wasi-shims/poll-impl.js': '/wasi-shims/poll-impl.js',
@@ -251,6 +263,22 @@ export default defineConfig(({ mode }) => ({
             ],
 
             output: {
+                // Force Node polyfills into a dedicated chunk to prevent circular dependencies
+                // between SandboxWorker and MCP modules (both need Buffer/process)
+                // Without this, Vite may bundle polyfills into the worker, causing
+                // MCP module to import from worker, creating a circular dependency
+                // that WebKit cannot handle correctly
+                manualChunks: (id) => {
+                    // Node polyfills from vite-plugin-node-polyfills
+                    if (id.includes('vite-plugin-node-polyfills/shims') ||
+                        id.includes('node_modules/buffer') ||
+                        id.includes('node_modules/process') ||
+                        id.includes('node_modules/events') ||
+                        id.includes('node_modules/stream')) {
+                        return 'node-polyfills';
+                    }
+                    return undefined;
+                },
                 // Map external modules to their runtime paths
                 paths: {
                     '@tjfontaine/wasi-shims': '/wasi-shims/index.js',

@@ -76,6 +76,7 @@ const TOTAL_BUFFER_SIZE = HTTP_BUFFER_OFFSET + HTTP_BUFFER_SIZE;
 export class WorkerBridge {
     private worker: Worker | null = null;
     private sharedBuffer: SharedArrayBuffer;
+    private opfsSharedBuffer: SharedArrayBuffer;
     private controlArray: Int32Array;
     private stdinDataArray: Uint8Array;
     private httpDataArray: Uint8Array;
@@ -96,11 +97,16 @@ export class WorkerBridge {
         this.mcpTransport = options?.mcpTransport || null;
         this.workerUrl = options?.workerUrl || null;
 
-        // Create SharedArrayBuffer for communication
+        // Create SharedArrayBuffer for stdin/http communication
         this.sharedBuffer = new SharedArrayBuffer(TOTAL_BUFFER_SIZE);
         this.controlArray = new Int32Array(this.sharedBuffer, 0, CONTROL_SIZE / 4);
         this.stdinDataArray = new Uint8Array(this.sharedBuffer, STDIN_BUFFER_OFFSET, STDIN_BUFFER_SIZE);
         this.httpDataArray = new Uint8Array(this.sharedBuffer, HTTP_BUFFER_OFFSET, HTTP_BUFFER_SIZE);
+
+        // Create SharedArrayBuffer for OPFS worker communication
+        // Must be created in main thread since WebKit workers don't have SharedArrayBuffer
+        const opfsBufferSize = 64 + 64 * 1024; // 64 bytes control + 64KB data
+        this.opfsSharedBuffer = new SharedArrayBuffer(opfsBufferSize);
 
         // Ready promise for async initialization
         this.readyPromise = new Promise((resolve) => {
@@ -127,13 +133,15 @@ export class WorkerBridge {
         };
 
         this.worker.onerror = (e) => {
-            console.error('[WorkerBridge] Worker error:', e);
+            console.error('[WorkerBridge] Worker error:', e.message || e.filename || e);
         };
 
-        // Initialize worker with shared buffer
+        // Initialize worker with shared buffers
+        // Both buffers must be created in main thread for WebKit compatibility
         this.worker.postMessage({
             type: 'init',
-            sharedBuffer: this.sharedBuffer
+            sharedBuffer: this.sharedBuffer,
+            opfsSharedBuffer: this.opfsSharedBuffer
         });
 
         // Wait for worker to be ready

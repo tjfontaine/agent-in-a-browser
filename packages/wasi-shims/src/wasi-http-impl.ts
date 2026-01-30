@@ -313,13 +313,16 @@ export function createInputStreamFromBytes(bytes: Uint8Array): unknown {
         },
         blockingRead(len: bigint): Uint8Array {
             // Same as read for our synchronous use case
+            console.log('[InputStream:bytes] blockingRead called, len:', len.toString(), 'bytesTotal:', bytes.length, 'offset:', offset);
             const remaining = bytes.length - offset;
             if (remaining <= 0) {
+                console.log('[InputStream:bytes] blockingRead -> empty (EOF)');
                 return new Uint8Array(0);
             }
             const toRead = Math.min(Number(len), remaining);
             const chunk = bytes.slice(offset, offset + toRead);
             offset += toRead;
+            console.log('[InputStream:bytes] blockingRead -> returning', chunk.length, 'bytes, new offset:', offset);
             return chunk;
         }
     });

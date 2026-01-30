@@ -38,13 +38,10 @@ aux_panel = true
  * @param configToml - TOML config content (defaults to DEFAULT_TEST_CONFIG)
  */
 export async function seedConfig(page: Page, configToml: string = DEFAULT_TEST_CONFIG): Promise<void> {
-    // Navigate to the wasm-test page to get OPFS access if not already on localhost
-    const currentUrl = page.url();
-    if (!currentUrl.includes('localhost') && !currentUrl.includes('127.0.0.1')) {
-        await page.goto('/wasm-test.html');
-        // Wait for page to be ready enough for OPFS
-        await page.waitForLoadState('domcontentloaded');
-    }
+    // Always navigate to a page that allows OPFS access
+    // about:blank (initial state) doesn't have OPFS access
+    await page.goto('/wasm-test.html');
+    await page.waitForLoadState('domcontentloaded');
 
     await page.evaluate(async (content) => {
         // Get OPFS root

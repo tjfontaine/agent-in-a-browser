@@ -47,6 +47,7 @@ const HTTP_BUFFER_SIZE = BUFFER_LAYOUT.HTTP_BUFFER_SIZE;
 let controlArray: Int32Array | null = null;
 let stdinDataArray: Uint8Array | null = null;
 let httpDataArray: Uint8Array | null = null;
+let opfsSharedBuffer: SharedArrayBuffer | null = null;
 let initialized = false;
 
 // Pending HTTP response headers (sent via postMessage, stored here for streaming)
@@ -64,12 +65,18 @@ function getPendingHttpHeaders(): { status: number; headers: [string, string][] 
 
 /**
  * Initialize the worker with shared memory from main thread.
+ * @param buffer SharedArrayBuffer for stdin/http communication
+ * @param opfsBuffer SharedArrayBuffer for OPFS worker communication (required for WebKit)
  */
-function initWorker(buffer: SharedArrayBuffer): void {
-    // Note: buffer is used directly, not stored in module-level variable
+function initWorker(buffer: SharedArrayBuffer, opfsBuffer: SharedArrayBuffer): void {
+    // Store buffers for stdin/http communication
     controlArray = new Int32Array(buffer, 0, CONTROL_SIZE / 4);
     stdinDataArray = new Uint8Array(buffer, STDIN_BUFFER_OFFSET, STDIN_BUFFER_SIZE);
     httpDataArray = new Uint8Array(buffer, HTTP_BUFFER_OFFSET, HTTP_BUFFER_SIZE);
+
+    // Store OPFS buffer for filesystem initialization
+    // In WebKit workers, SharedArrayBuffer is not available, so it must be passed from main thread
+    opfsSharedBuffer = opfsBuffer;
 
     // Clear control flags
     Atomics.store(controlArray, STDIN_CONTROL.REQUEST_READY, 0);
@@ -297,7 +304,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
     switch (msg.type) {
         case 'init':
-            initWorker(msg.sharedBuffer);
+            initWorker(msg.sharedBuffer, msg.opfsSharedBuffer);
             break;
 
         case 'stdin':
@@ -381,7 +388,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                     console.log('[WasmWorker] DEBUG - rootDesc instanceof Descriptor:', rootDesc instanceof shimDescriptor);
                     console.log('[WasmWorker] DEBUG - Same class?:', rootDesc?.constructor === shimDescriptor ? 'YES' : 'NO');
 
-                    await opfsShim.initFilesystem();
+                    // Initialize OPFS with buffer from main thread (required for WebKit)
+                    await opfsShim.initFilesystem(opfsSharedBuffer!);
                     console.log('[WasmWorker] OPFS filesystem ready');
 
                     // Pre-load all lazy modules in the worker context

@@ -13,11 +13,32 @@ import { setTerminalSize } from './ghostty-cli-shim.js';
 import { setExecutionMode, isSyncWorkerMode } from './execution-mode.js';
 
 // ============================================================
-// STATE (initialized by worker)
+// STATE (globalThis singleton for cross-bundle sharing)
 // ============================================================
 
-let controlArray: Int32Array | null = null;
-let dataArray: Uint8Array | null = null;
+// Use globalThis symbols to share state across bundled module copies.
+// When esbuild bundles stdin-sync-bridge into ghostty-cli-shim, it creates
+// a separate copy with its own module-level variables. Using globalThis
+// ensures the worker's initStdinSyncBridge() call initializes the same
+// state that ghostty-cli-shim's blockingReadStdin() reads from.
+const STDIN_BRIDGE_STATE_KEY = Symbol.for('wasi-shims:stdin-sync-bridge-state');
+
+// Type for the shared state
+interface StdinSyncBridgeState {
+    controlArray: Int32Array | null;
+    dataArray: Uint8Array | null;
+}
+
+// Get or create the shared state on globalThis
+function getSharedState(): StdinSyncBridgeState {
+    if (!(globalThis as any)[STDIN_BRIDGE_STATE_KEY]) {
+        (globalThis as any)[STDIN_BRIDGE_STATE_KEY] = {
+            controlArray: null,
+            dataArray: null,
+        };
+    }
+    return (globalThis as any)[STDIN_BRIDGE_STATE_KEY];
+}
 
 // ============================================================
 // INITIALIZATION
@@ -31,11 +52,12 @@ export function initStdinSyncBridge(
     control: Int32Array,
     data: Uint8Array
 ): void {
-    controlArray = control;
-    dataArray = data;
+    const state = getSharedState();
+    state.controlArray = control;
+    state.dataArray = data;
     // Set global execution mode to sync-worker
     setExecutionMode('sync-worker');
-    console.log('[StdinSyncBridge] Initialized');
+    console.log('[StdinSyncBridge] Initialized (globalThis singleton)');
 }
 
 /**
@@ -58,6 +80,9 @@ export function isNonJspiMode(): boolean {
  * @returns The stdin data, or empty array on EOF/timeout
  */
 export function blockingReadStdin(maxLen: number): Uint8Array {
+    const state = getSharedState();
+    const { controlArray, dataArray } = state;
+
     if (!controlArray || !dataArray) {
         throw new Error('StdinSyncBridge not initialized');
     }
@@ -118,6 +143,9 @@ export function blockingReadStdin(maxLen: number): Uint8Array {
  * Returns immediately with available data or empty array.
  */
 export function nonBlockingReadStdin(maxLen: number): Uint8Array {
+    const state = getSharedState();
+    const { controlArray, dataArray } = state;
+
     if (!controlArray || !dataArray) {
         return new Uint8Array(0);
     }
@@ -141,6 +169,9 @@ export function nonBlockingReadStdin(maxLen: number): Uint8Array {
  * Signal EOF on stdin (e.g., when terminal closes).
  */
 export function signalStdinEof(): void {
+    const state = getSharedState();
+    const { controlArray } = state;
+
     if (controlArray) {
         Atomics.store(controlArray, STDIN_CONTROL.EOF, 1);
         Atomics.notify(controlArray, STDIN_CONTROL.RESPONSE_READY);

@@ -23,6 +23,7 @@ const pendingRequests = new Map<string, {
 export function createWorkerFetchSimple(worker: Worker): WorkerFetchSimple {
     // Set up message handler for responses
     worker.addEventListener('message', (event) => {
+        console.log('[WorkerFetchSimple] Received message:', event.data.type, event.data.requestId);
         const { type, requestId, payload } = event.data;
 
         if (type === 'fetch-response' && requestId) {

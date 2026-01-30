@@ -628,24 +628,20 @@ async fn execute_simple(
                     }
                 }
             } else {
-                // Batch command - choose execution strategy based on JSPI availability
+                // Batch command - always use spawn_lazy_command
+                // It handles both modes:
+                // - JSPI mode (Chrome): Loads module async, JCO awaits the Promise
+                // - Sync mode (Safari/Firefox): Uses cached module loaded by initializeForSyncMode()
                 //
-                // JSPI mode (Chrome): Use spawn_lazy_command which runs in the same context.
-                // This avoids module duplication issues where JCO's instanceof checks fail
-                // because the Worker has different class instances.
-                //
-                // Non-JSPI mode (Safari/Firefox): Use spawn_worker_command for interruptible
-                // execution via Worker.terminate().
-                let process = if loader::has_jspi() {
-                    loader::spawn_lazy_command(
-                        &module_name,
-                        &expanded_name,
-                        &expanded_args,
-                        &exec_env,
-                    )
-                } else {
-                    loader::spawn_worker_command(&expanded_name, &expanded_args, &exec_env)
-                };
+                // NOTE: We previously used spawn_worker_command for interruptibility in sync mode,
+                // but that's async and can't be called from sync JCO trampolines.
+                // Interruptibility in sync mode requires a different mechanism (TBD).
+                let process = loader::spawn_lazy_command(
+                    &module_name,
+                    &expanded_name,
+                    &expanded_args,
+                    &exec_env,
+                );
 
                 // Wait for the module to be loaded before writing stdin
                 // Get the ready pollable and block on it

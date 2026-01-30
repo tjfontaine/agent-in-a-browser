@@ -17,6 +17,12 @@ import './oauth-handler.js';
 import { hasJSPI } from '@tjfontaine/mcp-wasm-server';
 import { WorkerBridge } from '@tjfontaine/wasi-shims';
 
+// Import bundled worker URL - Vite's ?worker&url suffix ensures:
+// 1. The worker is bundled as JavaScript (not raw TypeScript)
+// 2. We get the correct URL to the bundled worker asset
+// This is critical for WebKit which cannot execute TypeScript in workers
+import wasmWorkerUrl from './workers/wasm-worker.ts?worker&url';
+
 // Create full-screen terminal container
 const root = document.getElementById('root')!;
 root.innerHTML = '<div id="terminal" style="width: 100%; height: 100vh;"></div>';
@@ -57,6 +63,9 @@ const terminalEl = document.getElementById('terminal')!;
             terminal.open(terminalEl);
             terminalInstance = terminal;
 
+            // Expose terminal for E2E tests immediately (bridge.runModule doesn't return)
+            (window as unknown as { tuiTerminal: unknown }).tuiTerminal = terminal;
+
             // Load FitAddon for proper sizing (same as JSPI mode)
             const fitAddon = new ghostty.FitAddon();
             terminal.loadAddon(fitAddon);
@@ -85,8 +94,8 @@ const terminalEl = document.getElementById('terminal')!;
                 return { status: response.status, body: responseBody };
             };
 
-            // Launch worker bridge with MCP transport and worker URL
-            const workerUrl = new URL('./workers/wasm-worker.ts', import.meta.url);
+            // Launch worker bridge with MCP transport and bundled worker URL
+            const workerUrl = new URL(wasmWorkerUrl, import.meta.url);
             const bridge = new WorkerBridge(terminal, { mcpTransport, workerUrl });
             await bridge.start();
 
@@ -122,18 +131,14 @@ const terminalEl = document.getElementById('terminal')!;
                 }
             });
             terminalInstance = terminal;
+
+            // Expose terminal for E2E tests
+            (window as unknown as { tuiTerminal: unknown }).tuiTerminal = terminal;
         }
 
-        // Focus the terminal
         // Focus the terminal
         if (terminalInstance) {
             terminalInstance.focus();
-        }
-
-        // Expose terminal for E2E tests
-        // Expose terminal for E2E tests
-        if (terminalInstance) {
-            (window as unknown as { tuiTerminal: unknown }).tuiTerminal = terminalInstance;
         }
 
         console.log('[Main] TUI running');

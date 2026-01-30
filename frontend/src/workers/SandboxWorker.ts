@@ -242,6 +242,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
             case 'fetch-simple': {
                 // Safari-compatible fetch using request IDs (no MessageChannel ports)
                 console.log('[SandboxWorker] Handling fetch-simple:', data.url, data.method);
+                self.postMessage({ type: 'worker-log', msg: '[SandboxWorker] fetch-simple handler entered', data: { url: data.url, method: data.method }, time: Date.now() });
                 const { requestId, url, method, headers, body } = data;
 
                 try {
@@ -263,6 +264,10 @@ self.addEventListener('message', async (event: MessageEvent) => {
                     // Read full body
                     const reader = respBody.getReader();
                     const chunks: Uint8Array[] = [];
+
+                    // YIELD TO EVENT LOOP to avoid WebKit Sync Hang
+                    await new Promise(resolve => setTimeout(resolve, 0));
+
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
@@ -284,6 +289,8 @@ self.addEventListener('message', async (event: MessageEvent) => {
                     respHeaders.forEach((val, key) => headerEntries.push([key, val]));
 
                     // Post response back
+                    console.log('[SandboxWorker] Posting fetch-response:', requestId);
+
                     self.postMessage({
                         type: 'fetch-response',
                         requestId,
@@ -294,6 +301,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
                             body: Array.from(fullBody)
                         }
                     });
+
 
                 } catch (error: unknown) {
                     self.postMessage({

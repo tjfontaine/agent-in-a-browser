@@ -40,6 +40,8 @@ export const BUFFER_LAYOUT = {
 export interface WorkerInitMessage {
     type: 'init';
     sharedBuffer: SharedArrayBuffer;
+    /** SharedArrayBuffer for OPFS worker communication. Required for WebKit workers. */
+    opfsSharedBuffer: SharedArrayBuffer;
 }
 
 export interface WorkerRunMessage {

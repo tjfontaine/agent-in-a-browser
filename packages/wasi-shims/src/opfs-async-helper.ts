@@ -324,9 +324,7 @@ async function requestLoop(
 ): Promise<void> {
     console.log('[opfs-helper] Starting request loop');
 
-    // Initialize OPFS root
-    opfsRoot = await navigator.storage.getDirectory();
-    console.log('[opfs-helper] OPFS root acquired');
+    // OPFS root is already initialized before this function is called
 
     while (true) {
         // Wait for request from sandbox worker
@@ -439,13 +437,22 @@ self.onmessage = async (event: MessageEvent) => {
         const controlArray = new Int32Array(buffer, 0, 16);
         const dataArray = new Uint8Array(buffer, 64);
 
-        // Start the request loop
-        requestLoop(controlArray, dataArray).catch(e => {
-            console.error('[opfs-helper] Request loop error:', e);
-        });
+        // Initialize OPFS root BEFORE signaling ready
+        try {
+            console.log('[opfs-helper] Acquiring OPFS root...');
+            opfsRoot = await navigator.storage.getDirectory();
+            console.log('[opfs-helper] OPFS root acquired');
 
-        // Signal ready
-        self.postMessage({ type: 'ready' });
+            // Signal ready only after OPFS is successfully initialized
+            self.postMessage({ type: 'ready' });
+
+            // Start the request loop (this runs indefinitely)
+            await requestLoop(controlArray, dataArray);
+        } catch (e) {
+            console.error('[opfs-helper] Initialization error:', e);
+            // Signal error back to parent
+            self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
+        }
     }
 };
 

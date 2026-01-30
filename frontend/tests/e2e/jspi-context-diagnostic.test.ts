@@ -3,11 +3,16 @@
  * 
  * Tests JSPI in main thread, dedicated Worker, and SharedWorker.
  * Uses localhost:8080 page to allow SharedWorker creation.
+ * 
+ * NOTE: WebKit/Safari does not support JSPI, so these tests are skipped on webkit.
  */
 
 import { test, expect } from '@playwright/test';
 
 test.describe('JSPI Minimal Diagnostics', () => {
+    // Skip on WebKit - JSPI is not supported
+    test.skip(({ browserName }) => browserName === 'webkit', 'JSPI not supported on WebKit');
+
     // Use the real server for SharedWorker support (origin can't be 'null')
     test.beforeEach(async ({ page }) => {
         await page.goto('http://localhost:8080/');

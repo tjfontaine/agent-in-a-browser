@@ -23,6 +23,7 @@ const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown }
  * Whether the browser supports JSPI (JavaScript Promise Integration).
  * True for Chrome with flags, false for Safari/Firefox.
  */
+// export const hasJSPI: boolean = typeof webAssembly.Suspending !== 'undefined';
 export const hasJSPI: boolean = typeof webAssembly.Suspending !== 'undefined';
 
 /**

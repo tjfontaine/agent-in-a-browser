@@ -80,6 +80,7 @@ export class InputStream {
     }
 
     blockingRead(len: bigint): Uint8Array | Promise<Uint8Array> {
+        console.log('[InputStream:class] blockingRead delegation called, len:', len.toString());
         return this.handler.blockingRead(len);
     }
 

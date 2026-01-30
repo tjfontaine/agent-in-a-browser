@@ -93,7 +93,9 @@ export function spawnLazyCommand(
     const cachedModule = getLoadedModuleSync(moduleName);
     if (cachedModule) {
         console.log(`[ModuleLoader] Module '${moduleName}' retrieved from cache for command '${command}'`);
-        return new LazyProcess(moduleName, command, args, env, cachedModule);
+        const process = new LazyProcess(moduleName, command, args, env, cachedModule);
+        console.log(`[ModuleLoader] Instance check: ${String(LAZY_PROCESS_KEY)} in process =`, LAZY_PROCESS_KEY in process);
+        return process;
     }
 
     // Module not cached - behavior differs by mode
@@ -207,10 +209,24 @@ class ReadyPollable extends BasePollable {
 }
 
 /**
+ * IMPORTANT: Singleton Pattern for JCO Resource Validation
+ * 
+ * JCO-generated trampolines use `instanceof` checks to validate WASI resources.
+ * When modules are loaded multiple times (e.g., by different bundler entry points),
+ * each module instance gets its own class constructor, causing instanceof to fail.
+ * 
+ * We use Symbol.for() to create global singleton class references that persist
+ * across all module loads. This ensures all code references the same class prototype.
+ * 
+ * @see opfs-filesystem-impl.ts for the Descriptor pattern this follows
+ */
+const LAZY_PROCESS_KEY = Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess');
+
+/**
  * LazyProcess - Handle for a running lazy command with streaming I/O.
  * The module is passed in already loaded (since spawnLazyCommand awaited it).
  */
-export class LazyProcess {
+class _LazyProcess {
     private stdinBuffer: Uint8Array[] = [];
     private stdinClosed = false;
     private stdoutBuffer: Uint8Array[] = [];
@@ -248,6 +264,9 @@ export class LazyProcess {
 
         // Module is already loaded
         this.readyPollable = new ReadyPollable(module);
+
+        // Symbol marker for cross-bundle instanceof validation (patched by transpile.mjs)
+        Object.defineProperty(this, LAZY_PROCESS_KEY, { value: true, enumerable: false });
     }
 
     getReadyPollable(): ReadyPollable {
@@ -644,6 +663,23 @@ function getModuleUrl(moduleName: string): string {
             throw new Error(`No module URL for: ${moduleName}`);
     }
 }
+
+// Singleton registration via Symbol.for - ensures same class across all module loads
+// This fixes instanceof checks when Vite bundles the module multiple times
+if (!(globalThis as Record<symbol, unknown>)[LAZY_PROCESS_KEY]) {
+    // Use comma expression to ensure prototype marker is set (prevents tree-shaking)
+    // The 'in' operator check in transpile.mjs requires this on prototype chain
+    (globalThis as Record<symbol, unknown>)[LAZY_PROCESS_KEY] = (
+        Object.defineProperty(_LazyProcess.prototype, LAZY_PROCESS_KEY, { value: true, enumerable: false }),
+        _LazyProcess
+    );
+    console.log('[LazyProcess] Singleton registered, prototype marker set:', {
+        prototypeHasSymbol: LAZY_PROCESS_KEY in _LazyProcess.prototype,
+        symbolKey: LAZY_PROCESS_KEY.toString(),
+    });
+}
+export const LazyProcess = (globalThis as Record<symbol, unknown>)[LAZY_PROCESS_KEY] as typeof _LazyProcess;
+export type LazyProcess = InstanceType<typeof LazyProcess>;
 
 /**
  * WorkerProcess - Runs a command in an isolated Web Worker.
