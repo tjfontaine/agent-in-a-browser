@@ -1,70 +1,88 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var agentBridge: AgentBridge
+    @EnvironmentObject var nativeAgent: NativeAgentHost
     @EnvironmentObject var configManager: ConfigManager
     @Environment(\.dismiss) private var dismiss
     
-    @State private var providers: [ProviderInfo] = []
-    @State private var models: [ModelInfo] = []
-    @State private var isLoading = true
+    // Static provider/model lists for now (native agent doesn't have WASM exports for these yet)
+    private let providers: [ProviderInfo] = [
+        ProviderInfo(id: "gemini", name: "Google Gemini", defaultBaseUrl: nil),
+        ProviderInfo(id: "anthropic", name: "Anthropic", defaultBaseUrl: nil),
+        ProviderInfo(id: "openai", name: "OpenAI", defaultBaseUrl: nil),
+        ProviderInfo(id: "openrouter", name: "OpenRouter", defaultBaseUrl: "https://openrouter.ai/api/v1")
+    ]
+    
+    private func modelsForProvider(_ providerId: String) -> [ModelInfo] {
+        switch providerId {
+        case "gemini":
+            return [
+                ModelInfo(id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)"),
+                ModelInfo(id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)"),
+                ModelInfo(id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash"),
+                ModelInfo(id: "gemini-1.5-pro", name: "Gemini 1.5 Pro"),
+                ModelInfo(id: "gemini-1.5-flash", name: "Gemini 1.5 Flash")
+            ]
+        case "anthropic":
+            return [
+                ModelInfo(id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5"),
+                ModelInfo(id: "claude-haiku-4-5", name: "Claude Haiku 4.5"),
+                ModelInfo(id: "claude-3-5-sonnet-latest", name: "Claude 3.5 Sonnet")
+            ]
+        case "openai":
+            return [
+                ModelInfo(id: "gpt-4o", name: "GPT-4o"),
+                ModelInfo(id: "gpt-4o-mini", name: "GPT-4o Mini"),
+                ModelInfo(id: "gpt-4-turbo", name: "GPT-4 Turbo")
+            ]
+        case "openrouter":
+            return [
+                ModelInfo(id: "google/gemini-2.0-flash-exp:free", name: "Gemini 2.0 Flash (Free)"),
+                ModelInfo(id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet"),
+                ModelInfo(id: "openai/gpt-4o", name: "GPT-4o")
+            ]
+        default:
+            return []
+        }
+    }
+    
     @State private var useCustomModel = false
     
     var body: some View {
         NavigationStack {
             Form {
                 Section("Provider") {
-                    if isLoading {
-                        ProgressView("Loading providers...")
-                    } else {
-                        Picker("Provider", selection: $configManager.provider) {
-                            ForEach(providers) { provider in
-                                Text(provider.name).tag(provider.id)
-                            }
+                    Picker("Provider", selection: $configManager.provider) {
+                        ForEach(providers) { provider in
+                            Text(provider.name).tag(provider.id)
                         }
-                        .onChange(of: configManager.provider) { _, newProvider in
-                            Task {
-                                await loadModelsForProvider(newProvider)
-                                // Reset model when provider changes
-                                if let firstModel = models.first {
-                                    configManager.model = firstModel.id
-                                    useCustomModel = false
-                                }
-                            }
+                    }
+                    .onChange(of: configManager.provider) { _, newProvider in
+                        // Reset model when provider changes
+                        if let firstModel = modelsForProvider(newProvider).first {
+                            configManager.model = firstModel.id
+                            useCustomModel = false
                         }
-                        
-                        // Model picker with refresh
-                        HStack {
-                            Picker("Model", selection: $configManager.model) {
-                                ForEach(models) { model in
-                                    Text(model.name).tag(model.id)
-                                }
-                                if useCustomModel {
-                                    Text(configManager.model).tag(configManager.model)
-                                }
-                            }
-                            .disabled(useCustomModel)
-                            
-                            Button {
-                                Task {
-                                    isLoading = true
-                                    await loadModelsForProvider(configManager.provider)
-                                    isLoading = false
-                                }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .buttonStyle(.borderless)
+                    }
+                    
+                    // Model picker
+                    Picker("Model", selection: $configManager.model) {
+                        ForEach(modelsForProvider(configManager.provider)) { model in
+                            Text(model.name).tag(model.id)
                         }
-                        
-                        // Custom model toggle + input
-                        Toggle("Custom Model", isOn: $useCustomModel)
-                        
                         if useCustomModel {
-                            TextField("Model ID", text: $configManager.model)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
+                            Text(configManager.model).tag(configManager.model)
                         }
+                    }
+                    .disabled(useCustomModel)
+                    
+                    // Custom model toggle + input
+                    Toggle("Custom Model", isOn: $useCustomModel)
+                    
+                    if useCustomModel {
+                        TextField("Model ID", text: $configManager.model)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                 }
                 
@@ -99,37 +117,12 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task {
-                await loadProviders()
-            }
-            .onChange(of: agentBridge.isReady) { _, isReady in
-                // Reload providers when WASM becomes ready
-                if isReady && providers.isEmpty {
-                    Task { await loadProviders() }
-                }
-            }
         }
-    }
-    
-    private func loadProviders() async {
-        // Wait for WASM to be ready before loading
-        if !agentBridge.isReady {
-            // Will be retried when isReady changes to true via onChange observer
-            return
-        }
-        
-        providers = await agentBridge.listProviders()
-        await loadModelsForProvider(configManager.provider)
-        isLoading = false
-    }
-    
-    private func loadModelsForProvider(_ providerId: String) async {
-        models = await agentBridge.listModels(providerId: providerId)
     }
 }
 
 #Preview {
     SettingsView()
-        .environmentObject(AgentBridge.shared)
+        .environmentObject(NativeAgentHost.shared)
         .environmentObject(ConfigManager())
 }

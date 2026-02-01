@@ -3,20 +3,20 @@ import SwiftUI
 @main
 struct EdgeAgentApp: App {
     @StateObject private var configManager = ConfigManager()
-    private let agentBridge = AgentBridge.shared  // Use singleton
+    @StateObject private var nativeAgent = NativeAgentHost.shared
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(configManager)
-                .environmentObject(agentBridge)
+                .environmentObject(nativeAgent)
         }
     }
 }
 
 struct ContentView: View {
     @EnvironmentObject var configManager: ConfigManager
-    @EnvironmentObject var agentBridge: AgentBridge
+    @EnvironmentObject var nativeAgent: NativeAgentHost
     @State private var showSettings = false
     
     var body: some View {
@@ -24,24 +24,13 @@ struct ContentView: View {
             if configManager.apiKey.isEmpty {
                 WelcomeView(showSettings: $showSettings)
             } else {
-                ChatView()
+                MealMindView()
             }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .onChange(of: agentBridge.isReady) { ready in
-            if ready && !configManager.apiKey.isEmpty {
-                agentBridge.createAgent(config: configManager.buildAgentConfig())
-            }
-        }
-        .onChange(of: showSettings) { wasShowing, isShowing in
-            // Recreate agent when settings sheet closes (to pick up changes)
-            if wasShowing && !isShowing && agentBridge.isReady && !configManager.apiKey.isEmpty {
-                print("[EdgeAgentApp] Settings closed, recreating agent with new config")
-                agentBridge.createAgent(config: configManager.buildAgentConfig())
-            }
-        }
+        // Agent creation is now handled by MealMindView with its own config
     }
 }
 
@@ -50,20 +39,25 @@ struct WelcomeView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "brain.head.profile")
+            Image(systemName: "fork.knife.circle.fill")
                 .font(.system(size: 80))
-                .foregroundStyle(.tint)
+                .foregroundStyle(.orange)
             
-            Text("Edge Agent")
+            Text("MealMind")
                 .font(.largeTitle.bold())
             
-            Text("Configure your API key to get started")
+            Text("Your AI-powered recipe assistant")
                 .foregroundStyle(.secondary)
+            
+            Text("Configure your API key to get started")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
             
             Button("Open Settings") {
                 showSettings = true
             }
             .buttonStyle(.borderedProminent)
+            .tint(.orange)
         }
         .padding()
     }

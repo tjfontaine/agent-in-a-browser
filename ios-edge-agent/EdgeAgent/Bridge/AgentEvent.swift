@@ -1,7 +1,7 @@
 import Foundation
 
 /// Agent event matching the WIT variant type
-enum AgentEvent: Identifiable {
+enum AgentEvent: Identifiable, Equatable {
     case streamStart
     case chunk(String)
     case complete(String)
@@ -14,6 +14,7 @@ enum AgentEvent: Identifiable {
     case taskComplete(id: String, success: Bool, output: String?)
     case modelLoading(text: String, progress: Float)
     case ready
+    case renderUI(componentsJSON: String)  // JSON string for Equatable conformance
     
     var id: String {
         switch self {
@@ -29,6 +30,7 @@ enum AgentEvent: Identifiable {
         case .taskComplete(let id, _, _): return "task_complete_\(id)"
         case .modelLoading: return "model_loading"
         case .ready: return "ready"
+        case .renderUI: return "render_ui"
         }
     }
     
@@ -43,11 +45,22 @@ enum AgentEvent: Identifiable {
         case "stream_error": return .error(dict["error"] as? String ?? "Unknown error")
         case "tool_call": return .toolCall(dict["name"] as? String ?? "")
         case "tool_result":
-            return .toolResult(
-                name: dict["name"] as? String ?? "",
-                output: dict["output"] as? String ?? "",
-                isError: dict["is_error"] as? Bool ?? false
-            )
+            let name = dict["name"] as? String ?? ""
+            let output = dict["output"] as? String ?? ""
+            let isError = dict["is_error"] as? Bool ?? false
+            
+            // Intercept render_ui tool results and convert to renderUI event
+            if name == "render_ui" && !isError {
+                if let data = output.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let components = json["components"] as? [[String: Any]],
+                   let jsonData = try? JSONSerialization.data(withJSONObject: components),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    return .renderUI(componentsJSON: jsonString)
+                }
+            }
+            
+            return .toolResult(name: name, output: output, isError: isError)
         case "plan_generated": return .planGenerated(dict["content"] as? String ?? "")
         case "task_start":
             return .taskStart(
@@ -73,6 +86,13 @@ enum AgentEvent: Identifiable {
                 progress: (dict["progress"] as? NSNumber)?.floatValue ?? 0
             )
         case "ready": return .ready
+        case "render_ui":
+            if let components = dict["components"] as? [[String: Any]],
+               let jsonData = try? JSONSerialization.data(withJSONObject: components),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return .renderUI(componentsJSON: jsonString)
+            }
+            return nil
         default: return nil
         }
     }
