@@ -91,7 +91,7 @@ struct ChatView: View {
             }
             .navigationTitle("Edge Agent")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         viewModel.clearHistory()
@@ -100,7 +100,6 @@ struct ChatView: View {
                     }
                     .disabled(viewModel.messages.isEmpty)
                 }
-                
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showSettings = true
@@ -108,7 +107,7 @@ struct ChatView: View {
                         Image(systemName: "gearshape")
                     }
                 }
-            }
+            })
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }

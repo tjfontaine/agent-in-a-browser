@@ -2,13 +2,8 @@ import Foundation
 import CoreLocation
 import MCP
 import Network
+import OSLog
 
-/// Simple timestamp string for debug logging
-private func ts() -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm:ss.SSS"
-    return formatter.string(from: Date())
-}
 // MARK: - iOS MCP Server
 
 /// Local MCP server that provides iOS-specific tools to the headless agent.
@@ -81,13 +76,14 @@ class MCPServer: NSObject {
         try await startHTTPServer()
         
         isRunning = true
-        print("[MCPServer] Started on http://localhost:\(port)")
+        let serverPort = self.port
+        Log.mcp.info("Started on http://localhost:\(serverPort)")
     }
     
     func stop() {
         listener?.cancel()
         isRunning = false
-        print("[MCPServer] Stopped")
+        Log.mcp.info(" Stopped")
     }
     
     var baseURL: String {
@@ -370,9 +366,9 @@ class MCPServer: NSObject {
         listener?.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                print("[MCPServer] HTTP listener ready")
+                Log.mcp.info(" HTTP listener ready")
             case .failed(let error):
-                print("[MCPServer] HTTP listener failed: \(error)")
+                Log.mcp.info(" HTTP listener failed: \(error)")
             default:
                 break
             }
@@ -386,6 +382,9 @@ class MCPServer: NSObject {
     }
     
     private nonisolated func handleConnection(_ connection: NWConnection) {
+        let connectionId = UUID().uuidString.prefix(8)
+        Log.mcp.debug("[\(connectionId)] New connection accepted")
+        
         connection.start(queue: httpQueue)
         
         // Buffer to accumulate request data
@@ -394,36 +393,63 @@ class MCPServer: NSObject {
         func readMore() {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
                 guard let self = self else {
+                    Log.mcp.debug("[\(connectionId)] Server deallocated, cancelling connection")
+                    connection.cancel()
+                    return
+                }
+                
+                if let error = error {
+                    Log.mcp.error("[\(connectionId)] Receive error: \(error)")
                     connection.cancel()
                     return
                 }
                 
                 if let data = data {
+                    Log.mcp.debug("[\(connectionId)] Received \(data.count) bytes")
                     requestBuffer.append(data)
                 }
                 
+                if isComplete {
+                    Log.mcp.debug("[\(connectionId)] Connection closed by peer")
+                    // If we have data, we might need to process it, but usually HTTP 1.1 doesn't close connection for request
+                }
+                
                 // Check if we have a complete HTTP request
-                if let requestString = String(data: requestBuffer, encoding: .utf8),
-                   let headerEnd = requestString.range(of: "\r\n\r\n") {
+                // Use byte-based parsing to correctly handle Content-Length (which is in bytes, not characters)
+                let headerSeparator = Data("\r\n\r\n".utf8)
+                if let headerEndRange = requestBuffer.range(of: headerSeparator) {
+                    let headerData = requestBuffer[..<headerEndRange.lowerBound]
                     
-                    // Parse Content-Length to determine if we have the full body
-                    let headers = String(requestString[..<headerEnd.lowerBound])
+                    // Parse Content-Length from headers (ASCII-safe)
                     var contentLength = 0
-                    for line in headers.split(separator: "\r\n") {
-                        if line.lowercased().hasPrefix("content-length:") {
-                            let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
-                            contentLength = Int(value) ?? 0
+                    if let headersString = String(data: headerData, encoding: .utf8) {
+                        for line in headersString.split(separator: "\r\n") {
+                            if line.lowercased().hasPrefix("content-length:") {
+                                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                                contentLength = Int(value) ?? 0
+                            }
                         }
                     }
                     
-                    let bodyStart = requestString.index(headerEnd.upperBound, offsetBy: 0)
-                    let currentBodyLength = requestString.distance(from: bodyStart, to: requestString.endIndex)
+                    // Calculate body length in BYTES (not characters!)
+                    let bodyStartIndex = headerEndRange.upperBound
+                    let currentBodyLength = requestBuffer.count - bodyStartIndex
+                    
+                    Log.mcp.debug("[\(connectionId)] Request check: Body \(currentBodyLength)/\(contentLength) bytes")
                     
                     // If we have the full body, process the request
                     if currentBodyLength >= contentLength {
+                        Log.mcp.debug("[\(connectionId)] Request complete, processing sync")
                         // Process synchronously on httpQueue to avoid latency
                         let response = self.handleHTTPRequestSync(requestBuffer)
-                        connection.send(content: response, completion: .contentProcessed { _ in
+                        
+                        Log.mcp.debug("[\(connectionId)] Sending \(response.count) bytes response")
+                        connection.send(content: response, completion: .contentProcessed { error in
+                            if let error = error {
+                                Log.mcp.error("[\(connectionId)] Send error: \(error)")
+                            } else {
+                                Log.mcp.debug("[\(connectionId)] Sent response, closing connection")
+                            }
                             connection.cancel()
                         })
                         return
@@ -446,28 +472,28 @@ class MCPServer: NSObject {
     private nonisolated func handleHTTPRequestSync(_ data: Data) -> Data {
         // Parse HTTP request body (skip headers for simplicity)
         guard let requestString = String(data: data, encoding: .utf8) else {
-            print("[MCPServer] Failed to decode request as UTF-8")
+            Log.mcp.info(" Failed to decode request as UTF-8")
             return httpResponseSync(status: 400, body: "{\"error\": \"Invalid request encoding\"}")
         }
         
-        print("[\(ts())] [MCPServer] Received request (\(data.count) bytes)")
+        Log.mcp.debug(" Received request (\(data.count) bytes)")
         
         guard let bodyStart = requestString.range(of: "\r\n\r\n")?.upperBound else {
-            print("[MCPServer] No header/body separator found")
+            Log.mcp.info(" No header/body separator found")
             return httpResponseSync(status: 400, body: "{\"error\": \"Invalid request format\"}")
         }
         
         let body = String(requestString[bodyStart...])
-        print("[MCPServer] Body: \(body.prefix(200))")
+        Log.mcp.info(" Body: \(body.prefix(200))")
         
         guard !body.isEmpty else {
-            print("[MCPServer] Empty body")
+            Log.mcp.info(" Empty body")
             return httpResponseSync(status: 400, body: "{\"error\": \"Empty body\"}")
         }
         
         guard let jsonData = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            print("[MCPServer] JSON parse failed for body: \(body)")
+            Log.mcp.info(" JSON parse failed for body: \(body)")
             return httpResponseSync(status: 400, body: "{\"error\": \"Invalid JSON\"}")
         }
         
@@ -486,7 +512,7 @@ class MCPServer: NSObject {
         
         if let responseData = try? JSONSerialization.data(withJSONObject: responseJSON),
            let responseBody = String(data: responseData, encoding: .utf8) {
-            print("[\(ts())] [MCPServer] Sending response: \(responseBody.prefix(200))")
+            Log.mcp.debug(" Sending response: \(responseBody.prefix(200))")
             return httpResponseSync(status: 200, body: responseBody)
         }
         
@@ -506,46 +532,44 @@ class MCPServer: NSObject {
             // toolDefinitions is nonisolated, so we can access it directly
             return ["tools": toolDefinitions.map { toolToDictSync($0) }]
         case "tools/call":
-            // For tool calls, we need to dispatch to MainActor
-            // Use a semaphore to wait synchronously with thread-safe result box
+            // For tool calls that update UI, dispatch to main queue without blocking
+            // IMPORTANT: Do NOT use semaphore.wait() with MainActor - causes deadlock when WASM is running
             let name = params["name"] as? String ?? ""
-            
-            // Convert args to JSON string for thread-safe transfer
             let argsData = params["arguments"] as? [String: Any]
-            let argsJSONString: String?
-            if let argsData = argsData,
-               let data = try? JSONSerialization.data(withJSONObject: argsData),
-               let str = String(data: data, encoding: .utf8) {
-                argsJSONString = str
-            } else {
-                argsJSONString = nil
-            }
             
-            // Thread-safe result box
-            final class ResultBox: @unchecked Sendable {
-                var value: [String: Any] = [:]
-            }
-            let resultBox = ResultBox()
-            let semaphore = DispatchSemaphore(value: 0)
+            Log.mcp.debug(" tools/call: name=\(name)")
             
-            Task { @MainActor in
-                // Parse JSON back on MainActor
-                let argsJSON: Value?
-                if let jsonStr = argsJSONString,
-                   let data = jsonStr.data(using: .utf8),
-                   let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    argsJSON = self.dictToJSON(parsed)
-                } else {
-                    argsJSON = nil
+            switch name {
+            case "render_ui":
+                // Extract components and dispatch to main queue (fire-and-forget for UI)
+                if let components = argsData?["components"] as? [[String: Any]] {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onRenderUI?(components)
+                    }
+                    return ["content": [["type": "text", "text": "{\"rendered\": \(components.count)}"]], "isError": false]
                 }
+                return ["content": [["type": "text", "text": "Missing 'components' array"]], "isError": true]
                 
-                let callResult = await self.handleToolCall(name: name, arguments: argsJSON)
-                resultBox.value = self.resultToDict(callResult)
-                semaphore.signal()
+            case "update_ui":
+                // Extract patches and dispatch to main queue (fire-and-forget for UI)
+                if let patches = argsData?["patches"] as? [[String: Any]] {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onUpdateUI?(patches)
+                    }
+                    return ["content": [["type": "text", "text": "{\"patched\": \(patches.count)}"]], "isError": false]
+                }
+                return ["content": [["type": "text", "text": "Missing 'patches' array"]], "isError": true]
+                
+            case "get_location":
+                // Location doesn't need MainActor, return directly
+                return [
+                    "content": [["type": "text", "text": "{\"status\": \"not_determined\", \"message\": \"Location requires permission\"}"]],
+                    "isError": false
+                ]
+                
+            default:
+                return ["content": [["type": "text", "text": "Unknown tool: \(name)"]], "isError": true]
             }
-            
-            semaphore.wait()
-            return resultBox.value
         default:
             return [:]
         }
@@ -592,29 +616,29 @@ class MCPServer: NSObject {
     private func handleHTTPRequest(_ data: Data) async -> Data {
         // Parse HTTP request body (skip headers for simplicity)
         guard let requestString = String(data: data, encoding: .utf8) else {
-            print("[MCPServer] Failed to decode request as UTF-8")
+            Log.mcp.info(" Failed to decode request as UTF-8")
             return httpResponse(status: 400, body: "{\"error\": \"Invalid request encoding\"}")
         }
         
-        print("[MCPServer] Received request (\(data.count) bytes)")
+        Log.mcp.info(" Received request (\(data.count) bytes)")
         
         guard let bodyStart = requestString.range(of: "\r\n\r\n")?.upperBound else {
-            print("[MCPServer] No header/body separator found")
-            print("[MCPServer] Raw data: \(requestString.prefix(200))")
+            Log.mcp.info(" No header/body separator found")
+            Log.mcp.info(" Raw data: \(requestString.prefix(200))")
             return httpResponse(status: 400, body: "{\"error\": \"Invalid request format\"}")
         }
         
         let body = String(requestString[bodyStart...])
-        print("[MCPServer] Body: \(body.prefix(200))")
+        Log.mcp.info(" Body: \(body.prefix(200))")
         
         guard !body.isEmpty else {
-            print("[MCPServer] Empty body")
+            Log.mcp.info(" Empty body")
             return httpResponse(status: 400, body: "{\"error\": \"Empty body\"}")
         }
         
         guard let jsonData = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            print("[MCPServer] JSON parse failed for body: \(body)")
+            Log.mcp.info(" JSON parse failed for body: \(body)")
             return httpResponse(status: 400, body: "{\"error\": \"Invalid JSON\"}")
         }
         
@@ -730,7 +754,7 @@ extension MCPServer: CLLocationManagerDelegate {
     }
     
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("[MCPServer] Location error: \(error.localizedDescription)")
+        Log.mcp.info(" Location error: \(error.localizedDescription)")
     }
     
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

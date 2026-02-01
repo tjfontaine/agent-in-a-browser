@@ -2,13 +2,8 @@ import Foundation
 import WasmKit
 import WasmParser
 import Combine
+import OSLog
 
-/// Simple timestamp string for debug logging
-private func ts() -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm:ss.SSS"
-    return formatter.string(from: Date())
-}
 /// Native WASM runtime for the headless agent using WasmKit.
 /// This provides proper async HTTP support via URLSession, avoiding the
 /// WebView sync/async timing issues.
@@ -66,14 +61,14 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         // Instantiate module
         instance = try module.instantiate(store: store!, imports: imports)
         
-        print("[NativeAgentHost] WASM module loaded successfully")
+        Log.agent.info(" WASM module loaded successfully")
         isReady = true
     }
     
     /// Create a new agent with the given configuration (uses AgentConfig for compatibility)
     func createAgent(config: AgentConfig) {
         guard isReady, let instance = instance else {
-            print("[NativeAgentHost] Not ready, deferring agent creation")
+            Log.agent.info(" Not ready, deferring agent creation")
             return
         }
         
@@ -81,9 +76,9 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             do {
                 let handle = try await createAgentInternal(config: config)
                 self.agentHandle = UInt32(bitPattern: handle)
-                print("[NativeAgentHost] Agent created with handle: \(handle)")
+                Log.agent.info(" Agent created with handle: \(handle)")
             } catch {
-                print("[NativeAgentHost] Failed to create agent: \(error)")
+                Log.agent.info(" Failed to create agent: \(error)")
                 events.append(.error(error.localizedDescription))
             }
         }
@@ -142,7 +137,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         
         if tag == 0 {
             // Ok - value is the agent handle
-            print("[NativeAgentHost] Agent created with handle: \(value)")
+            Log.agent.info(" Agent created with handle: \(value)")
             return Int32(bitPattern: value)
         } else {
             // Err - value is a string pointer, read error message
@@ -161,7 +156,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
     /// Send a message to the agent
     func send(_ message: String) {
         guard let handle = agentHandle, let instance = instance else {
-            print("[NativeAgentHost] No agent handle available")
+            Log.agent.info(" No agent handle available")
             return
         }
         
@@ -171,7 +166,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 // Start polling for events
                 await pollEvents()
             } catch {
-                print("[NativeAgentHost] Send error: \(error)")
+                Log.agent.info(" Send error: \(error)")
                 await MainActor.run {
                     self.events.append(.error(error.localizedDescription))
                 }
@@ -227,7 +222,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             throw NativeAgentError.sendFailed(errorMsg)
         }
         
-        print("[NativeAgentHost] Message sent successfully")
+        Log.agent.info(" Message sent successfully")
     }
     
     /// Poll for events and update published state
@@ -236,11 +231,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
               let handle = agentHandle,
               let pollFn = instance.exports[function: "poll"],
               let memory = instance.exports[memory: "memory"] else {
-            print("[NativeAgentHost] pollEvents: missing instance, handle, or pollFn")
+            Log.agent.info(" pollEvents: missing instance, handle, or pollFn")
             return
         }
         
-        print("[NativeAgentHost] Starting poll loop for handle=\(handle)")
+        Log.agent.info(" Starting poll loop for handle=\(handle)")
         
         // Polling loop
         while true {
@@ -250,7 +245,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 let results = try pollFn([.i32(handle)])
                 
                 guard let resultPtrVal = results.first, case let .i32(resultPtr) = resultPtrVal else {
-                    print("[NativeAgentHost] Poll returned no result")
+                    Log.agent.info(" Poll returned no result")
                     break
                 }
                 
@@ -272,11 +267,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     continue
                 }
                 
-                print("[NativeAgentHost] Poll got event, optionTag=\(optionTag)")
+                Log.agent.info(" Poll got event, optionTag=\(optionTag)")
                 
                 // Some - parse the event from memory at offset 4 (after tag + padding)
                 if let event = parseAgentEventFromMemory(ptr: Int(resultPtr) + 4, memory: memory) {
-                    print("[NativeAgentHost] Parsed event: \(event)")
+                    Log.agent.info(" Parsed event: \(String(describing: event))")
                     await MainActor.run {
                         self.events.append(event)
                         
@@ -299,16 +294,16 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         }
                     }
                 } else {
-                    print("[NativeAgentHost] Failed to parse event at ptr=\(resultPtr)")
+                    Log.agent.info(" Failed to parse event at ptr=\(resultPtr)")
                     // Couldn't parse event, wait and retry
                     try await Task.sleep(nanoseconds: 50_000_000)
                 }
             } catch {
-                print("[NativeAgentHost] Poll error: \(error)")
+                Log.agent.info(" Poll error: \(error)")
                 break
             }
         }
-        print("[NativeAgentHost] Poll loop exited")
+        Log.agent.info(" Poll loop exited")
     }
     
     /// Clear conversation history
@@ -325,7 +320,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         do {
             _ = try clearFn([.i32(handle)])
         } catch {
-            print("[NativeAgentHost] Clear history error: \(error)")
+            Log.agent.info(" Clear history error: \(error)")
         }
     }
     
@@ -600,7 +595,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             return .ready
             
         default:
-            print("[NativeAgentHost] Unknown event tag: \(tag)")
+            Log.agent.info(" Unknown event tag: \(tag)")
             return nil
         }
     }
@@ -669,7 +664,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         
         imports.define(module: "wasi_snapshot_preview1", name: "proc_exit",
             Function(store: store, parameters: [.i32], results: []) { _, args in
-                print("[NativeAgentHost] proc_exit called with code: \(args[0].i32)")
+                Log.agent.info(" proc_exit called with code: \(args[0].i32)")
                 return []
             }
         )
@@ -690,11 +685,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 // args[2] = option value (if discriminant is 1)
                 let retPtr = UInt(args[3].i32)  // Return pointer is 4th argument
                 
-                print("[NativeAgentHost] HTTP handle called - request:\(requestHandle), retPtr:\(retPtr)")
+                Log.agent.info(" HTTP handle called - request:\(requestHandle), retPtr:\(retPtr)")
                 
                 // Get the request object
                 guard let request: HTTPOutgoingRequest = self.resources.get(requestHandle) else {
-                    print("[NativeAgentHost] HTTP handle error: request not found")
+                    Log.agent.info(" HTTP handle error: request not found")
                     // Write error to memory
                     if let memory = caller.instance?.exports[memory: "memory"] {
                         memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 4) { buffer in
@@ -710,7 +705,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 let path = request.path
                 let url = "\(scheme)://\(authority)\(path)"
                 
-                print("[NativeAgentHost] HTTP request: \(request.method) \(url)")
+                Log.agent.info(" HTTP request: \(request.method) \(url)")
                 
                 // Get headers
                 var headers: [(String, String)] = []
@@ -718,12 +713,12 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     headers = fieldsHandle.entries
                 }
                 // Log headers with full length for x-api-key to debug truncation
-                print("[NativeAgentHost] HTTP headers (\(headers.count)):")
+                Log.agent.info(" HTTP headers (\(headers.count)):")
                 for (name, value) in headers {
                     if name.lowercased().contains("api-key") {
-                        print("  \(name): length=\(value.count) chars")
+                        Log.agent.debug("  \(name): length=\(value.count) chars")
                     } else {
-                        print("  \(name): \(value.prefix(80))")
+                        Log.agent.debug("  \(name): \(value.prefix(80))")
                     }
                 }
                 
@@ -733,14 +728,14 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                    let body: HTTPOutgoingBody = self.resources.get(bodyHandle) {
                     bodyData = body.getData()
                     if let data = bodyData {
-                        print("[NativeAgentHost] HTTP body (\(data.count) bytes): \(String(data: data.prefix(200), encoding: .utf8) ?? "binary")")
+                        Log.agent.info(" HTTP body (\(data.count) bytes): \(String(data: data.prefix(200), encoding: .utf8) ?? "binary")")
                     }
                 }
                 
                 // Create FutureIncomingResponse and register it
                 let future = FutureIncomingResponse()
                 let futureHandle = self.resources.register(future)
-                print("[NativeAgentHost] HTTP registered futureHandle=\(futureHandle)")
+                Log.agent.info(" HTTP registered futureHandle=\(futureHandle)")
                 
                 // Start async HTTP request
                 self.httpManager.performRequest(
@@ -774,9 +769,9 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     }
                     // Verify what we wrote
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
-                        print("[NativeAgentHost] Memory bytes at \(retPtr): \(Array(buffer[0..<16]))")
+                        Log.agent.info(" Memory bytes at \(retPtr): \(Array(buffer[0..<16]))")
                     }
-                    print("[NativeAgentHost] HTTP wrote futureHandle=\(futureHandle) to memory at offset \(retPtr)+8")
+                    Log.agent.info(" HTTP wrote futureHandle=\(futureHandle) to memory at offset \(retPtr)+8")
                 }
                 
                 return []
@@ -869,7 +864,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 guard let fields: HTTPFields = self.resources.get(fieldsHandle),
                       let memory = caller.instance?.exports[memory: "memory"],
                       let realloc = caller.instance?.exports[function: "cabi_realloc"] else {
-                    print("[WASI-HTTP] fields.entries: missing fields, memory, or realloc")
+                    Log.wasiHttp.debug(" fields.entries: missing fields, memory, or realloc")
                     if let memory = caller.instance?.exports[memory: "memory"] {
                         memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
                             buffer.storeBytes(of: UInt32(0).littleEndian, as: UInt32.self)
@@ -880,7 +875,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 }
                 
                 let entries = fields.entries
-                print("[WASI-HTTP] fields.entries called, fieldsHandle=\(fieldsHandle), entries=\(entries.count) headers")
+                Log.wasiHttp.debug(" fields.entries called, fieldsHandle=\(fieldsHandle), entries=\(entries.count) headers")
                 
                 if entries.isEmpty {
                     memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
@@ -901,11 +896,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         tupleArrayPtr = ptr
                     }
                 } catch {
-                    print("[WASI-HTTP] fields.entries: failed to allocate tuple array: \(error)")
+                    Log.wasiHttp.debug(" fields.entries: failed to allocate tuple array: \(error)")
                 }
                 
                 guard tupleArrayPtr != 0 else {
-                    print("[WASI-HTTP] fields.entries: tuple array allocation returned 0")
+                    Log.wasiHttp.debug(" fields.entries: tuple array allocation returned 0")
                     memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
                         buffer.storeBytes(of: UInt32(0).littleEndian, as: UInt32.self)
                         buffer.storeBytes(of: UInt32(0).littleEndian, toByteOffset: 4, as: UInt32.self)
@@ -929,7 +924,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                                 namePtr = ptr
                             }
                         } catch {
-                            print("[WASI-HTTP] fields.entries: failed to allocate name string")
+                            Log.wasiHttp.debug(" fields.entries: failed to allocate name string")
                         }
                         
                         if namePtr != 0 {
@@ -950,7 +945,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                                 valuePtr = ptr
                             }
                         } catch {
-                            print("[WASI-HTTP] fields.entries: failed to allocate value string")
+                            Log.wasiHttp.debug(" fields.entries: failed to allocate value string")
                         }
                         
                         if valuePtr != 0 {
@@ -978,7 +973,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     buffer.storeBytes(of: UInt32(entries.count).littleEndian, toByteOffset: 4, as: UInt32.self)
                 }
                 
-                print("[WASI-HTTP] fields.entries: wrote \(entries.count) entries at ptr=\(tupleArrayPtr)")
+                Log.wasiHttp.debug(" fields.entries: wrote \(entries.count) entries at ptr=\(tupleArrayPtr)")
                 return []
             }
         )
@@ -1255,7 +1250,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 
                 let responseHandle = Int32(bitPattern: args[0].i32)
                 let resultPtr = UInt(args[1].i32)
-                print("[WASI-HTTP] incoming-response.consume called, responseHandle=\(responseHandle)")
+                Log.wasiHttp.debug(" incoming-response.consume called, responseHandle=\(responseHandle)")
                 
                 guard let response: HTTPIncomingResponse = self.resources.get(responseHandle),
                       let memory = caller.instance?.exports[memory: "memory"] else {
@@ -1278,7 +1273,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 // Create IncomingBody
                 let body = HTTPIncomingBody(response: response)
                 let bodyHandle = self.resources.register(body)
-                print("[WASI-HTTP] consume: created bodyHandle=\(bodyHandle)")
+                Log.wasiHttp.debug(" consume: created bodyHandle=\(bodyHandle)")
                 
                 memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
                     buffer.storeBytes(of: UInt32(0).littleEndian, as: UInt32.self) // ok
@@ -1295,11 +1290,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 
                 let bodyHandle = Int32(bitPattern: args[0].i32)
                 let resultPtr = UInt(args[1].i32)
-                print("[WASI-HTTP] incoming-body.stream called, bodyHandle=\(bodyHandle)")
+                Log.wasiHttp.debug(" incoming-body.stream called, bodyHandle=\(bodyHandle)")
                 
                 guard let body: HTTPIncomingBody = self.resources.get(bodyHandle),
                       let memory = caller.instance?.exports[memory: "memory"] else {
-                    print("[WASI-HTTP] stream: ERROR - body lookup failed for handle=\(bodyHandle)")
+                    Log.wasiHttp.debug(" stream: ERROR - body lookup failed for handle=\(bodyHandle)")
                     // Write error result
                     if let memory = caller.instance?.exports[memory: "memory"] {
                         memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
@@ -1314,9 +1309,9 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     let stream = WASIInputStream(body: body)
                     let streamHandle = self.resources.register(stream)
                     body.inputStreamHandle = streamHandle
-                    print("[WASI-HTTP] stream: created new streamHandle=\(streamHandle), response has \(body.response?.body.count ?? 0) bytes")
+                    Log.wasiHttp.debug(" stream: created new streamHandle=\(streamHandle), response has \(body.response?.body.count ?? 0) bytes")
                 } else {
-                    print("[WASI-HTTP] stream: reusing streamHandle=\(body.inputStreamHandle!)")
+                    Log.wasiHttp.debug(" stream: reusing streamHandle=\(body.inputStreamHandle!)")
                 }
                 
                 // Write success result: (tag=0, handle)
@@ -1341,7 +1336,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 guard let self = self else { return [] }
                 
                 let futureHandle = Int32(bitPattern: args[0].i32)
-                print("[WASI-HTTP] future-incoming-response.get called, handle=\(futureHandle)")
+                Log.wasiHttp.debug(" future-incoming-response.get called, handle=\(futureHandle)")
                 let resultPtr = UInt(args[1].i32)
                 
                 guard let future: FutureIncomingResponse = self.resources.get(futureHandle),
@@ -1357,7 +1352,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 }
                 
                 if let response = future.response {
-                    print("[WASI-HTTP] future.get: response ready, status=\(response.status)")
+                    Log.wasiHttp.debug(" future.get: response ready, status=\(response.status)")
                     // Return Some(Ok(Ok(response_handle)))
                     let responseHandle = self.resources.register(response)
                     memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 32) { buffer in
@@ -1371,10 +1366,10 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                             buffer[24 + i] = byte
                         }
                     }
-                    print("[WASI-HTTP] future.get: wrote responseHandle=\(responseHandle) at offset 24")
+                    Log.wasiHttp.debug(" future.get: wrote responseHandle=\(responseHandle) at offset 24")
                 } else if let error = future.error {
                     // Return Some(Ok(Err(error)))
-                    print("[WASI-HTTP] future.get: error: \(error)")
+                    Log.wasiHttp.debug(" future.get: error: \(error)")
                     memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 32) { buffer in
                         for i in 0..<32 { buffer[i] = 0 }  // Clear
                         buffer[0] = 1  // Some
@@ -1384,11 +1379,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     }
                 } else {
                     // Response not ready - wait briefly for it
-                    print("[\(ts())] [WASI-HTTP] future.get: pending, waiting for response...")
+                    Log.wasiHttp.debug(" future.get: pending, waiting for response...")
                     let ready = future.waitForReady(timeout: 30)
                     
                     if ready, let response = future.response {
-                        print("[\(ts())] [WASI-HTTP] future.get: response arrived, status=\(response.status)")
+                        Log.wasiHttp.debug(" future.get: response arrived, status=\(response.status)")
                         let responseHandle = self.resources.register(response)
                         memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 32) { buffer in
                             for i in 0..<32 { buffer[i] = 0 }
@@ -1400,9 +1395,9 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                                 buffer[24 + i] = byte
                             }
                         }
-                        print("[WASI-HTTP] future.get: wrote responseHandle=\(responseHandle) at offset 24")
+                        Log.wasiHttp.debug(" future.get: wrote responseHandle=\(responseHandle) at offset 24")
                     } else if let error = future.error {
-                        print("[WASI-HTTP] future.get: error after wait: \(error)")
+                        Log.wasiHttp.debug(" future.get: error after wait: \(error)")
                         memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 32) { buffer in
                             for i in 0..<32 { buffer[i] = 0 }
                             buffer[0] = 1  // Some
@@ -1411,7 +1406,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                             buffer[24] = 38 // InternalError
                         }
                     } else {
-                        print("[WASI-HTTP] future.get: timeout waiting for response")
+                        Log.wasiHttp.debug(" future.get: timeout waiting for response")
                         memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
                             for i in 0..<8 { buffer[i] = 0 }
                             buffer[0] = 0  // None
@@ -1429,7 +1424,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 
                 let futureHandle = Int32(bitPattern: args[0].i32)
                 guard let future: FutureIncomingResponse = self.resources.get(futureHandle) else {
-                    print("[WASI-HTTP] subscribe: future not found!")
+                    Log.wasiHttp.debug(" subscribe: future not found!")
                     return [.i32(0)]
                 }
                 
@@ -1438,13 +1433,13 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     return [.i32(UInt32(bitPattern: cachedPollableHandle))]
                 }
                 
-                print("[WASI-HTTP] future-incoming-response.subscribe called, futureHandle=\(futureHandle)")
+                Log.wasiHttp.debug(" future-incoming-response.subscribe called, futureHandle=\(futureHandle)")
                 
                 // Create a pollable for the future and cache it
                 let pollable = HTTPPollable(future: future)
                 let pollableHandle = self.resources.register(pollable)
                 future.cachedPollableHandle = pollableHandle
-                print("[WASI-HTTP] subscribe: returning pollableHandle=\(pollableHandle)")
+                Log.wasiHttp.debug(" subscribe: returning pollableHandle=\(pollableHandle)")
                 
                 return [.i32(UInt32(bitPattern: pollableHandle))]
             }
@@ -1504,15 +1499,23 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 guard let self = self else { return [] }
                 
                 let pollableHandle = Int32(bitPattern: args[0].i32)
-                print("[\(ts())] [WASI-HTTP] pollable.block called, handle=\(pollableHandle)")
+                Log.wasiHttp.debug(" pollable.block called, handle=\(pollableHandle)")
                 
-                // Check if it's an HTTP pollable - use semaphore for cross-thread sync
+                // Check if it's an HTTP pollable (for initial response)
                 if let httpPollable: HTTPPollable = self.resources.get(pollableHandle) {
-                    print("[\(ts())] [WASI-HTTP] pollable.block: waiting for HTTP response...")
+                    Log.wasiHttp.debug(" pollable.block: waiting for HTTP response...")
                     httpPollable.block(timeout: 30)
-                    print("[\(ts())] [WASI-HTTP] pollable.block: finished waiting, ready=\(httpPollable.isReady)")
+                    Log.wasiHttp.debug(" pollable.block: finished waiting, ready=\(httpPollable.isReady)")
+                }
+                // Check if it's a Stream pollable (for streaming data)
+                else if let streamPollable: StreamPollable = self.resources.get(pollableHandle) {
+                    Log.wasiHttp.debug(" pollable.block: waiting for stream data...")
+                    streamPollable.block(timeout: 30)
+                    Log.wasiHttp.debug(" pollable.block: finished waiting for stream, ready=\(streamPollable.isReady)")
+                    // Reset pollable for next wait cycle
+                    streamPollable.resetForNextWait()
                 } else {
-                    print("[WASI-HTTP] pollable.block: NO HTTPPollable found for handle \(pollableHandle)! Returning immediately.")
+                    Log.wasiHttp.debug(" pollable.block: NO pollable found for handle \(pollableHandle)! Returning immediately.")
                 }
                 
                 return []
@@ -1529,6 +1532,10 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     return [.i32(httpPollable.isReady ? 1 : 0)]
                 }
                 
+                if let streamPollable: StreamPollable = self.resources.get(pollableHandle) {
+                    return [.i32(streamPollable.isReady ? 1 : 0)]
+                }
+                
                 return [.i32(1)] // Default to ready
             }
         )
@@ -1542,7 +1549,27 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         
         // wasi:io/poll@0.2.4 (compatibility)
         imports.define(module: "wasi:io/poll@0.2.4", name: "[method]pollable.block",
-            Function(store: store, parameters: [.i32], results: []) { _, _ in [] }
+            Function(store: store, parameters: [.i32], results: []) { [weak self] _, args in
+                guard let self = self else { return [] }
+                
+                let pollableHandle = Int32(bitPattern: args[0].i32)
+                
+                // Check all pollable types
+                if let httpPollable: HTTPPollable = self.resources.get(pollableHandle) {
+                    httpPollable.block(timeout: 30)
+                } else if let streamPollable: StreamPollable = self.resources.get(pollableHandle) {
+                    streamPollable.block(timeout: 30)
+                    streamPollable.resetForNextWait()
+                } else if let durationPollable: DurationPollable = self.resources.get(pollableHandle) {
+                    // For duration pollables, just sleep
+                    let remaining = TimeInterval(durationPollable.nanoseconds) / 1_000_000_000 - Date().timeIntervalSince(durationPollable.createdAt)
+                    if remaining > 0 {
+                        Thread.sleep(forTimeInterval: min(remaining, 30))
+                    }
+                }
+                
+                return []
+            }
         )
         imports.define(module: "wasi:io/poll@0.2.4", name: "[resource-drop]pollable",
             Function(store: store, parameters: [.i32], results: []) { [weak self] _, args in
@@ -1566,13 +1593,13 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 guard let stream: WASIInputStream = self.resources.get(streamHandle),
                       let memory = caller.instance?.exports[memory: "memory"],
                       let realloc = caller.instance?.exports[function: "cabi_realloc"] else {
-                    print("[WASI-IO] blocking-read: stream or memory not found")
+                    Log.wasi.debug(" blocking-read: stream or memory not found")
                     return []
                 }
                 
                 // Read data from the stream
                 let data = stream.blockingRead(maxBytes: Int(maxLen))
-                print("[WASI-IO] blocking-read: read \(data.count) bytes, isEOF=\(stream.isEOF)")
+                Log.wasi.debug(" blocking-read: read \(data.count) bytes, isEOF=\(stream.isEOF)")
                 
                 if data.isEmpty && stream.isEOF {
                     // EOF - return Err(stream-error::closed)
@@ -1582,7 +1609,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         buffer[0] = 1  // Err tag
                         buffer[4] = 1  // stream-error::closed variant (1, not 0!)
                     }
-                    print("[WASI-IO] blocking-read: returning EOF (stream-error::closed)")
+                    Log.wasi.debug(" blocking-read: returning EOF (stream-error::closed)")
                     return []
                 }
                 
@@ -1597,12 +1624,12 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         .i32(UInt32(data.count))
                     ])
                 } catch {
-                    print("[WASI-IO] blocking-read: allocation failed: \(error)")
+                    Log.wasi.debug(" blocking-read: allocation failed: \(error)")
                     return []
                 }
                 
                 guard let ptrVal = allocResult.first, case let .i32(dataPtr) = ptrVal else {
-                    print("[WASI-IO] blocking-read: allocation returned invalid result")
+                    Log.wasi.debug(" blocking-read: allocation returned invalid result")
                     return []
                 }
                 
@@ -1635,7 +1662,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     }
                 }
                 
-                print("[WASI-IO] blocking-read: wrote \(data.count) bytes at ptr=\(dataPtr)")
+                Log.wasi.debug(" blocking-read: wrote \(data.count) bytes at ptr=\(dataPtr)")
                 
                 return []
             }
@@ -1654,13 +1681,13 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 guard let stream: WASIInputStream = self.resources.get(streamHandle),
                       let memory = caller.instance?.exports[memory: "memory"],
                       let realloc = caller.instance?.exports[function: "cabi_realloc"] else {
-                    print("[WASI-IO] read: stream or memory not found, handle=\(streamHandle)")
+                    Log.wasi.debug(" read: stream or memory not found, handle=\(streamHandle)")
                     return []
                 }
                 
                 // Read available data from the stream (non-blocking)
                 let data = stream.read(maxBytes: Int(maxLen))
-                print("[WASI-IO] read: read \(data.count) bytes from streamHandle=\(streamHandle), isEOF=\(stream.isEOF)")
+                Log.wasi.debug(" read: read \(data.count) bytes from streamHandle=\(streamHandle), isEOF=\(stream.isEOF)")
                 
                 if data.isEmpty && stream.isEOF {
                     // EOF - return Err(stream-error::closed)
@@ -1669,7 +1696,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         buffer[0] = 1  // Err tag
                         buffer[4] = 1  // stream-error::closed
                     }
-                    print("[WASI-IO] read: returning EOF (stream-error::closed)")
+                    Log.wasi.debug(" read: returning EOF (stream-error::closed)")
                     return []
                 }
                 
@@ -1683,12 +1710,12 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                         .i32(UInt32(data.count))
                     ])
                 } catch {
-                    print("[WASI-IO] read: allocation failed: \(error)")
+                    Log.wasi.debug(" read: allocation failed: \(error)")
                     return []
                 }
                 
                 guard let ptrVal = allocResult.first, case let .i32(dataPtr) = ptrVal else {
-                    print("[WASI-IO] read: allocation returned invalid result")
+                    Log.wasi.debug(" read: allocation returned invalid result")
                     return []
                 }
                 
@@ -1715,15 +1742,31 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     }
                 }
                 
-                print("[WASI-IO] read: wrote \(data.count) bytes at ptr=\(dataPtr)")
+                Log.wasi.debug(" read: wrote \(data.count) bytes at ptr=\(dataPtr)")
                 return []
             }
         )
         imports.define(module: "wasi:io/streams@0.2.9", name: "[method]input-stream.subscribe",
-            Function(store: store, parameters: [.i32], results: [.i32]) { _, args in
+            Function(store: store, parameters: [.i32], results: [.i32]) { [weak self] _, args in
+                guard let self = self else { return [.i32(1)] }
+                
                 let streamHandle = Int32(bitPattern: args[0].i32)
-                print("[WASI-IO] input-stream.subscribe called, streamHandle=\(streamHandle) - returning stub pollable=1")
-                return [.i32(1)]
+                
+                // Look up the WASIInputStream
+                guard let stream: WASIInputStream = self.resources.get(streamHandle),
+                      let body = stream.body,
+                      let response = body.response else {
+                    Log.wasi.debug(" input-stream.subscribe: no stream/body found for handle=\(streamHandle), returning stub")
+                    return [.i32(1)]
+                }
+                
+                // Create a StreamPollable that will signal when data is available
+                let pollable = StreamPollable(response: response, streamHandle: streamHandle)
+                body.addPollable(pollable)
+                let pollableHandle = self.resources.register(pollable)
+                
+                Log.wasi.debug(" input-stream.subscribe: created StreamPollable=\(pollableHandle) for stream=\(streamHandle)")
+                return [.i32(UInt32(bitPattern: pollableHandle))]
             }
         )
         imports.define(module: "wasi:io/streams@0.2.9", name: "[method]output-stream.blocking-write-and-flush",
@@ -1925,8 +1968,12 @@ final class HTTPRequestManager: @unchecked Sendable {
         // Rewrite wasm:// URLs to localhost MCP server for native runtime
         var effectiveURL = url
         if url.hasPrefix("wasm://") {
-            effectiveURL = "http://localhost:9292/"
-            print("[HTTPRequestManager] Routing wasm:// to localhost MCP server")
+            // Use 127.0.0.1 instead of localhost to avoid IPv6/IPv4 resolution ambiguity
+            effectiveURL = "http://127.0.0.1:9292/"
+            if let query = URL(string: url)?.query {
+                effectiveURL += "?\(query)"
+            }
+            Log.http.info(" Routing wasm:// to MCP server (127.0.0.1:9292)")
         }
         
         guard let requestURL = URL(string: effectiveURL) else {
@@ -1945,23 +1992,36 @@ final class HTTPRequestManager: @unchecked Sendable {
             request.httpBody = body
         }
         
-        print("[\(ts())] [HTTPRequestManager] Starting request: \(method) \(url)")
+        Log.http.debug("Starting request: \(method) \(effectiveURL)")
         
-        // Check if this is a streaming request (SSE)
-        let isStreaming = headers.contains { $0.0.lowercased() == "accept" && $0.1.contains("text/event-stream") }
+        // Check if this is an SSE streaming request (Accept: text/event-stream exactly)
+        let isSSE = headers.contains { $0.0.lowercased() == "accept" && $0.1 == "text/event-stream" }
         
-        if isStreaming {
-            // For SSE streaming, use delegate-based approach to signal ready when headers arrive
-            print("[\(ts())] [HTTPRequestManager] Using streaming delegate for SSE request")
+        if isSSE {
+            // SSE requests use StreamingDelegate for proper streaming support
+            Log.http.debug("Using streaming delegate for SSE request")
             let delegate = StreamingDelegate(future: future)
             let delegateSession = URLSession(configuration: session.configuration, delegate: delegate, delegateQueue: nil)
+            delegate.session = delegateSession
             let task = delegateSession.dataTask(with: request)
             task.resume()
         } else {
-            // For non-streaming, use completion handler (faster for simple requests)
-            let task = session.dataTask(with: request) { data, response, error in
+            // Non-SSE requests (like MCP JSON-RPC) use ephemeral session with completion handler
+            // This prevents connection reuse issues with the local server
+            let ephemeralConfig = URLSessionConfiguration.ephemeral
+            ephemeralConfig.timeoutIntervalForRequest = 60
+            let ephemeralSession = URLSession(configuration: ephemeralConfig)
+            
+            var ephemeralRequest = request
+            ephemeralRequest.addValue("close", forHTTPHeaderField: "Connection")
+            
+            let task = ephemeralSession.dataTask(with: ephemeralRequest) { data, response, error in
+                defer {
+                    ephemeralSession.finishTasksAndInvalidate()
+                }
+                
                 if let error = error {
-                    print("[HTTPRequestManager] Request error: \(error)")
+                    Log.http.error("Request failed: \(error.localizedDescription)")
                     future.error = error.localizedDescription
                     future.signalReady()
                     return
@@ -1973,33 +2033,26 @@ final class HTTPRequestManager: @unchecked Sendable {
                     return
                 }
                 
-                print("[\(ts())] [HTTPRequestManager] Response: \(httpResponse.statusCode)")
+                Log.http.debug("Response received: status=\(httpResponse.statusCode), body=\(data?.count ?? 0) bytes")
                 
-                // Log error response body immediately for debugging
-                if httpResponse.statusCode >= 400, let data = data {
-                    let bodyStr = String(data: data, encoding: .utf8) ?? "binary"
-                    print("[HTTPRequestManager] Error response body: \(bodyStr)")
-                }
-                
-                // Convert headers
-                var responseHeaders: [(String, String)] = []
+                var headers: [(String, String)] = []
                 for (key, value) in httpResponse.allHeaderFields {
                     if let keyStr = key as? String, let valueStr = value as? String {
-                        responseHeaders.append((keyStr.lowercased(), valueStr))
+                        headers.append((keyStr.lowercased(), valueStr))
                     }
                 }
                 
-                // Create response object
                 let incomingResponse = HTTPIncomingResponse(
                     status: httpResponse.statusCode,
-                    headers: responseHeaders,
+                    headers: headers,
                     body: data ?? Data()
                 )
+                // Mark complete since we have the full body
+                incomingResponse.streamComplete = true
                 
                 future.response = incomingResponse
                 future.signalReady()
             }
-            
             task.resume()
         }
     }
@@ -2009,6 +2062,10 @@ final class HTTPRequestManager: @unchecked Sendable {
 /// Signals ready as soon as headers arrive, then continues streaming body data
 class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     weak var future: FutureIncomingResponse?
+    /// Strong reference to keep the response alive for streaming data
+    /// This is set when headers arrive and persists even if future is dropped
+    var incomingResponse: HTTPIncomingResponse?
+    var session: URLSession?  // Set by caller for proper cleanup
     private var receivedData = Data()
     private var response: HTTPURLResponse?
     private var headersSignaled = false
@@ -2023,7 +2080,7 @@ class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         
         // Signal ready immediately when headers arrive for streaming!
         if let httpResponse = response as? HTTPURLResponse {
-            print("[\(ts())] [StreamingDelegate] Headers received, status=\(httpResponse.statusCode)")
+            Log.http.debug(" Headers received, status=\(httpResponse.statusCode)")
             
             var headers: [(String, String)] = []
             for (key, value) in httpResponse.allHeaderFields {
@@ -2033,11 +2090,16 @@ class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             }
             
             // Create response with empty body initially - body will be streamed
-            future?.response = HTTPIncomingResponse(
+            let httpIncomingResponse = HTTPIncomingResponse(
                 status: httpResponse.statusCode,
                 headers: headers,
                 body: Data()  // Empty initially, will be streamed
             )
+            
+            // Store STRONG reference for streaming data - survives future being dropped
+            self.incomingResponse = httpIncomingResponse
+            future?.response = httpIncomingResponse
+            
             headersSignaled = true
             future?.signalReady()  // Signal IMMEDIATELY when headers arrive!
         }
@@ -2049,19 +2111,27 @@ class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         dataLock.lock()
         receivedData.append(data)
         
-        // Append to the existing response body (thread-safe, no replacement)
-        future?.response?.appendBody(data)
+        // Append to the response body using STRONG reference (survives future being dropped)
+        incomingResponse?.appendBody(data)
         dataLock.unlock()
         
         // Log streaming progress periodically
         if receivedData.count % 1000 < data.count {
-            print("[\(ts())] [StreamingDelegate] Streaming: \(receivedData.count) bytes received")
+            let bytes = self.receivedData.count
+            Log.http.debug("Streaming: \(bytes) bytes received")
         }
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        defer {
+            // Clean up the session immediately to prevent connection issues
+            // Use invalidateAndCancel since we're done with this session
+            self.session?.invalidateAndCancel()
+            self.session = nil
+        }
+        
         if let error = error {
-            print("[\(ts())] [StreamingDelegate] Stream error: \(error)")
+            Log.http.debug(" Stream error: \(error)")
             future?.error = error.localizedDescription
             if !headersSignaled {
                 future?.signalReady()
@@ -2069,13 +2139,18 @@ class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             return
         }
         
-        print("[\(ts())] [StreamingDelegate] Stream completed, total: \(receivedData.count) bytes, final body size: \(future?.response?.body.count ?? 0) bytes")
+        let totalBytes = self.receivedData.count
+        let bodyBytes = self.incomingResponse?.body.count ?? 0
+        Log.http.debug("Stream completed, total: \(totalBytes) bytes, final body size: \(bodyBytes) bytes")
         
         // Log error response body for debugging
         if let httpResponse = response, httpResponse.statusCode >= 400 {
-            let bodyStr = String(data: receivedData, encoding: .utf8) ?? "binary"
-            print("[StreamingDelegate] Error response body: \(bodyStr)")
+            let bodyStr = String(data: self.receivedData, encoding: .utf8) ?? "binary"
+            Log.http.debug("Error response body: \(bodyStr)")
         }
+        
+        // Mark the response stream as complete so WASI knows EOF is truly reached
+        self.incomingResponse?.markStreamComplete()
         
         // Body is already updated incrementally via appendBody(), no need to replace
         // Signal ready if we haven't yet (shouldn't happen for streaming)
@@ -2192,7 +2267,14 @@ class HTTPIncomingResponse: NSObject {
     var body: Data  // var to allow streaming updates
     var bodyConsumed = false
     var bodyReadOffset = 0
+    var streamComplete = false  // Set to true when HTTP stream finishes
     private let bodyLock = NSLock()
+    
+    /// Callback triggered when new data is available (for signaling stream pollables)
+    var onDataAvailable: (() -> Void)?
+    
+    /// Weak reference to associated body for direct signaling (set when body is created)
+    weak var associatedBody: HTTPIncomingBody?
     
     init(status: Int, headers: [(String, String)], body: Data) {
         self.status = status
@@ -2204,10 +2286,33 @@ class HTTPIncomingResponse: NSObject {
     func appendBody(_ data: Data) {
         bodyLock.lock()
         body.append(data)
+        let callback = onDataAvailable
+        let body = associatedBody
         bodyLock.unlock()
+        
+        // Signal via direct body reference (preferred) or callback
+        if let body = body {
+            body.signalDataAvailable()
+        } else {
+            callback?()
+        }
+    }
+    
+    /// Mark the stream as complete (called when HTTP request finishes)
+    func markStreamComplete() {
+        bodyLock.lock()
+        streamComplete = true
+        bodyLock.unlock()
+        Log.http.debug("Stream marked complete, total body size: \(body.count) bytes")
+        
+        // Signal stream completion
+        onDataAvailable?()
     }
     
     func readBody(maxBytes: Int) -> Data {
+        bodyLock.lock()
+        defer { bodyLock.unlock() }
+        
         let remaining = body.count - bodyReadOffset
         let toRead = min(maxBytes, remaining)
         
@@ -2221,7 +2326,17 @@ class HTTPIncomingResponse: NSObject {
     }
     
     var isBodyEOF: Bool {
-        return bodyReadOffset >= body.count
+        bodyLock.lock()
+        defer { bodyLock.unlock() }
+        // Only EOF if we've read all data AND the stream has completed
+        return bodyReadOffset >= body.count && streamComplete
+    }
+    
+    /// Check if there's unread data available
+    var hasUnreadData: Bool {
+        bodyLock.lock()
+        defer { bodyLock.unlock() }
+        return bodyReadOffset < body.count
     }
 }
 
@@ -2230,8 +2345,44 @@ class HTTPIncomingBody: NSObject {
     var response: HTTPIncomingResponse?
     var inputStreamHandle: Int32?
     
+    /// Pollables waiting for data on this stream
+    var streamPollables: [StreamPollable] = []
+    private let pollablesLock = NSLock()
+    
     init(response: HTTPIncomingResponse) {
         self.response = response
+        super.init()
+        
+        // Set direct body reference for signaling (works even before callback)
+        response.associatedBody = self
+        
+        // Also connect response data callback as fallback
+        response.onDataAvailable = { [weak self] in
+            self?.signalDataAvailable()
+        }
+    }
+    
+    /// Add a pollable to be signaled when data arrives
+    func addPollable(_ pollable: StreamPollable) {
+        pollablesLock.lock()
+        streamPollables.append(pollable)
+        pollablesLock.unlock()
+        
+        // If data is already available, signal immediately
+        if let response = response, (response.hasUnreadData || response.streamComplete) {
+            pollable.signalDataAvailable()
+        }
+    }
+    
+    /// Signal all waiting pollables that data is available
+    func signalDataAvailable() {
+        pollablesLock.lock()
+        let pollables = streamPollables
+        pollablesLock.unlock()
+        
+        for pollable in pollables {
+            pollable.signalDataAvailable()
+        }
     }
 }
 
@@ -2331,11 +2482,63 @@ class DurationPollable: NSObject {
     }
 }
 
+/// Pollable for streaming input - waits for more data to become available
+class StreamPollable: NSObject {
+    weak var response: HTTPIncomingResponse?
+    let streamHandle: Int32
+    let semaphore = DispatchSemaphore(value: 0)
+    private var signaled = false
+    private let lock = NSLock()
+    
+    init(response: HTTPIncomingResponse, streamHandle: Int32) {
+        self.response = response
+        self.streamHandle = streamHandle
+        super.init()
+    }
+    
+    var isReady: Bool {
+        guard let response = response else { return true }
+        // Ready if there's more data to read OR stream is complete
+        return response.hasUnreadData || response.streamComplete
+    }
+    
+    /// Signal that data is available (called when streaming data arrives)
+    func signalDataAvailable() {
+        lock.lock()
+        if !signaled {
+            signaled = true
+            semaphore.signal()
+        }
+        lock.unlock()
+    }
+    
+    /// Block until data is available or timeout
+    func block(timeout: TimeInterval) {
+        guard let response = response else { return }
+        
+        // Check if already ready
+        if response.hasUnreadData || response.streamComplete {
+            return
+        }
+        
+        // Wait for signal with timeout
+        _ = semaphore.wait(timeout: .now() + timeout)
+    }
+    
+    /// Reset the semaphore for reuse after consuming data
+    func resetForNextWait() {
+        lock.lock()
+        signaled = false
+        lock.unlock()
+    }
+}
+
 /// Stderr output stream for WASI debug output
 class StderrOutputStream: NSObject {
     func write(_ data: Data) {
         if let str = String(data: data, encoding: .utf8) {
-            print("[WASM stderr] \(str)", terminator: "")
+            // Use info level so WASM stderr is visible in Console.app
+            Log.wasi.info("[stderr] \(str.trimmingCharacters(in: .newlines))")
         }
     }
 }

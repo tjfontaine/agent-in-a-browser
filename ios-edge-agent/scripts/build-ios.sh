@@ -72,9 +72,32 @@ fi
 echo ""
 echo "=== Build Complete ==="
 echo "WebRuntime bundled to: $WEB_RUNTIME_DIR"
+
+# Step 5: Resolve Swift Package Manager dependencies (Swift 6 MCP SDK)
+echo ""
+echo ">>> Resolving Swift Package Manager dependencies..."
+cd "$IOS_PROJECT"
+xcodebuild -project EdgeAgent.xcodeproj -scheme EdgeAgent -resolvePackageDependencies 2>&1 | grep -E "(Fetching|Checking|Resolved|resolved|error)" || true
+echo "  ✓ SPM packages resolved"
+
+# Step 6: Build iOS app (optional - can also build in Xcode)
+if [ "$1" = "--build" ]; then
+    echo ""
+    echo ">>> Building EdgeAgent for iOS Simulator..."
+    xcodebuild -project EdgeAgent.xcodeproj -scheme EdgeAgent \
+        -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+        -configuration Debug \
+        build 2>&1 | tail -20
+    echo ""
+    echo "  ✓ Build complete"
+else
+    echo ""
+    echo "To build (optional):"
+    echo "  $0 --build"
+fi
+
 echo ""
 echo "Next steps:"
-echo "  1. Open ios-edge-agent/EdgeAgent.xcodeproj in Xcode"
+echo "  1. Open ios-edge-agent/EdgeAgent.xcodeproj in Xcode 16+"
 echo "  2. Set your Development Team in Signing & Capabilities"
 echo "  3. Build and run on Simulator or device"
-

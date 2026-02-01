@@ -1,5 +1,6 @@
 import WebKit
 import Foundation
+import OSLog
 
 /// Custom URL scheme handler that serves local files from the app bundle without CORS restrictions
 /// This allows ES modules to import from file:// URLs in WKWebView
@@ -32,7 +33,7 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
         
         let fileURL = baseDirectory.appendingPathComponent(relativePath)
         
-        print("[LocalFileSchemeHandler] Loading: \(requestURL) -> \(fileURL)")
+        Log.http.debug("LocalFileScheme: \(requestURL.absoluteString) -> \(fileURL.path)")
         
         do {
             let data = try Data(contentsOf: fileURL)
@@ -62,7 +63,7 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
             urlSchemeTask.didFinish()
             
         } catch {
-            print("[LocalFileSchemeHandler] Error loading \(fileURL): \(error)")
+            Log.http.error("LocalFileScheme: Error loading \(fileURL.path): \(error.localizedDescription)")
             urlSchemeTask.didFailWithError(error)
         }
     }

@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		15F3F448540BD62B29B3ED6C /* JSConsoleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4150E73A7448714C57904CEA /* JSConsoleHandler.swift */; };
 		5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */; };
 		6F96EC3EB4B6C34B89C6AB0C /* WASISignatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C105A64D18A85AAB833F655 /* WASISignatures.swift */; };
+		9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB72373C65C1096DC1AE15 /* Log.swift */; };
 		A1000001201A0001 /* EdgeAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000001101A0001 /* EdgeAgentApp.swift */; };
 		A1000002201A0001 /* ConfigManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002101A0001 /* ConfigManager.swift */; };
 		A1000003201A0001 /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003101A0001 /* AgentEvent.swift */; };
@@ -38,6 +40,7 @@
 
 /* Begin PBXFileReference section */
 		30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalFileSchemeHandler.swift; sourceTree = "<group>"; };
+		4150E73A7448714C57904CEA /* JSConsoleHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JSConsoleHandler.swift; sourceTree = "<group>"; };
 		6C105A64D18A85AAB833F655 /* WASISignatures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASISignatures.swift; sourceTree = "<group>"; };
 		A1000000101A0001 /* EdgeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EdgeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000001101A0001 /* EdgeAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAgentApp.swift; sourceTree = "<group>"; };
@@ -54,6 +57,7 @@
 		A2000001101A0001 /* ConfigManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManagerTests.swift; sourceTree = "<group>"; };
 		A2000002101A0001 /* AgentEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventTests.swift; sourceTree = "<group>"; };
 		C1000001101A0001 /* NativeAgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentHost.swift; sourceTree = "<group>"; };
+		C3EB72373C65C1096DC1AE15 /* Log.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Utilities/Log.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +81,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2256003A9E3E1D5D69301C82 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				C3EB72373C65C1096DC1AE15 /* Log.swift */,
+			);
+			name = Utilities;
+			sourceTree = "<group>";
+		};
 		A1000000001A0001 = {
 			isa = PBXGroup;
 			children = (
@@ -96,6 +108,7 @@
 				A1000000071A0001 /* Models */,
 				A1000000081A0001 /* Resources */,
 				A100000A101A0001 /* Info.plist */,
+				2256003A9E3E1D5D69301C82 /* Utilities */,
 			);
 			path = EdgeAgent;
 			sourceTree = "<group>";
@@ -142,6 +155,7 @@
 				30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */,
 				C1000001101A0001 /* NativeAgentHost.swift */,
 				6C105A64D18A85AAB833F655 /* WASISignatures.swift */,
+				4150E73A7448714C57904CEA /* JSConsoleHandler.swift */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -291,6 +305,8 @@
 				C1000001201A0001 /* NativeAgentHost.swift in Sources */,
 				5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */,
 				6F96EC3EB4B6C34B89C6AB0C /* WASISignatures.swift in Sources */,
+				9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */,
+				15F3F448540BD62B29B3ED6C /* JSConsoleHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

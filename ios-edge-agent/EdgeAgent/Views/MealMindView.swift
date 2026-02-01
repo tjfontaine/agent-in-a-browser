@@ -191,16 +191,16 @@ struct MealMindView: View {
             do {
                 // 1a. Start MCP server first and wait for it to be ready
                 try await MCPServer.shared.start()
-                print("[MealMind] MCP server ready")
+                Log.app.info("MealMind: MCP server ready")
                 
                 // Small delay to ensure server is accepting connections
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 
                 // 2. Load native WASM runtime and create agent
                 if !agent.isReady {
-                    print("[MealMind] Loading native WASM runtime...")
+                    Log.app.info("MealMind: Loading native WASM runtime...")
                     try await agent.load()
-                    print("[MealMind] Native WASM runtime loaded")
+                    Log.app.info("MealMind: Native WASM runtime loaded")
                 }
                 
                 // Create agent with saved provider/model but MealMind system prompt
@@ -217,9 +217,9 @@ struct MealMindView: View {
                     maxTurns: UInt32(configManager.maxTurns)
                 )
                 agent.createAgent(config: config)
-                print("[MealMind] Agent created")
+                Log.app.info("MealMind: Agent created")
             } catch {
-                print("[MealMind] Failed to setup agent: \(error)")
+                Log.app.error("MealMind: Failed to setup agent: \(error)")
                 await MainActor.run {
                     loadError = error.localizedDescription
                 }

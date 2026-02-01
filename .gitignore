@@ -100,9 +100,24 @@ website/node_modules/
 
 # iOS/Xcode
 ios-edge-agent/EdgeAgent.xcodeproj/project.xcworkspace/xcuserdata/
+ios-edge-agent/EdgeAgent.xcodeproj/project.xcworkspace/
 ios-edge-agent/EdgeAgent.xcodeproj/xcuserdata/
 ios-edge-agent/EdgeAgent/Resources/WebRuntime/mcp-server-sync/
 ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent-sync/
 ios-edge-agent/EdgeAgent/Resources/WebRuntime/web-headless-agent/
 *.xcuserstate
 DerivedData/
+
+# iOS codegen tool build artifacts
+ios-edge-agent/scripts/codegen/.build/
+ios-edge-agent/scripts/codegen/.swiftpm/
+ios-edge-agent/scripts/codegen/Package.resolved
+ios-edge-agent/scripts/GeneratedWASIStubs.swift
+
+# iOS wasm-http-test tool build artifacts
+ios-edge-agent/scripts/wasm-http-test/.build/
+ios-edge-agent/scripts/wasm-http-test/.swiftpm/
+ios-edge-agent/scripts/wasm-http-test/Package.resolved
+
+# Generated WASI signatures Swift file
+ios-edge-agent/EdgeAgent/Bridge/WASISignatures.swift
