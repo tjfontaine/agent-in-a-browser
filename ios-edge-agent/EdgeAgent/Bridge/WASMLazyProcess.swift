@@ -185,6 +185,12 @@ class WASMLazyProcess {
             // Configure stdin to read from buffer (overrides some of the above)
             registerProcessIO(&imports, store: store)
             
+            // Validate providers against WASM module requirements BEFORE instantiation
+            let validationResult = WASIProviderValidator.validate(module: module, providers: providers)
+            if !validationResult.isValid {
+                Log.mcp.warning("WASMLazyProcess[\(handle)]: Missing WASI imports: \(validationResult.missingList.joined(separator: ", "))")
+            }
+            
             // Instantiate
             instance = try module.instantiate(store: store, imports: imports)
             
