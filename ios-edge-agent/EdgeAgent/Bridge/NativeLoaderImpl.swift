@@ -112,10 +112,15 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     // MARK: - Resource Methods (called from LoaderProvider)
     
-    /// Get a pollable for when the process has output ready
+    /// Get a pollable for when the process is ready (module loaded)
     func getReadyPollable(handle: Int32) -> Int32 {
-        let pollableHandle = resources.register(TimePollable(nanoseconds: 0))
-        return pollableHandle
+        guard let process = getProcess(handle) else {
+            // No process - return a pollable that's immediately ready
+            return resources.register(TimePollable(nanoseconds: 0))
+        }
+        // Return a pollable that waits for the process to be ready
+        let pollable = ProcessReadyPollable(process: process)
+        return resources.register(pollable)
     }
     
     /// Check if output is ready without blocking (thread-safe via WASMLazyProcess)

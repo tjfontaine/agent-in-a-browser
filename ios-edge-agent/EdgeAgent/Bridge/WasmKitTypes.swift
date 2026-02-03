@@ -358,6 +358,39 @@ class StreamPollable: NSObject {
     }
 }
 
+/// Pollable that waits for a WASMLazyProcess to become ready
+/// Used by get-ready-pollable import to properly wait for module loading
+class ProcessReadyPollable: NSObject {
+    weak var process: WASMLazyProcess?
+    private let timeout: TimeInterval
+    
+    init(process: WASMLazyProcess, timeout: TimeInterval = 30.0) {
+        self.process = process
+        self.timeout = timeout
+        super.init()
+    }
+    
+    var isReady: Bool {
+        return process?.isReady() ?? true  // No process means done
+    }
+    
+    /// Block until the process is ready or timeout expires
+    func block() {
+        guard let process = process else { return }
+        
+        let startTime = Date()
+        
+        // Poll every 10ms until ready or timeout
+        while !process.isReady() {
+            if Date().timeIntervalSince(startTime) > timeout {
+                Log.mcp.warning("ProcessReadyPollable: timeout waiting for process \(process.handle)")
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.01)  // 10ms
+        }
+    }
+}
+
 // MARK: - WASI IO Streams
 
 class WASIInputStream: NSObject {

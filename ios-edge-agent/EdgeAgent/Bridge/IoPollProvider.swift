@@ -55,6 +55,11 @@ struct IoPollProvider: WASIProvider {
                     Log.wasiHttp.debug("pollable.block: finished waiting for stream, ready=\(streamPollable.isReady)")
                     // Reset pollable for next wait cycle
                     streamPollable.resetForNextWait()
+                } else if let processReadyPollable: ProcessReadyPollable = resources.get(handle) {
+                    // Process ready pollable - wait for lazy-loaded module
+                    Log.wasiHttp.debug("pollable.block: waiting for process to be ready...")
+                    processReadyPollable.block()
+                    Log.wasiHttp.debug("pollable.block: finished waiting for process, ready=\(processReadyPollable.isReady)")
                 } else if let timePollable: TimePollable = resources.get(handle) {
                     // Time pollable - just wait until ready
                     let deadline = Date().addingTimeInterval(30)
@@ -80,6 +85,10 @@ struct IoPollProvider: WASIProvider {
                 
                 if let streamPollable: StreamPollable = resources.get(handle) {
                     return [.i32(streamPollable.isReady ? 1 : 0)]
+                }
+                
+                if let processReadyPollable: ProcessReadyPollable = resources.get(handle) {
+                    return [.i32(processReadyPollable.isReady ? 1 : 0)]
                 }
                 
                 if let timePollable: TimePollable = resources.get(handle) {
@@ -109,6 +118,8 @@ struct IoPollProvider: WASIProvider {
                 } else if let streamPollable: StreamPollable = resources.get(handle) {
                     streamPollable.block(timeout: 30)
                     streamPollable.resetForNextWait()
+                } else if let processReadyPollable: ProcessReadyPollable = resources.get(handle) {
+                    processReadyPollable.block()
                 } else if let timePollable: TimePollable = resources.get(handle) {
                     let deadline = Date().addingTimeInterval(30)
                     while !timePollable.isReady && Date() < deadline {
