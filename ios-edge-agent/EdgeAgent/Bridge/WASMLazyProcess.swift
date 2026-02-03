@@ -173,6 +173,7 @@ class WASMLazyProcess {
                 IoPollProvider(resources: resources),
                 IoErrorProvider(resources: resources),
                 IoStreamsProvider(resources: resources),
+                SocketsProvider(resources: resources),
                 HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
                 HttpTypesProvider(resources: resources, httpManager: httpManager),
             ]

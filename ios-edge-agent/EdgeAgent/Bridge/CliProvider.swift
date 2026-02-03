@@ -14,6 +14,8 @@ struct CliProvider: WASIProvider {
     var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:cli/stderr@0.2.4", name: "get-stderr", parameters: [], results: [.i32]),
+            WASIImportDeclaration(module: "wasi:cli/stdout@0.2.4", name: "get-stdout", parameters: [], results: [.i32]),
+            WASIImportDeclaration(module: "wasi:cli/stdin@0.2.4", name: "get-stdin", parameters: [], results: [.i32]),
             WASIImportDeclaration(module: "wasi:cli/terminal-output@0.2.9", name: "[resource-drop]terminal-output", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:cli/terminal-stdout@0.2.9", name: "get-terminal-stdout", parameters: [.i32], results: []),
         ]
