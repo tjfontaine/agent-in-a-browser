@@ -54,6 +54,10 @@ class WASMLazyProcess {
         self.env = env
         self.cwd = cwd
         Log.mcp.debug("WASMLazyProcess[\(handle)]: Created for command '\(command)' args=\(args)")
+        
+        // Start loading the module immediately (don't wait for closeStdin)
+        // The Rust shell executor calls get_ready_pollable().block() before writing stdin
+        startExecution()
     }
     
     // MARK: - Stdin Operations
@@ -68,12 +72,12 @@ class WASMLazyProcess {
         Log.mcp.debug("WASMLazyProcess[\(handle)]: writeStdin \(data.count) bytes")
     }
     
-    /// Close stdin (signals EOF and triggers execution)
+    /// Close stdin (signals EOF to the running execution)
     func closeStdin() {
         guard !stdinClosed else { return }
         stdinClosed = true
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: closeStdin - triggering execution")
-        startExecution()
+        Log.mcp.debug("WASMLazyProcess[\(handle)]: closeStdin - \(stdinBuffer.count) bytes buffered")
+        // The execute() task is polling for stdinClosed and will proceed
     }
     
     // MARK: - Stdout/Stderr Operations
@@ -130,12 +134,13 @@ class WASMLazyProcess {
     }
     
     private func execute() async {
-        Log.mcp.info("WASMLazyProcess[\(handle)]: Executing '\(command)' \(args)")
+        Log.mcp.info("WASMLazyProcess[\(handle)]: Loading module for '\(command)' \(args)")
         
         do {
             // Get the module for this command
             guard let moduleName = LazyModuleRegistry.shared.getModuleForCommand(command) else {
                 // If not a lazy command, treat it as a shell built-in
+                // Built-ins run immediately (they don't need stdin first)
                 let result = handleBuiltinCommand()
                 state = .completed(exitCode: result)
                 isReadyFlag = true
@@ -144,6 +149,7 @@ class WASMLazyProcess {
             
             // Load the module
             let module = try await LazyModuleRegistry.shared.loadModule(named: moduleName)
+            Log.mcp.info("WASMLazyProcess[\(handle)]: Module loaded, waiting for stdin")
             
             // Create runtime
             let engine = Engine()
@@ -172,11 +178,20 @@ class WASMLazyProcess {
                 throw ModuleLoadError.loadFailed("Failed to instantiate module")
             }
             
+            // Module is now loaded and ready to receive stdin
+            isReadyFlag = true
+            Log.mcp.info("WASMLazyProcess[\(handle)]: Ready, waiting for stdin to close")
+            
+            // Wait for stdin to be closed before executing
+            // Poll with a short sleep to avoid busy-waiting
+            while !stdinClosed {
+                try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            }
+            
+            Log.mcp.info("WASMLazyProcess[\(handle)]: Stdin closed, executing with \(stdinBuffer.count) bytes of input")
+            
             // Try to find and call the run export
             if let run = instance.exports[function: "run"] {
-                // Build args array for WASM
-                var allArgs = [command] + args
-                
                 // Most WASM command modules expect (argc, argv) or (name, args, ...)
                 // For now, we'll call run with no args and rely on WASI args_get
                 let result = try run([])
@@ -199,9 +214,8 @@ class WASMLazyProcess {
             Log.mcp.error("WASMLazyProcess[\(handle)]: Execution failed: \(error)")
             stderrBuffer.append(contentsOf: "Error: \(error.localizedDescription)\n".utf8)
             state = .failed(error)
+            isReadyFlag = true  // Mark ready even on failure so Rust doesn't wait forever
         }
-        
-        isReadyFlag = true
     }
     
     /// Handle shell built-in commands
