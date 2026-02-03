@@ -191,6 +191,8 @@ struct IoStreamsProvider: WASIProvider {
                 let dataLen = Int(args[2].i32)
                 let retPtr = UInt(args[3].i32)
                 
+                Log.wasi.debug("[blocking-write-and-flush] handle=\(handle), len=\(dataLen)")
+                
                 var bytes = [UInt8](repeating: 0, count: dataLen)
                 memory.withUnsafeMutableBufferPointer(offset: dataPtr, count: dataLen) { buf in
                     for i in 0..<dataLen { bytes[i] = buf[i] }
@@ -198,11 +200,13 @@ struct IoStreamsProvider: WASIProvider {
                 
                 if let body: HTTPOutgoingBody = resources.get(handle) {
                     body.data.append(contentsOf: bytes)
+                    Log.wasi.debug("[blocking-write-and-flush] Appended \(dataLen) bytes to HTTPOutgoingBody, total=\(body.data.count)")
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                         buf[0] = 0 // Ok
                     }
                 } else {
                     // Log for debugging
+                    Log.wasi.debug("[blocking-write-and-flush] Handle \(handle) not HTTPOutgoingBody")
                     if dataLen > 0, let str = String(bytes: bytes, encoding: .utf8) {
                         Log.wasi.debug("[STREAM] \(str)")
                     }

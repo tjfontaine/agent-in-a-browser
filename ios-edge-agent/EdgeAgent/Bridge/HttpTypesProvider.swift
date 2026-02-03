@@ -45,7 +45,7 @@ struct HttpTypesProvider: WASIProvider {
             WASIImportDeclaration(module: m, name: "[method]outgoing-request.body", parameters: [.i32, .i32], results: []),
             // Outgoing body
             WASIImportDeclaration(module: m, name: "[method]outgoing-body.write", parameters: [.i32, .i32], results: []),
-            WASIImportDeclaration(module: m, name: "[static]outgoing-body.finish", parameters: [.i32, .i32], results: []),
+            WASIImportDeclaration(module: m, name: "[static]outgoing-body.finish", parameters: [.i32, .i32, .i32, .i32], results: []),
             // Incoming response
             WASIImportDeclaration(module: m, name: "[method]incoming-response.status", parameters: [.i32], results: [.i32]),
             WASIImportDeclaration(module: m, name: "[method]incoming-response.headers", parameters: [.i32], results: [.i32]),
@@ -62,7 +62,7 @@ struct HttpTypesProvider: WASIProvider {
             WASIImportDeclaration(module: m, name: "[method]incoming-request.consume", parameters: [.i32, .i32], results: []),
             WASIImportDeclaration(module: m, name: "[method]outgoing-response.body", parameters: [.i32, .i32], results: []),
             WASIImportDeclaration(module: m, name: "[method]outgoing-response.set-status-code", parameters: [.i32, .i32], results: [.i32]),
-            WASIImportDeclaration(module: m, name: "[static]response-outparam.set", parameters: [.i32, .i32, .i32], results: []),
+            WASIImportDeclaration(module: m, name: "[static]response-outparam.set", parameters: [.i32, .i32, .i32, .i32, .i64, .i32, .i32, .i32, .i32], results: []),
             // Resource drops
             WASIImportDeclaration(module: m, name: "[resource-drop]fields", parameters: [.i32], results: []),
             WASIImportDeclaration(module: m, name: "[resource-drop]outgoing-request", parameters: [.i32], results: []),
@@ -384,12 +384,15 @@ struct HttpTypesProvider: WASIProvider {
         let resources = self.resources
         
         // [method]outgoing-body.write: (handle, ret_ptr) -> ()
+        // Returns output-stream handle for writing body data
         imports.define(module: module, name: "[method]outgoing-body.write",
             Function(store: store, parameters: Sig.methodoutgoing_body_write.parameters, results: Sig.methodoutgoing_body_write.results) { caller, args in
                 guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
                 
                 let handle = Int32(bitPattern: args[0].i32)
                 let retPtr = UInt(args[1].i32)
+                
+                Log.mcp.debug("[method]outgoing-body.write: body handle=\(handle)")
                 
                 if let body: HTTPOutgoingBody = resources.get(handle) {
                     // Return the body handle itself as the stream handle
@@ -398,10 +401,12 @@ struct HttpTypesProvider: WASIProvider {
                         buf[0] = 0 // Ok
                         buf.storeBytes(of: UInt32(bitPattern: handle).littleEndian, toByteOffset: 4, as: UInt32.self)
                     }
+                    Log.mcp.debug("[method]outgoing-body.write: returning stream handle=\(handle)")
                 } else {
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                         buf[0] = 1 // Error
                     }
+                    Log.mcp.warning("[method]outgoing-body.write: invalid body handle \(handle)")
                 }
                 return []
             }
@@ -416,6 +421,8 @@ struct HttpTypesProvider: WASIProvider {
                 let handle = Int32(bitPattern: args[0].i32)
                 // args[1] = has_trailers, args[2] = trailers_handle
                 let retPtr = UInt(args[3].i32)
+                
+                Log.mcp.debug("[static]outgoing-body.finish: body handle=\(handle)")
                 
                 // Zero-initialize full result area (40 bytes) to prevent garbage interpretation
                 // Layout: byte 0 = Ok/Err discriminant, bytes 8+ = error-code if Err
@@ -433,6 +440,7 @@ struct HttpTypesProvider: WASIProvider {
                 return []
             }
         )
+
     }
     
     // MARK: - Incoming Response
@@ -599,6 +607,7 @@ struct HttpTypesProvider: WASIProvider {
                 let headersHandle = Int32(bitPattern: args[0].i32)
                 let response = HTTPOutgoingResponseResource(headersHandle: headersHandle)
                 let handle = resources.register(response)
+                Log.mcp.debug("[constructor]outgoing-response: created handle=\(handle) with headers=\(headersHandle)")
                 return [.i32(UInt32(bitPattern: handle))]
             }
         )
@@ -628,11 +637,14 @@ struct HttpTypesProvider: WASIProvider {
                     let body = HTTPOutgoingBody()
                     let bodyHandle = resources.register(body)
                     response.bodyHandle = bodyHandle
+                    response.outgoingBody = body  // Store direct reference
+                    Log.mcp.debug("[method]outgoing-response.body: response=\(handle) -> body=\(bodyHandle)")
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                         buf[0] = 0 // Ok
                         buf.storeBytes(of: UInt32(bitPattern: bodyHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
                     }
                 } else {
+                    Log.mcp.warning("[method]outgoing-response.body: invalid response handle=\(handle)")
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                         buf[0] = 1 // Error
                     }
@@ -642,23 +654,31 @@ struct HttpTypesProvider: WASIProvider {
         )
         
         // [static]response-outparam.set - CRITICAL: 9 parameters
-        // (outparam, is_ok, response_or_err_disc, response_handle, error_code, err_ptr, err_len, ?, ?) -> ()
+        // ABI Layout for result<outgoing-response, error-code>:
+        // args[0] = outparam handle
+        // args[1] = discriminant (0=ok, 1=err)
+        // args[2] = response handle (if ok) or error discriminant (if err)
+        // args[3..8] = additional error data if err
         imports.define(module: module, name: "[static]response-outparam.set",
             Function(store: store, parameters: Sig.staticresponse_outparam_set.parameters, results: Sig.staticresponse_outparam_set.results) { _, args in
+                // Log all args for debugging
+                Log.mcp.debug("[static]response-outparam.set args: \(args.map { "\($0)" }.joined(separator: ", "))")
+                
                 let outparamHandle = Int32(bitPattern: args[0].i32)
                 let isOk = args[1].i32 == 0
-                // args[2] = sub-discriminant for ok/err variant
-                let responseHandle = Int32(bitPattern: args[3].i32)
-                // args[4] = i64 error code (for error case)
-                // args[5], [6] = error string ptr/len
-                // args[7], [8] = additional data if needed
+                // FIXED: Response handle is at args[2], not args[3]
+                let responseHandle = Int32(bitPattern: args[2].i32)
+                
+                Log.mcp.debug("response-outparam.set: outparam=\(outparamHandle), isOk=\(isOk), response=\(responseHandle)")
                 
                 if let outparam: ResponseOutparam = resources.get(outparamHandle) {
                     if isOk {
                         if let response: HTTPOutgoingResponseResource = resources.get(responseHandle) {
                             outparam.response = response
                             outparam.responseSet = true
-                            Log.mcp.debug("response-outparam.set: response set with status \(response.statusCode)")
+                            Log.mcp.debug("response-outparam.set: SUCCESS - response set with status \(response.statusCode)")
+                        } else {
+                            Log.mcp.error("response-outparam.set: FAILED - invalid response handle \(responseHandle)")
                         }
                     } else {
                         outparam.error = "HTTP response error"

@@ -9,13 +9,37 @@ import OSLog
 
 /// Provides type-safe WASI imports for the module-loader interface.
 /// Uses signature constants from MCPSignatures.swift (generated from WASM binary).
-struct ModuleLoaderProvider {
+struct ModuleLoaderProvider: WASIProvider {
+    
+    static var moduleName: String { "mcp:module-loader/loader@0.1.0" }
     
     private let loader: NativeLoaderImpl
     private let module = "mcp:module-loader/loader@0.1.0"
     
     // Type alias for readability
     private typealias Sig = MCPSignatures.module_loader_loader_0_1_0
+    
+    /// All imports declared by this provider for compile-time validation
+    var declaredImports: [WASIImportDeclaration] {
+        let m = Self.moduleName
+        return [
+            WASIImportDeclaration(module: m, name: "get-lazy-module", parameters: Sig.get_lazy_module.parameters, results: Sig.get_lazy_module.results),
+            WASIImportDeclaration(module: m, name: "is-interactive-command", parameters: Sig.is_interactive_command.parameters, results: Sig.is_interactive_command.results),
+            WASIImportDeclaration(module: m, name: "has-jspi", parameters: Sig.has_jspi.parameters, results: Sig.has_jspi.results),
+            WASIImportDeclaration(module: m, name: "spawn-lazy-command", parameters: Sig.spawn_lazy_command.parameters, results: Sig.spawn_lazy_command.results),
+            WASIImportDeclaration(module: m, name: "spawn-interactive", parameters: Sig.spawn_interactive.parameters, results: Sig.spawn_interactive.results),
+            WASIImportDeclaration(module: m, name: "spawn-worker-command", parameters: Sig.spawn_worker_command.parameters, results: Sig.spawn_worker_command.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.set-raw-mode", parameters: Sig.methodlazy_process_set_raw_mode.parameters, results: Sig.methodlazy_process_set_raw_mode.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.write-stdin", parameters: Sig.methodlazy_process_write_stdin.parameters, results: Sig.methodlazy_process_write_stdin.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.close-stdin", parameters: Sig.methodlazy_process_close_stdin.parameters, results: Sig.methodlazy_process_close_stdin.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.read-stdout", parameters: Sig.methodlazy_process_read_stdout.parameters, results: Sig.methodlazy_process_read_stdout.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.read-stderr", parameters: Sig.methodlazy_process_read_stderr.parameters, results: Sig.methodlazy_process_read_stderr.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.get-ready-pollable", parameters: Sig.methodlazy_process_get_ready_pollable.parameters, results: Sig.methodlazy_process_get_ready_pollable.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.is-ready", parameters: Sig.methodlazy_process_is_ready.parameters, results: Sig.methodlazy_process_is_ready.results),
+            WASIImportDeclaration(module: m, name: "[method]lazy-process.try-wait", parameters: Sig.methodlazy_process_try_wait.parameters, results: Sig.methodlazy_process_try_wait.results),
+            WASIImportDeclaration(module: m, name: "[resource-drop]lazy-process", parameters: Sig.resource_droplazy_process.parameters, results: Sig.resource_droplazy_process.results),
+        ]
+    }
     
     init(loader: NativeLoaderImpl) {
         self.loader = loader

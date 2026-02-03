@@ -64,11 +64,12 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
         // Build imports for WASI interfaces using type-safe providers
         var imports = Imports()
         
-        // Filesystem (wasi_snapshot_preview1) - legacy interface
-        SharedWASIImports.registerPreview1(&imports, store: store!, resources: resources)
+        // Create Module Loader implementation (needed by ModuleLoaderProvider)
+        loaderImpl = NativeLoaderImpl(resources: resources)
         
-        // Create type-safe providers for WASI interfaces
+        // Create type-safe providers for ALL WASI interfaces including MCP-specific
         let providers: [any WASIProvider] = [
+            Preview1Provider(resources: resources, filesystem: SandboxFilesystem.shared),
             RandomProvider(),
             ClocksProvider(resources: resources),
             CliProvider(resources: resources),
@@ -78,6 +79,7 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
             SocketsProvider(resources: resources),
             HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
             HttpTypesProvider(resources: resources, httpManager: httpManager),
+            ModuleLoaderProvider(loader: loaderImpl!),
         ]
         
         // Validate providers against WASM module requirements BEFORE instantiation
@@ -90,11 +92,6 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
         for provider in providers {
             provider.register(into: &imports, store: store!)
         }
-        
-        // Module Loader (MCP-specific) - not a standard WASI interface
-        loaderImpl = NativeLoaderImpl(resources: resources)
-        let loaderProvider = ModuleLoaderProvider(loader: loaderImpl!)
-        loaderProvider.register(into: &imports, store: store!)
         
         // Log required imports count for debugging
         Log.mcp.info("Module requires \(module.imports.count) imports")
@@ -147,19 +144,67 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
     private func handleConnection(_ connection: NWConnection, on queue: DispatchQueue) {
         connection.start(queue: queue)
         
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            guard let self = self, let data = data else {
-                connection.cancel()
-                return
-            }
-            
-            // Use DispatchQueue for request handling to avoid Swift Concurrency cooperative pool
-            queue.async {
-                // Run synchronously to avoid any cooperative executor dependencies
-                self.handleHTTPRequestSync(data: data, connection: connection)
+        // Buffer to accumulate request data until we have full body
+        var requestBuffer = Data()
+        
+        func readMore() {
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+                guard let self = self else {
+                    connection.cancel()
+                    return
+                }
+                
+                if let error = error {
+                    Log.mcp.error("Receive error: \(error)")
+                    connection.cancel()
+                    return
+                }
+                
+                if let data = data {
+                    requestBuffer.append(data)
+                }
+                
+                // Check if we have a complete HTTP request
+                let headerSeparator = Data("\r\n\r\n".utf8)
+                if let headerEndRange = requestBuffer.range(of: headerSeparator) {
+                    let headerData = requestBuffer[..<headerEndRange.lowerBound]
+                    
+                    // Parse Content-Length from headers (ASCII-safe)
+                    var contentLength = 0
+                    if let headersString = String(data: headerData, encoding: .utf8) {
+                        for line in headersString.split(separator: "\r\n") {
+                            if line.lowercased().hasPrefix("content-length:") {
+                                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                                contentLength = Int(value) ?? 0
+                            }
+                        }
+                    }
+                    
+                    // Calculate body length in BYTES
+                    let bodyStartIndex = headerEndRange.upperBound
+                    let currentBodyLength = requestBuffer.count - bodyStartIndex
+                    
+                    // If we have the full body, process the request
+                    if currentBodyLength >= contentLength {
+                        queue.async {
+                            self.handleHTTPRequestSync(data: requestBuffer, connection: connection)
+                        }
+                        return
+                    }
+                }
+                
+                // Need more data or error
+                if error != nil || isComplete {
+                    connection.cancel()
+                } else {
+                    readMore()
+                }
             }
         }
+        
+        readMore()
     }
+
     
     /// Synchronous HTTP request handler - avoids cooperative thread pool entirely
     private func handleHTTPRequestSync(data: Data, connection: NWConnection) {
@@ -181,6 +226,10 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
     
     /// Direct synchronous HTTP request handler (no async/await)
     private func handleHTTPRequestDirect(data: Data) throws -> Data {
+        guard let instance = instance else {
+            throw WasmKitHostError.notLoaded
+        }
+        
         // Parse HTTP request
         guard let requestString = String(data: data, encoding: .utf8) else {
             throw WasmKitHostError.invalidString
@@ -188,312 +237,101 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
         
         Log.mcp.debug("Received request: \(requestString.prefix(200))")
         
-        // For now, return a stub response
-        // TODO: Call wasi:http/incoming-handler@0.2.9#handle export
-        let responseBody = """
-        {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"run_command","description":"Execute a shell command (stub)","inputSchema":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}]}}
-        """
+        // Parse HTTP request line and headers
+        let lines = requestString.components(separatedBy: "\r\n")
+        guard lines.count >= 1 else {
+            throw WasmKitHostError.invalidString
+        }
         
+        // Parse request line: "POST / HTTP/1.1"
+        let requestLine = lines[0].components(separatedBy: " ")
+        let method = requestLine.count > 0 ? requestLine[0] : "GET"
+        let path = requestLine.count > 1 ? requestLine[1] : "/"
+        
+        // Parse headers until empty line
+        var headers = HTTPFields()
+        var bodyStartIndex = 1
+        for (index, line) in lines.dropFirst().enumerated() {
+            if line.isEmpty {
+                bodyStartIndex = index + 2 // +1 for dropFirst, +1 for empty line
+                break
+            }
+            if let colonIndex = line.firstIndex(of: ":") {
+                let name = String(line[..<colonIndex]).trimmingCharacters(in: .whitespaces)
+                let value = String(line[line.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+                headers.append(name: name, value: value)
+            }
+        }
+        
+        // Get body
+        var body = Data()
+        if bodyStartIndex < lines.count {
+            let bodyString = lines[bodyStartIndex...].joined(separator: "\r\n")
+            body = bodyString.data(using: .utf8) ?? Data()
+        }
+        
+        // Create IncomingRequest resource
+        let incomingRequest = HTTPIncomingRequest(method: method, path: path, headers: headers, body: body)
+        let requestHandle = resources.register(incomingRequest)
+        
+        // Create ResponseOutparam resource  
+        let responseOutparam = ResponseOutparam()
+        let outparamHandle = resources.register(responseOutparam)
+        
+        Log.mcp.debug("Calling WASM incoming-handler with request=\(requestHandle), outparam=\(outparamHandle)")
+        
+        // Get the WASM incoming-handler export
+        guard let handleFn = instance.exports[function: "wasi:http/incoming-handler@0.2.9#handle"] else {
+            Log.mcp.error("incoming-handler export not found")
+            throw WasmKitHostError.invalidString
+        }
+        
+        // Call the WASM handler: handle(request: i32, response-out: i32)
+        do {
+            _ = try handleFn([.i32(UInt32(bitPattern: requestHandle)), .i32(UInt32(bitPattern: outparamHandle))])
+        } catch {
+            Log.mcp.error("WASM handler failed: \(error)")
+            throw error
+        }
+        
+        // Read response from ResponseOutparam
+        guard responseOutparam.responseSet, let response = responseOutparam.response else {
+            Log.mcp.error("ResponseOutparam not set after handler")
+            let errorBody = """
+            {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"Internal error: no response from handler"}}
+            """
+            return formatHTTPResponse(statusCode: 500, body: errorBody)
+        }
+        
+        // Get response body - prefer direct reference which survives registry drops
+        var responseBody = Data()
+        if let body = response.outgoingBody {
+            responseBody = body.getData()
+            Log.mcp.debug("Body data from direct reference: \(responseBody.count) bytes")
+        } else if let bodyHandle = response.bodyHandle,
+           let outgoingBody: HTTPOutgoingBody = resources.get(bodyHandle) {
+            // Fallback to registry lookup
+            responseBody = outgoingBody.getData()
+            Log.mcp.debug("Body data from registry: \(responseBody.count) bytes")
+        }
+        
+        let responseBodyString = String(data: responseBody, encoding: .utf8) ?? ""
+        Log.mcp.debug("WASM response: status=\(response.statusCode), body=\(responseBodyString.prefix(200))")
+        
+        return formatHTTPResponse(statusCode: response.statusCode, body: responseBodyString)
+    }
+    
+    /// Format an HTTP response
+    private func formatHTTPResponse(statusCode: Int, body: String) -> Data {
         let response = """
-        HTTP/1.1 200 OK\r
+        HTTP/1.1 \(statusCode) OK\r
         Content-Type: application/json\r
-        Content-Length: \(responseBody.utf8.count)\r
+        Content-Length: \(body.utf8.count)\r
         Connection: close\r
         \r
-        \(responseBody)
+        \(body)
         """
-        
         return response.data(using: .utf8)!
     }
-
-    /// Registers HTTP imports that are host-specific (not shared with NativeAgentHost)
-    /// Common HTTP client imports are now in SharedWASIImports.registerHttpClient()
-    private func registerHttpImports(_ imports: inout Imports) {
-        guard let store = store else { return }
-        let httpModule = "wasi:http/types@0.2.9"
-        
-        // =============================================================================
-        // OUTGOING HTTP HANDLER - Uses httpManager to perform requests
-        // =============================================================================
-        
-        imports.define(module: "wasi:http/outgoing-handler@0.2.9", name: "handle",
-            Function(store: store, parameters: [.i32, .i32, .i32, .i32], results: []) { [weak self] caller, args in
-                guard let self = self else { return [] }
-                
-                let requestHandle = Int32(bitPattern: args[0].i32)
-                let retPtr = UInt(args[3].i32)
-                
-                guard let request: HTTPOutgoingRequest = self.resources.get(requestHandle),
-                      let memory = caller.instance?.exports[memory: "memory"] else {
-                    if let memory = caller.instance?.exports[memory: "memory"] {
-                        memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
-                            buffer[0] = 1  // Err
-                        }
-                    }
-                    return []
-                }
-                
-                // Build URL
-                let scheme = request.scheme.isEmpty ? "https" : request.scheme
-                let authority = request.authority.isEmpty ? "localhost" : request.authority
-                let path = request.path.isEmpty ? "/" : request.path
-                let urlString = "\(scheme)://\(authority)\(path)"
-                
-                // Get headers
-                var headers: [(String, String)] = []
-                if let fields: HTTPFields = self.resources.get(request.headersHandle) {
-                    headers = fields.entries
-                }
-                
-                // Get body
-                var body: Data? = nil
-                if let bodyHandle = request.outgoingBodyHandle,
-                   let outgoingBody: HTTPOutgoingBody = self.resources.get(bodyHandle) {
-                    body = outgoingBody.data
-                }
-                
-                // Create future and start async request using existing API
-                let future = FutureIncomingResponse()
-                let futureHandle = self.resources.register(future)
-                
-                self.httpManager.performRequest(
-                    method: request.method,
-                    url: urlString,
-                    headers: headers,
-                    body: body,
-                    future: future,
-                    resources: self.resources
-                )
-                
-                memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
-                    buffer[0] = 0  // Ok
-                    buffer.storeBytes(of: UInt32(bitPattern: futureHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
-                }
-                return []
-            }
-        )
-        
-        // =============================================================================
-        // FUTURE-INCOMING-RESPONSE - Polling for async HTTP responses
-        // =============================================================================
-        
-        imports.define(module: httpModule, name: "[method]future-incoming-response.subscribe",
-            Function(store: store, parameters: [.i32], results: [.i32]) { [weak self] _, args in
-                let futureHandle = Int32(bitPattern: args[0].i32)
-                if let future: FutureIncomingResponse = self?.resources.get(futureHandle) {
-                    let pollable = FuturePollable(future: future)
-                    let pollableHandle = self?.resources.register(pollable) ?? 0
-                    return [.i32(UInt32(bitPattern: pollableHandle))]
-                }
-                return [.i32(0)]
-            }
-        )
-        
-        imports.define(module: httpModule, name: "[method]future-incoming-response.get",
-            Function(store: store, parameters: [.i32, .i32], results: []) { [weak self] caller, args in
-                let futureHandle = Int32(bitPattern: args[0].i32)
-                let retPtr = UInt(args[1].i32)
-                
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
-                
-                if let future: FutureIncomingResponse = self?.resources.get(futureHandle),
-                   let response = future.response {
-                    let responseHandle = self?.resources.register(response) ?? 0
-                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
-                        buffer[0] = 1  // Some
-                        buffer[1] = 0  // Ok
-                        buffer.storeBytes(of: UInt32(bitPattern: responseHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
-                    }
-                } else {
-                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
-                        buffer[0] = 0  // None
-                    }
-                }
-                return []
-            }
-        )
-        
-        // =============================================================================
-        // HTTP SERVER IMPORTS - For MCP server handling incoming requests
-        // =============================================================================
-        
-        // [constructor]outgoing-response
-        imports.define(module: httpModule, name: "[constructor]outgoing-response",
-            Function(store: store, parameters: [.i32], results: [.i32]) { [weak self] _, args in
-                let headersHandle = Int32(bitPattern: args[0].i32)
-                let response = HTTPOutgoingResponseResource(headersHandle: headersHandle)
-                let handle = self?.resources.register(response) ?? 0
-                return [.i32(UInt32(bitPattern: handle))]
-            }
-        )
-        
-        // [method]outgoing-response.set-status-code
-        imports.define(module: httpModule, name: "[method]outgoing-response.set-status-code",
-            Function(store: store, parameters: [.i32, .i32], results: [.i32]) { [weak self] _, args in
-                let responseHandle = Int32(bitPattern: args[0].i32)
-                let statusCode = args[1].i32
-                if let response: HTTPOutgoingResponseResource = self?.resources.get(responseHandle) {
-                    response.statusCode = Int(statusCode)
-                    return [.i32(0)]
-                }
-                return [.i32(1)]
-            }
-        )
-        
-        // [method]outgoing-response.body
-        imports.define(module: httpModule, name: "[method]outgoing-response.body",
-            Function(store: store, parameters: [.i32, .i32], results: []) { [weak self] caller, args in
-                let responseHandle = Int32(bitPattern: args[0].i32)
-                let resultPtr = UInt(args[1].i32)
-                
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
-                
-                if let response: HTTPOutgoingResponseResource = self?.resources.get(responseHandle) {
-                    let body = HTTPOutgoingBody()
-                    let bodyHandle = self?.resources.register(body) ?? 0
-                    response.bodyHandle = bodyHandle
-                    memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
-                        buffer[0] = 0
-                        buffer.storeBytes(of: UInt32(bitPattern: bodyHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
-                    }
-                } else {
-                    memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
-                        buffer[0] = 1
-                    }
-                }
-                return []
-            }
-        )
-        
-        // [static]response-outparam.set - sets the response for a response-outparam
-        // Parameters: outparam handle, result discriminant, ok/err pointer, ok/err len (if error string)
-        imports.define(module: httpModule, name: "[static]response-outparam.set",
-            Function(store: store, parameters: [.i32, .i32, .i32, .i32, .i32], results: []) { [weak self] _, args in
-                let outparamHandle = Int32(bitPattern: args[0].i32)
-                let isOk = args[1].i32 == 0
-                let responseOrErrorHandle = Int32(bitPattern: args[2].i32)
-                
-                if let outparam: ResponseOutparam = self?.resources.get(outparamHandle) {
-                    if isOk {
-                        // Set the response
-                        if let response: HTTPOutgoingResponseResource = self?.resources.get(responseOrErrorHandle) {
-                            outparam.response = response
-                            outparam.responseSet = true
-                            Log.mcp.debug("response-outparam.set: response set with status \(response.statusCode)")
-                        }
-                    } else {
-                        // Set the error
-                        outparam.error = "HTTP response error"
-                        outparam.responseSet = true
-                        Log.mcp.debug("response-outparam.set: error set")
-                    }
-                } else {
-                    Log.mcp.warning("response-outparam.set: invalid outparam handle \(outparamHandle)")
-                }
-                return []
-            }
-        )
-        
-        // [method]incoming-request.headers - returns a Fields handle with request headers
-        imports.define(module: httpModule, name: "[method]incoming-request.headers",
-            Function(store: store, parameters: [.i32], results: [.i32]) { [weak self] _, args in
-                let requestHandle = Int32(bitPattern: args[0].i32)
-                if let request: HTTPIncomingRequest = self?.resources.get(requestHandle) {
-                    let handle = self?.resources.register(request.headers) ?? 0
-                    return [.i32(UInt32(bitPattern: handle))]
-                }
-                // If no request found, return empty fields handle
-                let fields = HTTPFields()
-                let handle = self?.resources.register(fields) ?? 0
-                return [.i32(UInt32(bitPattern: handle))]
-            }
-        )
-        
-        // [method]incoming-request.path-with-query - returns option<string>
-        imports.define(module: httpModule, name: "[method]incoming-request.path-with-query",
-            Function(store: store, parameters: [.i32, .i32], results: []) { [weak self] caller, args in
-                let requestHandle = Int32(bitPattern: args[0].i32)
-                let resultPtr = UInt(args[1].i32)
-                
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
-                
-                if let request: HTTPIncomingRequest = self?.resources.get(requestHandle),
-                   let path = request.pathWithQuery {
-                    // Allocate string in WASM memory
-                    if let reallocFn = caller.instance?.exports[function: "cabi_realloc"] {
-                        let pathBytes = Array(path.utf8)
-                        let stringPtr = try? reallocFn([.i32(0), .i32(0), .i32(1), .i32(UInt32(pathBytes.count))])
-                        if let ptr = stringPtr?.first?.i32 {
-                            memory.withUnsafeMutableBufferPointer(offset: UInt(ptr), count: pathBytes.count) { buffer in
-                                for (i, byte) in pathBytes.enumerated() {
-                                    buffer[i] = byte
-                                }
-                            }
-                            memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 12) { buffer in
-                                buffer[0] = 1  // Some
-                                buffer.storeBytes(of: UInt32(ptr).littleEndian, toByteOffset: 4, as: UInt32.self)
-                                buffer.storeBytes(of: UInt32(pathBytes.count).littleEndian, toByteOffset: 8, as: UInt32.self)
-                            }
-                            return []
-                        }
-                    }
-                }
-                // No path available - return None
-                memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 12) { buffer in
-                    buffer[0] = 0  // None
-                }
-                return []
-            }
-        )
-        
-        // [method]incoming-request.consume - returns result<incoming-body, error>
-        imports.define(module: httpModule, name: "[method]incoming-request.consume",
-            Function(store: store, parameters: [.i32, .i32], results: []) { [weak self] caller, args in
-                let requestHandle = Int32(bitPattern: args[0].i32)
-                let resultPtr = UInt(args[1].i32)
-                
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
-                
-                if let request: HTTPIncomingRequest = self?.resources.get(requestHandle),
-                   !request.bodyConsumed {
-                    request.bodyConsumed = true
-                    // Create incoming body with the request body
-                    let incomingBody = HTTPIncomingBody(data: request.body)
-                    let bodyHandle = self?.resources.register(incomingBody) ?? 0
-                    memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
-                        buffer[0] = 0  // Ok
-                        buffer.storeBytes(of: UInt32(bitPattern: bodyHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
-                    }
-                } else {
-                    // Already consumed or invalid request - return error
-                    memory.withUnsafeMutableBufferPointer(offset: resultPtr, count: 8) { buffer in
-                        buffer[0] = 1  // Error
-                    }
-                }
-                return []
-            }
-        )
-        
-        // HTTP Server resource drops
-        imports.define(module: httpModule, name: "[resource-drop]outgoing-response",
-            Function(store: store, parameters: [.i32], results: []) { [weak self] _, args in
-                self?.resources.drop(Int32(bitPattern: args[0].i32))
-                return []
-            }
-        )
-        
-        imports.define(module: httpModule, name: "[resource-drop]response-outparam",
-            Function(store: store, parameters: [.i32], results: []) { [weak self] _, args in
-                self?.resources.drop(Int32(bitPattern: args[0].i32))
-                return []
-            }
-        )
-        
-        imports.define(module: httpModule, name: "[resource-drop]incoming-request",
-            Function(store: store, parameters: [.i32], results: []) { [weak self] _, args in
-                self?.resources.drop(Int32(bitPattern: args[0].i32))
-                return []
-            }
-        )
-    }
 }
+

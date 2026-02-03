@@ -146,6 +146,7 @@ class HTTPOutgoingResponseResource: NSObject {
     var headersHandle: Int32
     var statusCode: Int = 200
     var bodyHandle: Int32?
+    var outgoingBody: HTTPOutgoingBody?  // Direct reference to survive registry drops
     
     init(headersHandle: Int32) {
         self.headersHandle = headersHandle
