@@ -164,7 +164,10 @@ class WASMLazyProcess {
         guard case .created = state else { return }
         state = .running
         
-        executionTask = Task {
+        // CRITICAL: Use Task.detached to run on a background thread
+        // Regular Task inherits MainActor context, which is blocked by synchronous WASM execution
+        // This caused a 30s timeout on first tsx-engine invocation
+        executionTask = Task.detached(priority: .userInitiated) { [self] in
             await execute()
         }
     }
