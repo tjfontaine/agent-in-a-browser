@@ -214,22 +214,41 @@ class WASMLazyProcess {
             Log.mcp.info("WASMLazyProcess[\(handle)]: Stdin closed, executing with \(stdinBuffer.count) bytes of input")
             
             // Try to find and call the run export
-            if let run = instance.exports[function: "run"] {
-                // Most WASM command modules expect (argc, argv) or (name, args, ...)
-                // For now, we'll call run with no args and rely on WASI args_get
-                let result = try run([])
-                
-                if let exitValue = result.first, case let .i32(code) = exitValue {
-                    state = .completed(exitCode: Int32(bitPattern: code))
-                } else {
-                    state = .completed(exitCode: 0)
-                }
-            } else if let wasiStart = instance.exports[function: "_start"] {
-                // WASI _start entry point
-                let _ = try wasiStart([])
-                state = .completed(exitCode: 0)
+            // Check for various entry point styles
+            let entryFunctionName: String?
+            if instance.exports[function: "run"] != nil {
+                entryFunctionName = "run"
+            } else if instance.exports[function: "_start"] != nil {
+                entryFunctionName = "_start"
+            } else if instance.exports[function: "shell:unix/command@0.1.0#run"] != nil {
+                entryFunctionName = "shell:unix/command@0.1.0#run"
             } else {
-                Log.mcp.error("WASMLazyProcess[\(handle)]: No run or _start export found")
+                entryFunctionName = nil
+            }
+            
+            if let funcName = entryFunctionName,
+               let entryFunc = instance.exports[function: funcName] {
+                Log.mcp.info("WASMLazyProcess[\(handle)]: Calling entry point '\(funcName)'")
+                
+                // shell:unix/command@0.1.0#run expects (command_ptr, command_len, args_ptr, args_len, ret_ptr)
+                // For now, try with no args for simple exports
+                if funcName == "shell:unix/command@0.1.0#run" {
+                    // This is a Component Model export that needs special handling
+                    // The command and args need to be written to memory
+                    // For MVP, call with the command string
+                    let result = try callShellCommand(instance: instance, function: entryFunc)
+                    state = .completed(exitCode: result)
+                } else {
+                    // Standard run or _start
+                    let result = try entryFunc([])
+                    if let exitValue = result.first, case let .i32(code) = exitValue {
+                        state = .completed(exitCode: Int32(bitPattern: code))
+                    } else {
+                        state = .completed(exitCode: 0)
+                    }
+                }
+            } else {
+                Log.mcp.error("WASMLazyProcess[\(handle)]: No entry point found. Available exports: \(listExports(instance))")
                 state = .failed(ModuleLoadError.loadFailed("No entry point found"))
             }
             
@@ -387,6 +406,110 @@ class WASMLazyProcess {
                 return [.i32(0)]
             }
         )
+    }
+    
+    // MARK: - Shell Command Interface
+    
+    /// Call shell:unix/command@0.1.0#run export with command and args
+    private func callShellCommand(instance: Instance, function: Function) throws -> Int32 {
+        guard let memory = instance.exports[memory: "memory"],
+              let realloc = instance.exports[function: "cabi_realloc"] else {
+            Log.mcp.error("WASMLazyProcess[\(handle)]: Missing memory or cabi_realloc for shell command")
+            return 1
+        }
+        
+        // Allocate and write command string
+        let commandBytes = Array(command.utf8)
+        let commandLen = Int32(commandBytes.count)
+        guard let commandPtrResult = try? realloc([.i32(0), .i32(0), .i32(1), .i32(UInt32(commandLen))]),
+              let commandPtrVal = commandPtrResult.first, case let .i32(commandPtr) = commandPtrVal else {
+            Log.mcp.error("WASMLazyProcess[\(handle)]: Failed to allocate command memory")
+            return 1
+        }
+        memory.withUnsafeMutableBufferPointer(offset: UInt(commandPtr), count: commandBytes.count) { buffer in
+            for (i, byte) in commandBytes.enumerated() {
+                buffer[i] = byte
+            }
+        }
+        
+        // Build args as list<string> - each string is (ptr, len), then overall (ptr, count)
+        // For simplicity, concatenate all args and track offsets
+        var argData: [(ptr: UInt32, len: Int32)] = []
+        for arg in args {
+            let argBytes = Array(arg.utf8)
+            let argLen = Int32(argBytes.count)
+            if argLen > 0 {
+                guard let argPtrResult = try? realloc([.i32(0), .i32(0), .i32(1), .i32(UInt32(argLen))]),
+                      let argPtrVal = argPtrResult.first, case let .i32(argPtr) = argPtrVal else {
+                    continue
+                }
+                memory.withUnsafeMutableBufferPointer(offset: UInt(argPtr), count: argBytes.count) { buffer in
+                    for (i, byte) in argBytes.enumerated() {
+                        buffer[i] = byte
+                    }
+                }
+                argData.append((ptr: argPtr, len: argLen))
+            }
+        }
+        
+        // Allocate args array (each entry is 8 bytes: ptr + len)
+        let argsArraySize = Int32(argData.count * 8)
+        let argsCount = Int32(argData.count)
+        var argsArrayPtr: UInt32 = 0
+        if argsArraySize > 0 {
+            if let argsResult = try? realloc([.i32(0), .i32(0), .i32(4), .i32(UInt32(argsArraySize))]),
+               let argsVal = argsResult.first, case let .i32(ptr) = argsVal {
+                argsArrayPtr = ptr
+            }
+            // Write arg entries
+            for (i, entry) in argData.enumerated() {
+                let offset = UInt(argsArrayPtr) + UInt(i * 8)
+                memory.withUnsafeMutableBufferPointer(offset: offset, count: 8) { buffer in
+                    buffer.storeBytes(of: entry.ptr.littleEndian, as: UInt32.self)
+                    buffer.storeBytes(of: UInt32(entry.len).littleEndian, toByteOffset: 4, as: UInt32.self)
+                }
+            }
+        }
+        
+        // Allocate return pointer (for result variant)
+        guard let retResult = try? realloc([.i32(0), .i32(0), .i32(4), .i32(16)]),
+              let retVal = retResult.first, case let .i32(retPtr) = retVal else {
+            Log.mcp.error("WASMLazyProcess[\(handle)]: Failed to allocate return memory")
+            return 1
+        }
+        
+        Log.mcp.debug("WASMLazyProcess[\(handle)]: Calling shell command '\(command)' with \(args.count) args")
+        
+        // Call the function: (command_ptr, command_len, args_ptr, args_len, ret_ptr) -> ()
+        let _ = try function([
+            .i32(commandPtr),
+            .i32(UInt32(commandLen)),
+            .i32(argsArrayPtr),
+            .i32(UInt32(argsCount)),
+            .i32(retPtr)
+        ])
+        
+        // Read result from retPtr
+        // result<string, i32> layout: discriminant (1 byte), then payload
+        var exitCode: Int32 = 0
+        memory.withUnsafeMutableBufferPointer(offset: UInt(retPtr), count: 16) { buffer in
+            let discriminant = buffer[0]
+            if discriminant == 0 {
+                // Ok(string) - output is in stdout buffer
+                exitCode = 0
+            } else {
+                // Err(i32) - read error code at offset 4
+                exitCode = Int32(bitPattern: buffer.load(fromByteOffset: 4, as: UInt32.self).littleEndian)
+            }
+        }
+        
+        return exitCode
+    }
+    
+    /// List available exports for debugging
+    private func listExports(_ instance: Instance) -> String {
+        // This is for debugging - just return a placeholder
+        "see wasm-tools output"
     }
     
     // MARK: - Cleanup
