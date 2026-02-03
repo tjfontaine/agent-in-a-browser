@@ -69,6 +69,45 @@ else
     echo "  ⚠ mcp-server-sync not found"
 fi
 
+# Step 4b: Copy lazy WASM modules for shell_eval support
+echo ">>> Copying lazy WASM modules..."
+
+# tsx-engine (for tsx/tsc commands)
+if [ -d "$PROJECT_ROOT/packages/wasm-tsx/wasm-sync" ]; then
+    mkdir -p "$WEB_RUNTIME_DIR/tsx-engine-sync"
+    cp "$PROJECT_ROOT/packages/wasm-tsx/wasm-sync/"*.wasm "$WEB_RUNTIME_DIR/tsx-engine-sync/"
+    echo "  ✓ Copied tsx-engine-sync"
+else
+    echo "  ⚠ wasm-tsx/wasm-sync not found"
+fi
+
+# sqlite-module (for sqlite3 command)
+if [ -d "$PROJECT_ROOT/packages/wasm-sqlite/wasm-sync" ]; then
+    mkdir -p "$WEB_RUNTIME_DIR/sqlite-module-sync"
+    cp "$PROJECT_ROOT/packages/wasm-sqlite/wasm-sync/"*.wasm "$WEB_RUNTIME_DIR/sqlite-module-sync/"
+    echo "  ✓ Copied sqlite-module-sync"
+else
+    echo "  ⚠ wasm-sqlite/wasm-sync not found"
+fi
+
+# ratatui-demo (for TUI demo commands)
+if [ -d "$PROJECT_ROOT/packages/wasm-ratatui/wasm-sync" ]; then
+    mkdir -p "$WEB_RUNTIME_DIR/ratatui-demo-sync"
+    cp "$PROJECT_ROOT/packages/wasm-ratatui/wasm-sync/"*.wasm "$WEB_RUNTIME_DIR/ratatui-demo-sync/"
+    echo "  ✓ Copied ratatui-demo-sync"
+else
+    echo "  ⚠ wasm-ratatui/wasm-sync not found"
+fi
+
+# edtui-module (for vim/edtui commands)
+if [ -d "$PROJECT_ROOT/packages/wasm-vim/wasm-sync" ]; then
+    mkdir -p "$WEB_RUNTIME_DIR/edtui-module-sync"
+    cp "$PROJECT_ROOT/packages/wasm-vim/wasm-sync/"*.wasm "$WEB_RUNTIME_DIR/edtui-module-sync/"
+    echo "  ✓ Copied edtui-module-sync"
+else
+    echo "  ⚠ wasm-vim/wasm-sync not found"
+fi
+
 echo ""
 echo "=== Build Complete ==="
 echo "WebRuntime bundled to: $WEB_RUNTIME_DIR"
