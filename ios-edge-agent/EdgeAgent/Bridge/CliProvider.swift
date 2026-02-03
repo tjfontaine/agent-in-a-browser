@@ -45,6 +45,32 @@ struct CliProvider: WASIProvider {
             }
         )
         
+        // wasi:cli/stdout@0.2.4
+        let stdoutModule = "wasi:cli/stdout@0.2.4"
+        
+        // get-stdout: () -> i32
+        imports.define(module: stdoutModule, name: "get-stdout",
+            Function(store: store, parameters: StderrSig.get_stderr.parameters, results: StderrSig.get_stderr.results) { _, _ in
+                // Return a stdout stream handle (use an output stream)
+                let stream = HTTPOutgoingBody()
+                let handle = resources.register(stream)
+                return [.i32(UInt32(bitPattern: handle))]
+            }
+        )
+        
+        // wasi:cli/stdin@0.2.4
+        let stdinModule = "wasi:cli/stdin@0.2.4"
+        
+        // get-stdin: () -> i32
+        imports.define(module: stdinModule, name: "get-stdin",
+            Function(store: store, parameters: StderrSig.get_stderr.parameters, results: StderrSig.get_stderr.results) { _, _ in
+                // Return an empty stdin stream (no interactive input on iOS)
+                let stream = HTTPIncomingBody(data: Data())
+                let handle = resources.register(stream)
+                return [.i32(UInt32(bitPattern: handle))]
+            }
+        )
+        
         // wasi:cli/terminal-output@0.2.9
         let termOutputModule = "wasi:cli/terminal-output@0.2.9"
         
