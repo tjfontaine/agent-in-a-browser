@@ -119,5 +119,12 @@ ios-edge-agent/scripts/wasm-http-test/.build/
 ios-edge-agent/scripts/wasm-http-test/.swiftpm/
 ios-edge-agent/scripts/wasm-http-test/Package.resolved
 
+# iOS WasmBindgen macro package build artifacts
+ios-edge-agent/WasmBindgen/.build/
+ios-edge-agent/WasmBindgen/.swiftpm/
+ios-edge-agent/WasmBindgen/Package.resolved
+
 # Generated WASI signatures Swift file
 ios-edge-agent/EdgeAgent/Bridge/WASISignatures.swift
+ios-edge-agent/EdgeAgent/Bridge/GeneratedWASIBindings.swift
+ios-edge-agent/EdgeAgent/Bridge/GeneratedWASMImports.swift

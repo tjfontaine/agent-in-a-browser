@@ -189,18 +189,40 @@ struct MealMindView: View {
         
         Task {
             do {
-                // 1a. Start MCP server first and wait for it to be ready
+                // 1a. Start Swift MCP server first and wait for it to be ready
                 try await MCPServer.shared.start()
-                Log.app.info("MealMind: MCP server ready")
+                Log.app.info("MealMind: Swift MCP server ready on port 9292")
                 
                 // Small delay to ensure server is accepting connections
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 
+                // 1b. Load Native MCP Host (shell tools WASM)
+                // This is optional - gracefully handle if WASM module is missing
+                do {
+                    if !NativeMCPHost.shared.isReady {
+                        Log.app.info("MealMind: Loading Native MCP Host (shell tools)...")
+                        try await NativeMCPHost.shared.load()
+                        try await NativeMCPHost.shared.startServer()
+                        Log.app.info("MealMind: Native MCP Host ready on port 9293")
+                    }
+                } catch {
+                    // Don't fail the whole app if MCP host fails to load
+                    Log.app.warning("MealMind: Native MCP Host unavailable: \(error.localizedDescription)")
+                }
+                
                 // 2. Load native WASM runtime and create agent
                 if !agent.isReady {
-                    Log.app.info("MealMind: Loading native WASM runtime...")
+                    Log.app.info("MealMind: Loading native WASM agent...")
                     try await agent.load()
-                    Log.app.info("MealMind: Native WASM runtime loaded")
+                    Log.app.info("MealMind: Native WASM agent loaded")
+                }
+                
+                // Build MCP server list - include shell tools if available
+                var mcpServers = [
+                    MCPServerConfig(url: MCPServer.shared.baseURL, name: "ios-tools")
+                ]
+                if NativeMCPHost.shared.isReady {
+                    mcpServers.append(MCPServerConfig(url: "http://127.0.0.1:9293", name: "shell-tools"))
                 }
                 
                 // Create agent with saved provider/model but MealMind system prompt
@@ -211,13 +233,11 @@ struct MealMindView: View {
                     baseUrl: configManager.baseUrl.isEmpty ? nil : configManager.baseUrl,
                     preamble: nil,  // Don't append to default
                     preambleOverride: mealMindSystemPrompt,  // MealMind-specific prompt
-                    mcpServers: [
-                        MCPServerConfig(url: MCPServer.shared.baseURL, name: "ios-tools")
-                    ],
+                    mcpServers: mcpServers,
                     maxTurns: UInt32(configManager.maxTurns)
                 )
                 agent.createAgent(config: config)
-                Log.app.info("MealMind: Agent created")
+                Log.app.info("MealMind: Agent created with \(mcpServers.count) MCP servers")
             } catch {
                 Log.app.error("MealMind: Failed to setup agent: \(error)")
                 await MainActor.run {

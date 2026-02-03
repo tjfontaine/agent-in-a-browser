@@ -7,10 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		15F3F448540BD62B29B3ED6C /* JSConsoleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4150E73A7448714C57904CEA /* JSConsoleHandler.swift */; };
-		5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */; };
+		09596547996FFACB30242F7B /* WASIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116FA3B9B48CB14AF467D4DC /* WASIProvider.swift */; };
+		10E5F05345D327A51767F2C8 /* Preview1Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA979225218207F99BF0865 /* Preview1Provider.swift */; };
+		28A31EBA52AE66EC97DB23D3 /* SocketsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB171AC6C3B207ABE16552F /* SocketsProvider.swift */; };
+		299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */; };
+		2CA4BAB444416E9FE42A75C2 /* HttpOutgoingHandlerProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393251FB0B1C206E4D4CB382 /* HttpOutgoingHandlerProvider.swift */; };
+		4D5544423630538E9DE6C073 /* IoStreamsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EC6DCA5B52126816207E39 /* IoStreamsProvider.swift */; };
+		68FED53B5EA45B371A6D0822 /* RandomProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB821B614A05F85E65C240C /* RandomProvider.swift */; };
+		6BF183642097D4DABEB3EEC2 /* NativeLoaderImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9383E0DE4D962844DC37077 /* NativeLoaderImpl.swift */; };
 		6F96EC3EB4B6C34B89C6AB0C /* WASISignatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C105A64D18A85AAB833F655 /* WASISignatures.swift */; };
+		907221EEAFFB26761CF54809 /* IoErrorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7700D0E1F69C46D3AE9E41 /* IoErrorProvider.swift */; };
 		9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB72373C65C1096DC1AE15 /* Log.swift */; };
+		9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */; };
 		A1000001201A0001 /* EdgeAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000001101A0001 /* EdgeAgentApp.swift */; };
 		A1000002201A0001 /* ConfigManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002101A0001 /* ConfigManager.swift */; };
 		A1000003201A0001 /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003101A0001 /* AgentEvent.swift */; };
@@ -25,7 +33,20 @@
 		B1000001201A0001 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = B1000001101A0001 /* MCP */; };
 		B2000001201A0001 /* WasmKit in Frameworks */ = {isa = PBXBuildFile; productRef = B2000001101A0001 /* WasmKit */; };
 		B2000002201A0001 /* WASI in Frameworks */ = {isa = PBXBuildFile; productRef = B2000002101A0001 /* WASI */; };
+		B4B63E0F18B169C07EF597D5 /* NativeLoaderImplTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */; };
 		C1000001201A0001 /* NativeAgentHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000001101A0001 /* NativeAgentHost.swift */; };
+		C92F94B3507A83BDB147C399 /* ClocksProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EF02ADBFAD20EE516CE013 /* ClocksProvider.swift */; };
+		D1000001201A0001 /* WasmKitTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000001101A0001 /* WasmKitTypes.swift */; };
+		DDAEB600AEA9BC272C5AF6A1 /* IoPollProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A54A7E357622DF69BF38813 /* IoPollProvider.swift */; };
+		DE0617F43D14F9676C1474AC /* ModuleLoaderProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D1774313CB149A4E20BF22 /* ModuleLoaderProvider.swift */; };
+		E1000001201A0001 /* NativeMCPHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000001101A0001 /* NativeMCPHost.swift */; };
+		F1000001201A0001 /* MCPSignatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001101A0001 /* MCPSignatures.swift */; };
+		F19F02F80A4CAAC373D32F3A /* HttpTypesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3BB2A66D51EC3B5F4E7F8F /* HttpTypesProvider.swift */; };
+		F9AF9C12A3AADFD882A67B06 /* CliProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F89F844C84F057205D2070 /* CliProvider.swift */; };
+		G1000001201A0001 /* SharedWASIImports.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000001101A0001 /* SharedWASIImports.swift */; };
+		H1000001201A0001 /* SandboxFilesystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001101A0001 /* SandboxFilesystem.swift */; };
+		I1000001201A0001 /* LazyModuleRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = I1000001101A0001 /* LazyModuleRegistry.swift */; };
+		J1000001201A0001 /* WASMLazyProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000001101A0001 /* WASMLazyProcess.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,9 +60,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalFileSchemeHandler.swift; sourceTree = "<group>"; };
-		4150E73A7448714C57904CEA /* JSConsoleHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JSConsoleHandler.swift; sourceTree = "<group>"; };
+		116FA3B9B48CB14AF467D4DC /* WASIProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASIProvider.swift; sourceTree = "<group>"; };
+		19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GeneratedWASMImports.swift; sourceTree = "<group>"; };
+		393251FB0B1C206E4D4CB382 /* HttpOutgoingHandlerProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HttpOutgoingHandlerProvider.swift; path = EdgeAgent/Bridge/HttpOutgoingHandlerProvider.swift; sourceTree = SOURCE_ROOT; };
+		40D1774313CB149A4E20BF22 /* ModuleLoaderProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ModuleLoaderProvider.swift; sourceTree = "<group>"; };
+		5DA979225218207F99BF0865 /* Preview1Provider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Preview1Provider.swift; sourceTree = "<group>"; };
 		6C105A64D18A85AAB833F655 /* WASISignatures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASISignatures.swift; sourceTree = "<group>"; };
+		6EB171AC6C3B207ABE16552F /* SocketsProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SocketsProvider.swift; path = EdgeAgent/Bridge/SocketsProvider.swift; sourceTree = SOURCE_ROOT; };
+		86EC6DCA5B52126816207E39 /* IoStreamsProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IoStreamsProvider.swift; path = EdgeAgent/Bridge/IoStreamsProvider.swift; sourceTree = SOURCE_ROOT; };
+		8A54A7E357622DF69BF38813 /* IoPollProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IoPollProvider.swift; path = EdgeAgent/Bridge/IoPollProvider.swift; sourceTree = SOURCE_ROOT; };
+		8EB821B614A05F85E65C240C /* RandomProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RandomProvider.swift; path = EdgeAgent/Bridge/RandomProvider.swift; sourceTree = SOURCE_ROOT; };
 		A1000000101A0001 /* EdgeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EdgeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000001101A0001 /* EdgeAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAgentApp.swift; sourceTree = "<group>"; };
 		A1000002101A0001 /* ConfigManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManager.swift; sourceTree = "<group>"; };
@@ -56,8 +84,22 @@
 		A2000000101A0001 /* EdgeAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EdgeAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001101A0001 /* ConfigManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManagerTests.swift; sourceTree = "<group>"; };
 		A2000002101A0001 /* AgentEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventTests.swift; sourceTree = "<group>"; };
+		A2EF02ADBFAD20EE516CE013 /* ClocksProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ClocksProvider.swift; path = EdgeAgent/Bridge/ClocksProvider.swift; sourceTree = SOURCE_ROOT; };
+		A6F89F844C84F057205D2070 /* CliProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CliProvider.swift; path = EdgeAgent/Bridge/CliProvider.swift; sourceTree = SOURCE_ROOT; };
+		A9383E0DE4D962844DC37077 /* NativeLoaderImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeLoaderImpl.swift; sourceTree = "<group>"; };
+		BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeLoaderImplTests.swift; sourceTree = "<group>"; };
 		C1000001101A0001 /* NativeAgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentHost.swift; sourceTree = "<group>"; };
 		C3EB72373C65C1096DC1AE15 /* Log.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Utilities/Log.swift; sourceTree = "<group>"; };
+		CD7700D0E1F69C46D3AE9E41 /* IoErrorProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IoErrorProvider.swift; path = EdgeAgent/Bridge/IoErrorProvider.swift; sourceTree = SOURCE_ROOT; };
+		D1000001101A0001 /* WasmKitTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WasmKitTypes.swift; sourceTree = "<group>"; };
+		DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASIImportRegistry.swift; sourceTree = "<group>"; };
+		E1000001101A0001 /* NativeMCPHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMCPHost.swift; sourceTree = "<group>"; };
+		F1000001101A0001 /* MCPSignatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSignatures.swift; sourceTree = "<group>"; };
+		FA3BB2A66D51EC3B5F4E7F8F /* HttpTypesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HttpTypesProvider.swift; path = EdgeAgent/Bridge/HttpTypesProvider.swift; sourceTree = SOURCE_ROOT; };
+		G1000001101A0001 /* SharedWASIImports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedWASIImports.swift; sourceTree = "<group>"; };
+		H1000001101A0001 /* SandboxFilesystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SandboxFilesystem.swift; sourceTree = "<group>"; };
+		I1000001101A0001 /* LazyModuleRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyModuleRegistry.swift; sourceTree = "<group>"; };
+		J1000001101A0001 /* WASMLazyProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WASMLazyProcess.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -152,10 +194,30 @@
 			children = (
 				A1000003101A0001 /* AgentEvent.swift */,
 				A1000012101A0001 /* MCPServer.swift */,
-				30E8119694B386E393ECA76E /* LocalFileSchemeHandler.swift */,
 				C1000001101A0001 /* NativeAgentHost.swift */,
+				E1000001101A0001 /* NativeMCPHost.swift */,
+				D1000001101A0001 /* WasmKitTypes.swift */,
 				6C105A64D18A85AAB833F655 /* WASISignatures.swift */,
-				4150E73A7448714C57904CEA /* JSConsoleHandler.swift */,
+				F1000001101A0001 /* MCPSignatures.swift */,
+				G1000001101A0001 /* SharedWASIImports.swift */,
+				H1000001101A0001 /* SandboxFilesystem.swift */,
+				I1000001101A0001 /* LazyModuleRegistry.swift */,
+				J1000001101A0001 /* WASMLazyProcess.swift */,
+				A9383E0DE4D962844DC37077 /* NativeLoaderImpl.swift */,
+				40D1774313CB149A4E20BF22 /* ModuleLoaderProvider.swift */,
+				A2EF02ADBFAD20EE516CE013 /* ClocksProvider.swift */,
+				A6F89F844C84F057205D2070 /* CliProvider.swift */,
+				393251FB0B1C206E4D4CB382 /* HttpOutgoingHandlerProvider.swift */,
+				FA3BB2A66D51EC3B5F4E7F8F /* HttpTypesProvider.swift */,
+				CD7700D0E1F69C46D3AE9E41 /* IoErrorProvider.swift */,
+				8A54A7E357622DF69BF38813 /* IoPollProvider.swift */,
+				86EC6DCA5B52126816207E39 /* IoStreamsProvider.swift */,
+				8EB821B614A05F85E65C240C /* RandomProvider.swift */,
+				6EB171AC6C3B207ABE16552F /* SocketsProvider.swift */,
+				116FA3B9B48CB14AF467D4DC /* WASIProvider.swift */,
+				19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */,
+				DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */,
+				5DA979225218207F99BF0865 /* Preview1Provider.swift */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -182,6 +244,7 @@
 			children = (
 				A2000001101A0001 /* ConfigManagerTests.swift */,
 				A2000002101A0001 /* AgentEventTests.swift */,
+				BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */,
 			);
 			path = EdgeAgentTests;
 			sourceTree = "<group>";
@@ -303,10 +366,30 @@
 				A1000011201A0001 /* ComponentLibrary.swift in Sources */,
 				A1000012201A0001 /* MCPServer.swift in Sources */,
 				C1000001201A0001 /* NativeAgentHost.swift in Sources */,
-				5A50C6DE72427F17F318A61C /* LocalFileSchemeHandler.swift in Sources */,
 				6F96EC3EB4B6C34B89C6AB0C /* WASISignatures.swift in Sources */,
+				F1000001201A0001 /* MCPSignatures.swift in Sources */,
 				9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */,
-				15F3F448540BD62B29B3ED6C /* JSConsoleHandler.swift in Sources */,
+				D1000001201A0001 /* WasmKitTypes.swift in Sources */,
+				G1000001201A0001 /* SharedWASIImports.swift in Sources */,
+				H1000001201A0001 /* SandboxFilesystem.swift in Sources */,
+				I1000001201A0001 /* LazyModuleRegistry.swift in Sources */,
+				J1000001201A0001 /* WASMLazyProcess.swift in Sources */,
+				E1000001201A0001 /* NativeMCPHost.swift in Sources */,
+				6BF183642097D4DABEB3EEC2 /* NativeLoaderImpl.swift in Sources */,
+				DE0617F43D14F9676C1474AC /* ModuleLoaderProvider.swift in Sources */,
+				C92F94B3507A83BDB147C399 /* ClocksProvider.swift in Sources */,
+				F9AF9C12A3AADFD882A67B06 /* CliProvider.swift in Sources */,
+				2CA4BAB444416E9FE42A75C2 /* HttpOutgoingHandlerProvider.swift in Sources */,
+				F19F02F80A4CAAC373D32F3A /* HttpTypesProvider.swift in Sources */,
+				907221EEAFFB26761CF54809 /* IoErrorProvider.swift in Sources */,
+				DDAEB600AEA9BC272C5AF6A1 /* IoPollProvider.swift in Sources */,
+				4D5544423630538E9DE6C073 /* IoStreamsProvider.swift in Sources */,
+				68FED53B5EA45B371A6D0822 /* RandomProvider.swift in Sources */,
+				28A31EBA52AE66EC97DB23D3 /* SocketsProvider.swift in Sources */,
+				09596547996FFACB30242F7B /* WASIProvider.swift in Sources */,
+				9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */,
+				299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */,
+				10E5F05345D327A51767F2C8 /* Preview1Provider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -316,6 +399,7 @@
 			files = (
 				A2000001201A0001 /* ConfigManagerTests.swift in Sources */,
 				A2000002201A0001 /* AgentEventTests.swift in Sources */,
+				B4B63E0F18B169C07EF597D5 /* NativeLoaderImplTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

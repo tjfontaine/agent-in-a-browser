@@ -52,11 +52,31 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         
         // Build imports for WASI interfaces
         var imports = Imports()
-        registerWasiImports(&imports)
-        registerHttpImports(&imports)
-        registerIoImports(&imports)
-        registerClocksImports(&imports)
-        registerRandomImports(&imports)
+        
+        // Create type-safe providers (including Preview1Provider for wasi_snapshot_preview1)
+        let providers: [any WASIProvider] = [
+            Preview1Provider(resources: resources),
+            RandomProvider(),
+            ClocksProvider(resources: resources),
+            CliProvider(resources: resources),
+            IoPollProvider(resources: resources),
+            IoErrorProvider(resources: resources),
+            IoStreamsProvider(resources: resources),
+            SocketsProvider(resources: resources),
+            HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
+            HttpTypesProvider(resources: resources, httpManager: httpManager),
+        ]
+        
+        // Validate providers against WASM module requirements
+        let validationResult = WASIProviderValidator.validate(module: module, providers: providers)
+        guard validationResult.isValid else {
+            throw NativeAgentError.missingImports(validationResult.missingList)
+        }
+        
+        // Register all providers
+        for provider in providers {
+            provider.register(into: &imports, store: store!)
+        }
         
         // Instantiate module
         instance = try module.instantiate(store: store!, imports: imports)
@@ -256,13 +276,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     optionTag = buffer[0]
                 }
                 
-                // Call cabi_post_poll to clean up
-                if let postFn = instance.exports[function: "cabi_post_poll"] {
-                    _ = try? postFn([.i32(resultPtr)])
-                }
-                
                 if optionTag == 0 {
-                    // None - no event available, poll again after delay
+                    // None - no event available, clean up and poll again after delay
+                    if let postFn = instance.exports[function: "cabi_post_poll"] {
+                        _ = try? postFn([.i32(resultPtr)])
+                    }
                     try await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
@@ -270,8 +288,15 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 Log.agent.info(" Poll got event, optionTag=\(optionTag)")
                 
                 // Some - parse the event from memory at offset 4 (after tag + padding)
+                // IMPORTANT: Parse BEFORE calling cabi_post_poll, as post_poll frees the memory
                 if let event = parseAgentEventFromMemory(ptr: Int(resultPtr) + 4, memory: memory) {
                     Log.agent.info(" Parsed event: \(String(describing: event))")
+                    
+                    // NOW call cabi_post_poll to clean up after we've copied all data
+                    if let postFn = instance.exports[function: "cabi_post_poll"] {
+                        _ = try? postFn([.i32(resultPtr)])
+                    }
+                    
                     await MainActor.run {
                         self.events.append(event)
                         
@@ -295,6 +320,10 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                     }
                 } else {
                     Log.agent.info(" Failed to parse event at ptr=\(resultPtr)")
+                    // Clean up even on parse failure
+                    if let postFn = instance.exports[function: "cabi_post_poll"] {
+                        _ = try? postFn([.i32(resultPtr)])
+                    }
                     // Couldn't parse event, wait and retry
                     try await Task.sleep(nanoseconds: 50_000_000)
                 }
@@ -633,43 +662,8 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             Function(store: store, parameters: signature.parameters, results: signature.results, body: handler)
         )
     }
-    
-    private func registerWasiImports(_ imports: inout Imports) {
-        guard let store = store else { return }
-        
-        // wasi_snapshot_preview1 (WASI Preview 1 compatibility layer)
-        imports.define(module: "wasi_snapshot_preview1", name: "environ_get",
-            Function(store: store, parameters: [.i32, .i32], results: [.i32]) { _, _ in
-                // Return success with no environment variables
-                return [.i32(0)]
-            }
-        )
-        
-        imports.define(module: "wasi_snapshot_preview1", name: "environ_sizes_get",
-            Function(store: store, parameters: [.i32, .i32], results: [.i32]) { caller, args in
-                // Write 0 for environ_count and environ_buf_size
-                if let memory = caller.instance?.exports[memory: "memory"] {
-                    let countOffset = UInt(args[0].i32)
-                    let sizeOffset = UInt(args[1].i32)
-                    memory.withUnsafeMutableBufferPointer(offset: countOffset, count: 4) { buffer in
-                        buffer.storeBytes(of: UInt32(0).littleEndian, as: UInt32.self)
-                    }
-                    memory.withUnsafeMutableBufferPointer(offset: sizeOffset, count: 4) { buffer in
-                        buffer.storeBytes(of: UInt32(0).littleEndian, as: UInt32.self)
-                    }
-                }
-                return [.i32(0)]
-            }
-        )
-        
-        imports.define(module: "wasi_snapshot_preview1", name: "proc_exit",
-            Function(store: store, parameters: [.i32], results: []) { _, args in
-                Log.agent.info(" proc_exit called with code: \(args[0].i32)")
-                return []
-            }
-        )
-    }
-    
+
+
     private func registerHttpImports(_ imports: inout Imports) {
         guard let store = store else { return }
         
@@ -690,10 +684,12 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 // Get the request object
                 guard let request: HTTPOutgoingRequest = self.resources.get(requestHandle) else {
                     Log.agent.info(" HTTP handle error: request not found")
-                    // Write error to memory
+                    // Write error to memory - zero-initialize full 40 bytes first
                     if let memory = caller.instance?.exports[memory: "memory"] {
-                        memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 4) { buffer in
-                            buffer.storeBytes(of: UInt32(1).littleEndian, as: UInt32.self) // Error tag
+                        memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 40) { buffer in
+                            for i in 0..<40 { buffer[i] = 0 }
+                            buffer[0] = 1 // Error discriminant
+                            // Error code at offset 8 is 0 (DnsTimeout) due to zero-init
                         }
                     }
                     return []
@@ -749,14 +745,14 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 
                 // Write success with future handle to memory
                 // Layout: result<own<future-incoming-response>, error-code>
-                // Rust bindings use 8-byte alignment (repr(align(8))) for return buffer
+                // Memory layout: 40 bytes (24 + 4 * sizeof(ptr) on 32-bit)
                 // - discriminant: 1 byte at offset 0 (0 = Ok, 1 = Err)
                 // - padding: 7 bytes (to align payload to 8)
                 // - payload: 4 bytes at offset 8 (future handle or error code)
                 if let memory = caller.instance?.exports[memory: "memory"] {
-                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buffer in
+                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 40) { buffer in
                         // Clear the buffer first
-                        for i in 0..<16 {
+                        for i in 0..<40 {
                             buffer[i] = 0
                         }
                         // Write discriminant (1 byte): 0 = Ok
@@ -1686,7 +1682,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
                 }
                 
                 // Read available data from the stream (non-blocking)
-                let data = stream.read(maxBytes: Int(maxLen))
+                let data = stream.read(maxBytes: Int(maxLen)) ?? Data()
                 Log.wasi.debug(" read: read \(data.count) bytes from streamHandle=\(streamHandle), isEOF=\(stream.isEOF)")
                 
                 if data.isEmpty && stream.isEOF {
@@ -1918,249 +1914,9 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             }
         )
     }
-    
-    private func registerRandomImports(_ imports: inout Imports) {
-        guard let store = store else { return }
-        
-        // wasi:random/insecure-seed@0.2.4
-        imports.define(module: "wasi:random/insecure-seed@0.2.4", name: "insecure-seed",
-            Function(store: store, parameters: [.i32], results: []) { caller, args in
-                // Write 16 bytes of random data to the pointer
-                var randomBytes = [UInt8](repeating: 0, count: 16)
-                _ = SecRandomCopyBytes(kSecRandomDefault, 16, &randomBytes)
-                
-                if let memory = caller.instance?.exports[memory: "memory"] {
-                    let offset = UInt(args[0].i32)
-                    memory.withUnsafeMutableBufferPointer(offset: offset, count: 16) { buffer in
-                        for (i, byte) in randomBytes.enumerated() {
-                            buffer[i] = byte
-                        }
-                    }
-                }
-                return []
-            }
-        )
-    }
 }
 
-// MARK: - HTTP Request Manager
-
-/// Manages async HTTP requests using URLSession
-final class HTTPRequestManager: @unchecked Sendable {
-    private let session: URLSession
-    
-    init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 300
-        self.session = URLSession(configuration: config)
-    }
-    
-    /// Perform an HTTP request and update the future when complete
-    func performRequest(
-        method: String,
-        url: String,
-        headers: [(String, String)],
-        body: Data?,
-        future: FutureIncomingResponse,
-        resources: ResourceRegistry
-    ) {
-        // Rewrite wasm:// URLs to localhost MCP server for native runtime
-        var effectiveURL = url
-        if url.hasPrefix("wasm://") {
-            // Use 127.0.0.1 instead of localhost to avoid IPv6/IPv4 resolution ambiguity
-            effectiveURL = "http://127.0.0.1:9292/"
-            if let query = URL(string: url)?.query {
-                effectiveURL += "?\(query)"
-            }
-            Log.http.info(" Routing wasm:// to MCP server (127.0.0.1:9292)")
-        }
-        
-        guard let requestURL = URL(string: effectiveURL) else {
-            future.error = "Invalid URL: \(url)"
-            return
-        }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = method
-        
-        for (name, value) in headers {
-            request.addValue(value, forHTTPHeaderField: name)
-        }
-        
-        if let body = body {
-            request.httpBody = body
-        }
-        
-        Log.http.debug("Starting request: \(method) \(effectiveURL)")
-        
-        // Check if this is an SSE streaming request (Accept: text/event-stream exactly)
-        let isSSE = headers.contains { $0.0.lowercased() == "accept" && $0.1 == "text/event-stream" }
-        
-        if isSSE {
-            // SSE requests use StreamingDelegate for proper streaming support
-            Log.http.debug("Using streaming delegate for SSE request")
-            let delegate = StreamingDelegate(future: future)
-            let delegateSession = URLSession(configuration: session.configuration, delegate: delegate, delegateQueue: nil)
-            delegate.session = delegateSession
-            let task = delegateSession.dataTask(with: request)
-            task.resume()
-        } else {
-            // Non-SSE requests (like MCP JSON-RPC) use ephemeral session with completion handler
-            // This prevents connection reuse issues with the local server
-            let ephemeralConfig = URLSessionConfiguration.ephemeral
-            ephemeralConfig.timeoutIntervalForRequest = 60
-            let ephemeralSession = URLSession(configuration: ephemeralConfig)
-            
-            var ephemeralRequest = request
-            ephemeralRequest.addValue("close", forHTTPHeaderField: "Connection")
-            
-            let task = ephemeralSession.dataTask(with: ephemeralRequest) { data, response, error in
-                defer {
-                    ephemeralSession.finishTasksAndInvalidate()
-                }
-                
-                if let error = error {
-                    Log.http.error("Request failed: \(error.localizedDescription)")
-                    future.error = error.localizedDescription
-                    future.signalReady()
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    future.error = "Invalid response type"
-                    future.signalReady()
-                    return
-                }
-                
-                Log.http.debug("Response received: status=\(httpResponse.statusCode), body=\(data?.count ?? 0) bytes")
-                
-                var headers: [(String, String)] = []
-                for (key, value) in httpResponse.allHeaderFields {
-                    if let keyStr = key as? String, let valueStr = value as? String {
-                        headers.append((keyStr.lowercased(), valueStr))
-                    }
-                }
-                
-                let incomingResponse = HTTPIncomingResponse(
-                    status: httpResponse.statusCode,
-                    headers: headers,
-                    body: data ?? Data()
-                )
-                // Mark complete since we have the full body
-                incomingResponse.streamComplete = true
-                
-                future.response = incomingResponse
-                future.signalReady()
-            }
-            task.resume()
-        }
-    }
-}
-
-/// Streaming delegate for chunked HTTP responses (SSE)
-/// Signals ready as soon as headers arrive, then continues streaming body data
-class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    weak var future: FutureIncomingResponse?
-    /// Strong reference to keep the response alive for streaming data
-    /// This is set when headers arrive and persists even if future is dropped
-    var incomingResponse: HTTPIncomingResponse?
-    var session: URLSession?  // Set by caller for proper cleanup
-    private var receivedData = Data()
-    private var response: HTTPURLResponse?
-    private var headersSignaled = false
-    private let dataLock = NSLock()
-    
-    init(future: FutureIncomingResponse) {
-        self.future = future
-    }
-    
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        self.response = response as? HTTPURLResponse
-        
-        // Signal ready immediately when headers arrive for streaming!
-        if let httpResponse = response as? HTTPURLResponse {
-            Log.http.debug(" Headers received, status=\(httpResponse.statusCode)")
-            
-            var headers: [(String, String)] = []
-            for (key, value) in httpResponse.allHeaderFields {
-                if let keyStr = key as? String, let valueStr = value as? String {
-                    headers.append((keyStr.lowercased(), valueStr))
-                }
-            }
-            
-            // Create response with empty body initially - body will be streamed
-            let httpIncomingResponse = HTTPIncomingResponse(
-                status: httpResponse.statusCode,
-                headers: headers,
-                body: Data()  // Empty initially, will be streamed
-            )
-            
-            // Store STRONG reference for streaming data - survives future being dropped
-            self.incomingResponse = httpIncomingResponse
-            future?.response = httpIncomingResponse
-            
-            headersSignaled = true
-            future?.signalReady()  // Signal IMMEDIATELY when headers arrive!
-        }
-        
-        completionHandler(.allow)
-    }
-    
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        dataLock.lock()
-        receivedData.append(data)
-        
-        // Append to the response body using STRONG reference (survives future being dropped)
-        incomingResponse?.appendBody(data)
-        dataLock.unlock()
-        
-        // Log streaming progress periodically
-        if receivedData.count % 1000 < data.count {
-            let bytes = self.receivedData.count
-            Log.http.debug("Streaming: \(bytes) bytes received")
-        }
-    }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        defer {
-            // Clean up the session immediately to prevent connection issues
-            // Use invalidateAndCancel since we're done with this session
-            self.session?.invalidateAndCancel()
-            self.session = nil
-        }
-        
-        if let error = error {
-            Log.http.debug(" Stream error: \(error)")
-            future?.error = error.localizedDescription
-            if !headersSignaled {
-                future?.signalReady()
-            }
-            return
-        }
-        
-        let totalBytes = self.receivedData.count
-        let bodyBytes = self.incomingResponse?.body.count ?? 0
-        Log.http.debug("Stream completed, total: \(totalBytes) bytes, final body size: \(bodyBytes) bytes")
-        
-        // Log error response body for debugging
-        if let httpResponse = response, httpResponse.statusCode >= 400 {
-            let bodyStr = String(data: self.receivedData, encoding: .utf8) ?? "binary"
-            Log.http.debug("Error response body: \(bodyStr)")
-        }
-        
-        // Mark the response stream as complete so WASI knows EOF is truly reached
-        self.incomingResponse?.markStreamComplete()
-        
-        // Body is already updated incrementally via appendBody(), no need to replace
-        // Signal ready if we haven't yet (shouldn't happen for streaming)
-        if !headersSignaled {
-            future?.signalReady()
-        }
-    }
-}
-
-// MARK: - Supporting Types
+// MARK: - Agent-Specific Errors
 
 enum NativeAgentError: Error, LocalizedError {
     case wasmNotFound
@@ -2171,6 +1927,7 @@ enum NativeAgentError: Error, LocalizedError {
     case allocationFailed
     case createFailed(String)
     case sendFailed(String)
+    case missingImports([String])
     
     var errorDescription: String? {
         switch self {
@@ -2182,363 +1939,7 @@ enum NativeAgentError: Error, LocalizedError {
         case .allocationFailed: return "Memory allocation failed"
         case .createFailed(let msg): return "Agent creation failed: \(msg)"
         case .sendFailed(let msg): return "Send failed: \(msg)"
-        }
-    }
-}
-
-struct NativeHTTPResponse {
-    let status: Int
-    let headers: [(String, String)]
-    let body: Data
-}
-
-/// Resource registry for WASI handles
-final class ResourceRegistry: @unchecked Sendable {
-    private var nextHandle: Int32 = 1
-    private var resources: [Int32: AnyObject] = [:]
-    private let lock = NSLock()
-    
-    func register(_ resource: AnyObject) -> Int32 {
-        lock.lock()
-        defer { lock.unlock() }
-        
-        let handle = nextHandle
-        nextHandle += 1
-        resources[handle] = resource
-        return handle
-    }
-    
-    func get<T: AnyObject>(_ handle: Int32) -> T? {
-        lock.lock()
-        defer { lock.unlock() }
-        return resources[handle] as? T
-    }
-    
-    func drop(_ handle: Int32) {
-        lock.lock()
-        defer { lock.unlock() }
-        resources.removeValue(forKey: handle)
-    }
-}
-
-// MARK: - WASI HTTP Resource Classes
-
-class HTTPFields: NSObject {
-    var entries: [(String, String)] = []
-}
-
-class HTTPRequestOptions: NSObject {
-    var connectTimeout: UInt64?
-    var firstByteTimeout: UInt64?
-    var betweenBytesTimeout: UInt64?
-}
-
-class HTTPOutgoingRequest: NSObject {
-    var headersHandle: Int32
-    var method: String = "GET"
-    var scheme: String = "https"
-    var authority: String = ""
-    var path: String = "/"
-    var outgoingBodyHandle: Int32?
-    
-    init(headers: UInt32) {
-        self.headersHandle = Int32(bitPattern: headers)
-        super.init()
-    }
-}
-
-class HTTPOutgoingBody: NSObject {
-    var data = Data()
-    var outputStreamHandle: Int32?
-    var finished = false
-    
-    func write(_ chunk: Data) {
-        data.append(chunk)
-    }
-    
-    func getData() -> Data {
-        return data
-    }
-}
-
-class HTTPIncomingResponse: NSObject {
-    let status: Int
-    let headers: [(String, String)]
-    var body: Data  // var to allow streaming updates
-    var bodyConsumed = false
-    var bodyReadOffset = 0
-    var streamComplete = false  // Set to true when HTTP stream finishes
-    private let bodyLock = NSLock()
-    
-    /// Callback triggered when new data is available (for signaling stream pollables)
-    var onDataAvailable: (() -> Void)?
-    
-    /// Weak reference to associated body for direct signaling (set when body is created)
-    weak var associatedBody: HTTPIncomingBody?
-    
-    init(status: Int, headers: [(String, String)], body: Data) {
-        self.status = status
-        self.headers = headers
-        self.body = body
-    }
-    
-    /// Append streaming body data (thread-safe)
-    func appendBody(_ data: Data) {
-        bodyLock.lock()
-        body.append(data)
-        let callback = onDataAvailable
-        let body = associatedBody
-        bodyLock.unlock()
-        
-        // Signal via direct body reference (preferred) or callback
-        if let body = body {
-            body.signalDataAvailable()
-        } else {
-            callback?()
-        }
-    }
-    
-    /// Mark the stream as complete (called when HTTP request finishes)
-    func markStreamComplete() {
-        bodyLock.lock()
-        streamComplete = true
-        bodyLock.unlock()
-        Log.http.debug("Stream marked complete, total body size: \(body.count) bytes")
-        
-        // Signal stream completion
-        onDataAvailable?()
-    }
-    
-    func readBody(maxBytes: Int) -> Data {
-        bodyLock.lock()
-        defer { bodyLock.unlock() }
-        
-        let remaining = body.count - bodyReadOffset
-        let toRead = min(maxBytes, remaining)
-        
-        if toRead <= 0 {
-            return Data()
-        }
-        
-        let chunk = body[bodyReadOffset..<(bodyReadOffset + toRead)]
-        bodyReadOffset += toRead
-        return chunk
-    }
-    
-    var isBodyEOF: Bool {
-        bodyLock.lock()
-        defer { bodyLock.unlock() }
-        // Only EOF if we've read all data AND the stream has completed
-        return bodyReadOffset >= body.count && streamComplete
-    }
-    
-    /// Check if there's unread data available
-    var hasUnreadData: Bool {
-        bodyLock.lock()
-        defer { bodyLock.unlock() }
-        return bodyReadOffset < body.count
-    }
-}
-
-class HTTPIncomingBody: NSObject {
-    // Strong reference to keep response alive during streaming
-    var response: HTTPIncomingResponse?
-    var inputStreamHandle: Int32?
-    
-    /// Pollables waiting for data on this stream
-    var streamPollables: [StreamPollable] = []
-    private let pollablesLock = NSLock()
-    
-    init(response: HTTPIncomingResponse) {
-        self.response = response
-        super.init()
-        
-        // Set direct body reference for signaling (works even before callback)
-        response.associatedBody = self
-        
-        // Also connect response data callback as fallback
-        response.onDataAvailable = { [weak self] in
-            self?.signalDataAvailable()
-        }
-    }
-    
-    /// Add a pollable to be signaled when data arrives
-    func addPollable(_ pollable: StreamPollable) {
-        pollablesLock.lock()
-        streamPollables.append(pollable)
-        pollablesLock.unlock()
-        
-        // If data is already available, signal immediately
-        if let response = response, (response.hasUnreadData || response.streamComplete) {
-            pollable.signalDataAvailable()
-        }
-    }
-    
-    /// Signal all waiting pollables that data is available
-    func signalDataAvailable() {
-        pollablesLock.lock()
-        let pollables = streamPollables
-        pollablesLock.unlock()
-        
-        for pollable in pollables {
-            pollable.signalDataAvailable()
-        }
-    }
-}
-
-class FutureIncomingResponse: NSObject {
-    var response: HTTPIncomingResponse?
-    var error: String?
-    let semaphore = DispatchSemaphore(value: 0)
-    
-    /// Cached pollable handle to avoid creating new pollables on each subscribe call
-    var cachedPollableHandle: Int32?
-    
-    var isReady: Bool {
-        return response != nil || error != nil
-    }
-    
-    /// Call this when response or error is set to wake up waiting threads
-    func signalReady() {
-        semaphore.signal()
-    }
-    
-    /// Wait for response with timeout, returns true if ready
-    func waitForReady(timeout: TimeInterval = 30) -> Bool {
-        if isReady { return true }
-        let result = semaphore.wait(timeout: .now() + timeout)
-        return result == .success || isReady
-    }
-}
-
-class HTTPPollable: NSObject {
-    weak var future: FutureIncomingResponse?
-    
-    init(future: FutureIncomingResponse) {
-        self.future = future
-    }
-    
-    var isReady: Bool {
-        return future?.isReady ?? true
-    }
-    
-    /// Block until ready or timeout
-    func block(timeout: TimeInterval = 30) {
-        guard let future = future else { return }
-        _ = future.waitForReady(timeout: timeout)
-    }
-}
-
-// MARK: - WASI IO Streams
-
-class WASIInputStream: NSObject {
-    // Strong reference to keep body (and its response) alive during streaming
-    var body: HTTPIncomingBody?
-    
-    init(body: HTTPIncomingBody) {
-        self.body = body
-    }
-    
-    func blockingRead(maxBytes: Int) -> Data {
-        return body?.response?.readBody(maxBytes: maxBytes) ?? Data()
-    }
-    
-    /// Non-blocking read - same as blockingRead since we preload data
-    func read(maxBytes: Int) -> Data {
-        return body?.response?.readBody(maxBytes: maxBytes) ?? Data()
-    }
-    
-    var isEOF: Bool {
-        return body?.response?.isBodyEOF ?? true
-    }
-}
-
-class WASIOutputStream: NSObject {
-    weak var body: HTTPOutgoingBody?
-    
-    init(body: HTTPOutgoingBody) {
-        self.body = body
-    }
-    
-    func write(_ data: Data) {
-        body?.write(data)
-    }
-}
-
-/// Pollable for duration-based timeouts
-class DurationPollable: NSObject {
-    let nanoseconds: UInt64
-    let createdAt: Date
-    
-    init(nanoseconds: UInt64) {
-        self.nanoseconds = nanoseconds
-        self.createdAt = Date()
-        super.init()
-    }
-    
-    var isReady: Bool {
-        let elapsed = Date().timeIntervalSince(createdAt) * 1_000_000_000
-        return UInt64(elapsed) >= nanoseconds
-    }
-}
-
-/// Pollable for streaming input - waits for more data to become available
-class StreamPollable: NSObject {
-    weak var response: HTTPIncomingResponse?
-    let streamHandle: Int32
-    let semaphore = DispatchSemaphore(value: 0)
-    private var signaled = false
-    private let lock = NSLock()
-    
-    init(response: HTTPIncomingResponse, streamHandle: Int32) {
-        self.response = response
-        self.streamHandle = streamHandle
-        super.init()
-    }
-    
-    var isReady: Bool {
-        guard let response = response else { return true }
-        // Ready if there's more data to read OR stream is complete
-        return response.hasUnreadData || response.streamComplete
-    }
-    
-    /// Signal that data is available (called when streaming data arrives)
-    func signalDataAvailable() {
-        lock.lock()
-        if !signaled {
-            signaled = true
-            semaphore.signal()
-        }
-        lock.unlock()
-    }
-    
-    /// Block until data is available or timeout
-    func block(timeout: TimeInterval) {
-        guard let response = response else { return }
-        
-        // Check if already ready
-        if response.hasUnreadData || response.streamComplete {
-            return
-        }
-        
-        // Wait for signal with timeout
-        _ = semaphore.wait(timeout: .now() + timeout)
-    }
-    
-    /// Reset the semaphore for reuse after consuming data
-    func resetForNextWait() {
-        lock.lock()
-        signaled = false
-        lock.unlock()
-    }
-}
-
-/// Stderr output stream for WASI debug output
-class StderrOutputStream: NSObject {
-    func write(_ data: Data) {
-        if let str = String(data: data, encoding: .utf8) {
-            // Use info level so WASM stderr is visible in Console.app
-            Log.wasi.info("[stderr] \(str.trimmingCharacters(in: .newlines))")
+        case .missingImports(let missing): return "Missing WASI imports: \(missing.joined(separator: ", "))"
         }
     }
 }
