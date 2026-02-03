@@ -59,10 +59,9 @@ final class NativeLoaderImpl: @unchecked Sendable {
         
         let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
         
-        // Create WASMLazyProcess on main thread (init is MainActor-isolated)
-        DispatchQueue.main.sync {
-            processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
-        }
+        // Create WASMLazyProcess directly - it's now thread-safe with internal locking
+        // No longer needs DispatchQueue.main.sync since we removed @MainActor
+        processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
         
         return handle
     }

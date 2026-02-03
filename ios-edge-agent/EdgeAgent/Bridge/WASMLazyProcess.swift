@@ -5,8 +5,11 @@ import OSLog
 
 /// Represents a spawned WASM command process
 /// Manages stdin/stdout/stderr streams and execution lifecycle
-@MainActor
-class WASMLazyProcess {
+/// Thread-safe: accessed from both MCP WASM thread and background execution task
+final class WASMLazyProcess: @unchecked Sendable {
+    
+    /// Lock for thread-safe access to mutable state
+    private let lock = NSLock()
     
     /// Unique handle ID for this process
     let handle: Int32
@@ -100,6 +103,8 @@ class WASMLazyProcess {
     
     /// Write data to stdin
     func writeStdin(_ data: [UInt8]) {
+        lock.lock()
+        defer { lock.unlock() }
         guard !stdinClosed else {
             Log.mcp.warning("WASMLazyProcess[\(handle)]: writeStdin called after close")
             return
@@ -110,6 +115,8 @@ class WASMLazyProcess {
     
     /// Close stdin (signals EOF to the running execution)
     func closeStdin() {
+        lock.lock()
+        defer { lock.unlock() }
         guard !stdinClosed else { return }
         stdinClosed = true
         Log.mcp.debug("WASMLazyProcess[\(handle)]: closeStdin - \(stdinBuffer.count) bytes buffered")
@@ -120,6 +127,8 @@ class WASMLazyProcess {
     
     /// Read available stdout data
     func readStdout() -> [UInt8] {
+        lock.lock()
+        defer { lock.unlock() }
         let data = stdoutBuffer
         stdoutBuffer.removeAll()
         return data
@@ -127,6 +136,8 @@ class WASMLazyProcess {
     
     /// Read available stderr data
     func readStderr() -> [UInt8] {
+        lock.lock()
+        defer { lock.unlock() }
         let data = stderrBuffer
         stderrBuffer.removeAll()
         return data
@@ -136,6 +147,8 @@ class WASMLazyProcess {
     
     /// Check if process has completed
     func tryWait() -> Int32? {
+        lock.lock()
+        defer { lock.unlock() }
         switch state {
         case .completed(let code):
             return code
@@ -148,21 +161,74 @@ class WASMLazyProcess {
     
     /// Check if ready for reading
     func isReady() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         return isReadyFlag || !stdoutBuffer.isEmpty || !stderrBuffer.isEmpty
     }
     
     /// Terminate the process
     func terminate() {
+        lock.lock()
         executionTask?.cancel()
         state = .completed(exitCode: -1)
+        lock.unlock()
         Log.mcp.debug("WASMLazyProcess[\(handle)]: Terminated")
     }
     
     // MARK: - Execution
     
+    /// Thread-safe state update
+    private func updateState(_ newState: State) {
+        lock.lock()
+        state = newState
+        lock.unlock()
+    }
+    
+    /// Thread-safe buffer append
+    private func appendToStderr(_ data: [UInt8]) {
+        lock.lock()
+        stderrBuffer.append(contentsOf: data)
+        lock.unlock()
+    }
+    
+    /// Thread-safe buffer append
+    private func appendToStdout(_ data: [UInt8]) {
+        lock.lock()
+        stdoutBuffer.append(contentsOf: data)
+        lock.unlock()
+    }
+    
+    /// Thread-safe ready flag update
+    private func markReady() {
+        lock.lock()
+        isReadyFlag = true
+        lock.unlock()
+    }
+    
+    /// Thread-safe check for stdin closed
+    private func isStdinClosed() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return stdinClosed
+    }
+    
+    /// Thread-safe get stdin buffer (consumes it)
+    private func consumeStdinBuffer() -> [UInt8] {
+        lock.lock()
+        defer { lock.unlock() }
+        let data = stdinBuffer
+        stdinBuffer.removeAll()
+        return data
+    }
+    
     private func startExecution() {
-        guard case .created = state else { return }
+        lock.lock()
+        guard case .created = state else {
+            lock.unlock()
+            return
+        }
         state = .running
+        lock.unlock()
         
         // CRITICAL: Use Task.detached to run on a background thread
         // Regular Task inherits MainActor context, which is blocked by synchronous WASM execution
@@ -176,17 +242,17 @@ class WASMLazyProcess {
         Log.mcp.info("WASMLazyProcess[\(handle)]: Loading module for '\(command)' \(args)")
         
         do {
-            // Get the module for this command
-            guard let moduleName = LazyModuleRegistry.shared.getModuleForCommand(command) else {
+            // Get the module for this command (use thread-safe static method)
+            guard let moduleName = LazyModuleRegistry.getModuleForCommandSync(command) else {
                 // If not a lazy command, treat it as a shell built-in
                 // Built-ins run immediately (they don't need stdin first)
                 let result = handleBuiltinCommand()
-                state = .completed(exitCode: result)
-                isReadyFlag = true
+                updateState(.completed(exitCode: result))
+                markReady()
                 return
             }
             
-            // Load the module
+            // Load the module (crosses into MainActor for cache access)
             let module = try await LazyModuleRegistry.shared.loadModule(named: moduleName)
             Log.mcp.info("WASMLazyProcess[\(handle)]: Module loaded, waiting for stdin")
             
@@ -204,19 +270,25 @@ class WASMLazyProcess {
             self.resources = resources  // Save for Component Model stream registration
             let httpManager = HTTPRequestManager()
             
+            // Get MainActor-isolated filesystem reference
+            let filesystem = await SandboxFilesystem.shared
+            
             // Register WASI imports from type-safe providers
-            let providers: [any WASIProvider] = [
-                Preview1Provider(resources: resources, filesystem: SandboxFilesystem.shared),
-                RandomProvider(),
-                ClocksProvider(resources: resources),
-                CliProvider(resources: resources),
-                IoPollProvider(resources: resources),
-                IoErrorProvider(resources: resources),
-                IoStreamsProvider(resources: resources),
-                SocketsProvider(resources: resources),
-                HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
-                HttpTypesProvider(resources: resources, httpManager: httpManager),
-            ]
+            // Construct providers on MainActor since some are MainActor-isolated
+            let providers: [any WASIProvider] = await MainActor.run {
+                [
+                    Preview1Provider(resources: resources, filesystem: filesystem),
+                    RandomProvider(),
+                    ClocksProvider(resources: resources),
+                    CliProvider(resources: resources),
+                    IoPollProvider(resources: resources),
+                    IoErrorProvider(resources: resources),
+                    IoStreamsProvider(resources: resources),
+                    SocketsProvider(resources: resources),
+                    HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
+                    HttpTypesProvider(resources: resources, httpManager: httpManager),
+                ]
+            }
             
             // Register all providers
             for provider in providers {
@@ -242,16 +314,16 @@ class WASMLazyProcess {
             }
             
             // Module is now loaded and ready to receive stdin
-            isReadyFlag = true
+            markReady()
             Log.mcp.info("WASMLazyProcess[\(handle)]: Ready, waiting for stdin to close")
             
             // Wait for stdin to be closed before executing
             // Poll with a short sleep to avoid busy-waiting
-            while !stdinClosed {
+            while !isStdinClosed() {
                 try await Task.sleep(nanoseconds: 10_000_000) // 10ms
             }
             
-            Log.mcp.info("WASMLazyProcess[\(handle)]: Stdin closed, executing with \(stdinBuffer.count) bytes of input")
+            Log.mcp.info("WASMLazyProcess[\(handle)]: Stdin closed, executing with \(consumeStdinBuffer().count) bytes of input")
             
             // Try to find and call the run export
             // Check for various entry point styles
@@ -276,26 +348,26 @@ class WASMLazyProcess {
                     // This is a Component Model export
                     // Signature: (name_ptr, name_len, args_ptr, args_len, cwd_ptr, cwd_len, env_ptr, env_len, stdin, stdout, stderr) -> i32
                     let exitCode = try callShellCommandExport(instance: instance, function: entryFunc)
-                    state = .completed(exitCode: exitCode)
+                    updateState(.completed(exitCode: exitCode))
                 } else {
                     // Standard run or _start
                     let result = try entryFunc([])
                     if let exitValue = result.first, case let .i32(code) = exitValue {
-                        state = .completed(exitCode: Int32(bitPattern: code))
+                        updateState(.completed(exitCode: Int32(bitPattern: code)))
                     } else {
-                        state = .completed(exitCode: 0)
+                        updateState(.completed(exitCode: 0))
                     }
                 }
             } else {
                 Log.mcp.error("WASMLazyProcess[\(handle)]: No entry point found. Available exports: \(listExports(instance))")
-                state = .failed(ModuleLoadError.loadFailed("No entry point found"))
+                updateState(.failed(ModuleLoadError.loadFailed("No entry point found")))
             }
             
         } catch {
             Log.mcp.error("WASMLazyProcess[\(handle)]: Execution failed: \(error)")
-            stderrBuffer.append(contentsOf: "Error: \(error.localizedDescription)\n".utf8)
-            state = .failed(error)
-            isReadyFlag = true  // Mark ready even on failure so Rust doesn't wait forever
+            appendToStderr(Array("Error: \(error.localizedDescription)\n".utf8))
+            updateState(.failed(error))
+            markReady()  // Mark ready even on failure so Rust doesn't wait forever
         }
     }
     
@@ -306,12 +378,12 @@ class WASMLazyProcess {
         switch command {
         case "echo":
             let output = args.joined(separator: " ") + "\n"
-            stdoutBuffer.append(contentsOf: output.utf8)
+            appendToStdout(Array(output.utf8))
             return 0
             
         case "pwd":
             let output = cwd + "\n"
-            stdoutBuffer.append(contentsOf: output.utf8)
+            appendToStdout(Array(output.utf8))
             return 0
             
         case "true":
@@ -326,7 +398,7 @@ class WASMLazyProcess {
             
         default:
             let error = "\(command): command not found\n"
-            stderrBuffer.append(contentsOf: error.utf8)
+            appendToStderr(Array(error.utf8))
             return 127
         }
     }
