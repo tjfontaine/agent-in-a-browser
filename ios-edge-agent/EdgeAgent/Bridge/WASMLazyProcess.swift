@@ -252,8 +252,8 @@ final class WASMLazyProcess: @unchecked Sendable {
                 return
             }
             
-            // Load the module (crosses into MainActor for cache access)
-            let module = try await LazyModuleRegistry.shared.loadModule(named: moduleName)
+            // Load the module (synchronous, thread-safe)
+            let module = try LazyModuleRegistry.shared.loadModule(named: moduleName)
             Log.mcp.info("WASMLazyProcess[\(handle)]: Module loaded, waiting for stdin")
             
             // Create runtime

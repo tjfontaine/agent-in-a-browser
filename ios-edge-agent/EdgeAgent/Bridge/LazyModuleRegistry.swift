@@ -5,8 +5,11 @@ import OSLog
 
 /// Registry for lazy-loaded WASM command modules
 /// Maps command names to their WASM module bundles
-@MainActor
-class LazyModuleRegistry {
+/// Thread-safe: can be accessed from any thread
+final class LazyModuleRegistry: @unchecked Sendable {
+    
+    /// Lock for thread-safe cache access
+    private let lock = NSLock()
     
     static let shared = LazyModuleRegistry()
     
@@ -45,7 +48,7 @@ class LazyModuleRegistry {
     private var loadedModules: [String: Module] = [:]
     
     /// WASM file paths in the bundle (relative to Resources/WebRuntime)
-    private let modulePaths: [String: String] = [
+    private static let modulePaths: [String: String] = [
         "coreutils": "mcp-server-sync/ts-runtime-mcp.core.wasm",
         "tsx-engine": "tsx-engine-sync/tsx-engine.core.wasm",
         "sqlite-module": "sqlite-module-sync/sqlite-module.core.wasm",
@@ -74,15 +77,18 @@ class LazyModuleRegistry {
     
     // MARK: - Module Loading
     
-    /// Load a WASM module from the bundle
-    func loadModule(named moduleName: String) async throws -> Module {
-        // Return cached module if available
+    /// Load a WASM module from the bundle (thread-safe)
+    func loadModule(named moduleName: String) throws -> Module {
+        // Check cache first with lock
+        lock.lock()
         if let cached = loadedModules[moduleName] {
+            lock.unlock()
             Log.mcp.debug("LazyModuleRegistry: Using cached module '\(moduleName)'")
             return cached
         }
+        lock.unlock()
         
-        guard let relativePath = modulePaths[moduleName] else {
+        guard let relativePath = Self.modulePaths[moduleName] else {
             Log.mcp.error("LazyModuleRegistry: Unknown module '\(moduleName)'")
             throw ModuleLoadError.unknownModule(moduleName)
         }
@@ -106,7 +112,11 @@ class LazyModuleRegistry {
             let wasmBytes = try Data(contentsOf: moduleURL)
             let module = try parseWasm(bytes: Array(wasmBytes))
             
+            // Store in cache with lock
+            lock.lock()
             loadedModules[moduleName] = module
+            lock.unlock()
+            
             Log.mcp.info("LazyModuleRegistry: Successfully loaded '\(moduleName)'")
             
             return module
@@ -118,13 +128,17 @@ class LazyModuleRegistry {
     
     /// Unload a cached module to free memory
     func unloadModule(named moduleName: String) {
+        lock.lock()
         loadedModules.removeValue(forKey: moduleName)
+        lock.unlock()
         Log.mcp.debug("LazyModuleRegistry: Unloaded module '\(moduleName)'")
     }
     
     /// Unload all cached modules
     func unloadAllModules() {
+        lock.lock()
         loadedModules.removeAll()
+        lock.unlock()
         Log.mcp.debug("LazyModuleRegistry: Unloaded all modules")
     }
 }
