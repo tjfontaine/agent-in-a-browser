@@ -290,8 +290,9 @@ struct CardComponent: View {
         let shadow = props["shadow"] as? Bool ?? true
         let cornerRadius = props["cornerRadius"] as? CGFloat ?? 12
         let children = props["children"] as? [[String: Any]] ?? []
+        let onTap = props["onTap"] as? String  // Format: "action_name:payload"
         
-        VStack(alignment: .leading, spacing: 8) {
+        let cardContent = VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 ComponentRouter(component: child, onAction: onAction)
             }
@@ -300,6 +301,25 @@ struct CardComponent: View {
         .background(Color(.systemBackground))
         .cornerRadius(cornerRadius)
         .shadow(color: shadow ? .black.opacity(0.1) : .clear, radius: 4, x: 0, y: 2)
+        
+        if let onTap = onTap {
+            Button(action: {
+                // Parse action format: "action_name:payload"
+                if onTap.contains(":") {
+                    let parts = onTap.split(separator: ":", maxSplits: 1)
+                    let actionName = String(parts[0])
+                    let payload = parts.count > 1 ? String(parts[1]) : nil
+                    onAction(actionName, payload)
+                } else {
+                    onAction(onTap, nil)
+                }
+            }) {
+                cardContent
+            }
+            .buttonStyle(.plain)
+        } else {
+            cardContent
+        }
     }
 }
 
