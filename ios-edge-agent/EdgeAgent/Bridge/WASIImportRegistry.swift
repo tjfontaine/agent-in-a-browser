@@ -115,6 +115,8 @@ enum WASIImportRegistry {
     // MARK: - CliProvider
     static let cli: Set<String> = [
         "wasi:cli/stderr@0.2.4.get-stderr",
+        "wasi:cli/stdout@0.2.4.get-stdout",
+        "wasi:cli/stdin@0.2.4.get-stdin",
         "wasi:cli/terminal-output@0.2.9.[resource-drop]terminal-output",
         "wasi:cli/terminal-stdout@0.2.9.get-terminal-stdout",
     ]
@@ -149,9 +151,11 @@ enum WASIImportRegistry {
     // MARK: - SharedWASIImports (wasi_snapshot_preview1)
     static let preview1: Set<String> = [
         "wasi_snapshot_preview1.adapter_close_badfd",
+        "wasi_snapshot_preview1.clock_time_get",
         "wasi_snapshot_preview1.environ_get",
         "wasi_snapshot_preview1.environ_sizes_get",
         "wasi_snapshot_preview1.fd_close",
+        "wasi_snapshot_preview1.fd_fdstat_get",
         "wasi_snapshot_preview1.fd_filestat_get",
         "wasi_snapshot_preview1.fd_filestat_set_size",
         "wasi_snapshot_preview1.fd_prestat_dir_name",
@@ -193,11 +197,21 @@ enum WASIImportRegistry {
     
     /// Returns imports required by Agent WASM but not declared by any provider
     static var missingForAgent: Set<String> {
-        AgentWASMImports.required.subtracting(allDeclared)
+        WebHeadlessAgentSyncWebHeadlessAgentIosCoreWASMImports.required.subtracting(allDeclared)
     }
     
     /// Returns imports required by MCP WASM but not declared by any provider
     static var missingForMCP: Set<String> {
-        MCPWASMImports.required.subtracting(allDeclared)
+        McpServerSyncTsRuntimeMcpCoreWASMImports.required.subtracting(allDeclared)
+    }
+    
+    /// Returns imports required by TSX Engine WASM but not declared by any provider
+    static var missingForTSX: Set<String> {
+        TsxEngineSyncTsxEngineCoreWASMImports.required.subtracting(allDeclared)
+    }
+    
+    /// Returns all imports required by any WASM module but not declared by any provider
+    static var missingForAll: Set<String> {
+        AllWASMImports.allRequired.subtracting(allDeclared)
     }
 }

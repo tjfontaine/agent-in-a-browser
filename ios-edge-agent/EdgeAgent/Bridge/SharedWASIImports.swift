@@ -532,6 +532,73 @@ enum SharedWASIImports {
                 return [.i32(8)]  // EBADF
             }
         )
+        
+        // clock_time_get: (clock_id, precision, timestamp_ptr) -> errno
+        // tsx-engine requires this for timing operations
+        imports.define(module: module, name: "clock_time_get",
+            Function(store: store, parameters: [.i32, .i64, .i32], results: [.i32]) { caller, args in
+                let clockId = args[0].i32
+                // args[1] = precision (ignored)
+                let timestampPtr = UInt(args[2].i32)
+                
+                guard let memory = caller.instance?.exports[memory: "memory"] else {
+                    return [.i32(8)]  // EBADF
+                }
+                
+                let timestamp: UInt64
+                switch clockId {
+                case 0:  // CLOCK_REALTIME
+                    timestamp = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+                case 1:  // CLOCK_MONOTONIC
+                    timestamp = UInt64(DispatchTime.now().uptimeNanoseconds)
+                default:
+                    timestamp = UInt64(DispatchTime.now().uptimeNanoseconds)
+                }
+                
+                memory.withUnsafeMutableBufferPointer(offset: timestampPtr, count: 8) { buffer in
+                    buffer.storeBytes(of: timestamp.littleEndian, as: UInt64.self)
+                }
+                return [.i32(0)]  // SUCCESS
+            }
+        )
+        
+        // fd_fdstat_get: (fd, fdstat_ptr) -> errno
+        // Returns file descriptor status
+        imports.define(module: module, name: "fd_fdstat_get",
+            Function(store: store, parameters: [.i32, .i32], results: [.i32]) { caller, args in
+                let fd = Int32(bitPattern: args[0].i32)
+                let fdstatPtr = UInt(args[1].i32)
+                
+                guard let memory = caller.instance?.exports[memory: "memory"] else {
+                    return [.i32(8)]  // EBADF
+                }
+                
+                // fdstat struct: { u8 fs_filetype, u16 fs_flags, u64 fs_rights_base, u64 fs_rights_inheriting }
+                // Total size: 24 bytes
+                memory.withUnsafeMutableBufferPointer(offset: fdstatPtr, count: 24) { buffer in
+                    let filetype: UInt8
+                    let flags: UInt16 = 0
+                    let rightsBase: UInt64 = 0xFFFFFFFFFFFFFFFF  // All rights
+                    let rightsInheriting: UInt64 = 0xFFFFFFFFFFFFFFFF
+                    
+                    switch fd {
+                    case 0: // stdin
+                        filetype = 2  // CHARACTER_DEVICE
+                    case 1, 2: // stdout, stderr
+                        filetype = 2  // CHARACTER_DEVICE
+                    default:
+                        filetype = 4  // REGULAR_FILE
+                    }
+                    
+                    buffer[0] = filetype
+                    buffer[1] = 0  // padding
+                    buffer.storeBytes(of: flags.littleEndian, toByteOffset: 2, as: UInt16.self)
+                    buffer.storeBytes(of: rightsBase.littleEndian, toByteOffset: 8, as: UInt64.self)
+                    buffer.storeBytes(of: rightsInheriting.littleEndian, toByteOffset: 16, as: UInt64.self)
+                }
+                return [.i32(0)]  // SUCCESS
+            }
+        )
     }
     
     // MARK: - wasi:random

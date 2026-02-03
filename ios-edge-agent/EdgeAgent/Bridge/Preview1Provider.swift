@@ -28,6 +28,9 @@ struct Preview1Provider: WASIProvider {
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "fd_readdir", parameters: [.i32, .i32, .i32, .i64, .i32], results: [.i32]),
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "fd_prestat_get", parameters: [.i32, .i32], results: [.i32]),
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "fd_prestat_dir_name", parameters: [.i32, .i32, .i32], results: [.i32]),
+            WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "fd_fdstat_get", parameters: [.i32, .i32], results: [.i32]),
+            // Clock
+            WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "clock_time_get", parameters: [.i32, .i64, .i32], results: [.i32]),
             // Path operations
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "path_open", parameters: [.i32, .i32, .i32, .i32, .i32, .i64, .i64, .i32, .i32], results: [.i32]),
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "path_create_directory", parameters: [.i32, .i32, .i32], results: [.i32]),

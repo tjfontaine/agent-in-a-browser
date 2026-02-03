@@ -1,6 +1,6 @@
 #!/bin/bash
 # generate-wasm-imports.sh
-# Extracts imports from WASM files and generates Swift manifest for compile-time validation
+# Extracts imports from ALL WASM files and generates Swift manifest for compile-time validation
 #
 # This script runs as an Xcode Build Phase before compilation.
 # It generates GeneratedWASMImports.swift containing all required imports.
@@ -21,13 +21,23 @@ fi
 # Function to extract imports from a WASM file
 extract_imports() {
     local wasm_file="$1"
-    local var_name="$2"
     
     # Parse imports: (import "module" "name" (func ...))
     wasm-tools print "$wasm_file" 2>/dev/null | \
         grep -E '^\s*\(import' | \
         sed -E 's/.*\(import "([^"]+)" "([^"]+)".*/\1.\2/' | \
         sort | uniq
+}
+
+# Convert path to Swift enum name (e.g., "mcp-server-sync/ts-runtime-mcp.core.wasm" -> "McpServerSyncTsRuntimeMcpCore")
+to_enum_name() {
+    local filepath="$1"
+    # Remove .wasm, replace special chars with space, capitalize words, remove spaces
+    echo "$filepath" | \
+        sed 's/\.wasm$//' | \
+        tr '/-.' ' ' | \
+        awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1' | \
+        tr -d ' '
 }
 
 # Start generating Swift file
@@ -42,43 +52,53 @@ import Foundation
 
 HEADER
 
-# Generate imports for Agent WASM
-AGENT_WASM="$WASM_DIR/web-headless-agent-sync/web-headless-agent-ios.core.wasm"
-if [[ -f "$AGENT_WASM" ]]; then
-    echo "// Extracting imports from Agent WASM..."
-    cat >> "$OUTPUT_FILE" << 'EOF'
-/// Required imports for the Agent WASM module
-public enum AgentWASMImports {
-    /// All imports required by web-headless-agent-ios.core.wasm
+# Find all .wasm files and generate imports for each
+# Use relative paths to create unique enum names
+cd "$WASM_DIR"
+find . -name "*.wasm" -type f 2>/dev/null | sed 's|^\./||' | sort -u | while read -r rel_path; do
+    wasm_file="$WASM_DIR/$rel_path"
+    enum_name=$(to_enum_name "$rel_path")
+    
+    echo "// Extracting imports from $rel_path..."
+    
+    # Generate enum for this WASM file
+    cat >> "$OUTPUT_FILE" << EOF
+/// Required imports for $rel_path
+public enum ${enum_name}WASMImports {
+    /// All imports required by $rel_path
     public static let required: Set<String> = [
 EOF
     
-    extract_imports "$AGENT_WASM" | while read -r import; do
+    extract_imports "$wasm_file" | while read -r import; do
         echo "        \"$import\"," >> "$OUTPUT_FILE"
     done
     
     echo "    ]" >> "$OUTPUT_FILE"
     echo "}" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
-fi
+done
 
-# Generate imports for MCP Server WASM
-MCP_WASM="$WASM_DIR/mcp-server-sync/ts-runtime-mcp.core.wasm"
-if [[ -f "$MCP_WASM" ]]; then
-    echo "// Extracting imports from MCP WASM..."
-    cat >> "$OUTPUT_FILE" << 'EOF'
-/// Required imports for the MCP Server WASM module
-public enum MCPWASMImports {
-    /// All imports required by ts-runtime-mcp.core.wasm
-    public static let required: Set<String> = [
+# Generate the AllWASMImports enum that combines all imports
+echo "" >> "$OUTPUT_FILE"
+cat >> "$OUTPUT_FILE" << 'EOF'
+/// All WASM modules and their combined required imports
+public enum AllWASMImports {
+    /// Combined set of all imports required by any WASM module
+    public static var allRequired: Set<String> {
+        var all = Set<String>()
 EOF
-    
-    extract_imports "$MCP_WASM" | while read -r import; do
-        echo "        \"$import\"," >> "$OUTPUT_FILE"
-    done
-    
-    echo "    ]" >> "$OUTPUT_FILE"
-    echo "}" >> "$OUTPUT_FILE"
-fi
+
+# Add all enum references
+cd "$WASM_DIR"
+find . -name "*.wasm" -type f 2>/dev/null | sed 's|^\./||' | sort -u | while read -r rel_path; do
+    enum_name=$(to_enum_name "$rel_path")
+    echo "        all.formUnion(${enum_name}WASMImports.required)" >> "$OUTPUT_FILE"
+done
+
+cat >> "$OUTPUT_FILE" << 'EOF'
+        return all
+    }
+}
+EOF
 
 echo "Generated $OUTPUT_FILE"
