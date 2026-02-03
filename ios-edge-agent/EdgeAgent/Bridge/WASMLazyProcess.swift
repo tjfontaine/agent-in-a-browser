@@ -188,7 +188,9 @@ class WASMLazyProcess {
             // Validate providers against WASM module requirements BEFORE instantiation
             let validationResult = WASIProviderValidator.validate(module: module, providers: providers)
             if !validationResult.isValid {
-                Log.mcp.warning("WASMLazyProcess[\(handle)]: Missing WASI imports: \(validationResult.missingList.joined(separator: ", "))")
+                let missingImports = validationResult.missingList.joined(separator: ", ")
+                Log.mcp.error("WASMLazyProcess[\(handle)]: FATAL - Missing WASI imports: \(missingImports)")
+                throw ModuleLoadError.loadFailed("Missing WASI imports: \(missingImports)")
             }
             
             // Instantiate
