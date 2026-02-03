@@ -162,13 +162,27 @@ class WASMLazyProcess {
             // Setup imports
             var imports = Imports()
             let resources = ResourceRegistry()
+            let httpManager = HTTPRequestManager()
             
-            // Register WASI imports
-            SharedWASIImports.registerPreview1(&imports, store: store, resources: resources)
-            SharedWASIImports.registerRandom(&imports, store: store)
-            SharedWASIImports.registerClocks(&imports, store: store)
+            // Register WASI imports from type-safe providers
+            let providers: [any WASIProvider] = [
+                Preview1Provider(resources: resources, filesystem: SandboxFilesystem.shared),
+                RandomProvider(),
+                ClocksProvider(resources: resources),
+                CliProvider(resources: resources),
+                IoPollProvider(resources: resources),
+                IoErrorProvider(resources: resources),
+                IoStreamsProvider(resources: resources),
+                HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
+                HttpTypesProvider(resources: resources, httpManager: httpManager),
+            ]
             
-            // Configure stdin to read from buffer
+            // Register all providers
+            for provider in providers {
+                provider.register(into: &imports, store: store)
+            }
+            
+            // Configure stdin to read from buffer (overrides some of the above)
             registerProcessIO(&imports, store: store)
             
             // Instantiate
