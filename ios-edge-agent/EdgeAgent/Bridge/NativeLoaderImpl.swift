@@ -5,16 +5,16 @@ import Foundation
 import OSLog
 
 /// Native iOS implementation of the module loader interface.
-/// This class bridges between WasmKit callbacks and the MainActor-isolated
-/// WASMLazyProcess instances. WASM may run on background threads (e.g., via
-/// NativeMCPHost's socket handler), so we use DispatchQueue.main.sync to
-/// safely access MainActor-isolated types.
+/// Thread-safe via NSLock - can be called from any thread.
+/// WASMLazyProcess instances handle their own internal thread safety.
 final class NativeLoaderImpl: @unchecked Sendable {
     
-    // Process management - accessed via DispatchQueue.main.sync
-    // These are nonisolated(unsafe) because we synchronize via main.sync
-    nonisolated(unsafe) private var processes: [Int32: WASMLazyProcess] = [:]
-    nonisolated(unsafe) private var nextHandle: Int32 = 1
+    /// Lock for thread-safe access to processes dictionary
+    private let lock = NSLock()
+    
+    // Process management - protected by lock
+    private var processes: [Int32: WASMLazyProcess] = [:]
+    private var nextHandle: Int32 = 1
     
     // Shared resource registry for pollables (Sendable via @unchecked)
     private let resources: ResourceRegistry
@@ -25,14 +25,18 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     // MARK: - Process Registry (for resource dispatch)
     
-    /// Get a process by handle - must be called from main thread
+    /// Get a process by handle (thread-safe)
     func getProcess(_ handle: Int32) -> WASMLazyProcess? {
+        lock.lock()
+        defer { lock.unlock() }
         return processes[handle]
     }
     
-    /// Remove a process by handle
+    /// Remove a process by handle (thread-safe)
     func removeProcess(_ handle: Int32) {
+        lock.lock()
         processes.removeValue(forKey: handle)
+        lock.unlock()
         Log.mcp.debug("Dropped lazy-process handle \(handle)")
     }
     
@@ -50,18 +54,19 @@ final class NativeLoaderImpl: @unchecked Sendable {
         return result
     }
     
-    /// Spawn a command in a lazy-loaded module
+    /// Spawn a command in a lazy-loaded module (thread-safe)
     func spawnLazyCommand(module: String, command: String, args: [String], cwd: String, env: [(String, String)]) -> Int32 {
         Log.mcp.info("spawn-lazy-command: module=\(module) command=\(command)")
         
-        let handle = nextHandle
-        nextHandle += 1
-        
         let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
         
-        // Create WASMLazyProcess directly - it's now thread-safe with internal locking
-        // No longer needs DispatchQueue.main.sync since we removed @MainActor
-        processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
+        // Create process with lock protection for dictionary access
+        lock.lock()
+        let handle = nextHandle
+        nextHandle += 1
+        let process = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
+        processes[handle] = process
+        lock.unlock()
         
         return handle
     }
@@ -93,13 +98,12 @@ final class NativeLoaderImpl: @unchecked Sendable {
         
         if moduleName == nil {
             // If not a lazy command, create process anyway for builtins
+            let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
+            lock.lock()
             let handle = nextHandle
             nextHandle += 1
-            let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
-            // WASMLazyProcess.init is MainActor-isolated
-            DispatchQueue.main.sync {
-                processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
-            }
+            processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
+            lock.unlock()
             return handle
         }
         
@@ -114,62 +118,36 @@ final class NativeLoaderImpl: @unchecked Sendable {
         return pollableHandle
     }
     
-    /// Check if output is ready without blocking
+    /// Check if output is ready without blocking (thread-safe via WASMLazyProcess)
     func isReady(handle: Int32) -> Bool {
-        return DispatchQueue.main.sync {
-            guard let process = processes[handle] else {
-                return true  // No process means completed
-            }
-            return process.isReady()
-        }
+        return getProcess(handle)?.isReady() ?? true  // No process means completed
     }
     
-    /// Write data to stdin
+    /// Write data to stdin (thread-safe via WASMLazyProcess)
     func writeStdin(handle: Int32, data: [UInt8]) -> UInt64 {
-        DispatchQueue.main.sync {
-            guard let process = processes[handle] else {
-                return UInt64(0)
-            }
-            process.writeStdin(data)
-            return UInt64(data.count)
-        }
+        guard let process = getProcess(handle) else { return 0 }
+        process.writeStdin(data)
+        return UInt64(data.count)
     }
     
-    /// Close stdin
+    /// Close stdin (thread-safe via WASMLazyProcess)
     func closeStdin(handle: Int32) {
-        DispatchQueue.main.sync {
-            processes[handle]?.closeStdin()
-        }
+        getProcess(handle)?.closeStdin()
     }
     
-    /// Read from stdout
+    /// Read from stdout (thread-safe via WASMLazyProcess)
     func readStdout(handle: Int32, maxBytes: UInt64) -> [UInt8] {
-        return DispatchQueue.main.sync {
-            guard let process = processes[handle] else {
-                return []
-            }
-            return process.readStdout()
-        }
+        return getProcess(handle)?.readStdout() ?? []
     }
     
-    /// Read from stderr
+    /// Read from stderr (thread-safe via WASMLazyProcess)
     func readStderr(handle: Int32, maxBytes: UInt64) -> [UInt8] {
-        return DispatchQueue.main.sync {
-            guard let process = processes[handle] else {
-                return []
-            }
-            return process.readStderr()
-        }
+        return getProcess(handle)?.readStderr() ?? []
     }
     
-    /// Try to get exit status without blocking
+    /// Try to get exit status without blocking (thread-safe via WASMLazyProcess)
     func tryWait(handle: Int32) -> Int32? {
-        return DispatchQueue.main.sync {
-            guard let process = processes[handle] else {
-                return nil
-            }
-            return process.tryWait()
-        }
+        return getProcess(handle)?.tryWait()
     }
     
     /// Get terminal size
@@ -192,15 +170,14 @@ final class NativeLoaderImpl: @unchecked Sendable {
         false
     }
     
-    /// Send signal to process
+    /// Send signal to process (thread-safe via WASMLazyProcess)
     func sendSignal(handle: Int32, signum: UInt8) {
-        DispatchQueue.main.sync {
-            if let process = processes[handle] {
-                if signum == 15 || signum == 9 { // SIGTERM or SIGKILL
-                    process.terminate()
-                }
-                Log.mcp.debug("lazy-process.send-signal(\(signum)) to handle \(handle)")
+        if let process = getProcess(handle) {
+            if signum == 15 || signum == 9 { // SIGTERM or SIGKILL
+                process.terminate()
             }
+            Log.mcp.debug("lazy-process.send-signal(\(signum)) to handle \(handle)")
         }
     }
 }
+
