@@ -233,11 +233,12 @@ class WASMLazyProcess {
                 // shell:unix/command@0.1.0#run expects (command_ptr, command_len, args_ptr, args_len, ret_ptr)
                 // For now, try with no args for simple exports
                 if funcName == "shell:unix/command@0.1.0#run" {
-                    // This is a Component Model export that needs special handling
-                    // The command and args need to be written to memory
-                    // For MVP, call with the command string
-                    let result = try callShellCommand(instance: instance, function: entryFunc)
-                    state = .completed(exitCode: result)
+                    // This is a Component Model export that requires stream resource handles
+                    // The full signature is: (name_ptr, name_len, args_ptr, args_len, cwd_ptr, cwd_len, env_ptr, env_len, stdin, stdout, stderr) -> i32
+                    // Supporting this requires implementing stream resources with proper handle tables
+                    Log.mcp.error("WASMLazyProcess[\(handle)]: shell:unix/command@0.1.0#run requires Component Model stream resources (not yet implemented for iOS)")
+                    stderrBuffer.append(contentsOf: "Error: tsx-engine requires streaming IO support not yet available on iOS\n".utf8)
+                    state = .completed(exitCode: 1)
                 } else {
                     // Standard run or _start
                     let result = try entryFunc([])
