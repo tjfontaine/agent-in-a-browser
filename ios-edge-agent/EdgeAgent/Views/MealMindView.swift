@@ -318,6 +318,20 @@ console.log(JSON.stringify(data.meals?.slice(0, 4) || []));
 "`})
 ```
 
+## UI Design Guidelines
+
+**IMPORTANT LAYOUT RULES:**
+- Cards are displayed in a 2-column grid, so each card is ~160pt wide
+- Keep titles SHORT (max 20 chars) to prevent ugly line breaks like "Chick-en & Chori-zo"
+- If recipe name is long, abbreviate it: "Chicken & Chorizo Rice Pot" → "Chorizo Rice Pot" or "Chicken Chorizo Rice"
+- Use varied, useful badges (not all "Rice Dish"): try cuisine origin, cook time, or difficulty
+- Badge examples: "🇯🇵 Japanese", "⏱️ 30 min", "Easy", "🌶️ Spicy", "One-Pot"
+
+**Card Height Consistency:**
+- Use consistent image height (120-140pt)
+- Limit title to 1-2 lines max
+- One badge per card is enough
+
 ## UI Templates
 
 ### Loading State
@@ -328,21 +342,20 @@ render_ui({components: [{
   ]}
 }]})
 
-### Recipe Card
-{type:"Card", props:{shadow:true, padding:12, children:[
-  {type:"Image", props:{url:"IMAGE_URL", height:140, cornerRadius:8}},
+### Recipe Card (compact, fits 2-col grid)
+{type:"Card", props:{shadow:true, padding:8, children:[
+  {type:"Image", props:{url:"IMAGE_URL", height:120, cornerRadius:8}},
   {type:"VStack", props:{spacing:4, align:"leading", children:[
-    {type:"Text", props:{content:"TITLE", size:"lg", weight:"bold"}},
-    {type:"Badge", props:{text:"CATEGORY", color:"orange"}}
+    {type:"Text", props:{content:"SHORT TITLE", size:"md", weight:"bold"}},
+    {type:"Badge", props:{text:"⏱️ 30 min", color:"orange"}}
   ]}}
 ]}}
 
-### Recipe Grid (2-column layout)
+### Recipe Grid
 render_ui({components: [{
-  type:"VStack", props:{spacing:16, children:[
+  type:"VStack", props:{spacing:12, children:[
     {type:"Text", props:{content:"🍗 Chicken Recipes", size:"xl", weight:"bold"}},
-    {type:"HStack", props:{spacing:12, children:[CARD1, CARD2]}},
-    {type:"HStack", props:{spacing:12, children:[CARD3, CARD4]}}
+    ...CARD_ARRAY
   ]}
 }]})
 
