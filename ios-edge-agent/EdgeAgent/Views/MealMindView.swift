@@ -270,26 +270,15 @@ struct MealMindView: View {
     }
     
     private func handleAction(_ action: String, payload: Any?) {
-        // Convert UI actions to agent messages - agent loop drives all navigation
-        switch action {
-        case "select_recipe":
-            if let recipeId = payload as? String {
-                agent.send("Show me the full recipe for meal ID: \(recipeId)")
-            }
-        case "go_back":
-            agent.send("Go back to the recipe list")
-        case "input_submit":
-            if let dict = payload as? [String: String],
-               let value = dict["value"] {
-                agent.send(value)
-            }
-        default:
-            // Forward any action as natural language to the agent
-            if let payload = payload as? String {
-                agent.send("\(action): \(payload)")
-            } else {
-                agent.send(action)
-            }
+        // Forward UI actions directly to agent - agent loop handles everything
+        if action == "input_submit",
+           let dict = payload as? [String: String],
+           let value = dict["value"] {
+            agent.send(value)
+        } else if let payload = payload as? String {
+            agent.send("\(action): \(payload)")
+        } else {
+            agent.send(action)
         }
     }
 }
