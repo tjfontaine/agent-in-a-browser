@@ -86,8 +86,12 @@ struct IoStreamsProvider: WASIProvider {
                 let maxBytes = args[1].i64
                 let retPtr = UInt(args[2].i32)
                 
-                // Check if this is an incoming body stream
-                if let body: HTTPIncomingBody = resources.get(handle),
+                // First check for ProcessInputStream (Component Model shell commands)
+                if let processInput: ProcessInputStream = resources.get(handle) {
+                    let (data, isEOF) = processInput.read(maxBytes: Int(maxBytes))
+                    Log.wasi.debug("input-stream.read: ProcessInputStream read \(data.count) bytes, isEOF=\(isEOF)")
+                    writeStreamResult(data: data, isEOF: isEOF, to: retPtr, memory: memory, caller: caller)
+                } else if let body: HTTPIncomingBody = resources.get(handle),
                    let response = body.response {
                     let data = response.readBody(maxBytes: Int(maxBytes))
                     let isEOF = response.streamComplete && !response.hasUnreadData
@@ -112,7 +116,12 @@ struct IoStreamsProvider: WASIProvider {
                 let maxBytes = args[1].i64
                 let retPtr = UInt(args[2].i32)
                 
-                if let body: HTTPIncomingBody = resources.get(handle),
+                // First check for ProcessInputStream (Component Model shell commands)
+                if let processInput: ProcessInputStream = resources.get(handle) {
+                    let (data, isEOF) = processInput.read(maxBytes: Int(maxBytes))
+                    Log.wasi.debug("blocking-read: ProcessInputStream read \(data.count) bytes, isEOF=\(isEOF)")
+                    writeStreamResult(data: data, isEOF: isEOF, to: retPtr, memory: memory, caller: caller)
+                } else if let body: HTTPIncomingBody = resources.get(handle),
                    let response = body.response {
                     let data = response.readBody(maxBytes: Int(maxBytes))
                     let isEOF = response.streamComplete && !response.hasUnreadData
@@ -161,8 +170,14 @@ struct IoStreamsProvider: WASIProvider {
                 
                 Log.wasi.debug("[output-stream.write] handle=\(handle), len=\(dataLen)")
                 
-                // Check if this is an outgoing body
-                if let body: HTTPOutgoingBody = resources.get(handle) {
+                // First check for ProcessOutputStream (Component Model shell commands)
+                if let processOutput: ProcessOutputStream = resources.get(handle) {
+                    processOutput.write(bytes)
+                    Log.wasi.debug("[output-stream.write] ProcessOutputStream wrote \(dataLen) bytes")
+                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
+                        buf[0] = 0 // Ok
+                    }
+                } else if let body: HTTPOutgoingBody = resources.get(handle) {
                     body.data.append(contentsOf: bytes)
                     Log.wasi.debug("[output-stream.write] Appended to HTTPOutgoingBody, total=\(body.data.count)")
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
@@ -198,7 +213,14 @@ struct IoStreamsProvider: WASIProvider {
                     for i in 0..<dataLen { bytes[i] = buf[i] }
                 }
                 
-                if let body: HTTPOutgoingBody = resources.get(handle) {
+                // First check for ProcessOutputStream (Component Model shell commands)
+                if let processOutput: ProcessOutputStream = resources.get(handle) {
+                    processOutput.write(bytes)
+                    Log.wasi.debug("[blocking-write-and-flush] ProcessOutputStream wrote \(dataLen) bytes")
+                    memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
+                        buf[0] = 0 // Ok
+                    }
+                } else if let body: HTTPOutgoingBody = resources.get(handle) {
                     body.data.append(contentsOf: bytes)
                     Log.wasi.debug("[blocking-write-and-flush] Appended \(dataLen) bytes to HTTPOutgoingBody, total=\(body.data.count)")
                     memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
@@ -206,7 +228,7 @@ struct IoStreamsProvider: WASIProvider {
                     }
                 } else {
                     // Log for debugging
-                    Log.wasi.debug("[blocking-write-and-flush] Handle \(handle) not HTTPOutgoingBody")
+                    Log.wasi.debug("[blocking-write-and-flush] Handle \(handle) not recognized stream type")
                     if dataLen > 0, let str = String(bytes: bytes, encoding: .utf8) {
                         Log.wasi.debug("[STREAM] \(str)")
                     }

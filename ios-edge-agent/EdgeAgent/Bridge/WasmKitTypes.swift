@@ -403,6 +403,53 @@ class StderrOutputStream: NSObject {
     }
 }
 
+// MARK: - Process Stream Resources (Component Model)
+
+/// Input stream for reading from a process's stdin buffer
+/// Used by tsx-engine's shell:unix/command@0.1.0#run interface
+class ProcessInputStream: NSObject {
+    /// Data buffer to read from
+    private var buffer: [UInt8]
+    private var readPosition: Int = 0
+    
+    init(data: [UInt8]) {
+        self.buffer = data
+        super.init()
+    }
+    
+    /// Read up to maxBytes from the buffer
+    /// Returns (data, isEOF)
+    func read(maxBytes: Int) -> ([UInt8], Bool) {
+        let available = buffer.count - readPosition
+        if available <= 0 {
+            return ([], true)  // EOF
+        }
+        
+        let toRead = min(maxBytes, available)
+        let data = Array(buffer[readPosition..<(readPosition + toRead)])
+        readPosition += toRead
+        
+        return (data, readPosition >= buffer.count)
+    }
+}
+
+/// Output stream for writing to a process's stdout/stderr buffer
+/// Used by tsx-engine's shell:unix/command@0.1.0#run interface
+class ProcessOutputStream: NSObject {
+    /// Callback to write data to the process buffer
+    private let writeHandler: ([UInt8]) -> Void
+    
+    init(writeHandler: @escaping ([UInt8]) -> Void) {
+        self.writeHandler = writeHandler
+        super.init()
+    }
+    
+    /// Write data to the buffer
+    func write(_ data: [UInt8]) {
+        writeHandler(data)
+    }
+}
+
 // MARK: - HTTP Request Manager
 
 /// Manages async HTTP requests using URLSession - shared by all WASM hosts

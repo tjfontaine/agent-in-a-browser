@@ -46,6 +46,42 @@ class WASMLazyProcess {
     /// WasmKit runtime components
     private var store: Store?
     private var instance: Instance?
+    private var resources: ResourceRegistry?
+    
+    // MARK: - Component Model Stream Resources
+    
+    /// Stream resource types for Component Model shell command interface
+    enum StreamResource {
+        case stdin
+        case stdout
+        case stderr
+    }
+    
+    /// Resource handle table for stream handles
+    /// tsx-engine's shell:unix/command@0.1.0#run passes stream handles that it will call imports on
+    private var streamHandles: [Int32: StreamResource] = [:]
+    private var nextStreamHandle: Int32 = 100  // Start at 100 to avoid conflicts with other handles
+    
+    /// Allocate a stream handle
+    private func allocateStreamHandle(_ resource: StreamResource) -> Int32 {
+        let handle = nextStreamHandle
+        nextStreamHandle += 1
+        streamHandles[handle] = resource
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: Allocated stream handle \(handle) for \(resource)")
+        return handle
+    }
+    
+    /// Look up a stream resource by handle
+    func lookupStream(_ handle: Int32) -> StreamResource? {
+        return streamHandles[handle]
+    }
+    
+    /// Drop a stream handle (resource cleanup)
+    private func dropStreamHandle(_ handle: Int32) {
+        if streamHandles.removeValue(forKey: handle) != nil {
+            Log.mcp.debug("WASMLazyProcess[\(self.handle)]: Dropped stream handle \(handle)")
+        }
+    }
     
     init(handle: Int32, command: String, args: [String], env: [String: String] = [:], cwd: String = "/") {
         self.handle = handle
@@ -162,6 +198,7 @@ class WASMLazyProcess {
             // Setup imports
             var imports = Imports()
             let resources = ResourceRegistry()
+            self.resources = resources  // Save for Component Model stream registration
             let httpManager = HTTPRequestManager()
             
             // Register WASI imports from type-safe providers
@@ -233,12 +270,10 @@ class WASMLazyProcess {
                 // shell:unix/command@0.1.0#run expects (command_ptr, command_len, args_ptr, args_len, ret_ptr)
                 // For now, try with no args for simple exports
                 if funcName == "shell:unix/command@0.1.0#run" {
-                    // This is a Component Model export that requires stream resource handles
-                    // The full signature is: (name_ptr, name_len, args_ptr, args_len, cwd_ptr, cwd_len, env_ptr, env_len, stdin, stdout, stderr) -> i32
-                    // Supporting this requires implementing stream resources with proper handle tables
-                    Log.mcp.error("WASMLazyProcess[\(handle)]: shell:unix/command@0.1.0#run requires Component Model stream resources (not yet implemented for iOS)")
-                    stderrBuffer.append(contentsOf: "Error: tsx-engine requires streaming IO support not yet available on iOS\n".utf8)
-                    state = .completed(exitCode: 1)
+                    // This is a Component Model export
+                    // Signature: (name_ptr, name_len, args_ptr, args_len, cwd_ptr, cwd_len, env_ptr, env_len, stdin, stdout, stderr) -> i32
+                    let exitCode = try callShellCommandExport(instance: instance, function: entryFunc)
+                    state = .completed(exitCode: exitCode)
                 } else {
                     // Standard run or _start
                     let result = try entryFunc([])
@@ -411,98 +446,135 @@ class WASMLazyProcess {
     
     // MARK: - Shell Command Interface
     
-    /// Call shell:unix/command@0.1.0#run export with command and args
-    private func callShellCommand(instance: Instance, function: Function) throws -> Int32 {
+    /// Call shell:unix/command@0.1.0#run export with Component Model ABI
+    /// Signature: (name_ptr, name_len, args_ptr, args_len, cwd_ptr, cwd_len, env_ptr, env_len, stdin, stdout, stderr) -> i32
+    private func callShellCommandExport(instance: Instance, function: Function) throws -> Int32 {
         guard let memory = instance.exports[memory: "memory"],
-              let realloc = instance.exports[function: "cabi_realloc"] else {
-            Log.mcp.error("WASMLazyProcess[\(handle)]: Missing memory or cabi_realloc for shell command")
+              let realloc = instance.exports[function: "cabi_realloc"],
+              let resources = self.resources else {
+            Log.mcp.error("WASMLazyProcess[\(handle)]: Missing memory, cabi_realloc, or resources for shell command")
             return 1
         }
         
-        // Allocate and write command string
-        let commandBytes = Array(command.utf8)
-        let commandLen = Int32(commandBytes.count)
-        guard let commandPtrResult = try? realloc([.i32(0), .i32(0), .i32(1), .i32(UInt32(commandLen))]),
-              let commandPtrVal = commandPtrResult.first, case let .i32(commandPtr) = commandPtrVal else {
-            Log.mcp.error("WASMLazyProcess[\(handle)]: Failed to allocate command memory")
-            return 1
-        }
-        memory.withUnsafeMutableBufferPointer(offset: UInt(commandPtr), count: commandBytes.count) { buffer in
-            for (i, byte) in commandBytes.enumerated() {
-                buffer[i] = byte
+        // Helper to allocate and write a string to WASM memory
+        func allocString(_ str: String) throws -> (ptr: UInt32, len: UInt32) {
+            let bytes = Array(str.utf8)
+            let len = UInt32(bytes.count)
+            if len == 0 {
+                return (0, 0)
             }
+            guard let result = try? realloc([.i32(0), .i32(0), .i32(1), .i32(len)]),
+                  let ptrVal = result.first, case let .i32(ptr) = ptrVal else {
+                throw WasmKitHostError.allocationFailed
+            }
+            memory.withUnsafeMutableBufferPointer(offset: UInt(ptr), count: bytes.count) { buffer in
+                for (i, byte) in bytes.enumerated() {
+                    buffer[i] = byte
+                }
+            }
+            return (ptr, len)
         }
         
-        // Build args as list<string> - each string is (ptr, len), then overall (ptr, count)
-        // For simplicity, concatenate all args and track offsets
-        var argData: [(ptr: UInt32, len: Int32)] = []
+        // 1. Allocate command name
+        let (namePtr, nameLen) = try allocString(command)
+        
+        // 2. Allocate args list<string>
+        var argEntries: [(ptr: UInt32, len: UInt32)] = []
         for arg in args {
-            let argBytes = Array(arg.utf8)
-            let argLen = Int32(argBytes.count)
-            if argLen > 0 {
-                guard let argPtrResult = try? realloc([.i32(0), .i32(0), .i32(1), .i32(UInt32(argLen))]),
-                      let argPtrVal = argPtrResult.first, case let .i32(argPtr) = argPtrVal else {
-                    continue
-                }
-                memory.withUnsafeMutableBufferPointer(offset: UInt(argPtr), count: argBytes.count) { buffer in
-                    for (i, byte) in argBytes.enumerated() {
-                        buffer[i] = byte
-                    }
-                }
-                argData.append((ptr: argPtr, len: argLen))
-            }
+            let entry = try allocString(arg)
+            argEntries.append(entry)
         }
         
-        // Allocate args array (each entry is 8 bytes: ptr + len)
-        let argsArraySize = Int32(argData.count * 8)
-        let argsCount = Int32(argData.count)
-        var argsArrayPtr: UInt32 = 0
+        // Allocate array of (ptr, len) pairs
+        let argsArraySize = UInt32(argEntries.count * 8)
+        var argsPtr: UInt32 = 0
         if argsArraySize > 0 {
-            if let argsResult = try? realloc([.i32(0), .i32(0), .i32(4), .i32(UInt32(argsArraySize))]),
-               let argsVal = argsResult.first, case let .i32(ptr) = argsVal {
-                argsArrayPtr = ptr
+            if let result = try? realloc([.i32(0), .i32(0), .i32(4), .i32(argsArraySize)]),
+               let val = result.first, case let .i32(ptr) = val {
+                argsPtr = ptr
             }
-            // Write arg entries
-            for (i, entry) in argData.enumerated() {
-                let offset = UInt(argsArrayPtr) + UInt(i * 8)
+            for (i, entry) in argEntries.enumerated() {
+                let offset = UInt(argsPtr) + UInt(i * 8)
                 memory.withUnsafeMutableBufferPointer(offset: offset, count: 8) { buffer in
                     buffer.storeBytes(of: entry.ptr.littleEndian, as: UInt32.self)
-                    buffer.storeBytes(of: UInt32(entry.len).littleEndian, toByteOffset: 4, as: UInt32.self)
+                    buffer.storeBytes(of: entry.len.littleEndian, toByteOffset: 4, as: UInt32.self)
                 }
             }
         }
+        let argsLen = UInt32(argEntries.count)
         
-        // Allocate return pointer (for result variant)
-        guard let retResult = try? realloc([.i32(0), .i32(0), .i32(4), .i32(16)]),
-              let retVal = retResult.first, case let .i32(retPtr) = retVal else {
-            Log.mcp.error("WASMLazyProcess[\(handle)]: Failed to allocate return memory")
-            return 1
+        // 3. Allocate cwd string
+        let (cwdPtr, cwdLen) = try allocString(cwd)
+        
+        // 4. Allocate env vars list<tuple<string,string>>
+        let envPairs = Array(env)
+        var envEntries: [(keyPtr: UInt32, keyLen: UInt32, valPtr: UInt32, valLen: UInt32)] = []
+        for (key, value) in envPairs {
+            let keyEntry = try allocString(key)
+            let valEntry = try allocString(value)
+            envEntries.append((keyEntry.ptr, keyEntry.len, valEntry.ptr, valEntry.len))
         }
         
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: Calling shell command '\(command)' with \(args.count) args")
-        
-        // Call the function: (command_ptr, command_len, args_ptr, args_len, ret_ptr) -> ()
-        let _ = try function([
-            .i32(commandPtr),
-            .i32(UInt32(commandLen)),
-            .i32(argsArrayPtr),
-            .i32(UInt32(argsCount)),
-            .i32(retPtr)
-        ])
-        
-        // Read result from retPtr
-        // result<string, i32> layout: discriminant (1 byte), then payload
-        var exitCode: Int32 = 0
-        memory.withUnsafeMutableBufferPointer(offset: UInt(retPtr), count: 16) { buffer in
-            let discriminant = buffer[0]
-            if discriminant == 0 {
-                // Ok(string) - output is in stdout buffer
-                exitCode = 0
-            } else {
-                // Err(i32) - read error code at offset 4
-                exitCode = Int32(bitPattern: buffer.load(fromByteOffset: 4, as: UInt32.self).littleEndian)
+        let envArraySize = UInt32(envEntries.count * 16)  // Each entry: key_ptr, key_len, val_ptr, val_len
+        var envPtr: UInt32 = 0
+        if envArraySize > 0 {
+            if let result = try? realloc([.i32(0), .i32(0), .i32(4), .i32(envArraySize)]),
+               let val = result.first, case let .i32(ptr) = val {
+                envPtr = ptr
+            }
+            for (i, entry) in envEntries.enumerated() {
+                let offset = UInt(envPtr) + UInt(i * 16)
+                memory.withUnsafeMutableBufferPointer(offset: offset, count: 16) { buffer in
+                    buffer.storeBytes(of: entry.keyPtr.littleEndian, as: UInt32.self)
+                    buffer.storeBytes(of: entry.keyLen.littleEndian, toByteOffset: 4, as: UInt32.self)
+                    buffer.storeBytes(of: entry.valPtr.littleEndian, toByteOffset: 8, as: UInt32.self)
+                    buffer.storeBytes(of: entry.valLen.littleEndian, toByteOffset: 12, as: UInt32.self)
+                }
             }
         }
+        let envLen = UInt32(envEntries.count)
+        
+        // 5. Create and register stream resources
+        // stdin: reads from stdinBuffer
+        let stdinStream = ProcessInputStream(data: stdinBuffer)
+        let stdinHandle = resources.register(stdinStream)
+        
+        // stdout: writes to stdoutBuffer  
+        let stdoutStream = ProcessOutputStream { [weak self] data in
+            self?.stdoutBuffer.append(contentsOf: data)
+        }
+        let stdoutHandle = resources.register(stdoutStream)
+        
+        // stderr: writes to stderrBuffer
+        let stderrStream = ProcessOutputStream { [weak self] data in
+            self?.stderrBuffer.append(contentsOf: data)
+        }
+        let stderrHandle = resources.register(stderrStream)
+        
+        Log.mcp.debug("WASMLazyProcess[\(handle)]: Calling shell command '\(command)' with \(args.count) args, streams: in=\(stdinHandle) out=\(stdoutHandle) err=\(stderrHandle)")
+        
+        // 6. Call the export with all 11 parameters
+        let result = try function([
+            .i32(namePtr),           // name_ptr
+            .i32(nameLen),           // name_len
+            .i32(argsPtr),           // args_ptr
+            .i32(argsLen),           // args_len
+            .i32(cwdPtr),            // cwd_ptr
+            .i32(cwdLen),            // cwd_len
+            .i32(envPtr),            // env_ptr
+            .i32(envLen),            // env_len
+            .i32(UInt32(bitPattern: stdinHandle)),   // stdin stream handle
+            .i32(UInt32(bitPattern: stdoutHandle)),  // stdout stream handle
+            .i32(UInt32(bitPattern: stderrHandle))   // stderr stream handle
+        ])
+        
+        // 7. Read exit code from result
+        var exitCode: Int32 = 0
+        if let retVal = result.first, case let .i32(code) = retVal {
+            exitCode = Int32(bitPattern: code)
+        }
+        
+        Log.mcp.info("WASMLazyProcess[\(handle)]: Shell command returned exit code \(exitCode)")
         
         return exitCode
     }
