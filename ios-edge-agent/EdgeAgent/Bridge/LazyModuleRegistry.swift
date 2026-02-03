@@ -10,8 +10,8 @@ class LazyModuleRegistry {
     
     static let shared = LazyModuleRegistry()
     
-    /// Command to module name mapping (from lazy-modules.ts)
-    private let commandModules: [String: String] = [
+    /// Command to module name mapping - static for thread-safe access
+    private static let commandModules: [String: String] = [
         "tsx": "tsx-engine",
         "tsc": "tsx-engine",
         "sqlite3": "sqlite-module",
@@ -36,6 +36,11 @@ class LazyModuleRegistry {
         "grep": "coreutils",
     ]
     
+    /// Thread-safe accessor for command module lookup (can be called from any thread)
+    nonisolated static func getModuleForCommandSync(_ command: String) -> String? {
+        return commandModules[command]
+    }
+    
     /// Loaded WASM module instances (cached)
     private var loadedModules: [String: Module] = [:]
     
@@ -54,17 +59,17 @@ class LazyModuleRegistry {
     
     /// Check if a command is available as a lazy-loaded module
     func isLazyCommand(_ command: String) -> Bool {
-        return commandModules[command] != nil
+        return Self.commandModules[command] != nil
     }
     
     /// Get the module name for a given command
     func getModuleForCommand(_ command: String) -> String? {
-        return commandModules[command]
+        return Self.commandModules[command]
     }
     
     /// Get list of all available lazy commands
     func getLazyCommandList() -> [String] {
-        return Array(commandModules.keys).sorted()
+        return Array(Self.commandModules.keys).sorted()
     }
     
     // MARK: - Module Loading

@@ -6,13 +6,13 @@ import OSLog
 
 /// Native iOS implementation of the module loader interface.
 /// This class bridges between WasmKit callbacks and the MainActor-isolated
-/// WASMLazyProcess instances. Since WasmKit runs synchronously on the main
-/// thread in iOS, we can safely use MainActor.assumeIsolated to access
-/// main-actor-isolated types.
+/// WASMLazyProcess instances. WASM may run on background threads (e.g., via
+/// NativeMCPHost's socket handler), so we use DispatchQueue.main.sync to
+/// safely access MainActor-isolated types.
 final class NativeLoaderImpl: @unchecked Sendable {
     
-    // Process management - accessed via MainActor.assumeIsolated
-    // These are nonisolated(unsafe) because we guarantee access from main thread
+    // Process management - accessed via DispatchQueue.main.sync
+    // These are nonisolated(unsafe) because we synchronize via main.sync
     nonisolated(unsafe) private var processes: [Int32: WASMLazyProcess] = [:]
     nonisolated(unsafe) private var nextHandle: Int32 = 1
     
@@ -40,10 +40,8 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Get the module name for a lazy-loaded command (none if not a lazy command)
     func getLazyModule(command: String) -> String? {
-        // Access LazyModuleRegistry on main actor
-        let result = MainActor.assumeIsolated {
-            LazyModuleRegistry.shared.getModuleForCommand(command)
-        }
+        // Use thread-safe static accessor (this is called from WASM thread)
+        let result = LazyModuleRegistry.getModuleForCommandSync(command)
         if let moduleName = result {
             Log.mcp.debug("get-lazy-module: \(command) -> \(moduleName)")
         } else {
@@ -61,8 +59,8 @@ final class NativeLoaderImpl: @unchecked Sendable {
         
         let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
         
-        // Create WASMLazyProcess on main actor
-        MainActor.assumeIsolated {
+        // Create WASMLazyProcess on main thread (init is MainActor-isolated)
+        DispatchQueue.main.sync {
             processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
         }
         
@@ -91,17 +89,16 @@ final class NativeLoaderImpl: @unchecked Sendable {
     func spawnWorkerCommand(command: String, args: [String], cwd: String, env: [(String, String)]) -> Int32 {
         Log.mcp.info("spawn-worker-command: \(command)")
         
-        // Check if this is a lazy command
-        let moduleName = MainActor.assumeIsolated {
-            LazyModuleRegistry.shared.getModuleForCommand(command)
-        }
+        // Check if this is a lazy command (thread-safe access)
+        let moduleName = LazyModuleRegistry.getModuleForCommandSync(command)
         
         if moduleName == nil {
             // If not a lazy command, create process anyway for builtins
             let handle = nextHandle
             nextHandle += 1
             let envDict = Dictionary(env, uniquingKeysWith: { first, _ in first })
-            MainActor.assumeIsolated {
+            // WASMLazyProcess.init is MainActor-isolated
+            DispatchQueue.main.sync {
                 processes[handle] = WASMLazyProcess(handle: handle, command: command, args: args, env: envDict, cwd: cwd)
             }
             return handle
@@ -120,7 +117,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Check if output is ready without blocking
     func isReady(handle: Int32) -> Bool {
-        return MainActor.assumeIsolated {
+        return DispatchQueue.main.sync {
             guard let process = processes[handle] else {
                 return true  // No process means completed
             }
@@ -130,7 +127,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Write data to stdin
     func writeStdin(handle: Int32, data: [UInt8]) -> UInt64 {
-        MainActor.assumeIsolated {
+        DispatchQueue.main.sync {
             guard let process = processes[handle] else {
                 return UInt64(0)
             }
@@ -141,14 +138,14 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Close stdin
     func closeStdin(handle: Int32) {
-        MainActor.assumeIsolated {
+        DispatchQueue.main.sync {
             processes[handle]?.closeStdin()
         }
     }
     
     /// Read from stdout
     func readStdout(handle: Int32, maxBytes: UInt64) -> [UInt8] {
-        return MainActor.assumeIsolated {
+        return DispatchQueue.main.sync {
             guard let process = processes[handle] else {
                 return []
             }
@@ -158,7 +155,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Read from stderr
     func readStderr(handle: Int32, maxBytes: UInt64) -> [UInt8] {
-        return MainActor.assumeIsolated {
+        return DispatchQueue.main.sync {
             guard let process = processes[handle] else {
                 return []
             }
@@ -168,7 +165,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Try to get exit status without blocking
     func tryWait(handle: Int32) -> Int32? {
-        return MainActor.assumeIsolated {
+        return DispatchQueue.main.sync {
             guard let process = processes[handle] else {
                 return nil
             }
@@ -198,7 +195,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Send signal to process
     func sendSignal(handle: Int32, signum: UInt8) {
-        MainActor.assumeIsolated {
+        DispatchQueue.main.sync {
             if let process = processes[handle] {
                 if signum == 15 || signum == 9 { // SIGTERM or SIGKILL
                     process.terminate()
