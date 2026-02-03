@@ -6,7 +6,6 @@ import OSLog
 
 /// Provides type-safe WASI imports for preview1 interface.
 /// This wraps SharedWASIImports.registerPreview1 to integrate with the provider validation system.
-@MainActor
 struct Preview1Provider: WASIProvider {
     static var moduleName: String { "wasi_snapshot_preview1" }
     

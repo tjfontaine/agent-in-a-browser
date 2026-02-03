@@ -5,7 +5,7 @@ import OSLog
 
 /// Shared WASI import implementations for WasmKit hosts.
 /// Both NativeAgentHost and NativeMCPHost can use these.
-@MainActor
+/// Thread-safe: can be called from any thread since SandboxFilesystem is now thread-safe.
 enum SharedWASIImports {
     
     // MARK: - wasi_snapshot_preview1

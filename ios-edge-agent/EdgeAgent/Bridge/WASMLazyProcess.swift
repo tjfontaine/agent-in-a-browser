@@ -270,25 +270,22 @@ final class WASMLazyProcess: @unchecked Sendable {
             self.resources = resources  // Save for Component Model stream registration
             let httpManager = HTTPRequestManager()
             
-            // Get MainActor-isolated filesystem reference
-            let filesystem = await SandboxFilesystem.shared
+            // Get thread-safe filesystem reference (no longer MainActor-isolated)
+            let filesystem = SandboxFilesystem.shared
             
-            // Register WASI imports from type-safe providers
-            // Construct providers on MainActor since some are MainActor-isolated
-            let providers: [any WASIProvider] = await MainActor.run {
-                [
-                    Preview1Provider(resources: resources, filesystem: filesystem),
-                    RandomProvider(),
-                    ClocksProvider(resources: resources),
-                    CliProvider(resources: resources),
-                    IoPollProvider(resources: resources),
-                    IoErrorProvider(resources: resources),
-                    IoStreamsProvider(resources: resources),
-                    SocketsProvider(resources: resources),
-                    HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
-                    HttpTypesProvider(resources: resources, httpManager: httpManager),
-                ]
-            }
+            // Register WASI imports from type-safe providers (no longer MainActor-isolated)
+            let providers: [any WASIProvider] = [
+                Preview1Provider(resources: resources, filesystem: filesystem),
+                RandomProvider(),
+                ClocksProvider(resources: resources),
+                CliProvider(resources: resources),
+                IoPollProvider(resources: resources),
+                IoErrorProvider(resources: resources),
+                IoStreamsProvider(resources: resources),
+                SocketsProvider(resources: resources),
+                HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
+                HttpTypesProvider(resources: resources, httpManager: httpManager),
+            ]
             
             // Register all providers
             for provider in providers {

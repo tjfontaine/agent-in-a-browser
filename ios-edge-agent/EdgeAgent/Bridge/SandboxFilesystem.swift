@@ -122,8 +122,11 @@ class OpenFile {
 
 /// iOS sandbox filesystem implementation
 /// Provides WASI preview1 filesystem access rooted at Documents/sandbox
-@MainActor
-class SandboxFilesystem {
+/// Thread-safe: can be accessed from any thread
+final class SandboxFilesystem: @unchecked Sendable {
+    
+    /// Lock for thread-safe access to mutable state
+    private let lock = NSLock()
     
     static let shared = SandboxFilesystem()
     
@@ -158,9 +161,13 @@ class SandboxFilesystem {
     
     /// Convert a WASI path to an absolute iOS filesystem path
     private func resolvePath(dirFd: Int32, subpath: String) -> Result<URL, WasiError> {
+        lock.lock()
         guard let dirFile = fdTable[dirFd] else {
+            lock.unlock()
             return .failure(.badf)
         }
+        let dirPath = dirFile.path
+        lock.unlock()
         
         // Normalize the path
         var normalized = subpath
@@ -183,8 +190,8 @@ class SandboxFilesystem {
         
         // Build the final path relative to root
         var basePath = rootURL
-        if dirFile.path != "/" {
-            basePath = rootURL.appendingPathComponent(String(dirFile.path.dropFirst()))
+        if dirPath != "/" {
+            basePath = rootURL.appendingPathComponent(String(dirPath.dropFirst()))
         }
         
         for component in resolvedComponents {
