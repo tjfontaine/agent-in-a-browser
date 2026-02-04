@@ -4,6 +4,138 @@ import MCP
 import Network
 import OSLog
 
+// MARK: - SDUI Validation
+
+/// Validates SDUI tool inputs to help the agent self-correct
+struct SDUIValidator {
+    
+    /// Validation result containing warnings and/or errors
+    struct ValidationResult {
+        var errors: [String] = []
+        var warnings: [String] = []
+        
+        var isValid: Bool { errors.isEmpty }
+        
+        var errorMessage: String? {
+            guard !errors.isEmpty else { return nil }
+            return "VALIDATION ERROR: " + errors.joined(separator: "; ")
+        }
+        
+        var warningMessage: String? {
+            guard !warnings.isEmpty else { return nil }
+            return "⚠️ " + warnings.joined(separator: "; ")
+        }
+    }
+    
+    /// Validate a register_view template
+    /// Checks that templates use ForEach for list rendering
+    static func validateTemplate(_ component: [String: Any]) -> ValidationResult {
+        var result = ValidationResult()
+        
+        // Check for ForEach in the component tree
+        if !containsForEach(component) {
+            result.warnings.append("Template has no ForEach component. For recipe lists, use ForEach with items binding: {type: \"ForEach\", props: {items: \"{{recipes}}\", itemTemplate: {...}}}")
+        }
+        
+        // Check for common mistakes - static children arrays with component objects
+        if hasPrebuiltCardChildren(component) {
+            result.errors.append("Template contains pre-built Card/Image components as children. Use ForEach with itemTemplate bindings instead of static children.")
+        }
+        
+        return result
+    }
+    
+    /// Validate show_view data
+    /// Checks that data contains raw values, not component objects
+    static func validateShowViewData(_ data: [String: Any]?) -> ValidationResult {
+        var result = ValidationResult()
+        
+        guard let data = data else { return result }
+        
+        // Check each data value for component objects
+        for (key, value) in data {
+            if let array = value as? [[String: Any]] {
+                for item in array {
+                    if isComponentObject(item) {
+                        result.errors.append("Data key '\(key)' contains component objects (found 'type' or 'props'). Pass raw data arrays instead, e.g. [{idMeal: \"...\", strMeal: \"...\"}]. ForEach itemTemplate will render each item.")
+                        return result  // Return early - one error is enough
+                    }
+                }
+            } else if let dict = value as? [String: Any], isComponentObject(dict) {
+                result.errors.append("Data key '\(key)' contains a component object. Pass raw data values, not UI components.")
+                return result
+            }
+        }
+        
+        return result
+    }
+    
+    // MARK: - Helpers
+    
+    /// Recursively check if component tree contains ForEach
+    private static func containsForEach(_ component: [String: Any]) -> Bool {
+        if let type = component["type"] as? String, type == "ForEach" {
+            return true
+        }
+        
+        if let props = component["props"] as? [String: Any] {
+            if let children = props["children"] as? [[String: Any]] {
+                for child in children {
+                    if containsForEach(child) {
+                        return true
+                    }
+                }
+            }
+            // Check itemTemplate
+            if let itemTemplate = props["itemTemplate"] as? [String: Any] {
+                if containsForEach(itemTemplate) {
+                    return true
+                }
+            }
+            if let template = props["template"] as? [String: Any] {
+                if containsForEach(template) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    /// Check if component has pre-built Card/Image children (common mistake)
+    private static func hasPrebuiltCardChildren(_ component: [String: Any]) -> Bool {
+        if let props = component["props"] as? [String: Any],
+           let children = props["children"] as? [[String: Any]] {
+            // Look for multiple Card or Image children with static URLs
+            var cardCount = 0
+            for child in children {
+                if let type = child["type"] as? String, type == "Card" || type == "Image" {
+                    if let childProps = child["props"] as? [String: Any] {
+                        // Check if it has static (non-binding) values
+                        if let url = childProps["url"] as? String, !url.contains("{{") {
+                            cardCount += 1
+                        }
+                    }
+                }
+            }
+            // If we have multiple static cards, it's a mistake
+            if cardCount >= 2 {
+                return true
+            }
+        }
+        return false
+    }
+    
+    /// Check if a dictionary looks like a component object
+    private static func isComponentObject(_ dict: [String: Any]) -> Bool {
+        // Components have "type" and usually "props"
+        if dict["type"] is String && dict["props"] is [String: Any] {
+            return true
+        }
+        return false
+    }
+}
+
 // MARK: - iOS MCP Server
 
 /// Local MCP server that provides iOS-specific tools to the headless agent.
@@ -34,6 +166,9 @@ class MCPServer: NSObject {
     
     // Update callback - called when agent invokes update_ui for partial updates
     nonisolated(unsafe) var onUpdateUI: (([[String: Any]]) -> Void)?
+    
+    // SDUI: Show view callback - called when agent invokes show_view (navigates to cached view)
+    nonisolated(unsafe) var onShowView: ((String, [String: Any]?) -> Void)?
 
     
     private override init() {
@@ -149,6 +284,156 @@ class MCPServer: NSObject {
                         ])
                     ]),
                     "required": .array([.string("capability")])
+                ])
+            ),
+            
+            // MARK: - View Registry Tools (SDUI)
+            
+            Tool(
+                name: "register_view",
+                description: "Register a reusable view template with data bindings. Templates use {{path}} for bindings. Once registered, use show_view to display.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Unique name for the view template")
+                        ]),
+                        "version": .object([
+                            "type": .string("string"),
+                            "description": .string("Semver version for cache invalidation (e.g. '1.0.0')")
+                        ]),
+                        "component": .object([
+                            "type": .string("object"),
+                            "description": .string("The component tree with {{bindings}}")
+                        ]),
+                        "defaultData": .object([
+                            "type": .string("object"),
+                            "description": .string("Default data values for bindings")
+                        ]),
+                        "animation": .object([
+                            "type": .string("object"),
+                            "description": .string("Enter/exit animations: {enter, exit, duration}")
+                        ])
+                    ]),
+                    "required": .array([.string("name"), .string("version"), .string("component")])
+                ])
+            ),
+            Tool(
+                name: "show_view",
+                description: "Navigate to a registered view with data. Bindings in the template are resolved with the provided data.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Name of the registered view to show")
+                        ]),
+                        "data": .object([
+                            "type": .string("object"),
+                            "description": .string("Data to bind to template placeholders")
+                        ])
+                    ]),
+                    "required": .array([.string("name")])
+                ])
+            ),
+            Tool(
+                name: "update_view_data",
+                description: "Update data for the current view without re-registering the template.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "data": .object([
+                            "type": .string("object"),
+                            "description": .string("New data to merge with current view data")
+                        ])
+                    ]),
+                    "required": .array([.string("data")])
+                ])
+            ),
+            Tool(
+                name: "update_template",
+                description: "Apply patches to a registered template without full re-registration.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Name of the view template to patch")
+                        ]),
+                        "patches": .object([
+                            "type": .string("array"),
+                            "description": .string("Array of patches: {path, value, op?}"),
+                            "items": .object([
+                                "type": .string("object")
+                            ])
+                        ])
+                    ]),
+                    "required": .array([.string("name"), .string("patches")])
+                ])
+            ),
+            Tool(
+                name: "pop_view",
+                description: "Pop the current view from the navigation stack and return to the previous view.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([:])
+                ])
+            ),
+            Tool(
+                name: "invalidate_view",
+                description: "Remove a specific view from the cache, forcing re-registration on next use.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Name of the view to invalidate")
+                        ])
+                    ]),
+                    "required": .array([.string("name")])
+                ])
+            ),
+            Tool(
+                name: "invalidate_all_views",
+                description: "Clear the entire view registry cache.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([:])
+                ])
+            ),
+            Tool(
+                name: "query_views",
+                description: "Query registered view templates and navigation stack. Returns: templates (name, version), navigationStack (viewName, dataKeys), currentView. Use this to check if a template is already registered and what data is cached before re-fetching.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional: query a specific template by name to get its full cached data")
+                        ])
+                    ])
+                ])
+            ),
+            Tool(
+                name: "sqlite_query",
+                description: "Execute a SQL query on the SDUI database. Returns results as JSON array. Use for reading/writing app state, agent memory, and custom data tables.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "sql": .object([
+                            "type": .string("string"),
+                            "description": .string("SQL query to execute (SELECT/INSERT/UPDATE/DELETE)")
+                        ]),
+                        "params": .object([
+                            "type": .string("array"),
+                            "description": .string("Optional array of parameter values for ? placeholders"),
+                            "items": .object([
+                                "type": .string("string")
+                            ])
+                        ])
+                    ]),
+                    "required": .array([.string("sql")])
                 ])
             )
         ]
@@ -566,6 +851,200 @@ class MCPServer: NSObject {
                     "content": [["type": "text", "text": "{\"status\": \"not_determined\", \"message\": \"Location requires permission\"}"]],
                     "isError": false
                 ]
+                
+            // MARK: - View Registry Tool Handlers
+                
+            case "register_view":
+                guard let name = argsData?["name"] as? String,
+                      let version = argsData?["version"] as? String,
+                      let component = argsData?["component"] as? [String: Any] else {
+                    return ["content": [["type": "text", "text": "Missing required parameters: name, version, component"]], "isError": true]
+                }
+                
+                // Validate template structure
+                let validation = SDUIValidator.validateTemplate(component)
+                if let errorMsg = validation.errorMessage {
+                    return ["content": [["type": "text", "text": errorMsg]], "isError": true]
+                }
+                
+                let defaultData = argsData?["defaultData"] as? [String: Any]
+                var animation: ViewAnimation? = nil
+                if let animDict = argsData?["animation"] as? [String: Any] {
+                    animation = ViewAnimation(
+                        enter: animDict["enter"] as? String,
+                        exit: animDict["exit"] as? String,
+                        duration: animDict["duration"] as? Double
+                    )
+                }
+                DispatchQueue.main.async {
+                    do {
+                        try ViewRegistry.shared.registerView(
+                            name: name,
+                            version: version,
+                            template: component,
+                            defaultData: defaultData,
+                            animation: animation
+                        )
+                    } catch {
+                        Log.mcp.error("register_view failed: \(error)")
+                    }
+                }
+                
+                // Include warning in response if present
+                var responseText = "{\"registered\": \"\(name)\", \"version\": \"\(version)\"}"
+                if let warningMsg = validation.warningMessage {
+                    responseText = "{\"registered\": \"\(name)\", \"version\": \"\(version)\", \"warning\": \"\(warningMsg)\"}"
+                }
+                return ["content": [["type": "text", "text": responseText]], "isError": false]
+                
+            case "show_view":
+                guard let name = argsData?["name"] as? String else {
+                    return ["content": [["type": "text", "text": "Missing required parameter: name"]], "isError": true]
+                }
+                let data = argsData?["data"] as? [String: Any]
+                
+                // Validate data structure - must be raw data, not components
+                let validation = SDUIValidator.validateShowViewData(data)
+                if let errorMsg = validation.errorMessage {
+                    return ["content": [["type": "text", "text": errorMsg]], "isError": true]
+                }
+                
+                DispatchQueue.main.async { [weak self] in
+                    do {
+                        try ViewRegistry.shared.showView(name: name, data: data)
+                        self?.onShowView?(name, data)
+                    } catch {
+                        Log.mcp.error("show_view failed: \(error)")
+                    }
+                }
+                return ["content": [["type": "text", "text": "{\"showing\": \"\(name)\"}"]], "isError": false]
+                
+            case "update_view_data":
+                guard let data = argsData?["data"] as? [String: Any] else {
+                    return ["content": [["type": "text", "text": "Missing required parameter: data"]], "isError": true]
+                }
+                DispatchQueue.main.async {
+                    do {
+                        try ViewRegistry.shared.updateViewData(data: data)
+                    } catch {
+                        Log.mcp.error("update_view_data failed: \(error)")
+                    }
+                }
+                return ["content": [["type": "text", "text": "{\"updated\": true}"]], "isError": false]
+                
+            case "update_template":
+                guard let name = argsData?["name"] as? String,
+                      let _ = argsData?["patches"] as? [[String: Any]] else {
+                    return ["content": [["type": "text", "text": "Missing required parameters: name, patches"]], "isError": true]
+                }
+                // TODO: Implement patch application in ViewRegistry
+                return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"status\": \"not_yet_implemented\"}"]], "isError": false]
+                
+            case "pop_view":
+                DispatchQueue.main.async {
+                    _ = ViewRegistry.shared.popView()
+                }
+                return ["content": [["type": "text", "text": "{\"popped\": true}"]], "isError": false]
+                
+            case "invalidate_view":
+                guard let name = argsData?["name"] as? String else {
+                    return ["content": [["type": "text", "text": "Missing required parameter: name"]], "isError": true]
+                }
+                DispatchQueue.main.async {
+                    ViewRegistry.shared.invalidateView(name: name)
+                }
+                return ["content": [["type": "text", "text": "{\"invalidated\": \"\(name)\"}"]], "isError": false]
+                
+            case "invalidate_all_views":
+                DispatchQueue.main.async {
+                    ViewRegistry.shared.invalidateAllViews()
+                }
+                return ["content": [["type": "text", "text": "{\"invalidated\": \"all\"}"]], "isError": false]
+                
+            case "query_views":
+                // Query view registry state - use semaphore to avoid sync deadlock
+                let semaphore = DispatchSemaphore(value: 0)
+                var result: [String: Any] = [:]
+                
+                DispatchQueue.main.async {
+                    let registry = ViewRegistry.shared
+                    
+                    // If querying a specific view by name, return its cached data
+                    if let queryName = argsData?["name"] as? String {
+                        // Find data in navigation stack
+                        if let viewState = registry.navigationStack.first(where: { $0.viewName == queryName }) {
+                            let template = registry.templates[queryName]
+                            result = [
+                                "found": true,
+                                "viewName": queryName,
+                                "version": template?.version ?? "unknown",
+                                "cachedData": viewState.data,
+                                "inStack": true
+                            ] as [String: Any]
+                        } else if let template = registry.templates[queryName] {
+                            // Template exists but not in stack (no data cached)
+                            result = [
+                                "found": true,
+                                "viewName": queryName,
+                                "version": template.version,
+                                "inStack": false,
+                                "defaultData": template.parseDefaultData() ?? [:]
+                            ] as [String: Any]
+                        } else {
+                            result = ["found": false, "viewName": queryName] as [String: Any]
+                        }
+                    } else {
+                        // General query - list all templates and stack
+                        let templates = registry.templates.map { name, template in
+                            ["name": name, "version": template.version]
+                        }
+                        
+                        let stack = registry.navigationStack.map { state in
+                            [
+                                "viewName": state.viewName,
+                                "dataKeys": Array(state.data.keys)
+                            ] as [String: Any]
+                        }
+                        
+                        result = [
+                            "templates": templates,
+                            "navigationStack": stack,
+                            "currentView": registry.currentView?.viewName ?? NSNull(),
+                            "stackDepth": registry.navigationStack.count
+                        ] as [String: Any]
+                    }
+                    semaphore.signal()
+                }
+                
+                // Wait with timeout to prevent indefinite blocking
+                let waitResult = semaphore.wait(timeout: .now() + 5.0)
+                if waitResult == .timedOut {
+                    return ["content": [["type": "text", "text": "{\"error\": \"query_views timed out\"}"]], "isError": true]
+                }
+                
+                if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    return ["content": [["type": "text", "text": jsonString]], "isError": false]
+                }
+                return ["content": [["type": "text", "text": "{\"error\": \"serialization failed\"}"]], "isError": true]
+                
+            case "sqlite_query":
+                guard let sql = argsData?["sql"] as? String else {
+                    return ["content": [["type": "text", "text": "Missing required parameter: sql"]], "isError": true]
+                }
+                let params = argsData?["params"] as? [Any] ?? []
+                
+                do {
+                    let results = try DatabaseManager.shared.executeQuery(sql: sql, params: params)
+                    if let jsonData = try? JSONSerialization.data(withJSONObject: results),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        return ["content": [["type": "text", "text": jsonString]], "isError": false]
+                    }
+                    return ["content": [["type": "text", "text": "{\"rows\": \(results.count)}"]], "isError": false]
+                } catch {
+                    Log.mcp.error("sqlite_query failed: \(error)")
+                    return ["content": [["type": "text", "text": "Query error: \(error.localizedDescription)"]], "isError": true]
+                }
                 
             default:
                 return ["content": [["type": "text", "text": "Unknown tool: \(name)"]], "isError": true]

@@ -216,6 +216,14 @@ struct ComponentRouter: View {
         case "Toast":
             ToastComponent(props: props)
             
+        // SDUI Components
+        case "ForEach":
+            ForEachComponent(props: props, onAction: onAction)
+        case "If":
+            IfComponent(props: props, onAction: onAction)
+        case "View":
+            ViewRefComponent(props: props, onAction: onAction)
+            
         default:
             Text("Unknown: \(type)")
                 .foregroundColor(.red)
@@ -742,5 +750,166 @@ struct ToastComponent: View {
         case "error": return .red
         default: return .blue
         }
+    }
+}
+
+// MARK: - SDUI Components
+
+/// ForEach - Iterates over an array and renders children for each item
+struct ForEachComponent: View {
+    let props: [String: Any]
+    let onAction: (String, Any?) -> Void
+    
+    var body: some View {
+        ForEach(Array(resolvedItems.enumerated()), id: \.offset) { index, item in
+            // Render the template with item data available
+            // The TemplateRenderer has already expanded this for us
+            // so we just render whatever children we have
+            let renderedTemplate = renderWithItem(template: resolvedTemplate, item: item, index: index)
+            ComponentRouter(component: renderedTemplate, onAction: { action, data in
+                // Include item context in action
+                var enrichedData = (data as? [String: Any]) ?? [:]
+                enrichedData["_item"] = item
+                enrichedData["_index"] = index
+                onAction(action, enrichedData)
+            })
+        }
+    }
+    
+    private var resolvedItems: [[String: Any]] {
+        let items = props["items"] as? [[String: Any]] ?? []
+        if items.isEmpty {
+            Log.app.debug("ForEachComponent: items array is empty or not resolved")
+        }
+        return items
+    }
+    
+    private var resolvedTemplate: [String: Any] {
+        // Accept both "template" and "itemTemplate" for compatibility
+        return (props["template"] ?? props["itemTemplate"]) as? [String: Any] ?? [:]
+    }
+    
+    private func renderWithItem(template: [String: Any], item: [String: Any], index: Int) -> [String: Any] {
+        // If template already has resolved bindings, return as-is
+        // Otherwise, resolve bindings using TemplateRenderer
+        return TemplateRenderer.renderWithItem(template: template, data: item, item: item)
+    }
+}
+
+/// If - Conditional rendering based on a boolean condition
+struct IfComponent: View {
+    let props: [String: Any]
+    let onAction: (String, Any?) -> Void
+    
+    var body: some View {
+        let condition = evaluateCondition()
+        let thenContent = props["then"] as? [String: Any]
+        let elseContent = props["else"] as? [String: Any]
+        
+        if condition {
+            if let thenContent = thenContent {
+                ComponentRouter(component: thenContent, onAction: onAction)
+            }
+        } else {
+            if let elseContent = elseContent {
+                ComponentRouter(component: elseContent, onAction: onAction)
+            }
+        }
+    }
+    
+    private func evaluateCondition() -> Bool {
+        // Direct boolean
+        if let condition = props["condition"] as? Bool {
+            return condition
+        }
+        
+        // String truthy check
+        if let condition = props["condition"] as? String {
+            // Check for common truthy/falsy values
+            let lower = condition.lowercased()
+            if lower == "true" || lower == "yes" || lower == "1" {
+                return true
+            }
+            if lower == "false" || lower == "no" || lower == "0" || condition.isEmpty {
+                return false
+            }
+            // Non-empty string is truthy
+            return !condition.isEmpty
+        }
+        
+        // Number truthy check
+        if let condition = props["condition"] as? Int {
+            return condition != 0
+        }
+        if let condition = props["condition"] as? Double {
+            return condition != 0
+        }
+        
+        // Array/dict not empty check
+        if let condition = props["condition"] as? [Any] {
+            return !condition.isEmpty
+        }
+        if let condition = props["condition"] as? [String: Any] {
+            return !condition.isEmpty
+        }
+        
+        // NSNull or nil is falsy
+        if props["condition"] is NSNull {
+            return false
+        }
+        
+        // Default: check if condition key exists
+        return props["condition"] != nil
+    }
+}
+
+/// View - Reference to a registered view in ViewRegistry
+struct ViewRefComponent: View {
+    let props: [String: Any]
+    let onAction: (String, Any?) -> Void
+    
+    var body: some View {
+        let viewName = props["name"] as? String ?? ""
+        let data = props["data"] as? [String: Any] ?? [:]
+        
+        // Render inline by fetching from ViewRegistry
+        NestedViewRenderer(viewName: viewName, data: data, onAction: onAction)
+    }
+}
+
+/// Helper view to render nested views from ViewRegistry
+struct NestedViewRenderer: View {
+    let viewName: String
+    let data: [String: Any]
+    let onAction: (String, Any?) -> Void
+    
+    var body: some View {
+        // Get template from registry and render it
+        let components = renderNestedView()
+        
+        ForEach(Array(components.enumerated()), id: \.offset) { _, component in
+            ComponentRouter(component: component, onAction: onAction)
+        }
+    }
+    
+    private func renderNestedView() -> [[String: Any]] {
+        // Access ViewRegistry on main actor
+        // Since we're already on main thread in SwiftUI view, this is safe
+        let registry = ViewRegistry.shared
+        
+        guard let template = registry.templates[viewName],
+              let templateDict = template.parseTemplate() else {
+            return [["type": "Text", "props": ["text": "View not found: \(viewName)"]]]
+        }
+        
+        // Merge default data with provided data
+        var mergedData = template.parseDefaultData() ?? [:]
+        for (key, value) in data {
+            mergedData[key] = value
+        }
+        
+        // Render with data
+        let rendered = TemplateRenderer.render(template: templateDict, data: mergedData)
+        return [rendered]
     }
 }

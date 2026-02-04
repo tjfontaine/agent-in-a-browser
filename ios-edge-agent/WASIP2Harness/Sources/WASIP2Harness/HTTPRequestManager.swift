@@ -99,6 +99,12 @@ public final class HTTPRequestManager: NSObject, HTTPRequestPerforming, @uncheck
                 
                 Log.http.debug("Response: status=\(httpResponse.statusCode), body=\(data?.count ?? 0) bytes")
                 
+                // Log error response bodies for debugging
+                if httpResponse.statusCode >= 400, let data = data {
+                    let bodyStr = String(data: data, encoding: .utf8) ?? "binary data"
+                    Log.http.error("Error response body: \(bodyStr)")
+                }
+                
                 var headers: [(String, String)] = []
                 for (key, value) in httpResponse.allHeaderFields {
                     if let keyStr = key as? String, let valueStr = value as? String {

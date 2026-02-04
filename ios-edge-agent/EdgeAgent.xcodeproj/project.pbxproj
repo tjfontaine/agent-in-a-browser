@@ -7,9 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */; };
 		299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */; };
+		51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */; };
+		67748A744756A00A9DE44D71 /* EventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FFE639729C170C2695401F8 /* EventHandler.swift */; };
 		9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB72373C65C1096DC1AE15 /* Log.swift */; };
 		9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */; };
+		A029D9C7EDDD0FB353B49E8A /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */; };
 		A1000001201A0001 /* EdgeAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000001101A0001 /* EdgeAgentApp.swift */; };
 		A1000002201A0001 /* ConfigManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002101A0001 /* ConfigManager.swift */; };
 		A1000003201A0001 /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003101A0001 /* AgentEvent.swift */; };
@@ -44,6 +48,8 @@
 
 /* Begin PBXFileReference section */
 		19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GeneratedWASMImports.swift; sourceTree = "<group>"; };
+		4FFE639729C170C2695401F8 /* EventHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
+		5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		A1000000101A0001 /* EdgeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EdgeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000001101A0001 /* EdgeAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAgentApp.swift; sourceTree = "<group>"; };
 		A1000002101A0001 /* ConfigManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManager.swift; sourceTree = "<group>"; };
@@ -58,10 +64,12 @@
 		A2000000101A0001 /* EdgeAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EdgeAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001101A0001 /* ConfigManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManagerTests.swift; sourceTree = "<group>"; };
 		A2000002101A0001 /* AgentEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventTests.swift; sourceTree = "<group>"; };
+		B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewRegistry.swift; sourceTree = "<group>"; };
 		BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeLoaderImplTests.swift; sourceTree = "<group>"; };
 		C1000001101A0001 /* NativeAgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentHost.swift; sourceTree = "<group>"; };
 		C3EB72373C65C1096DC1AE15 /* Log.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Utilities/Log.swift; sourceTree = "<group>"; };
 		DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASIImportRegistry.swift; sourceTree = "<group>"; };
+		E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
 		F1000001101A0001 /* MCPSignatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSignatures.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -144,6 +152,10 @@
 				A1000005101A0001 /* SettingsView.swift */,
 				A1000010101A0001 /* MealMindView.swift */,
 				A1000011101A0001 /* ComponentLibrary.swift */,
+				B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */,
+				E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */,
+				4FFE639729C170C2695401F8 /* EventHandler.swift */,
+				5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -218,6 +230,7 @@
 				K1000001101A0001 /* WASIP2Harness */,
 				K2000001101A0001 /* WASIShims */,
 				K3000001101A0001 /* MCPServerKit */,
+				FA45E1BC6223511421635B5C /* GRDB */,
 			);
 			productName = EdgeAgent;
 			productReference = A1000000101A0001 /* EdgeAgent.app */;
@@ -275,6 +288,7 @@
 				L1000000101A0001 /* XCLocalSwiftPackageReference "WASIP2Harness" */,
 				L2000000101A0001 /* XCLocalSwiftPackageReference "WASIShims" */,
 				L3000000101A0001 /* XCLocalSwiftPackageReference "MCPServerKit" */,
+				2BCF4831B0503D704A0CAFE2 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 			);
 			productRefGroup = A1000000021A0001 /* Products */;
 			projectDirPath = "";
@@ -322,6 +336,10 @@
 				9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */,
 				9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */,
 				299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */,
+				26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */,
+				51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */,
+				67748A744756A00A9DE44D71 /* EventHandler.swift in Sources */,
+				A029D9C7EDDD0FB353B49E8A /* DatabaseManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -589,7 +607,30 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		L1000000101A0001 /* XCLocalSwiftPackageReference "WASIP2Harness" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = WASIP2Harness;
+		};
+		L2000000101A0001 /* XCLocalSwiftPackageReference "WASIShims" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = WASIShims;
+		};
+		L3000000101A0001 /* XCLocalSwiftPackageReference "MCPServerKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = MCPServerKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
+		2BCF4831B0503D704A0CAFE2 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
 		B1000000101A0001 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
@@ -608,21 +649,6 @@
 		};
 /* End XCRemoteSwiftPackageReference section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		L1000000101A0001 /* XCLocalSwiftPackageReference "WASIP2Harness" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = WASIP2Harness;
-		};
-		L2000000101A0001 /* XCLocalSwiftPackageReference "WASIShims" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = WASIShims;
-		};
-		L3000000101A0001 /* XCLocalSwiftPackageReference "MCPServerKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = MCPServerKit;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		B1000001101A0001 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -638,6 +664,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B2000000101A0001 /* XCRemoteSwiftPackageReference "WasmKit" */;
 			productName = WASI;
+		};
+		FA45E1BC6223511421635B5C /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2BCF4831B0503D704A0CAFE2 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
 		};
 		K1000001101A0001 /* WASIP2Harness */ = {
 			isa = XCSwiftPackageProductDependency;

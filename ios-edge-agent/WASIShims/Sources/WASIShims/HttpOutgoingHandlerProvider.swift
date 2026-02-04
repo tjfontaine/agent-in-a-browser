@@ -137,6 +137,12 @@ public struct HttpOutgoingHandlerProvider: WASIProvider {
                     
                     Log.http.debug("Response: status=\(httpResponse.statusCode), body=\(data?.count ?? 0) bytes")
                     
+                    // Log error response bodies for debugging API errors
+                    if httpResponse.statusCode >= 400, let data = data {
+                        let bodyStr = String(data: data, encoding: .utf8) ?? "binary"
+                        Log.http.error("Error response body: \(bodyStr)")
+                    }
+                    
                     var headerPairs: [(String, String)] = []
                     for (key, value) in httpResponse.allHeaderFields {
                         if let k = key as? String, let v = value as? String {

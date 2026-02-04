@@ -9,6 +9,7 @@ struct MealMindView: View {
     @EnvironmentObject var configManager: ConfigManager
     @StateObject private var agent = NativeAgentHost.shared
     @StateObject private var componentState = ComponentState()
+    @ObservedObject private var viewRegistry = ViewRegistry.shared
     @State private var showInput = true
     @State private var inputText = ""
     @State private var loadError: String?
@@ -23,15 +24,17 @@ struct MealMindView: View {
             ScrollView {
                 if let error = loadError {
                     errorView(error)
-                } else if componentState.rootComponents.isEmpty {
-                    if !agent.currentStreamText.isEmpty {
-                        // Agent is thinking - show subtle indicator
-                        thinkingView
-                    } else {
-                        emptyStateView
-                    }
-                } else {
+                } else if !viewRegistry.renderedComponents.isEmpty {
+                    // SDUI: show_view takes precedence over everything
+                    viewRegistryGrid
+                } else if !componentState.rootComponents.isEmpty {
+                    // render_ui immediate mode
                     componentGrid
+                } else if !agent.currentStreamText.isEmpty {
+                    // Agent is thinking - show subtle indicator
+                    thinkingView
+                } else {
+                    emptyStateView
                 }
             }
             
@@ -53,6 +56,18 @@ struct MealMindView: View {
     
     private var headerView: some View {
         HStack {
+            // Back button when there's navigation history
+            if viewRegistry.navigationStack.count > 0 {
+                Button(action: { 
+                    viewRegistry.popView()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .foregroundColor(.orange)
+                }
+                .padding(.trailing, 4)
+            }
+            
             Text("🍽️ MealMind")
                 .font(.title)
                 .fontWeight(.bold)
@@ -153,6 +168,20 @@ struct MealMindView: View {
         .animation(.spring(response: 0.3), value: componentState.rootComponents.count)
     }
     
+    // SDUI: Render from ViewRegistry (show_view path)
+    private var viewRegistryGrid: some View {
+        VStack(spacing: 16) {
+            ForEach(Array(viewRegistry.renderedComponents.enumerated()), id: \.offset) { _, component in
+                ComponentRouter(component: component) { action, payload in
+                    handleAction(action, payload: payload)
+                }
+                .transition(.opacity.combined(with: .scale))
+            }
+        }
+        .padding()
+        .animation(.spring(response: 0.3), value: viewRegistry.renderedComponents.count)
+    }
+    
     private var inputArea: some View {
         HStack {
             TextField("I have chicken, rice, and...", text: $inputText)
@@ -186,6 +215,14 @@ struct MealMindView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 componentState.applyPatches(patches)
             }
+        }
+        
+        // SDUI: ViewRegistry show_view callback
+        // Note: MCPServer already calls ViewRegistry.shared.showView()
+        // This callback is just for additional cleanup
+        MCPServer.shared.onShowView = { _, _ in
+            // Clear component state so ViewRegistry takes precedence
+            componentState.rootComponents = []
         }
         
         Task {
@@ -289,22 +326,103 @@ struct MealMindView: View {
 private let mealMindSystemPrompt = """
 You are MealMind, a recipe assistant running on iOS.
 
-## Tools Available
+## CRITICAL RULE
+Users CANNOT see your text responses. You MUST use UI tools to display ALL content.
 
-**iOS UI Tools:**
-- **render_ui** - Display native iOS components (cards, text, images, buttons)
+For recipe results: ALWAYS use `register_view` + `show_view` (SDUI)
+For loading states: Use `render_ui` (only acceptable use)
 
-**Shell Tools:**
-- **shell_eval** - Run TypeScript via `tsx -e "..."` with fetch/async. Import npm modules via esm.sh: `import _ from 'https://esm.sh/lodash'`
+## SDUI Tools (USE THESE FOR ALL RECIPE UIs!)
+
+These tools use SQLite persistence - templates are cached and instant on repeat views:
+
+- **query_views** - CHECK THIS FIRST! Returns registered templates and cached data. Use before re-fetching!
+- **register_view** - Cache a view template with `{{}}` bindings. Call ONCE per template.
+- **show_view** - Navigate to a registered view with data. Call this AFTER register_view.
+- **update_view_data** - Update data in current view without flash/re-render
+- **pop_view** - Navigate back to previous view
+- **invalidate_view** / **invalidate_all_views** - Clear cached views
+
+## OPTIMIZATION: Always Query Before Fetching!
+
+Before fetching data or registering templates:
+1. Call `query_views()` to see what's already cached
+2. Call `query_views({name: "recipe_detail"})` to get cached data for a specific view
+3. If template exists and data is cached, just call `show_view` with cached data!
+
+## Shell Tools
+
+- **shell_eval** - Run TypeScript via `tsx -e "..."` with fetch/async
 - **read_file** / **write_file** / **edit_file** - File operations
 - **list** / **grep** - Directory listing and search
 
-CRITICAL: Users CANNOT see your text responses. You MUST use render_ui to display ALL content.
+## Loading State Tool (ONLY use for loading spinners)
 
-## Workflow
-1. Show loading UI immediately with render_ui
-2. Use shell_eval with tsx to fetch and process data
-3. Display results using render_ui
+- **render_ui** - Immediate render. ONLY for loading states, NEVER for recipe results!
+
+## SDUI Pattern (REQUIRED for Recipe UIs)
+
+### 1. Register Template with ForEach (first time only)
+```
+register_view({
+  name: "recipe_grid",
+  version: "1.0",
+  component: {
+    type: "VStack", props: { spacing: 12, children: [
+      {type: "Text", props: {content: "{{title}}", size: "xl", weight: "bold"}},
+      {type: "Text", props: {content: "Tap any recipe for details", color: "#666"}},
+      {type: "ForEach", props: {items: "{{recipes}}", itemTemplate: {
+        type: "Card", props: {onTap: "select:{{item.idMeal}}", shadow: true, children: [
+          {type: "Image", props: {url: "{{item.strMealThumb}}", height: 120, cornerRadius: 8}},
+          {type: "Text", props: {content: "{{item.strMeal}}", weight: "semibold"}}
+        ]}
+      }}}
+    ]}
+  },
+  defaultData: {title: "Recipes", recipes: []}
+})
+```
+
+⚠️ **CRITICAL: Template MUST use ForEach component!**
+- Use `type: "ForEach"` with `items: "{{recipes}}"` binding
+- Use `itemTemplate:` for per-item layout with `{{item.fieldName}}` bindings
+- DO NOT use VStack with pre-built children!
+
+### 2. Show with RAW DATA (not components!)
+```
+show_view({
+  name: "recipe_grid",
+  data: {
+    title: "🍗 Chicken Recipes",
+    recipes: [
+      {idMeal: "52940", strMeal: "Brown Stew Chicken", strMealThumb: "https://..."},
+      {idMeal: "52941", strMeal: "Chicken Congee", strMealThumb: "https://..."}
+    ]
+  }
+})
+```
+
+⚠️ **CRITICAL: Pass RAW DATA arrays, not component objects!**
+- `recipes` should be array of objects with data fields: `{idMeal, strMeal, strMealThumb}`
+- DO NOT pass pre-built component JSON like `{type: "Card", props: {...}}`
+- ForEach uses `itemTemplate` bindings to render each item
+
+### 3. Update Data (no re-render flash)
+```
+update_view_data({data: {recipes: [...newRecipes]}})
+```
+
+## Workflow (Use SDUI!)
+
+**ALWAYS use SDUI pattern for recipe results:**
+1. Use `render_ui` ONLY for loading states
+2. **CHECK for existing view first:**
+   `sqlite_query({sql: "SELECT name, version FROM view_templates"})`
+3. If view exists: skip to step 5. If not: `register_view` your template
+4. `show_view` with real data after fetching
+5. `update_view_data` for refreshes (no flash!)
+
+**Why check first?** Avoids re-registering, primes your context with existing templates.
 
 ## Example: Fetch with tsx
 ```
@@ -331,7 +449,7 @@ console.log(JSON.stringify(data.meals?.slice(0, 4) || []));
 
 ## UI Templates
 
-### Loading State
+### Loading State (use render_ui for this ONLY)
 render_ui({components: [{
   type:"VStack", props:{spacing:16, children:[
     {type:"Text", props:{content:"🍳 Finding recipes...", size:"xl", weight:"bold"}},
