@@ -7,19 +7,26 @@
 import WasmKit
 
 /// Represents a single WASI import declaration
-struct WASIImportDeclaration: Hashable {
-    let module: String
-    let name: String
-    let parameters: [ValueType]
-    let results: [ValueType]
+public struct WASIImportDeclaration: Hashable {
+    public let module: String
+    public let name: String
+    public let parameters: [ValueType]
+    public let results: [ValueType]
     
-    var description: String {
+    public init(module: String, name: String, parameters: [ValueType], results: [ValueType]) {
+        self.module = module
+        self.name = name
+        self.parameters = parameters
+        self.results = results
+    }
+    
+    public var description: String {
         "\(module).\(name)"
     }
 }
 
 /// Protocol for type-safe WASI providers that declare their imports
-protocol WASIProvider {
+public protocol WASIProvider {
     /// The WASI module(s) this provider handles
     static var moduleName: String { get }
     
@@ -32,15 +39,15 @@ protocol WASIProvider {
 }
 
 /// Default implementation for providers that don't yet declare imports
-extension WASIProvider {
+public extension WASIProvider {
     var declaredImports: [WASIImportDeclaration] { [] }
 }
 
 /// Utility for validating provider coverage against WASM module requirements
-struct WASIProviderValidator {
+public struct WASIProviderValidator {
     
     /// Check if all required imports from a WASM module are covered by providers
-    static func validate(
+    public static func validate(
         module: Module,
         providers: [WASIProvider]
     ) -> ValidationResult {
@@ -66,16 +73,16 @@ struct WASIProviderValidator {
         }
     }
     
-    enum ValidationResult {
+    public enum ValidationResult {
         case success
         case missingImports([String])
         
-        var isValid: Bool {
+        public var isValid: Bool {
             if case .success = self { return true }
             return false
         }
         
-        var missingList: [String] {
+        public var missingList: [String] {
             if case .missingImports(let list) = self { return list }
             return []
         }
@@ -83,7 +90,7 @@ struct WASIProviderValidator {
 }
 
 /// Extension to make validation easy to use
-extension Array where Element == WASIProvider {
+public extension Array where Element == WASIProvider {
     func validate(against module: Module) -> WASIProviderValidator.ValidationResult {
         WASIProviderValidator.validate(module: module, providers: self)
     }

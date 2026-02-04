@@ -4,14 +4,15 @@
 /// Uses MCPSignatures constants for ABI-correct function signatures.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for CLI interfaces.
-struct CliProvider: WASIProvider {
-    static var moduleName: String { "wasi:cli" }
+public struct CliProvider: WASIProvider {
+    public static var moduleName: String { "wasi:cli" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:cli/stderr@0.2.4", name: "get-stderr", parameters: [], results: [.i32]),
             WASIImportDeclaration(module: "wasi:cli/stdout@0.2.4", name: "get-stdout", parameters: [], results: [.i32]),
@@ -27,11 +28,11 @@ struct CliProvider: WASIProvider {
     private typealias TermOutputSig = MCPSignatures.cli_terminal_output_0_2_9
     private typealias TermStdoutSig = MCPSignatures.cli_terminal_stdout_0_2_9
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         
         // wasi:cli/stderr@0.2.4

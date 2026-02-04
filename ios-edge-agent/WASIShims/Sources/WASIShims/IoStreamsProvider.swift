@@ -5,13 +5,14 @@
 
 import WasmKit
 import OSLog
+import WASIP2Harness
 
 /// Provides type-safe WASI imports for IO streams interface.
-struct IoStreamsProvider: WASIProvider {
-    static var moduleName: String { "wasi:io/streams" }
+public struct IoStreamsProvider: WASIProvider {
+    public static var moduleName: String { "wasi:io/streams" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             // 0.2.9 input streams
             WASIImportDeclaration(module: "wasi:io/streams@0.2.9", name: "[method]input-stream.subscribe", parameters: [.i32], results: [.i32]),
@@ -40,11 +41,11 @@ struct IoStreamsProvider: WASIProvider {
     private typealias Sig_0_2_0 = MCPSignatures.io_streams_0_2_0
     private typealias Sig_0_2_4 = MCPSignatures.io_streams_0_2_4
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         registerInputStreams(&imports, store: store)
         registerOutputStreams(&imports, store: store)
         registerResourceDrops(&imports, store: store)

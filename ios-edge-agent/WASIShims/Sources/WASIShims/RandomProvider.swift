@@ -4,14 +4,17 @@
 /// Uses MCPSignatures constants for ABI-correct function signatures.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for random interfaces.
-struct RandomProvider: WASIProvider {
-    static var moduleName: String { "wasi:random" }
+public struct RandomProvider: WASIProvider {
+    public static var moduleName: String { "wasi:random" }
+    
+    public init() {}
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:random/insecure-seed@0.2.4", name: "insecure-seed", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:random/random@0.2.9", name: "get-random-u64", parameters: [], results: [.i64]),
@@ -22,7 +25,7 @@ struct RandomProvider: WASIProvider {
     private typealias InsecureSeedSig = MCPSignatures.random_insecure_seed_0_2_4
     private typealias RandomSig = MCPSignatures.random_random_0_2_9
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         
         // wasi:random/insecure-seed@0.2.4
         let insecureModule = "wasi:random/insecure-seed@0.2.4"

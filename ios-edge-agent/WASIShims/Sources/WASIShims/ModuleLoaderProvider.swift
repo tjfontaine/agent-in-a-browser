@@ -5,13 +5,14 @@
 /// This ensures compile-time type safety matching the actual WASM binary.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for the module-loader interface.
 /// Uses signature constants from MCPSignatures.swift (generated from WASM binary).
-struct ModuleLoaderProvider: WASIProvider {
+public struct ModuleLoaderProvider: WASIProvider {
     
-    static var moduleName: String { "mcp:module-loader/loader@0.1.0" }
+    public static var moduleName: String { "mcp:module-loader/loader@0.1.0" }
     
     private let loader: NativeLoaderImpl
     private let module = "mcp:module-loader/loader@0.1.0"
@@ -20,7 +21,7 @@ struct ModuleLoaderProvider: WASIProvider {
     private typealias Sig = MCPSignatures.module_loader_loader_0_1_0
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         let m = Self.moduleName
         return [
             WASIImportDeclaration(module: m, name: "get-lazy-module", parameters: Sig.get_lazy_module.parameters, results: Sig.get_lazy_module.results),
@@ -41,13 +42,13 @@ struct ModuleLoaderProvider: WASIProvider {
         ]
     }
     
-    init(loader: NativeLoaderImpl) {
+    public init(loader: NativeLoaderImpl) {
         self.loader = loader
     }
     
     /// Register all module-loader imports into the given Imports collection.
     /// Each function uses MCPSignatures for correct parameter/result types.
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         registerFunctions(&imports, store: store)
         registerResourceMethods(&imports, store: store)
     }

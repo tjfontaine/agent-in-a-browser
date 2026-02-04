@@ -5,13 +5,14 @@
 
 import WasmKit
 import OSLog
+import WASIP2Harness
 
 /// Provides type-safe WASI imports for IO poll interface.
-struct IoPollProvider: WASIProvider {
-    static var moduleName: String { "wasi:io/poll" }
+public struct IoPollProvider: WASIProvider {
+    public static var moduleName: String { "wasi:io/poll" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:io/poll@0.2.9", name: "[method]pollable.block", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:io/poll@0.2.9", name: "[method]pollable.ready", parameters: [.i32], results: [.i32]),
@@ -27,11 +28,11 @@ struct IoPollProvider: WASIProvider {
     private typealias Sig = MCPSignatures.io_poll_0_2_9
     private typealias Sig_0_2_0 = MCPSignatures.io_poll_0_2_0
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         
         let module = "wasi:io/poll@0.2.9"

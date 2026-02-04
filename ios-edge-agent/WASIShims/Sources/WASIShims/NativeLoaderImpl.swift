@@ -3,11 +3,12 @@
 
 import Foundation
 import OSLog
+import WASIP2Harness
 
 /// Native iOS implementation of the module loader interface.
 /// Thread-safe via NSLock - can be called from any thread.
 /// WASMLazyProcess instances handle their own internal thread safety.
-final class NativeLoaderImpl: @unchecked Sendable {
+public final class NativeLoaderImpl: @unchecked Sendable {
     
     /// Lock for thread-safe access to processes dictionary
     private let lock = NSLock()
@@ -19,7 +20,7 @@ final class NativeLoaderImpl: @unchecked Sendable {
     // Shared resource registry for pollables (Sendable via @unchecked)
     private let resources: ResourceRegistry
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     

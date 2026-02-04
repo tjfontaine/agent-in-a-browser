@@ -1,18 +1,19 @@
 import Foundation
 import WasmKit
+import WASIP2Harness
 import WasmParser
 import OSLog
 
 /// Represents a spawned WASM command process
 /// Manages stdin/stdout/stderr streams and execution lifecycle
 /// Thread-safe: accessed from both MCP WASM thread and background execution task
-final class WASMLazyProcess: @unchecked Sendable {
+public final class WASMLazyProcess: NSObject, LazyProcessProtocol, @unchecked Sendable {
     
     /// Lock for thread-safe access to mutable state
     private let lock = NSLock()
     
     /// Unique handle ID for this process
-    let handle: Int32
+    public let handle: Int32
     
     /// Command and arguments
     let command: String
@@ -54,10 +55,18 @@ final class WASMLazyProcess: @unchecked Sendable {
     // MARK: - Component Model Stream Resources
     
     /// Stream resource types for Component Model shell command interface
-    enum StreamResource {
+    enum StreamResource: CustomStringConvertible {
         case stdin
         case stdout
         case stderr
+        
+        var description: String {
+            switch self {
+            case .stdin: return "stdin"
+            case .stdout: return "stdout"
+            case .stderr: return "stderr"
+            }
+        }
     }
     
     /// Resource handle table for stream handles
@@ -92,6 +101,7 @@ final class WASMLazyProcess: @unchecked Sendable {
         self.args = args
         self.env = env
         self.cwd = cwd
+        super.init()
         Log.mcp.debug("WASMLazyProcess[\(handle)]: Created for command '\(command)' args=\(args)")
         
         // Start loading the module immediately (don't wait for closeStdin)
@@ -106,11 +116,11 @@ final class WASMLazyProcess: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard !stdinClosed else {
-            Log.mcp.warning("WASMLazyProcess[\(handle)]: writeStdin called after close")
+            Log.mcp.warning("WASMLazyProcess[\(self.handle)]: writeStdin called after close")
             return
         }
         stdinBuffer.append(contentsOf: data)
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: writeStdin \(data.count) bytes")
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: writeStdin \(data.count) bytes")
     }
     
     /// Close stdin (signals EOF to the running execution)
@@ -119,7 +129,7 @@ final class WASMLazyProcess: @unchecked Sendable {
         defer { lock.unlock() }
         guard !stdinClosed else { return }
         stdinClosed = true
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: closeStdin - \(stdinBuffer.count) bytes buffered")
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: closeStdin - \(self.stdinBuffer.count) bytes buffered")
         // The execute() task is polling for stdinClosed and will proceed
     }
     
@@ -160,7 +170,7 @@ final class WASMLazyProcess: @unchecked Sendable {
     }
     
     /// Check if ready for reading
-    func isReady() -> Bool {
+    public func isReady() -> Bool {
         lock.lock()
         defer { lock.unlock() }
         return isReadyFlag || !stdoutBuffer.isEmpty || !stderrBuffer.isEmpty
@@ -172,7 +182,7 @@ final class WASMLazyProcess: @unchecked Sendable {
         executionTask?.cancel()
         state = .completed(exitCode: -1)
         lock.unlock()
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: Terminated")
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: Terminated")
     }
     
     // MARK: - Execution
@@ -239,7 +249,7 @@ final class WASMLazyProcess: @unchecked Sendable {
     }
     
     private func execute() async {
-        Log.mcp.info("WASMLazyProcess[\(handle)]: Loading module for '\(command)' \(args)")
+        Log.mcp.info("WASMLazyProcess[\(self.handle)]: Loading module for '\(self.command)' \(self.args)")
         
         do {
             // Get the module for this command (use thread-safe static method)
@@ -254,7 +264,7 @@ final class WASMLazyProcess: @unchecked Sendable {
             
             // Load the module (synchronous, thread-safe)
             let module = try LazyModuleRegistry.shared.loadModule(named: moduleName)
-            Log.mcp.info("WASMLazyProcess[\(handle)]: Module loaded, waiting for stdin")
+            Log.mcp.info("WASMLazyProcess[\(self.handle)]: Module loaded, waiting for stdin")
             
             // Create runtime
             let engine = Engine()
@@ -299,7 +309,7 @@ final class WASMLazyProcess: @unchecked Sendable {
             let validationResult = WASIProviderValidator.validate(module: module, providers: providers)
             if !validationResult.isValid {
                 let missingImports = validationResult.missingList.joined(separator: ", ")
-                Log.mcp.error("WASMLazyProcess[\(handle)]: FATAL - Missing WASI imports: \(missingImports)")
+                Log.mcp.error("WASMLazyProcess[\(self.handle)]: FATAL - Missing WASI imports: \(missingImports)")
                 throw ModuleLoadError.loadFailed("Missing WASI imports: \(missingImports)")
             }
             
@@ -312,7 +322,7 @@ final class WASMLazyProcess: @unchecked Sendable {
             
             // Module is now loaded and ready to receive stdin
             markReady()
-            Log.mcp.info("WASMLazyProcess[\(handle)]: Ready, waiting for stdin to close")
+            Log.mcp.info("WASMLazyProcess[\(self.handle)]: Ready, waiting for stdin to close")
             
             // Wait for stdin to be closed before executing
             // Poll with a short sleep to avoid busy-waiting
@@ -320,7 +330,7 @@ final class WASMLazyProcess: @unchecked Sendable {
                 try await Task.sleep(nanoseconds: 10_000_000) // 10ms
             }
             
-            Log.mcp.info("WASMLazyProcess[\(handle)]: Stdin closed, executing with \(consumeStdinBuffer().count) bytes of input")
+            Log.mcp.info("WASMLazyProcess[\(self.handle)]: Stdin closed, executing with \(self.consumeStdinBuffer().count) bytes of input")
             
             // Try to find and call the run export
             // Check for various entry point styles
@@ -337,7 +347,7 @@ final class WASMLazyProcess: @unchecked Sendable {
             
             if let funcName = entryFunctionName,
                let entryFunc = instance.exports[function: funcName] {
-                Log.mcp.info("WASMLazyProcess[\(handle)]: Calling entry point '\(funcName)'")
+                Log.mcp.info("WASMLazyProcess[\(self.handle)]: Calling entry point '\(funcName)'")
                 
                 // shell:unix/command@0.1.0#run expects (command_ptr, command_len, args_ptr, args_len, ret_ptr)
                 // For now, try with no args for simple exports
@@ -356,12 +366,12 @@ final class WASMLazyProcess: @unchecked Sendable {
                     }
                 }
             } else {
-                Log.mcp.error("WASMLazyProcess[\(handle)]: No entry point found. Available exports: \(listExports(instance))")
+                Log.mcp.error("WASMLazyProcess[\(self.handle)]: No entry point found. Available exports: \(self.listExports(instance))")
                 updateState(.failed(ModuleLoadError.loadFailed("No entry point found")))
             }
             
         } catch {
-            Log.mcp.error("WASMLazyProcess[\(handle)]: Execution failed: \(error)")
+            Log.mcp.error("WASMLazyProcess[\(self.handle)]: Execution failed: \(error)")
             appendToStderr(Array("Error: \(error.localizedDescription)\n".utf8))
             updateState(.failed(error))
             markReady()  // Mark ready even on failure so Rust doesn't wait forever
@@ -370,7 +380,7 @@ final class WASMLazyProcess: @unchecked Sendable {
     
     /// Handle shell built-in commands
     private func handleBuiltinCommand() -> Int32 {
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: Handling builtin '\(command)'")
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: Handling builtin '\(self.command)'")
         
         switch command {
         case "echo":
@@ -524,7 +534,7 @@ final class WASMLazyProcess: @unchecked Sendable {
         guard let memory = instance.exports[memory: "memory"],
               let realloc = instance.exports[function: "cabi_realloc"],
               let resources = self.resources else {
-            Log.mcp.error("WASMLazyProcess[\(handle)]: Missing memory, cabi_realloc, or resources for shell command")
+            Log.mcp.error("WASMLazyProcess[\(self.handle)]: Missing memory, cabi_realloc, or resources for shell command")
             return 1
         }
         
@@ -623,7 +633,7 @@ final class WASMLazyProcess: @unchecked Sendable {
         }
         let stderrHandle = resources.register(stderrStream)
         
-        Log.mcp.debug("WASMLazyProcess[\(handle)]: Calling shell command '\(command)' with \(args.count) args, streams: in=\(stdinHandle) out=\(stdoutHandle) err=\(stderrHandle)")
+        Log.mcp.debug("WASMLazyProcess[\(self.handle)]: Calling shell command '\(self.command)' with \(self.args.count) args, streams: in=\(stdinHandle) out=\(stdoutHandle) err=\(stderrHandle)")
         
         // 6. Call the export with all 11 parameters
         let result = try function([
@@ -646,7 +656,7 @@ final class WASMLazyProcess: @unchecked Sendable {
             exitCode = Int32(bitPattern: code)
         }
         
-        Log.mcp.info("WASMLazyProcess[\(handle)]: Shell command returned exit code \(exitCode)")
+        Log.mcp.info("WASMLazyProcess[\(self.handle)]: Shell command returned exit code \(exitCode)")
         
         return exitCode
     }

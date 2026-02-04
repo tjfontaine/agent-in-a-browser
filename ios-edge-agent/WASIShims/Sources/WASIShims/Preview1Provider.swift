@@ -2,15 +2,16 @@
 /// Type-safe WASI import provider for wasi_snapshot_preview1
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for preview1 interface.
 /// This wraps SharedWASIImports.registerPreview1 to integrate with the provider validation system.
-struct Preview1Provider: WASIProvider {
-    static var moduleName: String { "wasi_snapshot_preview1" }
+public struct Preview1Provider: WASIProvider {
+    public static var moduleName: String { "wasi_snapshot_preview1" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             // Core environment
             WASIImportDeclaration(module: "wasi_snapshot_preview1", name: "environ_get", parameters: [.i32, .i32], results: [.i32]),
@@ -47,12 +48,12 @@ struct Preview1Provider: WASIProvider {
     private let resources: ResourceRegistry
     private let filesystem: SandboxFilesystem?
     
-    init(resources: ResourceRegistry, filesystem: SandboxFilesystem? = nil) {
+    public init(resources: ResourceRegistry, filesystem: SandboxFilesystem? = nil) {
         self.resources = resources
         self.filesystem = filesystem
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         // Delegate to SharedWASIImports for the actual implementation
         SharedWASIImports.registerPreview1(&imports, store: store, resources: resources, filesystem: filesystem)
     }

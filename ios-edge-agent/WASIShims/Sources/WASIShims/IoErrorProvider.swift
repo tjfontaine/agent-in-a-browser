@@ -5,13 +5,14 @@
 
 import WasmKit
 import OSLog
+import WASIP2Harness
 
 /// Provides type-safe WASI imports for IO error interface.
-struct IoErrorProvider: WASIProvider {
-    static var moduleName: String { "wasi:io/error" }
+public struct IoErrorProvider: WASIProvider {
+    public static var moduleName: String { "wasi:io/error" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:io/error@0.2.9", name: "[resource-drop]error", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:io/error@0.2.4", name: "[resource-drop]error", parameters: [.i32], results: []),
@@ -24,11 +25,11 @@ struct IoErrorProvider: WASIProvider {
     private typealias Sig = MCPSignatures.io_error_0_2_9
     private typealias Sig_0_2_4 = MCPSignatures.io_error_0_2_4
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         
         // wasi:io/error@0.2.9

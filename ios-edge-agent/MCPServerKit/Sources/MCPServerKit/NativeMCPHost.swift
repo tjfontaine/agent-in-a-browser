@@ -3,19 +3,24 @@ import WasmKit
 import WasmParser
 import OSLog
 import Network
+import WASIP2Harness
+import WASIShims
 
-/// Native WASM runtime for the MCP shell server using WasmKit.
-/// This loads ts-runtime-mcp.wasm and provides shell command execution capabilities.
+/// Native WASM runtime for MCP server using WasmKit.
+/// This loads a WASM module and routes HTTP requests to its wasi:http/incoming-handler.
 ///
-/// Currently stubbed for initial integration - process spawning will be added incrementally.
+/// Usage:
+/// 1. Create instance with WASM module path
+/// 2. Load the module: `await host.load(wasmPath:)`
+/// 3. Start server: `await host.startServer()`
 @MainActor
-final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
+public final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
     
-    static let shared = NativeMCPHost()
+    public static let shared = NativeMCPHost()
     
     // Published state for SwiftUI
-    @Published var isReady = false
-    @Published var isLoading = false
+    @Published public var isReady = false
+    @Published public var isLoading = false
     
     private var engine: Engine?
     private var store: Store?
@@ -29,30 +34,37 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
     
     // HTTP server for incoming MCP requests
     private var httpListener: Task<Void, Never>?
-    private let port: UInt16 = 9293
+    public var port: UInt16 = 9293
     
     // Process management via NativeLoaderImpl
     private var loaderImpl: NativeLoaderImpl?
     
-    private override init() {
+    // Configurable filesystem
+    public var filesystem: SandboxFilesystem = SandboxFilesystem.shared
+    
+    public override init() {
         super.init()
     }
     
     // MARK: - Public API
     
-    /// Load and initialize the MCP WASM module
-    func load() async throws {
-        guard !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
-        
+    /// Load and initialize the MCP WASM module from bundle
+    public func load() async throws {
         // Get path to WASM file in bundle
         guard let wasmPath = Bundle.main.path(forResource: "WebRuntime/mcp-server-sync/ts-runtime-mcp.core", ofType: "wasm") else {
             Log.mcp.error("MCP WASM module not found in bundle")
             throw WasmKitHostError.wasmNotFound
         }
+        try await loadWasm(from: wasmPath)
+    }
+    
+    /// Load and initialize a WASM module from a specific path
+    public func loadWasm(from path: String) async throws {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
         
-        let wasmData = try Data(contentsOf: URL(fileURLWithPath: wasmPath))
+        let wasmData = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = try parseWasm(bytes: Array(wasmData))
         
         Log.mcp.info("Loaded MCP WASM module: \(wasmData.count) bytes")
@@ -69,7 +81,7 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
         
         // Create type-safe providers for ALL WASI interfaces including MCP-specific
         let providers: [any WASIProvider] = [
-            Preview1Provider(resources: resources, filesystem: SandboxFilesystem.shared),
+            Preview1Provider(resources: resources, filesystem: filesystem),
             RandomProvider(),
             ClocksProvider(resources: resources),
             CliProvider(resources: resources),
@@ -110,12 +122,12 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
     }
     
     /// Start the HTTP server to receive MCP requests
-    func startServer() async throws {
+    public func startServer() async throws {
         guard isReady else {
             throw WasmKitHostError.notLoaded
         }
         
-        Log.mcp.info("Starting MCP HTTP server on port \(port)")
+        Log.mcp.info("Starting MCP HTTP server on port \(self.port)")
         
         // Create dedicated queue for MCP server - separate from DispatchQueue.global()
         // This prevents thread pool exhaustion from semaphore.wait() blocking all global threads
@@ -138,7 +150,7 @@ final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendable {
         
         listener.start(queue: mcpServerQueue)
         
-        Log.mcp.info("MCP HTTP server listening on port \(port)")
+        Log.mcp.info("MCP HTTP server listening on port \(self.port)")
     }
     
     private func handleConnection(_ connection: NWConnection, on queue: DispatchQueue) {

@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 /// WASI Filesystem Error Codes
-enum WasiError: Int32, Error {
+public enum WasiError: Int32, Error {
     case success = 0
     case toobig = 1
     case access = 2
@@ -83,7 +83,7 @@ enum WasiError: Int32, Error {
 }
 
 /// WASI File Type
-enum WasiFileType: UInt8 {
+public enum WasiFileType: UInt8 {
     case unknown = 0
     case blockDevice = 1
     case characterDevice = 2
@@ -123,12 +123,12 @@ class OpenFile {
 /// iOS sandbox filesystem implementation
 /// Provides WASI preview1 filesystem access rooted at Documents/sandbox
 /// Thread-safe: can be accessed from any thread
-final class SandboxFilesystem: @unchecked Sendable {
+public final class SandboxFilesystem: @unchecked Sendable {
     
     /// Lock for thread-safe access to mutable state
     private let lock = NSLock()
     
-    static let shared = SandboxFilesystem()
+    public static let shared = SandboxFilesystem()
     
     /// Root directory for the sandbox (Documents/sandbox)
     let rootURL: URL

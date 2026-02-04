@@ -4,15 +4,16 @@
 /// Uses MCPSignatures constants for ABI-correct function signatures.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for sockets interfaces.
 /// Note: iOS doesn't support full sockets, so these are stubs.
-struct SocketsProvider: WASIProvider {
-    static var moduleName: String { "wasi:sockets" }
+public struct SocketsProvider: WASIProvider {
+    public static var moduleName: String { "wasi:sockets" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:sockets/tcp@0.2.0", name: "[resource-drop]tcp-socket", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:sockets/udp@0.2.0", name: "[resource-drop]udp-socket", parameters: [.i32], results: []),
@@ -26,11 +27,11 @@ struct SocketsProvider: WASIProvider {
     private typealias TcpSig = MCPSignatures.sockets_tcp_0_2_0
     private typealias UdpSig = MCPSignatures.sockets_udp_0_2_0
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         
         // wasi:sockets/tcp@0.2.0

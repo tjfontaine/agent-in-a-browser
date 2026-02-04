@@ -6,11 +6,11 @@ import OSLog
 /// Shared WASI import implementations for WasmKit hosts.
 /// Both NativeAgentHost and NativeMCPHost can use these.
 /// Thread-safe: can be called from any thread since SandboxFilesystem is now thread-safe.
-enum SharedWASIImports {
+public enum SharedWASIImports {
     
     // MARK: - wasi_snapshot_preview1
     
-    static func registerPreview1(
+    public static func registerPreview1(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry,
@@ -603,7 +603,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:random
     
-    static func registerRandom(
+    public static func registerRandom(
         _ imports: inout Imports,
         store: Store
     ) {
@@ -672,7 +672,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:clocks
     
-    static func registerClocks(
+    public static func registerClocks(
         _ imports: inout Imports,
         store: Store
     ) {
@@ -713,7 +713,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:cli
     
-    static func registerCli(
+    public static func registerCli(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry
@@ -752,7 +752,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:io/poll
     
-    static func registerPoll(
+    public static func registerPoll(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry
@@ -788,7 +788,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:io/error
     
-    static func registerError(
+    public static func registerError(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry
@@ -827,7 +827,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:io/streams
     
-    static func registerStreams(
+    public static func registerStreams(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry
@@ -883,7 +883,7 @@ enum SharedWASIImports {
     
     // MARK: - wasi:sockets (stubs)
     
-    static func registerSockets(
+    public static func registerSockets(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry
@@ -923,7 +923,7 @@ enum SharedWASIImports {
     
     /// Registers WASI HTTP client imports (wasi:http/types@0.2.9)
     /// Used by both NativeAgentHost and NativeMCPHost for making outgoing HTTP requests
-    static func registerHttpClient(
+    public static func registerHttpClient(
         _ imports: inout Imports,
         store: Store,
         resources: ResourceRegistry,

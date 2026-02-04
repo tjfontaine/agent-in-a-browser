@@ -128,3 +128,18 @@ ios-edge-agent/WasmBindgen/Package.resolved
 ios-edge-agent/EdgeAgent/Bridge/WASISignatures.swift
 ios-edge-agent/EdgeAgent/Bridge/GeneratedWASIBindings.swift
 ios-edge-agent/EdgeAgent/Bridge/GeneratedWASMImports.swift
+
+# iOS WASIP2Harness package build artifacts
+ios-edge-agent/WASIP2Harness/.build/
+ios-edge-agent/WASIP2Harness/.swiftpm/
+ios-edge-agent/WASIP2Harness/Package.resolved
+
+# iOS WASIShims package build artifacts
+ios-edge-agent/WASIShims/.build/
+ios-edge-agent/WASIShims/.swiftpm/
+ios-edge-agent/WASIShims/Package.resolved
+
+# iOS MCPServerKit package build artifacts
+ios-edge-agent/MCPServerKit/.build/
+ios-edge-agent/MCPServerKit/.swiftpm/
+ios-edge-agent/MCPServerKit/Package.resolved

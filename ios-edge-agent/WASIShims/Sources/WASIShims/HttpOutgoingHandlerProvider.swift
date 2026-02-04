@@ -4,31 +4,32 @@
 /// Uses MCPSignatures constants for ABI-correct function signatures.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for HTTP outgoing handler interface.
-struct HttpOutgoingHandlerProvider: WASIProvider {
-    static var moduleName: String { "wasi:http/outgoing-handler" }
+public struct HttpOutgoingHandlerProvider: WASIProvider {
+    public static var moduleName: String { "wasi:http/outgoing-handler" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:http/outgoing-handler@0.2.9", name: "handle", parameters: [.i32, .i32, .i32, .i32], results: []),
         ]
     }
     
     private let resources: ResourceRegistry
-    private let httpManager: HTTPRequestManager
+    private let httpManager: any HTTPRequestPerforming
     private let module = "wasi:http/outgoing-handler@0.2.9"
     
     private typealias Sig = MCPSignatures.http_outgoing_handler_0_2_9
     
-    init(resources: ResourceRegistry, httpManager: HTTPRequestManager) {
+    public init(resources: ResourceRegistry, httpManager: any HTTPRequestPerforming) {
         self.resources = resources
         self.httpManager = httpManager
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         let httpManager = self.httpManager
         

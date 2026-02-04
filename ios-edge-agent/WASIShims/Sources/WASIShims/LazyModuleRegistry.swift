@@ -1,12 +1,13 @@
 import Foundation
 import WasmKit
+import WASIP2Harness
 import WasmParser
 import OSLog
 
 /// Registry for lazy-loaded WASM command modules
 /// Maps command names to their WASM module bundles
 /// Thread-safe: can be accessed from any thread
-final class LazyModuleRegistry: @unchecked Sendable {
+public final class LazyModuleRegistry: @unchecked Sendable {
     
     /// Lock for thread-safe cache access
     private let lock = NSLock()
@@ -144,13 +145,13 @@ final class LazyModuleRegistry: @unchecked Sendable {
 }
 
 /// Errors that can occur during module loading
-enum ModuleLoadError: Error, LocalizedError {
+public enum ModuleLoadError: Error, LocalizedError {
     case unknownModule(String)
     case bundleNotFound
     case fileNotFound(String)
     case loadFailed(String)
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unknownModule(let name):
             return "Unknown module: \(name)"

@@ -1,4 +1,5 @@
 import SwiftUI
+import MCPServerKit
 
 /// Main MealMind view - agent-driven UI
 /// This view observes agent events and renders components based on render_ui events.

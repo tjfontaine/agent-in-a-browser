@@ -4,14 +4,15 @@
 /// Uses MCPSignatures constants for ABI-correct function signatures.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for clock interfaces.
-struct ClocksProvider: WASIProvider {
-    static var moduleName: String { "wasi:clocks" }
+public struct ClocksProvider: WASIProvider {
+    public static var moduleName: String { "wasi:clocks" }
     
     /// All imports declared by this provider for compile-time validation
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         [
             WASIImportDeclaration(module: "wasi:clocks/monotonic-clock@0.2.4", name: "now", parameters: [], results: [.i64]),
             WASIImportDeclaration(module: "wasi:clocks/monotonic-clock@0.2.4", name: "subscribe-duration", parameters: [.i64], results: [.i32]),
@@ -26,11 +27,11 @@ struct ClocksProvider: WASIProvider {
     private typealias MonoSig_0_2_9 = MCPSignatures.clocks_monotonic_clock_0_2_9
     private typealias WallSig = MCPSignatures.clocks_wall_clock_0_2_9
     
-    init(resources: ResourceRegistry) {
+    public init(resources: ResourceRegistry) {
         self.resources = resources
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         let resources = self.resources
         
         // wasi:clocks/monotonic-clock@0.2.4

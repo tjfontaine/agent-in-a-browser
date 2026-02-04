@@ -5,13 +5,14 @@
 /// This includes both HTTP client types and HTTP server types.
 
 import WasmKit
+import WASIP2Harness
 import OSLog
 
 /// Provides type-safe WASI imports for HTTP types interface.
 /// Used for both HTTP client (outgoing requests) and HTTP server (incoming requests).
-struct HttpTypesProvider: WASIProvider {
+public struct HttpTypesProvider: WASIProvider {
     
-    static var moduleName: String { "wasi:http/types@0.2.9" }
+    public static var moduleName: String { "wasi:http/types@0.2.9" }
     
     private let resources: ResourceRegistry
     private let httpManager: HTTPRequestManager
@@ -19,13 +20,13 @@ struct HttpTypesProvider: WASIProvider {
     
     private typealias Sig = MCPSignatures.http_types_0_2_9
     
-    init(resources: ResourceRegistry, httpManager: HTTPRequestManager) {
+    public init(resources: ResourceRegistry, httpManager: HTTPRequestManager) {
         self.resources = resources
         self.httpManager = httpManager
     }
     
     /// All imports declared and registered by this provider
-    var declaredImports: [WASIImportDeclaration] {
+    public var declaredImports: [WASIImportDeclaration] {
         let m = Self.moduleName
         return [
             // Constructors
@@ -78,7 +79,7 @@ struct HttpTypesProvider: WASIProvider {
         ]
     }
     
-    func register(into imports: inout Imports, store: Store) {
+    public func register(into imports: inout Imports, store: Store) {
         registerFieldsConstructor(&imports, store: store)
         registerFieldsMethods(&imports, store: store)
         registerRequestOptions(&imports, store: store)
@@ -356,7 +357,7 @@ struct HttpTypesProvider: WASIProvider {
                         let bodyHandle = resources.register(body)
                         request.outgoingBodyHandle = bodyHandle
                         request.outgoingBody = body  // Store direct reference
-                        Log.http.debug("Registered body with handle=\(bodyHandle), resources=\(ObjectIdentifier(resources))")
+                        Log.http.debug("Registered body with handle=\(bodyHandle), resources=\(String(describing: ObjectIdentifier(resources)))")
                         memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                             buf[0] = 0 // Ok
                             buf.storeBytes(of: UInt32(bitPattern: bodyHandle).littleEndian, toByteOffset: 4, as: UInt32.self)
