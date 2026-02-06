@@ -38,9 +38,67 @@ fn eval_js(code: &str) -> std::result::Result<String, String> {
     }))
 }
 
+/// Helper to evaluate JavaScript code with custom process.argv payload.
+fn eval_js_with_argv(code: &str, argv: Vec<String>) -> std::result::Result<String, String> {
+    process::set_argv(argv);
+    let result = eval_js(code);
+    process::set_argv(Vec::new());
+    result
+}
+
+/// Helper to evaluate JavaScript code with custom runtime env/cwd.
+fn eval_js_with_runtime(
+    code: &str,
+    cwd: String,
+    vars: Vec<(String, String)>,
+) -> std::result::Result<String, String> {
+    process::set_runtime_env(cwd, vars);
+    let result = eval_js(code);
+    process::set_runtime_env("/".to_string(), Vec::new());
+    result
+}
+
 // ========================================================================
 // Buffer Tests
 // ========================================================================
+
+#[test]
+fn test_process_argv_default_shape() {
+    let result = eval_js("return process.argv[0] + '|' + process.argv[1]").unwrap();
+    assert_eq!(result, "tsx|script.ts");
+}
+
+#[test]
+fn test_process_argv_extra_args() {
+    let result = eval_js_with_argv(
+        "return process.argv.slice(2).join(',')",
+        vec!["--flag".to_string(), "input.ts".to_string()],
+    )
+    .unwrap();
+    assert_eq!(result, "--flag,input.ts");
+}
+
+#[test]
+fn test_process_env_from_runtime() {
+    let result = eval_js_with_runtime(
+        "return process.env.API_KEY + '|' + process.cwd()",
+        "/work/project".to_string(),
+        vec![("API_KEY".to_string(), "secret".to_string())],
+    )
+    .unwrap();
+    assert_eq!(result, "secret|/work/project");
+}
+
+#[test]
+fn test_process_chdir_updates_cwd() {
+    let result = eval_js_with_runtime(
+        "process.chdir('/tmp/next'); return process.cwd();",
+        "/work/project".to_string(),
+        Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(result, "/tmp/next");
+}
 
 #[test]
 fn test_buffer_from_string() {
@@ -407,6 +465,25 @@ fn test_response_not_ok() {
     assert_eq!(result, "false");
 }
 
+#[test]
+fn test_request_class_basic_fields() {
+    let result = eval_js(r#"
+        const req = new Request('https://example.com/a', { method: 'POST' });
+        return req.url + '|' + req.method;
+    "#).unwrap();
+    assert_eq!(result, "https://example.com/a|POST");
+}
+
+#[test]
+fn test_abort_controller_signal() {
+    let result = eval_js(r#"
+        const c = new AbortController();
+        c.abort();
+        return c.signal.aborted;
+    "#).unwrap();
+    assert_eq!(result, "true");
+}
+
 // ========================================================================
 // Filesystem Sync Tests
 // ========================================================================
@@ -562,4 +639,3 @@ fn test_fs_promises_write_and_read() {
     assert!(result.is_ok() || result.is_err()); // Just check it doesn't crash
     let _ = std::fs::remove_file("/tmp/js_async_test.txt");
 }
-

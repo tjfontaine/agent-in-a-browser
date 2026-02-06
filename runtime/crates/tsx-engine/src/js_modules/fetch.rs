@@ -22,17 +22,18 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
 
         match url {
             Some(url_str) => {
-                let (method, headers_json, body) = if let Some(opts) = &options_json {
+                let (method, headers_json, body, timeout_ms) = if let Some(opts) = &options_json {
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(opts) {
                         let m = parsed.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
                         let h = parsed.get("headers").map(|v| v.to_string());
                         let b = parsed.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
-                        (m.to_string(), h, b)
+                        let timeout_ms = parsed.get("timeoutMs").and_then(|v| v.as_u64());
+                        (m.to_string(), h, b, timeout_ms)
                     } else {
-                        ("GET".to_string(), None, None)
+                        ("GET".to_string(), None, None, None)
                     }
                 } else {
-                    ("GET".to_string(), None, None)
+                    ("GET".to_string(), None, None, None)
                 };
                 
                 let result = crate::http_client::fetch_request(
@@ -40,6 +41,7 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                     &url_str,
                     headers_json.as_deref(),
                     body.as_deref(),
+                    timeout_ms,
                 );
                 
                 match result {

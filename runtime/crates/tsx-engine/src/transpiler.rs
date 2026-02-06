@@ -11,7 +11,11 @@
 //! - Add global shim injection at AST level (console, fs, Buffer, etc.)
 
 use std::mem;
-use swc_common::{sync::Lrc, FileName, Mark, SourceMap, Spanned, DUMMY_SP, GLOBALS};
+use std::collections::BTreeMap;
+use swc_common::{
+    source_map::DefaultSourceMapGenConfig, sync::Lrc, FileName, Mark, SourceMap, Spanned, DUMMY_SP,
+    GLOBALS,
+};
 use swc_ecma_ast::{
     ArrowExpr, AwaitExpr, BindingIdent, BlockStmt, BlockStmtOrExpr, CallExpr, Callee, EsVersion,
     Expr, ExprOrSpread, ExprStmt, Ident, IdentName, MemberExpr, MemberProp, Module, ModuleItem,
@@ -19,6 +23,7 @@ use swc_ecma_ast::{
 };
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
+use swc_ecma_transforms_base::{fixer::fixer, resolver};
 use swc_ecma_transforms_typescript::strip;
 use swc_ecma_visit::VisitMut;
 
@@ -31,6 +36,10 @@ use swc_ecma_visit::VisitMut;
 pub struct TranspileResult {
     /// Generated JavaScript code
     pub code: String,
+    /// True when source contains import/export declarations.
+    pub contains_module_decls: bool,
+    /// Generated-line -> original-line mapping (1-based lines)
+    pub line_map: Option<Vec<usize>>,
     /// Source map JSON (for error line mapping) - TODO: implement
     #[allow(dead_code)]
     pub source_map: Option<Vec<u8>>,
@@ -261,6 +270,11 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
         .parse_module()
         .map_err(|e| format_parse_error(ts_code, e))?;
 
+    let contains_module_decls = module
+        .body
+        .iter()
+        .any(|item| matches!(item, ModuleItem::ModuleDecl(_)));
+
     // Check for parse errors
     for err in parser.take_errors() {
         return Err(format_parse_error(ts_code, err));
@@ -272,10 +286,13 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
     let mut program = Program::Module(module);
 
     use swc_ecma_ast::Pass;
+    let mut resolver_pass = resolver(unresolved_mark, top_level_mark, true);
+    resolver_pass.process(&mut program);
+
     let mut pass = strip(unresolved_mark, top_level_mark);
     pass.process(&mut program);
 
-    if wrap_in_iife {
+    if wrap_in_iife && !contains_module_decls {
         // Transform 2: Await last expression
         AwaitLastExpr.visit_mut_program(&mut program);
 
@@ -285,6 +302,9 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
         }
     }
 
+    let mut fix = fixer(None);
+    fix.process(&mut program);
+
     // Extract the module
     let module = match program {
         Program::Module(m) => m,
@@ -293,12 +313,13 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
 
     // Emit JavaScript (source map generation TODO)
     let mut buf = vec![];
+    let mut raw_mappings = Vec::new();
     {
         let mut emitter = Emitter {
             cfg: Config::default(),
             cm: cm.clone(),
             comments: None,
-            wr: JsWriter::new(cm.clone(), "\n", &mut buf, None),
+            wr: JsWriter::new(cm.clone(), "\n", &mut buf, Some(&mut raw_mappings)),
         };
 
         emitter
@@ -306,9 +327,39 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
             .map_err(|e| format!("Emit error: {:?}", e))?;
     }
 
+    let mut line_map = BTreeMap::<usize, usize>::new();
+    for (byte_pos, gen_loc) in &raw_mappings {
+        let orig_loc = cm.lookup_char_pos(*byte_pos);
+        line_map
+            .entry(gen_loc.line as usize + 1)
+            .or_insert(orig_loc.line);
+    }
+    let max_gen_line = line_map.keys().copied().max().unwrap_or(0);
+    let dense_line_map = if max_gen_line > 0 {
+        let mut dense = vec![0usize; max_gen_line];
+        let mut last = 1usize;
+        for line in 1..=max_gen_line {
+            if let Some(mapped) = line_map.get(&line) {
+                last = *mapped;
+            }
+            dense[line - 1] = last;
+        }
+        Some(dense)
+    } else {
+        None
+    };
+
+    let mut source_map_bytes = Vec::new();
+    let source_map = cm.build_source_map(&raw_mappings, None, DefaultSourceMapGenConfig);
+    source_map
+        .to_writer(&mut source_map_bytes)
+        .map_err(|e| format!("Source map emit error: {:?}", e))?;
+
     Ok(TranspileResult {
         code: String::from_utf8(buf).map_err(|e| format!("UTF-8 error: {}", e))?,
-        source_map: None, // TODO: Implement source map generation
+        contains_module_decls,
+        line_map: dense_line_map,
+        source_map: Some(source_map_bytes),
     })
 }
 
@@ -435,5 +486,50 @@ mod tests {
         let err = transpile(ts).unwrap_err();
         assert!(err.contains("line"), "Expected line info: {}", err);
         assert!(err.contains("const x"), "Expected code context: {}", err);
+    }
+
+    #[test]
+    fn test_transpile_marks_module_declarations() {
+        let ts = "import { x } from './x.ts';\nexport const y: number = 1;";
+        let result = transpile(ts).unwrap();
+        assert!(
+            result.contains_module_decls,
+            "Expected module declarations to be detected"
+        );
+    }
+
+    #[test]
+    fn test_transpile_preserves_import_export_without_iife() {
+        let ts = "import { x } from './x.ts';\nexport const y: number = x;";
+        let result = transpile(ts).unwrap();
+        assert!(result.code.contains("import "), "Got: {}", result.code);
+        assert!(result.code.contains("export "), "Got: {}", result.code);
+        assert!(
+            !result.code.contains(".catch("),
+            "Module source should not be wrapped in async IIFE: {}",
+            result.code
+        );
+    }
+
+    #[test]
+    fn test_transpile_emits_source_map_json() {
+        let ts = "const x: number = 42;\nconsole.log(x);";
+        let result = transpile(ts).unwrap();
+        let source_map = result.source_map.expect("expected source map bytes");
+        let v: serde_json::Value = serde_json::from_slice(&source_map).unwrap();
+        assert_eq!(v.get("version").and_then(|x| x.as_u64()), Some(3));
+        let sources = v
+            .get("sources")
+            .and_then(|x| x.as_array())
+            .expect("sources array");
+        assert!(!sources.is_empty(), "sources must not be empty");
+        let mappings = v
+            .get("mappings")
+            .and_then(|x| x.as_str())
+            .expect("mappings string");
+        assert!(
+            !mappings.is_empty(),
+            "mappings should not be empty for non-empty input"
+        );
     }
 }

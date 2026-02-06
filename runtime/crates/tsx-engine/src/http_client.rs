@@ -47,16 +47,65 @@ fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
         return Err(format!("Unsupported URL scheme: {}", url));
     };
 
-    let (authority, path) = match rest.find('/') {
-        Some(idx) => (rest[..idx].to_string(), rest[idx..].to_string()),
-        None => (rest.to_string(), "/".to_string()),
+    let split_idx = rest
+        .find(|ch| ['/', '?', '#'].contains(&ch))
+        .unwrap_or(rest.len());
+    let authority = rest[..split_idx].to_string();
+
+    let mut path = if split_idx >= rest.len() {
+        "/".to_string()
+    } else {
+        let tail = &rest[split_idx..];
+        if tail.starts_with('/') {
+            tail.to_string()
+        } else {
+            format!("/{}", tail)
+        }
     };
+
+    if let Some(fragment_idx) = path.find('#') {
+        path.truncate(fragment_idx);
+    }
+    if path.is_empty() {
+        path = "/".to_string();
+    }
 
     if authority.is_empty() {
         return Err("URL has no authority (host)".to_string());
     }
 
     Ok((scheme, authority, path))
+}
+
+fn parse_headers_json(headers_json: Option<&str>) -> Vec<(String, String)> {
+    let mut header_vec = Vec::new();
+    if let Some(headers_str) = headers_json {
+        if let Ok(serde_json::Value::Object(map)) =
+            serde_json::from_str::<serde_json::Value>(headers_str)
+        {
+            for (key, value) in map {
+                if key.is_empty() {
+                    continue;
+                }
+                let value_str = match value {
+                    serde_json::Value::String(s) => s,
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::Bool(b) => {
+                        if b {
+                            "true".to_string()
+                        } else {
+                            "false".to_string()
+                        }
+                    }
+                    _ => continue,
+                };
+                if !value_str.is_empty() {
+                    header_vec.push((key, value_str));
+                }
+            }
+        }
+    }
+    header_vec
 }
 
 /// Read the entire body from an IncomingBody stream as bytes
@@ -76,9 +125,8 @@ fn read_body_bytes(
                 }
                 bytes.extend(chunk);
             }
-            Err(_) => {
-                // Stream closed or error - we're done reading
-                break;
+            Err(e) => {
+                return Err(format!("Failed to read body stream: {:?}", e));
             }
         }
     }
@@ -89,7 +137,7 @@ fn read_body_bytes(
 
 /// Perform a synchronous HTTP GET request
 pub fn fetch_sync(url: &str) -> Result<FetchResponse, String> {
-    fetch(Method::Get, url, &[], None)
+    fetch(Method::Get, url, &[], None, None)
 }
 
 /// Perform a synchronous HTTP request with full control
@@ -98,7 +146,11 @@ pub fn fetch(
     url: &str,
     headers: &[(&str, &str)],
     body: Option<&[u8]>,
+    timeout_ms: Option<u64>,
 ) -> Result<FetchResponse, String> {
+    if let Some(0) = timeout_ms {
+        return Err("Request timeout (0ms)".to_string());
+    }
     let (scheme, authority, path) = parse_url(url)?;
 
     // Build headers
@@ -153,7 +205,13 @@ pub fn fetch(
         .map_err(|e| format!("HTTP request failed: {:?}", e))?;
 
     // Wait for response - use block() to allow JSPI suspension
+    let start = std::time::Instant::now();
     loop {
+        if let Some(max_ms) = timeout_ms {
+            if start.elapsed().as_millis() as u64 > max_ms {
+                return Err(format!("Request timeout after {}ms", max_ms));
+            }
+        }
         // Subscribe to the future and block until ready
         let pollable = future_response.subscribe();
         pollable.block();
@@ -182,6 +240,7 @@ pub fn fetch_request(
     url: &str,
     headers_json: Option<&str>,
     body: Option<&str>,
+    timeout_ms: Option<u64>,
 ) -> Result<FetchResponse, String> {
     // Parse method
     let method_enum = match method.to_uppercase().as_str() {
@@ -197,22 +256,65 @@ pub fn fetch_request(
     };
 
     // Parse JSON headers
-    let mut header_vec = Vec::new();
-    if let Some(headers_str) = headers_json {
-        for pair in headers_str
-            .trim_matches(|c| c == '{' || c == '}')
-            .split(',')
-        {
-            let parts: Vec<&str> = pair.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let key = parts[0].trim().trim_matches('"');
-                let value = parts[1].trim().trim_matches('"');
-                if !key.is_empty() && !value.is_empty() {
-                    header_vec.push((key, value));
-                }
-            }
-        }
+    let header_vec = parse_headers_json(headers_json);
+
+    let borrowed_headers: Vec<(&str, &str)> = header_vec
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    fetch(
+        method_enum,
+        url,
+        &borrowed_headers,
+        body.map(|s| s.as_bytes()),
+        timeout_ms,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_url_with_query_and_no_explicit_path() {
+        let (_, authority, path) = parse_url("https://example.com?x=1&y=2").unwrap();
+        assert_eq!(authority, "example.com");
+        assert_eq!(path, "/?x=1&y=2");
     }
 
-    fetch(method_enum, url, &header_vec, body.map(|s| s.as_bytes()))
+    #[test]
+    fn test_parse_url_strips_fragment() {
+        let (_, authority, path) = parse_url("https://example.com/api?q=1#frag").unwrap();
+        assert_eq!(authority, "example.com");
+        assert_eq!(path, "/api?q=1");
+    }
+
+    #[test]
+    fn test_parse_url_requires_supported_scheme() {
+        let err = parse_url("ftp://example.com/file").unwrap_err();
+        assert!(err.contains("Unsupported URL scheme"), "Got: {}", err);
+    }
+
+    #[test]
+    fn test_parse_headers_json_preserves_complex_values() {
+        let headers = parse_headers_json(Some(
+            r#"{"Authorization":"Bearer a:b,c","X-Flag":true,"X-Retry":3}"#,
+        ));
+        assert!(headers.contains(&(
+            "Authorization".to_string(),
+            "Bearer a:b,c".to_string()
+        )));
+        assert!(headers.contains(&("X-Flag".to_string(), "true".to_string())));
+        assert!(headers.contains(&("X-Retry".to_string(), "3".to_string())));
+    }
+
+    #[test]
+    fn test_parse_headers_json_ignores_non_scalar_values() {
+        let headers = parse_headers_json(Some(
+            r#"{"X-Obj":{"a":1},"X-Arr":[1,2],"X-Ok":"value"}"#,
+        ));
+        assert_eq!(headers.len(), 1);
+        assert_eq!(headers[0], ("X-Ok".to_string(), "value".to_string()));
+    }
 }
