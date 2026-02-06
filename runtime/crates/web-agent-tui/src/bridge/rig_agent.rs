@@ -186,13 +186,16 @@ impl StreamItem {
         match item {
             MultiTurnStreamItem::StreamAssistantItem(content) => match content {
                 StreamedAssistantContent::Text(text) => StreamItem::Text(text.text),
-                StreamedAssistantContent::ToolCall(tc) => StreamItem::ToolCall {
-                    name: tc.function.name,
+                StreamedAssistantContent::ToolCall { tool_call, .. } => StreamItem::ToolCall {
+                    name: tool_call.function.name,
                 },
                 StreamedAssistantContent::Final(_) => StreamItem::Final,
                 _ => StreamItem::Other,
             },
-            MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult(tr)) => {
+            MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult {
+                tool_result: tr,
+                ..
+            }) => {
                 // Extract text from tool result content
                 let result_text = tr
                     .content
@@ -472,9 +475,8 @@ fn build_tool_server(
 ) -> Result<rig::tool::server::ToolServerHandle, String> {
     let tool_set = super::rig_tools::build_tool_set(mcp_client)?;
 
-    // Add tools BEFORE run() to avoid block_on deadlock
-    // (run() spawns a background task that would deadlock with block_on)
-    let handle = ToolServer::new().add_tools(tool_set).run();
+    let handle = ToolServer::new().run();
+    wasm_block_on(handle.append_toolset(tool_set)).map_err(|e| e.to_string())?;
 
     Ok(handle)
 }
@@ -618,13 +620,13 @@ impl RigAgent {
     ) -> Result<String, RigAgentError> {
         let result = match &self.agent_type {
             AgentType::Anthropic(agent) => {
-                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+                wasm_block_on(agent.prompt(message).max_turns(max_turns).into_future())
             }
             AgentType::OpenAI(agent) => {
-                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+                wasm_block_on(agent.prompt(message).max_turns(max_turns).into_future())
             }
             AgentType::Gemini(agent) => {
-                wasm_block_on(agent.prompt(message).multi_turn(max_turns).into_future())
+                wasm_block_on(agent.prompt(message).max_turns(max_turns).into_future())
             }
         };
 

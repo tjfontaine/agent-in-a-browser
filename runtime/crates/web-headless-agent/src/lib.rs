@@ -100,7 +100,8 @@ fn build_tool_server(
         }
     }
 
-    let handle = ToolServer::new().add_tools(tool_set).run();
+    let handle = ToolServer::new().run();
+    wasm_block_on(handle.append_toolset(tool_set)).map_err(|e| e.to_string())?;
     Ok(handle)
 }
 

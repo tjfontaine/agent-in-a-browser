@@ -29,8 +29,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # HTTP client abstractions for rig-core compatibility
-bytes = "1.5"
-http = "1.0"
+bytes = "1.11"
+http = "1.4"
 futures = { version = "0.3", default-features = false, features = [
     "alloc",
     "executor",
@@ -58,6 +58,6 @@ world = "tui"
 
 [dev-dependencies]
 # Mocking framework for trait-based testing
-mockall = "0.13"
+mockall = "0.14"
 # Snapshot testing for UI visual verification  
-insta = { version = "1.42", features = ["colors"] }
+insta = { version = "1.46", features = ["colors"] }

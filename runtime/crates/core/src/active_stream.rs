@@ -171,13 +171,16 @@ impl StreamItem {
         match item {
             MultiTurnStreamItem::StreamAssistantItem(content) => match content {
                 StreamedAssistantContent::Text(text) => StreamItem::Text(text.text),
-                StreamedAssistantContent::ToolCall(tc) => StreamItem::ToolCall {
-                    name: tc.function.name,
+                StreamedAssistantContent::ToolCall { tool_call, .. } => StreamItem::ToolCall {
+                    name: tool_call.function.name,
                 },
                 StreamedAssistantContent::Final(_) => StreamItem::Final,
                 _ => StreamItem::Other,
             },
-            MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult(tr)) => {
+            MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult {
+                tool_result: tr,
+                ..
+            }) => {
                 // Extract text from tool result content
                 let result_text = tr
                     .content

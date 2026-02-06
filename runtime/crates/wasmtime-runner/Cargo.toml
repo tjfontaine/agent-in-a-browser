@@ -31,4 +31,4 @@ libc = "0.2"
 # https://docs.rs/expectrl/latest/expectrl/
 expectrl = "0.8"
 # insta: snapshot testing for visual regression
-insta = "1.42"
+insta = "1.46"
