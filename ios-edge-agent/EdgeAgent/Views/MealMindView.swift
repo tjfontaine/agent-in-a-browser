@@ -231,6 +231,31 @@ struct MealMindView: View {
                 try await MCPServer.shared.start()
                 Log.app.info("MealMind: Swift MCP server ready on port 9292")
                 
+                // Start Foundation Models OpenAI-compatible server (iOS 26+)
+                if #available(iOS 26.0, *) {
+                    do {
+                        try await FoundationModelsServer.shared.start()
+                        Log.app.info("MealMind: Foundation Models server ready on port 11534")
+                    } catch {
+                        Log.app.warning("MealMind: Foundation Models not available: \(error.localizedDescription)")
+                    }
+                }
+                
+                // Start MLX server if MLX provider is selected
+                if configManager.provider == "mlx-local" {
+                    do {
+                        Log.app.info("MealMind: Loading MLX model \(configManager.model)...")
+                        try await MLXServer.shared.loadModel(id: configManager.model)
+                        try await MLXServer.shared.start()
+                        Log.app.info("MealMind: MLX server ready on port 11535")
+                    } catch {
+                        Log.app.error("MealMind: MLX server failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            loadError = "MLX model failed to load: \(error.localizedDescription)"
+                        }
+                    }
+                }
+                
                 // Small delay to ensure server is accepting connections
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 
@@ -264,8 +289,17 @@ struct MealMindView: View {
                 }
                 
                 // Create agent with saved provider/model but MealMind system prompt
+                // Map on-device providers to openai (local servers are OpenAI-compatible)
+                let actualProvider: String
+                switch configManager.provider {
+                case "apple-on-device", "mlx-local":
+                    actualProvider = "openai"
+                default:
+                    actualProvider = configManager.provider
+                }
+                
                 let config = AgentConfig(
-                    provider: configManager.provider,
+                    provider: actualProvider,
                     model: configManager.model,
                     apiKey: configManager.apiKey,
                     baseUrl: configManager.baseUrl.isEmpty ? nil : configManager.baseUrl,
@@ -275,7 +309,7 @@ struct MealMindView: View {
                     maxTurns: UInt32(configManager.maxTurns)
                 )
                 agent.createAgent(config: config)
-                Log.app.info("MealMind: Agent created with \(mcpServers.count) MCP servers")
+                Log.app.info("MealMind: Agent created with \(mcpServers.count) MCP servers, provider: \(actualProvider)")
             } catch {
                 Log.app.error("MealMind: Failed to setup agent: \(error)")
                 await MainActor.run {

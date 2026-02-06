@@ -60,5 +60,7 @@
     <string>MealMind uses your location to suggest weather-appropriate recipes.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
 </dict>
 </plist>

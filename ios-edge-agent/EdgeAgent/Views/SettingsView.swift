@@ -1,17 +1,40 @@
 import SwiftUI
 
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
 struct SettingsView: View {
     @EnvironmentObject var nativeAgent: NativeAgentHost
     @EnvironmentObject var configManager: ConfigManager
     @Environment(\.dismiss) private var dismiss
     
-    // Static provider/model lists for now (native agent doesn't have WASM exports for these yet)
-    private let providers: [ProviderInfo] = [
-        ProviderInfo(id: "gemini", name: "Google Gemini", defaultBaseUrl: nil),
-        ProviderInfo(id: "anthropic", name: "Anthropic", defaultBaseUrl: nil),
-        ProviderInfo(id: "openai", name: "OpenAI", defaultBaseUrl: nil),
-        ProviderInfo(id: "openrouter", name: "OpenRouter", defaultBaseUrl: "https://openrouter.ai/api/v1")
-    ]
+    // Check if on-device Foundation Models is available (iOS 26+ with Apple Silicon)
+    private var isOnDeviceAvailable: Bool {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            return SystemLanguageModel.default.isAvailable
+        }
+        #endif
+        return false
+    }
+    
+    // Static provider/model lists
+    private var providers: [ProviderInfo] {
+        var list = [
+            ProviderInfo(id: "gemini", name: "Google Gemini", defaultBaseUrl: nil),
+            ProviderInfo(id: "anthropic", name: "Anthropic", defaultBaseUrl: nil),
+            ProviderInfo(id: "openai", name: "OpenAI", defaultBaseUrl: nil),
+            ProviderInfo(id: "openrouter", name: "OpenRouter", defaultBaseUrl: "https://openrouter.ai/api/v1")
+        ]
+        // Add Apple On-Device if available
+        if isOnDeviceAvailable {
+            list.insert(ProviderInfo(id: "apple-on-device", name: "🍎 Apple On-Device", defaultBaseUrl: "http://localhost:11534/v1"), at: 0)
+        }
+        // Add MLX option for iOS 17+
+        list.insert(ProviderInfo(id: "mlx-local", name: "🦙 MLX Local", defaultBaseUrl: "http://localhost:11535/v1"), at: isOnDeviceAvailable ? 1 : 0)
+        return list
+    }
     
     private func modelsForProvider(_ providerId: String) -> [ModelInfo] {
         switch providerId {
@@ -41,6 +64,17 @@ struct SettingsView: View {
                 ModelInfo(id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet"),
                 ModelInfo(id: "openai/gpt-4o", name: "GPT-4o")
             ]
+        case "apple-on-device":
+            return [
+                ModelInfo(id: "apple-on-device", name: "Apple Intelligence (~3B)")
+            ]
+        case "mlx-local":
+            return [
+                ModelInfo(id: "mlx-community/Qwen3-4B-4bit", name: "Qwen3 4B (~2.5GB)"),
+                ModelInfo(id: "mlx-community/Llama-3.2-3B-Instruct-4bit", name: "LLaMA 3.2 3B (~2GB)"),
+                ModelInfo(id: "mlx-community/Phi-3.5-mini-instruct-4bit", name: "Phi 3.5 Mini (~2GB)"),
+                ModelInfo(id: "mlx-community/gemma-2-2b-it-4bit", name: "Gemma 2 2B (~1.5GB)")
+            ]
         default:
             return []
         }
@@ -62,6 +96,17 @@ struct SettingsView: View {
                         if let firstModel = modelsForProvider(newProvider).first {
                             configManager.model = firstModel.id
                             useCustomModel = false
+                        }
+                        // Auto-configure for on-device providers
+                        if newProvider == "apple-on-device" {
+                            configManager.baseUrl = "http://localhost:11534/v1"
+                            configManager.apiKey = "not-needed"
+                        } else if newProvider == "mlx-local" {
+                            configManager.baseUrl = "http://localhost:11535/v1"
+                            configManager.apiKey = "not-needed"
+                        } else if let provider = providers.first(where: { $0.id == newProvider }),
+                                  let defaultUrl = provider.defaultBaseUrl {
+                            configManager.baseUrl = defaultUrl
                         }
                     }
                     
@@ -86,15 +131,36 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section("Authentication") {
-                    SecureField("API Key", text: $configManager.apiKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                    
-                    TextField("Base URL (optional)", text: $configManager.baseUrl)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                // Hide API Key section for on-device providers (no key needed)
+                if configManager.provider != "apple-on-device" && configManager.provider != "mlx-local" {
+                    Section("Authentication") {
+                        SecureField("API Key", text: $configManager.apiKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                        
+                        TextField("Base URL (optional)", text: $configManager.baseUrl)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                } else {
+                    Section {
+                        HStack {
+                            Image(systemName: "checkmark.shield.fill")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading) {
+                                Text("Runs entirely on-device")
+                                    .font(.subheadline)
+                                if configManager.provider == "mlx-local" {
+                                    Text("Model will download on first use")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Privacy")
+                    }
                 }
                 
                 Section("Advanced") {
