@@ -13,7 +13,7 @@ agent-bridge = { path = "../core" }
 
 # AI Agent framework (wasip2 feature for WASI component model)
 # NOTE: DO NOT enable "wasm" feature - it enables futures-timer/wasm-bindgen which panics in WASI
-rig-core = { git = "https://github.com/tjfontaine/rig", branch = "wasip2", default-features = false, features = [
+rig-core = { git = "https://github.com/tjfontaine/rig", rev = "de8999de2002d36610a3d5416253881c73ba81b5", default-features = false, features = [
     "wasip2",
 ] }
 
