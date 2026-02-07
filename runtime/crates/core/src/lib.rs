@@ -15,6 +15,7 @@
 //! each with their own WIT-generated bindings.
 
 pub mod active_stream;
+pub mod conversation;
 pub mod events;
 pub mod http_transport;
 pub mod local_tools;
@@ -33,6 +34,10 @@ pub use active_stream::StreamItem;
 pub use active_stream::{
     erase_stream, ActiveStream, ActiveStreamState, ErasedConnectFuture, ErasedStream,
     ErasedStreamResult, PollResult, StreamingBuffer,
+};
+pub use conversation::{
+    ConversationHistory, ConversationRole, ConversationState, ConversationTurn, ConversationView,
+    TurnMetadata,
 };
 pub use events::{AgentEvent, FileInfo, TaskInfo, TaskResult, ToolResultData};
 pub use http_transport::{
