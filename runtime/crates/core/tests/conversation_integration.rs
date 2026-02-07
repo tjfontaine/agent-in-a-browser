@@ -30,11 +30,11 @@ fn test_conversation_preserves_tool_traces() {
     // Verify tool call is present
     let tool_call = &history.turns()[1];
     assert_eq!(tool_call.role, ConversationRole::ToolCall);
-    assert_eq!(tool_call.metadata.tool_name, Some("weather_api".to_string()));
     assert_eq!(
-        tool_call.metadata.tool_call_id,
-        Some("call-1".to_string())
+        tool_call.metadata.tool_name,
+        Some("weather_api".to_string())
     );
+    assert_eq!(tool_call.metadata.tool_call_id, Some("call-1".to_string()));
 
     // Verify tool result is present
     let tool_result = &history.turns()[2];
