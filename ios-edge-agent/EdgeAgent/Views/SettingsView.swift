@@ -31,8 +31,6 @@ struct SettingsView: View {
         if isOnDeviceAvailable {
             list.insert(ProviderInfo(id: "apple-on-device", name: "🍎 Apple On-Device", defaultBaseUrl: "http://localhost:11534/v1"), at: 0)
         }
-        // Add MLX option for iOS 17+
-        list.insert(ProviderInfo(id: "mlx-local", name: "🦙 MLX Local", defaultBaseUrl: "http://localhost:11535/v1"), at: isOnDeviceAvailable ? 1 : 0)
         return list
     }
     
@@ -68,13 +66,6 @@ struct SettingsView: View {
             return [
                 ModelInfo(id: "apple-on-device", name: "Apple Intelligence (~3B)")
             ]
-        case "mlx-local":
-            return [
-                ModelInfo(id: "mlx-community/Qwen3-4B-4bit", name: "Qwen3 4B (~2.5GB)"),
-                ModelInfo(id: "mlx-community/Llama-3.2-3B-Instruct-4bit", name: "LLaMA 3.2 3B (~2GB)"),
-                ModelInfo(id: "mlx-community/Phi-3.5-mini-instruct-4bit", name: "Phi 3.5 Mini (~2GB)"),
-                ModelInfo(id: "mlx-community/gemma-2-2b-it-4bit", name: "Gemma 2 2B (~1.5GB)")
-            ]
         default:
             return []
         }
@@ -100,9 +91,6 @@ struct SettingsView: View {
                         // Auto-configure for on-device providers
                         if newProvider == "apple-on-device" {
                             configManager.baseUrl = "http://localhost:11534/v1"
-                            configManager.apiKey = "not-needed"
-                        } else if newProvider == "mlx-local" {
-                            configManager.baseUrl = "http://localhost:11535/v1"
                             configManager.apiKey = "not-needed"
                         } else if let provider = providers.first(where: { $0.id == newProvider }),
                                   let defaultUrl = provider.defaultBaseUrl {
@@ -131,8 +119,8 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Hide API Key section for on-device providers (no key needed)
-                if configManager.provider != "apple-on-device" && configManager.provider != "mlx-local" {
+                // Hide API Key section for on-device provider (no key needed)
+                if configManager.provider != "apple-on-device" {
                     Section("Authentication") {
                         SecureField("API Key", text: $configManager.apiKey)
                             .textContentType(.password)
@@ -151,11 +139,6 @@ struct SettingsView: View {
                             VStack(alignment: .leading) {
                                 Text("Runs entirely on-device")
                                     .font(.subheadline)
-                                if configManager.provider == "mlx-local" {
-                                    Text("Model will download on first use")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
                             }
                         }
                     } header: {

@@ -34,7 +34,7 @@ struct SDUIValidator {
         
         // Check for ForEach in the component tree
         if !containsForEach(component) {
-            result.warnings.append("Template has no ForEach component. For recipe lists, use ForEach with items binding: {type: \"ForEach\", props: {items: \"{{recipes}}\", itemTemplate: {...}}}")
+            result.warnings.append("Template has no ForEach component. For list rendering, use ForEach with items binding: {type: \"ForEach\", props: {items: \"{{items}}\", itemTemplate: {...}}}")
         }
         
         // Check for common mistakes - static children arrays with component objects
@@ -57,7 +57,7 @@ struct SDUIValidator {
             if let array = value as? [[String: Any]] {
                 for item in array {
                     if isComponentObject(item) {
-                        result.errors.append("Data key '\(key)' contains component objects (found 'type' or 'props'). Pass raw data arrays instead, e.g. [{idMeal: \"...\", strMeal: \"...\"}]. ForEach itemTemplate will render each item.")
+                        result.errors.append("Data key '\(key)' contains component objects (found 'type' or 'props'). Pass raw data arrays instead, e.g. [{id: \"...\", title: \"...\"}]. ForEach itemTemplate will render each item.")
                         return result  // Return early - one error is enough
                     }
                 }
@@ -452,8 +452,17 @@ class MCPServer: NSObject {
         case "request_authorization":
             return await executeRequestAuthorization(arguments: arguments)
         default:
-            return .init(content: [.text("Unknown tool: \(name)")], isError: true)
+            break
         }
+
+        var params: [String: Any] = ["name": name]
+        if let arguments,
+           case .object(let dict) = arguments {
+            params["arguments"] = dict.mapValues { jsonToAny($0) }
+        }
+
+        let resultDict = handleJSONRPCMethodSync(method: "tools/call", params: params)
+        return dictToCallToolResult(resultDict)
     }
     
     private func executeRenderUI(arguments: Value?) async -> CallTool.Result {
@@ -846,11 +855,38 @@ class MCPServer: NSObject {
                 return ["content": [["type": "text", "text": "Missing 'patches' array"]], "isError": true]
                 
             case "get_location":
-                // Location doesn't need MainActor, return directly
-                return [
-                    "content": [["type": "text", "text": "{\"status\": \"not_determined\", \"message\": \"Location requires permission\"}"]],
-                    "isError": false
+                if Thread.isMainThread {
+                    let result = MainActor.assumeIsolated {
+                        self.executeGetLocation()
+                    }
+                    return MainActor.assumeIsolated {
+                        self.resultToDict(result)
+                    }
+                }
+
+                let semaphore = DispatchSemaphore(value: 0)
+                var response: [String: Any] = [
+                    "content": [["type": "text", "text": "{\"error\": \"get_location unavailable\"}"]],
+                    "isError": true,
                 ]
+                DispatchQueue.main.async {
+                    let result = self.executeGetLocation()
+                    response = self.resultToDict(result)
+                    semaphore.signal()
+                }
+                if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
+                    return ["content": [["type": "text", "text": "{\"error\": \"get_location timed out\"}"]], "isError": true]
+                }
+                return response
+
+            case "request_authorization":
+                guard let capability = argsData?["capability"] as? String else {
+                    return ["content": [["type": "text", "text": "{\"error\": \"Missing 'capability' parameter\"}"]], "isError": true]
+                }
+                if capability == "location" {
+                    return ["content": [["type": "text", "text": "{\"granted\": false, \"status\": \"permission_required\", \"message\": \"Use get_location to trigger iOS permission prompt in the current runtime path.\"}"]], "isError": false]
+                }
+                return ["content": [["type": "text", "text": "{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Authorization for \(capability) is not implemented.\"}"]], "isError": false]
                 
             // MARK: - View Registry Tool Handlers
                 
@@ -934,11 +970,41 @@ class MCPServer: NSObject {
                 
             case "update_template":
                 guard let name = argsData?["name"] as? String,
-                      let _ = argsData?["patches"] as? [[String: Any]] else {
+                      let patches = argsData?["patches"] as? [[String: Any]] else {
                     return ["content": [["type": "text", "text": "Missing required parameters: name, patches"]], "isError": true]
                 }
-                // TODO: Implement patch application in ViewRegistry
-                return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"status\": \"not_yet_implemented\"}"]], "isError": false]
+
+                // Avoid deadlock when called from MainActor path
+                if Thread.isMainThread {
+                    do {
+                        try MainActor.assumeIsolated {
+                            try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
+                        }
+                    } catch {
+                        return ["content": [["type": "text", "text": "Template patch error: \(error.localizedDescription)"]], "isError": true]
+                    }
+                    return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"count\": \(patches.count)}"]], "isError": false]
+                }
+
+                let semaphore = DispatchSemaphore(value: 0)
+                var patchError: String?
+                DispatchQueue.main.async {
+                    do {
+                        try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
+                    } catch {
+                        patchError = error.localizedDescription
+                    }
+                    semaphore.signal()
+                }
+
+                if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
+                    return ["content": [["type": "text", "text": "{\"error\": \"update_template timed out\"}"]], "isError": true]
+                }
+                if let patchError {
+                    return ["content": [["type": "text", "text": "Template patch error: \(patchError)"]], "isError": true]
+                }
+
+                return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"count\": \(patches.count)}"]], "isError": false]
                 
             case "pop_view":
                 DispatchQueue.main.async {
@@ -962,64 +1028,27 @@ class MCPServer: NSObject {
                 return ["content": [["type": "text", "text": "{\"invalidated\": \"all\"}"]], "isError": false]
                 
             case "query_views":
-                // Query view registry state - use semaphore to avoid sync deadlock
-                let semaphore = DispatchSemaphore(value: 0)
+                // Query view registry state
                 var result: [String: Any] = [:]
-                
-                DispatchQueue.main.async {
-                    let registry = ViewRegistry.shared
-                    
-                    // If querying a specific view by name, return its cached data
-                    if let queryName = argsData?["name"] as? String {
-                        // Find data in navigation stack
-                        if let viewState = registry.navigationStack.first(where: { $0.viewName == queryName }) {
-                            let template = registry.templates[queryName]
-                            result = [
-                                "found": true,
-                                "viewName": queryName,
-                                "version": template?.version ?? "unknown",
-                                "cachedData": viewState.data,
-                                "inStack": true
-                            ] as [String: Any]
-                        } else if let template = registry.templates[queryName] {
-                            // Template exists but not in stack (no data cached)
-                            result = [
-                                "found": true,
-                                "viewName": queryName,
-                                "version": template.version,
-                                "inStack": false,
-                                "defaultData": template.parseDefaultData() ?? [:]
-                            ] as [String: Any]
-                        } else {
-                            result = ["found": false, "viewName": queryName] as [String: Any]
-                        }
-                    } else {
-                        // General query - list all templates and stack
-                        let templates = registry.templates.map { name, template in
-                            ["name": name, "version": template.version]
-                        }
-                        
-                        let stack = registry.navigationStack.map { state in
-                            [
-                                "viewName": state.viewName,
-                                "dataKeys": Array(state.data.keys)
-                            ] as [String: Any]
-                        }
-                        
-                        result = [
-                            "templates": templates,
-                            "navigationStack": stack,
-                            "currentView": registry.currentView?.viewName ?? NSNull(),
-                            "stackDepth": registry.navigationStack.count
-                        ] as [String: Any]
+
+                if Thread.isMainThread {
+                    result = MainActor.assumeIsolated {
+                        buildQueryViewsResult(argsData: argsData)
                     }
-                    semaphore.signal()
-                }
-                
-                // Wait with timeout to prevent indefinite blocking
-                let waitResult = semaphore.wait(timeout: .now() + 5.0)
-                if waitResult == .timedOut {
-                    return ["content": [["type": "text", "text": "{\"error\": \"query_views timed out\"}"]], "isError": true]
+                } else {
+                    let semaphore = DispatchSemaphore(value: 0)
+                    DispatchQueue.main.async {
+                        result = MainActor.assumeIsolated {
+                            self.buildQueryViewsResult(argsData: argsData)
+                        }
+                        semaphore.signal()
+                    }
+
+                    // Wait with timeout to prevent indefinite blocking
+                    let waitResult = semaphore.wait(timeout: .now() + 5.0)
+                    if waitResult == .timedOut {
+                        return ["content": [["type": "text", "text": "{\"error\": \"query_views timed out\"}"]], "isError": true]
+                    }
                 }
                 
                 if let jsonData = try? JSONSerialization.data(withJSONObject: result),
@@ -1086,6 +1115,8 @@ class MCPServer: NSObject {
         case .double(let d): return d
         case .bool(let b): return b
         case .null: return NSNull()
+        case .data(mimeType: let mimeType, let data):
+            return data.dataURLEncoded(mimeType: mimeType)
         case .array(let arr): return arr.map { valueToDictSync($0) }
         case .object(let obj): return obj.mapValues { valueToDictSync($0) }
         @unknown default: return NSNull()
@@ -1184,11 +1215,69 @@ class MCPServer: NSObject {
     private func resultToDict(_ result: CallTool.Result) -> [String: Any] {
         var contents: [[String: Any]] = []
         for content in result.content {
-            if case .text(let text) = content {
+            switch content {
+            case .text(let text):
                 contents.append(["type": "text", "text": text])
+            case .image(data: let data, mimeType: let mimeType, metadata: let metadata):
+                var item: [String: Any] = ["type": "image", "data": data, "mimeType": mimeType]
+                if let metadata {
+                    item["metadata"] = metadata
+                }
+                contents.append(item)
+            case .audio(data: let data, mimeType: let mimeType):
+                contents.append(["type": "audio", "data": data, "mimeType": mimeType])
+            case .resource(uri: let uri, mimeType: let mimeType, text: let text):
+                var item: [String: Any] = ["type": "resource", "uri": uri, "mimeType": mimeType]
+                if let text {
+                    item["text"] = text
+                }
+                contents.append(item)
             }
         }
         return ["content": contents, "isError": result.isError ?? false]
+    }
+
+    private func dictToCallToolResult(_ result: [String: Any]) -> CallTool.Result {
+        var content: [Tool.Content] = []
+        if let items = result["content"] as? [[String: Any]] {
+            for item in items {
+                let type = (item["type"] as? String) ?? "text"
+                switch type {
+                case "text":
+                    if let text = item["text"] as? String {
+                        content.append(.text(text))
+                    }
+                case "image":
+                    if let data = item["data"] as? String,
+                       let mimeType = item["mimeType"] as? String {
+                        let metadata = item["metadata"] as? [String: String]
+                        content.append(.image(data: data, mimeType: mimeType, metadata: metadata))
+                    }
+                case "audio":
+                    if let data = item["data"] as? String,
+                       let mimeType = item["mimeType"] as? String {
+                        content.append(.audio(data: data, mimeType: mimeType))
+                    }
+                case "resource":
+                    if let uri = item["uri"] as? String,
+                       let mimeType = item["mimeType"] as? String {
+                        let text = item["text"] as? String
+                        content.append(.resource(uri: uri, mimeType: mimeType, text: text))
+                    }
+                default:
+                    if let text = item["text"] as? String {
+                        content.append(.text(text))
+                    }
+                }
+            }
+        }
+
+        if content.isEmpty {
+            content = [.text("Tool call failed")]
+        }
+
+        let isError = (result["isError"] as? Bool) ?? true
+        return .init(content: content, isError: isError)
     }
     
     private func dictToJSON(_ dict: [String: Any]) -> Value {
@@ -1209,6 +1298,56 @@ class MCPServer: NSObject {
         case let dict as [String: Any]: return dictToJSON(dict)
         default: return .null
         }
+    }
+
+    @MainActor
+    private func buildQueryViewsResult(argsData: [String: Any]?) -> [String: Any] {
+        let registry = ViewRegistry.shared
+
+        // If querying a specific view by name, return its cached data
+        if let queryName = argsData?["name"] as? String {
+            // Find data in navigation stack
+            if let viewState = registry.navigationStack.first(where: { $0.viewName == queryName }) {
+                let template = registry.templates[queryName]
+                return [
+                    "found": true,
+                    "viewName": queryName,
+                    "version": template?.version ?? "unknown",
+                    "cachedData": viewState.data,
+                    "inStack": true,
+                ] as [String: Any]
+            } else if let template = registry.templates[queryName] {
+                // Template exists but not in stack (no data cached)
+                return [
+                    "found": true,
+                    "viewName": queryName,
+                    "version": template.version,
+                    "inStack": false,
+                    "defaultData": template.parseDefaultData() ?? [:],
+                ] as [String: Any]
+            } else {
+                return ["found": false, "viewName": queryName] as [String: Any]
+            }
+        }
+
+        // General query - list all templates and stack
+        let templates = registry.templates.map { name, template in
+            ["name": name, "version": template.version]
+        }
+
+        let stack = registry.navigationStack.map { state in
+            [
+                "viewName": state.viewName,
+                "dataKeys": Array(state.data.keys),
+            ] as [String: Any]
+        }
+
+        return [
+            "templates": templates,
+            "navigationStack": stack,
+            "currentView": registry.currentView?.viewName ?? NSNull(),
+            "stackDepth": registry.navigationStack.count,
+        ] as [String: Any]
     }
     
     // MARK: - Location Services

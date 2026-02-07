@@ -89,7 +89,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
     
     /// Create a new agent with the given configuration (uses AgentConfig for compatibility)
     func createAgent(config: AgentConfig) {
-        guard isReady, let instance = instance else {
+        guard isReady, instance != nil else {
             Log.agent.info(" Not ready, deferring agent creation")
             return
         }
@@ -177,7 +177,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
     
     /// Send a message to the agent
     func send(_ message: String) {
-        guard let handle = agentHandle, let instance = instance else {
+        guard let handle = agentHandle, instance != nil else {
             Log.agent.info(" No agent handle available")
             return
         }

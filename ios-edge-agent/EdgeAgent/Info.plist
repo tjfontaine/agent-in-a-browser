@@ -57,7 +57,7 @@
         <true/>
     </dict>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>MealMind uses your location to suggest weather-appropriate recipes.</string>
+    <string>Edge Super App uses your location when an app or workflow you requested needs it.</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>CFBundleIconName</key>

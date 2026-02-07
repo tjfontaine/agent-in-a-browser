@@ -74,7 +74,7 @@ struct ViewTemplate: Codable, Sendable {
 }
 
 /// State for a view in the navigation stack
-struct ViewState: Sendable {
+struct ViewState: @unchecked Sendable {
     let viewName: String
     var data: [String: Any]
     var scrollOffset: CGFloat?
@@ -110,6 +110,13 @@ class ViewRegistry: ObservableObject {
     
     private init() {
         Log.app.info("ViewRegistry: Initialized")
+    }
+
+    // MARK: - Path Patch Helpers
+
+    private enum TemplatePathToken {
+        case key(String)
+        case index(Int)
     }
     
     // MARK: - Current View
@@ -149,13 +156,14 @@ class ViewRegistry: ObservableObject {
         }
         
         let now = Date()
+        let existingCreatedAt = templates[name]?.createdAt ?? now
         let viewTemplate = ViewTemplate(
             name: name,
             version: version,
             template: templateString,
             defaultData: defaultDataString,
             animation: animation,
-            createdAt: now,
+            createdAt: existingCreatedAt,
             updatedAt: now
         )
         
@@ -169,6 +177,7 @@ class ViewRegistry: ObservableObject {
         }
         
         templates[name] = viewTemplate
+        persistTemplate(viewTemplate)
     }
     
     // MARK: - Navigation
@@ -234,12 +243,49 @@ class ViewRegistry: ObservableObject {
         // Re-render
         try renderCurrentView()
     }
+
+    /// Apply patches to a registered template
+    func updateTemplate(name: String, patches: [[String: Any]]) throws {
+        guard var existing = templates[name] else {
+            throw ViewRegistryError.viewNotFound(name)
+        }
+
+        guard var template = existing.parseTemplate() else {
+            throw ViewRegistryError.serializationFailed("Template for '\(name)' is not valid JSON")
+        }
+
+        for patch in patches {
+            try applyTemplatePatch(&template, patch: patch)
+        }
+
+        let serialized = try JSONSerialization.data(withJSONObject: template)
+        guard let serializedString = String(data: serialized, encoding: .utf8) else {
+            throw ViewRegistryError.serializationFailed("Failed to serialize patched template")
+        }
+
+        existing = ViewTemplate(
+            name: existing.name,
+            version: existing.version,
+            template: serializedString,
+            defaultData: existing.defaultData,
+            animation: existing.animation,
+            createdAt: existing.createdAt,
+            updatedAt: Date()
+        )
+        templates[name] = existing
+        persistTemplate(existing)
+
+        if currentView?.viewName == name {
+            try renderCurrentView()
+        }
+    }
     
     // MARK: - Cache Management
     
     /// Invalidate a specific view
     func invalidateView(name: String) {
         templates.removeValue(forKey: name)
+        try? DatabaseManager.shared.deleteViewTemplate(name: name)
         Log.app.info("ViewRegistry: Invalidated view '\(name)'")
     }
     
@@ -248,7 +294,16 @@ class ViewRegistry: ObservableObject {
         templates.removeAll()
         navigationStack.removeAll()
         renderedComponents.removeAll()
+        try? DatabaseManager.shared.clearViewTemplates()
         Log.app.info("ViewRegistry: Cleared all views")
+    }
+
+    /// Clear only rendered/navigation state while keeping cached templates intact.
+    /// Useful when switching contexts without destroying globally reusable templates.
+    func clearRenderedState() {
+        navigationStack.removeAll()
+        renderedComponents.removeAll()
+        Log.app.info("ViewRegistry: Cleared rendered/navigation state")
     }
     
     // MARK: - Rendering
@@ -282,14 +337,203 @@ class ViewRegistry: ObservableObject {
     
     /// Load templates from SQLite (called on app launch)
     func loadFromDatabase() async throws {
-        // TODO: Implement SQLite loading via DatabaseManager
-        Log.app.info("ViewRegistry: loadFromDatabase (not yet implemented)")
+        let loaded = try DatabaseManager.shared.loadViewTemplates()
+        templates = loaded
+        Log.app.info("ViewRegistry: Loaded \(loaded.count) template(s) from SQLite")
     }
-    
+
     /// Save templates to SQLite
     func saveToDatabase() async throws {
-        // TODO: Implement SQLite saving via DatabaseManager
-        Log.app.info("ViewRegistry: saveToDatabase (not yet implemented)")
+        for template in templates.values {
+            try DatabaseManager.shared.saveViewTemplate(template)
+        }
+        Log.app.info("ViewRegistry: Saved \(self.templates.count) template(s) to SQLite")
+    }
+
+    /// Export current templates as a JSON snapshot (for revision history)
+    func exportTemplatesSnapshot() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let templatesArray = Array(templates.values)
+        let data = try encoder.encode(templatesArray)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw ViewRegistryError.serializationFailed("Failed to encode template snapshot")
+        }
+        return json
+    }
+
+    /// Import templates from a JSON snapshot and persist them
+    func importTemplatesSnapshot(_ snapshot: String) throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = snapshot.data(using: .utf8) else {
+            throw ViewRegistryError.serializationFailed("Snapshot is not valid UTF-8")
+        }
+        let restored = try decoder.decode([ViewTemplate].self, from: data)
+
+        templates = Dictionary(uniqueKeysWithValues: restored.map { ($0.name, $0) })
+        navigationStack.removeAll()
+        renderedComponents.removeAll()
+
+        try DatabaseManager.shared.clearViewTemplates()
+        for template in restored {
+            try DatabaseManager.shared.saveViewTemplate(template)
+        }
+
+        Log.app.info("ViewRegistry: Imported \(restored.count) template(s) from revision snapshot")
+    }
+
+    private func persistTemplate(_ template: ViewTemplate) {
+        do {
+            try DatabaseManager.shared.saveViewTemplate(template)
+        } catch {
+            Log.app.error("ViewRegistry: Failed to persist template '\(template.name)': \(error)")
+        }
+    }
+
+    private func applyTemplatePatch(_ template: inout [String: Any], patch: [String: Any]) throws {
+        guard let path = patch["path"] as? String, !path.isEmpty else {
+            throw ViewRegistryError.invalidPatch("Patch is missing 'path'")
+        }
+
+        let op = (patch["op"] as? String ?? "replace").lowercased()
+        let tokens = try parseTemplatePath(path)
+
+        var root: Any = template
+        switch op {
+        case "replace", "set":
+            guard let value = patch["value"] else {
+                throw ViewRegistryError.invalidPatch("Patch '\(path)' is missing 'value' for op '\(op)'")
+            }
+            try updateValue(in: &root, tokens: tokens, value: value, remove: false)
+        case "remove", "delete":
+            try updateValue(in: &root, tokens: tokens, value: nil, remove: true)
+        default:
+            throw ViewRegistryError.invalidPatch("Unsupported patch op '\(op)'")
+        }
+
+        guard let patched = root as? [String: Any] else {
+            throw ViewRegistryError.invalidPatch("Patch '\(path)' corrupted root template type")
+        }
+        template = patched
+    }
+
+    private func parseTemplatePath(_ path: String) throws -> [TemplatePathToken] {
+        var tokens: [TemplatePathToken] = []
+        var keyBuffer = ""
+        var i = path.startIndex
+
+        func flushKey() {
+            guard !keyBuffer.isEmpty else { return }
+            tokens.append(.key(keyBuffer))
+            keyBuffer = ""
+        }
+
+        while i < path.endIndex {
+            let ch = path[i]
+            if ch == "." {
+                flushKey()
+                i = path.index(after: i)
+                continue
+            }
+
+            if ch == "[" {
+                flushKey()
+                let start = path.index(after: i)
+                guard let close = path[start...].firstIndex(of: "]") else {
+                    throw ViewRegistryError.invalidPatch("Unclosed '[' in patch path '\(path)'")
+                }
+                let indexString = String(path[start..<close])
+                guard let index = Int(indexString) else {
+                    throw ViewRegistryError.invalidPatch("Invalid array index '\(indexString)' in patch path '\(path)'")
+                }
+                tokens.append(.index(index))
+                i = path.index(after: close)
+                continue
+            }
+
+            keyBuffer.append(ch)
+            i = path.index(after: i)
+        }
+
+        flushKey()
+        if tokens.isEmpty {
+            throw ViewRegistryError.invalidPatch("Patch path '\(path)' resolved to zero tokens")
+        }
+        return tokens
+    }
+
+    private func updateValue(
+        in current: inout Any,
+        tokens: [TemplatePathToken],
+        value: Any?,
+        remove: Bool
+    ) throws {
+        guard let head = tokens.first else {
+            throw ViewRegistryError.invalidPatch("Invalid empty patch token list")
+        }
+
+        let tail = Array(tokens.dropFirst())
+
+        if tail.isEmpty {
+            switch head {
+            case .key(let key):
+                guard var dict = current as? [String: Any] else {
+                    throw ViewRegistryError.invalidPatch("Expected object at '\(key)'")
+                }
+                if remove {
+                    dict.removeValue(forKey: key)
+                } else {
+                    dict[key] = value ?? NSNull()
+                }
+                current = dict
+            case .index(let index):
+                guard var array = current as? [Any] else {
+                    throw ViewRegistryError.invalidPatch("Expected array at index \(index)")
+                }
+                if remove {
+                    guard index >= 0 && index < array.count else {
+                        throw ViewRegistryError.invalidPatch("Index \(index) out of range")
+                    }
+                    array.remove(at: index)
+                } else {
+                    guard index >= 0 && index <= array.count else {
+                        throw ViewRegistryError.invalidPatch("Index \(index) out of range")
+                    }
+                    if index == array.count {
+                        array.append(value ?? NSNull())
+                    } else {
+                        array[index] = value ?? NSNull()
+                    }
+                }
+                current = array
+            }
+            return
+        }
+
+        switch head {
+        case .key(let key):
+            guard var dict = current as? [String: Any] else {
+                throw ViewRegistryError.invalidPatch("Expected object at '\(key)'")
+            }
+            guard var child = dict[key] else {
+                throw ViewRegistryError.invalidPatch("Path component '\(key)' not found")
+            }
+            try updateValue(in: &child, tokens: tail, value: value, remove: remove)
+            dict[key] = child
+            current = dict
+        case .index(let index):
+            guard var array = current as? [Any] else {
+                throw ViewRegistryError.invalidPatch("Expected array at index \(index)")
+            }
+            guard index >= 0 && index < array.count else {
+                throw ViewRegistryError.invalidPatch("Index \(index) out of range")
+            }
+            var child = array[index]
+            try updateValue(in: &child, tokens: tail, value: value, remove: remove)
+            array[index] = child
+            current = array
+        }
     }
 }
 
@@ -300,6 +544,7 @@ public enum ViewRegistryError: Error, LocalizedError {
     case serializationFailed(String)
     case renderFailed(String)
     case noCurrentView
+    case invalidPatch(String)
     
     public var errorDescription: String? {
         switch self {
@@ -311,6 +556,8 @@ public enum ViewRegistryError: Error, LocalizedError {
             return "Render failed: \(reason)"
         case .noCurrentView:
             return "No current view in navigation stack"
+        case .invalidPatch(let reason):
+            return "Invalid template patch: \(reason)"
         }
     }
 }

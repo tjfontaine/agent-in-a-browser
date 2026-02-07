@@ -24,13 +24,13 @@ struct ContentView: View {
             if configManager.apiKey.isEmpty {
                 WelcomeView(showSettings: $showSettings)
             } else {
-                MealMindView()
+                SuperAppView()
             }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        // Agent creation is now handled by MealMindView with its own config
+        // Agent creation is handled by SuperAppView with dynamic runtime config
     }
 }
 
@@ -39,17 +39,17 @@ struct WelcomeView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "fork.knife.circle.fill")
+            Image(systemName: "app.badge.fill")
                 .font(.system(size: 80))
                 .foregroundStyle(.orange)
             
-            Text("MealMind")
+            Text("Edge Super App")
                 .font(.largeTitle.bold())
             
-            Text("Your AI-powered recipe assistant")
+            Text("Build and iterate apps from plain-language requests")
                 .foregroundStyle(.secondary)
             
-            Text("Configure your API key to get started")
+            Text("Configure a provider to get started")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
             

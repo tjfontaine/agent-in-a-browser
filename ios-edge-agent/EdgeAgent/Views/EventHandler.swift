@@ -4,7 +4,7 @@ import OSLog
 // MARK: - Event Handler Types
 
 /// Types of event handlers that can be attached to UI components
-public enum EventHandlerType: Sendable {
+public enum EventHandlerType: @unchecked Sendable {
     case shellEval(command: String, resultMode: ResultMode, onResult: ResultAction?, onError: ResultAction?)
     case navigate(viewName: String, data: [String: Any]?)
     case update(changes: [String: Any])
@@ -78,7 +78,7 @@ public enum ResultMode: String, Sendable {
 }
 
 /// Action to take with the result of a shell_eval
-public enum ResultAction: Sendable {
+public enum ResultAction: @unchecked Sendable {
     case navigate(viewName: String, dataPath: String?)
     case update(changes: [String: Any])
     case toast(message: String)

@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		1AF20D502F358267005FA9DC /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = FA45E1BC6223511421635B5C /* GRDB */; };
-		1AF20D512F358267005FA9DC /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 0E1C463D784D04DFA67ADEE0 /* MLXLLM */; };
 		26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */; };
 		299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */; };
 		51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */; };
@@ -23,17 +22,15 @@
 		A1000005201A0001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000005101A0001 /* SettingsView.swift */; };
 		A1000008201A0001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000008101A0001 /* Assets.xcassets */; };
 		A1000009201A0001 /* WebRuntime in Resources */ = {isa = PBXBuildFile; fileRef = A1000009101A0001 /* WebRuntime */; };
-		A1000010201A0001 /* MealMindView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000010101A0001 /* MealMindView.swift */; };
+		A1000010201A0001 /* SuperAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000010101A0001 /* SuperAppView.swift */; };
 		A1000011201A0001 /* ComponentLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011101A0001 /* ComponentLibrary.swift */; };
 		A1000012201A0001 /* MCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012101A0001 /* MCPServer.swift */; };
 		A2000001201A0001 /* ConfigManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001101A0001 /* ConfigManagerTests.swift */; };
 		A2000002201A0001 /* AgentEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002101A0001 /* AgentEventTests.swift */; };
-		AFBD1CFA0E5302CF630BDD2D /* MLXServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF28A8D9C49F29D6F42C533 /* MLXServer.swift */; };
 		B1000001201A0001 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = B1000001101A0001 /* MCP */; };
 		B2000001201A0001 /* WasmKit in Frameworks */ = {isa = PBXBuildFile; productRef = B2000001101A0001 /* WasmKit */; };
 		B2000002201A0001 /* WASI in Frameworks */ = {isa = PBXBuildFile; productRef = B2000002101A0001 /* WASI */; };
 		B4B63E0F18B169C07EF597D5 /* NativeLoaderImplTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */; };
-		C0450DEABF91148E016B64B6 /* MLXModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EE8D2788133DFD97877C39 /* MLXModelManager.swift */; };
 		C1000001201A0001 /* NativeAgentHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000001101A0001 /* NativeAgentHost.swift */; };
 		C8388861F46676946FAC5F31 /* FoundationModelsServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E3153B3E13BEFBC60FECB3 /* FoundationModelsServer.swift */; };
 		F1000001201A0001 /* MCPSignatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001101A0001 /* MCPSignatures.swift */; };
@@ -54,7 +51,6 @@
 
 /* Begin PBXFileReference section */
 		19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GeneratedWASMImports.swift; sourceTree = "<group>"; };
-		3DF28A8D9C49F29D6F42C533 /* MLXServer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MLXServer.swift; path = EdgeAgent/Services/MLXServer.swift; sourceTree = SOURCE_ROOT; };
 		4FFE639729C170C2695401F8 /* EventHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
 		5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoundationModelsTypes.swift; path = EdgeAgent/Services/FoundationModelsTypes.swift; sourceTree = SOURCE_ROOT; };
@@ -66,7 +62,7 @@
 		A1000008101A0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000009101A0001 /* WebRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebRuntime; sourceTree = "<group>"; };
 		A100000A101A0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A1000010101A0001 /* MealMindView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealMindView.swift; sourceTree = "<group>"; };
+		A1000010101A0001 /* SuperAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperAppView.swift; sourceTree = "<group>"; };
 		A1000011101A0001 /* ComponentLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentLibrary.swift; sourceTree = "<group>"; };
 		A1000012101A0001 /* MCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServer.swift; sourceTree = "<group>"; };
 		A2000000101A0001 /* EdgeAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EdgeAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,7 +71,6 @@
 		B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewRegistry.swift; sourceTree = "<group>"; };
 		BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeLoaderImplTests.swift; sourceTree = "<group>"; };
 		C1000001101A0001 /* NativeAgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentHost.swift; sourceTree = "<group>"; };
-		C2EE8D2788133DFD97877C39 /* MLXModelManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MLXModelManager.swift; path = EdgeAgent/Services/MLXModelManager.swift; sourceTree = SOURCE_ROOT; };
 		C3EB72373C65C1096DC1AE15 /* Log.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Utilities/Log.swift; sourceTree = "<group>"; };
 		DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASIImportRegistry.swift; sourceTree = "<group>"; };
 		E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
@@ -88,8 +83,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1AF20D512F358267005FA9DC /* MLXLLM in Frameworks */,
-				1AF20D502F358267005FA9DC /* GRDB in Frameworks */,
+					1AF20D502F358267005FA9DC /* GRDB in Frameworks */,
 				B1000001201A0001 /* MCP in Frameworks */,
 				B2000001201A0001 /* WasmKit in Frameworks */,
 				B2000002201A0001 /* WASI in Frameworks */,
@@ -163,7 +157,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000005101A0001 /* SettingsView.swift */,
-				A1000010101A0001 /* MealMindView.swift */,
+				A1000010101A0001 /* SuperAppView.swift */,
 				A1000011101A0001 /* ComponentLibrary.swift */,
 				B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */,
 				E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */,
@@ -225,8 +219,6 @@
 			children = (
 				F7E3153B3E13BEFBC60FECB3 /* FoundationModelsServer.swift */,
 				603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */,
-				3DF28A8D9C49F29D6F42C533 /* MLXServer.swift */,
-				C2EE8D2788133DFD97877C39 /* MLXModelManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -255,7 +247,6 @@
 				K2000001101A0001 /* WASIShims */,
 				K3000001101A0001 /* MCPServerKit */,
 				FA45E1BC6223511421635B5C /* GRDB */,
-				0E1C463D784D04DFA67ADEE0 /* MLXLLM */,
 			);
 			productName = EdgeAgent;
 			productReference = A1000000101A0001 /* EdgeAgent.app */;
@@ -314,7 +305,6 @@
 				L2000000101A0001 /* XCLocalSwiftPackageReference "WASIShims" */,
 				L3000000101A0001 /* XCLocalSwiftPackageReference "MCPServerKit" */,
 				2BCF4831B0503D704A0CAFE2 /* XCRemoteSwiftPackageReference "GRDB" */,
-				57578C01ABA5F02E9741A8B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			);
 			productRefGroup = A1000000021A0001 /* Products */;
 			projectDirPath = "";
@@ -354,7 +344,7 @@
 				A1000002201A0001 /* ConfigManager.swift in Sources */,
 				A1000003201A0001 /* AgentEvent.swift in Sources */,
 				A1000005201A0001 /* SettingsView.swift in Sources */,
-				A1000010201A0001 /* MealMindView.swift in Sources */,
+				A1000010201A0001 /* SuperAppView.swift in Sources */,
 				A1000011201A0001 /* ComponentLibrary.swift in Sources */,
 				A1000012201A0001 /* MCPServer.swift in Sources */,
 				C1000001201A0001 /* NativeAgentHost.swift in Sources */,
@@ -368,8 +358,6 @@
 				A029D9C7EDDD0FB353B49E8A /* DatabaseManager.swift in Sources */,
 				C8388861F46676946FAC5F31 /* FoundationModelsServer.swift in Sources */,
 				5207F13AC4EFACA9FC563FB5 /* FoundationModelsTypes.swift in Sources */,
-				AFBD1CFA0E5302CF630BDD2D /* MLXServer.swift in Sources */,
-				C0450DEABF91148E016B64B6 /* MLXModelManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -444,17 +432,19 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+					GCC_WARN_UNUSED_FUNCTION = YES;
+					GCC_WARN_UNUSED_VARIABLE = YES;
+					GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+					IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+					MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+					MTL_FAST_MATH = YES;
+					ONLY_ACTIVE_ARCH = YES;
+					SDKROOT = iphoneos;
+					SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
 		};
@@ -502,16 +492,18 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				VALIDATE_PRODUCT = YES;
+					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+					GCC_WARN_UNUSED_FUNCTION = YES;
+					GCC_WARN_UNUSED_VARIABLE = YES;
+					GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+					IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+					MTL_ENABLE_DEBUG_INFO = NO;
+					MTL_FAST_MATH = YES;
+					SDKROOT = iphoneos;
+					SWIFT_COMPILATION_MODE = wholemodule;
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -533,11 +525,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_EMIT_LOC_STRINGS = YES;
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -559,11 +552,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_EMIT_LOC_STRINGS = YES;
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -577,11 +571,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_EMIT_LOC_STRINGS = NO;
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
 			name = Debug;
@@ -596,11 +591,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_EMIT_LOC_STRINGS = NO;
+					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
 			name = Release;
@@ -661,14 +657,6 @@
 				minimumVersion = 7.0.0;
 			};
 		};
-		57578C01ABA5F02E9741A8B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm/";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.30.0;
-			};
-		};
 		B1000000101A0001 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
@@ -688,11 +676,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0E1C463D784D04DFA67ADEE0 /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57578C01ABA5F02E9741A8B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
-			productName = MLXLLM;
-		};
 		B1000001101A0001 /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B1000000101A0001 /* XCRemoteSwiftPackageReference "swift-sdk" */;

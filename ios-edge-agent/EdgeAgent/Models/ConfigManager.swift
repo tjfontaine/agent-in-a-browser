@@ -56,7 +56,7 @@ class ConfigManager: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         self.provider = defaults.string(forKey: "provider") ?? "anthropic"
-        self.model = defaults.string(forKey: "model") ?? "claude-sonnet-4-20250514"
+        self.model = defaults.string(forKey: "model") ?? "claude-sonnet-4-5"
         self.apiKey = defaults.string(forKey: "apiKey") ?? ""
         self.baseUrl = defaults.string(forKey: "baseUrl") ?? ""
         self.maxTurns = defaults.integer(forKey: "maxTurns")
@@ -71,7 +71,7 @@ class ConfigManager: ObservableObject {
             baseUrl: baseUrl.isEmpty ? nil : baseUrl,
             preamble: nil,
             preambleOverride: nil,
-            mcpServers: [MCPServerConfig(url: "wasm://mcp-server", name: "Local MCP")],
+            mcpServers: [MCPServerConfig(url: "http://127.0.0.1:9292", name: "ios-tools")],
             maxTurns: UInt32(maxTurns)
         )
     }
