@@ -72,6 +72,10 @@ jobs:
             -p web-agent-tui \
             -p web-headless-agent
 
+      - name: tsx-engine WASM smoke check
+        working-directory: runtime
+        run: cargo check -p tsx-engine --target wasm32-wasip2
+
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 

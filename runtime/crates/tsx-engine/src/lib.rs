@@ -24,6 +24,21 @@ const QUICKJS_MAX_STACK_BYTES: usize = 1024 * 1024;
 const QUICKJS_GC_THRESHOLD_BYTES: usize = 32 * 1024 * 1024;
 const QUICKJS_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Clone, Copy)]
+struct RuntimeLimits {
+    memory_limit_bytes: usize,
+    max_stack_bytes: usize,
+    gc_threshold_bytes: usize,
+    execution_timeout: Duration,
+}
+
+const DEFAULT_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
+    memory_limit_bytes: QUICKJS_MEMORY_LIMIT_BYTES,
+    max_stack_bytes: QUICKJS_MAX_STACK_BYTES,
+    gc_threshold_bytes: QUICKJS_GC_THRESHOLD_BYTES,
+    execution_timeout: QUICKJS_EXECUTION_TIMEOUT,
+};
+
 struct TsxEngine;
 
 impl Guest for TsxEngine {
@@ -337,8 +352,24 @@ fn execute_js_with_source_map(
     line_map: Option<&[usize]>,
     source_map: Option<&[u8]>,
 ) -> Result<String, String> {
+    execute_js_with_source_map_and_limits(
+        js_code,
+        source_name,
+        line_map,
+        source_map,
+        DEFAULT_RUNTIME_LIMITS,
+    )
+}
+
+fn execute_js_with_source_map_and_limits(
+    js_code: &str,
+    source_name: &str,
+    line_map: Option<&[usize]>,
+    source_map: Option<&[u8]>,
+    limits: RuntimeLimits,
+) -> Result<String, String> {
     let runtime = AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
-    configure_runtime(&runtime);
+    configure_runtime_with_limits(&runtime, limits);
     let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
         .map_err(|e| format!("Failed to create context: {}", e))?;
 
@@ -411,8 +442,24 @@ fn execute_js_module_with_source_map(
     line_map: Option<&[usize]>,
     source_map: Option<&[u8]>,
 ) -> Result<String, String> {
+    execute_js_module_with_source_map_and_limits(
+        js_code,
+        source_name,
+        line_map,
+        source_map,
+        DEFAULT_RUNTIME_LIMITS,
+    )
+}
+
+fn execute_js_module_with_source_map_and_limits(
+    js_code: &str,
+    source_name: &str,
+    line_map: Option<&[usize]>,
+    source_map: Option<&[u8]>,
+    limits: RuntimeLimits,
+) -> Result<String, String> {
     let runtime = AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
-    configure_runtime(&runtime);
+    configure_runtime_with_limits(&runtime, limits);
     let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
         .map_err(|e| format!("Failed to create context: {}", e))?;
 
@@ -498,16 +545,16 @@ fn execute_js_module_with_source_map(
     result
 }
 
-fn configure_runtime(runtime: &AsyncRuntime) {
+fn configure_runtime_with_limits(runtime: &AsyncRuntime, limits: RuntimeLimits) {
     let started_at = Instant::now();
     futures_lite::future::block_on(async {
-        runtime.set_memory_limit(QUICKJS_MEMORY_LIMIT_BYTES).await;
-        runtime.set_max_stack_size(QUICKJS_MAX_STACK_BYTES).await;
-        runtime.set_gc_threshold(QUICKJS_GC_THRESHOLD_BYTES).await;
+        runtime.set_memory_limit(limits.memory_limit_bytes).await;
+        runtime.set_max_stack_size(limits.max_stack_bytes).await;
+        runtime.set_gc_threshold(limits.gc_threshold_bytes).await;
 
         runtime
             .set_interrupt_handler(Some(Box::new(move || {
-                started_at.elapsed() >= QUICKJS_EXECUTION_TIMEOUT
+                started_at.elapsed() >= limits.execution_timeout
             })))
             .await;
 
@@ -1450,5 +1497,270 @@ mod integration_tests {
         let _ = execute_js(&transpiled.code, "<fetch-timeout>", transpiled.line_map.as_deref()).unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("true"), "logs: {}", logs);
+    }
+
+    #[test]
+    fn test_integration_runtime_interrupt_timeout_triggers_error() {
+        let ts = "while (true) {}";
+        let transpiled = transpiler::transpile(ts).unwrap();
+        let limits = RuntimeLimits {
+            execution_timeout: Duration::from_millis(25),
+            ..DEFAULT_RUNTIME_LIMITS
+        };
+        let err = execute_js_with_source_map_and_limits(
+            &transpiled.code,
+            "<timeout-limit>",
+            transpiled.line_map.as_deref(),
+            transpiled.source_map.as_deref(),
+            limits,
+        )
+        .unwrap_err();
+        let lower = err.to_lowercase();
+        assert!(
+            lower.contains("interrupt") || lower.contains("timeout"),
+            "err: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_integration_runtime_memory_limit_is_enforced() {
+        let ts = r#"
+            const chunk = 'x'.repeat(1024 * 1024);
+            console.log(chunk.length);
+        "#;
+        let transpiled = transpiler::transpile(ts).unwrap();
+        let limits = RuntimeLimits {
+            memory_limit_bytes: 256 * 1024,
+            execution_timeout: Duration::from_secs(2),
+            ..DEFAULT_RUNTIME_LIMITS
+        };
+        let err = execute_js_with_source_map_and_limits(
+            &transpiled.code,
+            "<memory-limit>",
+            transpiled.line_map.as_deref(),
+            transpiled.source_map.as_deref(),
+            limits,
+        )
+        .unwrap_err();
+        let lower = err.to_lowercase();
+        assert!(
+            lower.contains("memory")
+                || lower.contains("out of memory")
+                || lower.contains("failed to install bindings")
+                || lower.contains("exception generated by quickjs"),
+            "err: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_integration_runtime_stack_limit_is_enforced() {
+        let ts = r#"
+            function recurse() { return recurse() + 1; }
+            recurse();
+        "#;
+        let transpiled = transpiler::transpile(ts).unwrap();
+        let limits = RuntimeLimits {
+            max_stack_bytes: 128 * 1024,
+            execution_timeout: Duration::from_secs(5),
+            ..DEFAULT_RUNTIME_LIMITS
+        };
+        let err = execute_js_with_source_map_and_limits(
+            &transpiled.code,
+            "<stack-limit>",
+            transpiled.line_map.as_deref(),
+            transpiled.source_map.as_deref(),
+            limits,
+        )
+        .unwrap_err();
+        let lower = err.to_lowercase();
+        assert!(
+            lower.contains("stack")
+                || lower.contains("recursion")
+                || lower.contains("failed to install bindings")
+                || lower.contains("exception generated by quickjs"),
+            "err: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_integration_unhandled_rejection_clears_when_later_handled() {
+        let ts = r#"
+            const p = Promise.reject(new Error('late-handled'));
+            Promise.resolve().then(() => p.catch(() => {}));
+            setTimeout(() => console.log('handled-later-ok'), 0);
+        "#;
+        let transpiled = transpiler::transpile(ts).unwrap();
+        js_modules::console::clear_logs();
+        let _ = execute_js(
+            &transpiled.code,
+            "<late-handled>",
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
+        let logs = js_modules::console::get_logs();
+        assert!(logs.contains("handled-later-ok"), "logs: {}", logs);
+    }
+
+    #[test]
+    fn test_integration_multiple_unhandled_rejections_surface_error() {
+        let ts = r#"
+            Promise.reject('first-unhandled');
+            Promise.resolve().then(() => Promise.reject('second-unhandled'));
+        "#;
+        let transpiled = transpiler::transpile(ts).unwrap();
+        let err = execute_js(&transpiled.code, "<multi-unhandled>", transpiled.line_map.as_deref())
+            .unwrap_err();
+        assert!(err.contains("Unhandled error"), "err: {}", err);
+        assert!(
+            err.contains("first-unhandled") || err.contains("second-unhandled"),
+            "err: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_integration_module_mode_rejects_unknown_import_attribute_type() {
+        let root = unique_temp_path("json-attrs-unknown", "dir");
+        let _ = std::fs::create_dir_all(&root);
+        let json_path = format!("{}/data.json", root);
+        std::fs::write(&json_path, r#"{"value":41}"#).unwrap();
+        let source_name = format!("{}/entry.ts", root);
+        let js = "import data from './data.json' with { type: 'jsonx' }; export default data.value + 1;";
+
+        let err = execute_js_module(js, &source_name, None).unwrap_err();
+        assert!(err.contains("Unsupported import attribute type: jsonx"), "err: {}", err);
+
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_integration_module_mode_rejects_invalid_json_import_attribute() {
+        let root = unique_temp_path("json-attrs-invalid", "dir");
+        let _ = std::fs::create_dir_all(&root);
+        let json_path = format!("{}/data.json", root);
+        std::fs::write(&json_path, r#"{"value":"#).unwrap();
+        let source_name = format!("{}/entry.ts", root);
+        let js = "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
+
+        let err = execute_js_module(js, &source_name, None).unwrap_err();
+        assert!(err.contains("Invalid JSON module"), "err: {}", err);
+
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_integration_module_mode_json_without_attributes_is_not_supported() {
+        let root = unique_temp_path("json-no-attrs", "dir");
+        let _ = std::fs::create_dir_all(&root);
+        let json_path = format!("{}/data.json", root);
+        std::fs::write(&json_path, r#"{"value":41}"#).unwrap();
+        let source_name = format!("{}/entry.ts", root);
+        let js = "import data from './data.json'; export default data.value + 1;";
+
+        let err = execute_js_module(js, &source_name, None).unwrap_err();
+        assert!(
+            err.contains("data.json") || err.contains("module import failed"),
+            "err: {}",
+            err
+        );
+
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_integration_module_mode_async_unhandled_rejection_from_dependency_surfaces() {
+        let dep_path = unique_temp_path("dep-async-unhandled", "ts");
+        let entry_dir = dep_path
+            .rsplit_once('/')
+            .map(|(dir, _)| dir.to_string())
+            .unwrap_or_else(|| "/tmp".to_string());
+        let entry_path = format!("{}/entry.ts", entry_dir);
+        let dep_name = dep_path
+            .rsplit('/')
+            .next()
+            .unwrap_or("dep-async-unhandled.ts");
+
+        std::fs::write(
+            &dep_path,
+            "Promise.resolve().then(() => { throw new Error('dep-async-unhandled'); }); export const value: number = 1;",
+        )
+        .unwrap();
+        std::fs::write(
+            &entry_path,
+            format!("import {{ value }} from './{}'; export default value;", dep_name),
+        )
+        .unwrap();
+
+        let source = std::fs::read_to_string(&entry_path).unwrap();
+        let transpiled = transpiler::transpile(&source).unwrap();
+        let err = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref())
+            .unwrap_err();
+        assert!(err.contains("dep-async-unhandled"), "err: {}", err);
+        assert!(err.contains(dep_name), "err: {}", err);
+
+        let _ = std::fs::remove_file(&dep_path);
+        let _ = std::fs::remove_file(&entry_path);
+    }
+
+    #[test]
+    fn test_integration_execution_state_isolation_between_runs() {
+        let ts_err = "Promise.reject(new Error('isolation-unhandled'));";
+        let transpiled_err = transpiler::transpile(ts_err).unwrap();
+        let _ = execute_js(
+            &transpiled_err.code,
+            "<isolation-err>",
+            transpiled_err.line_map.as_deref(),
+        )
+        .unwrap_err();
+
+        let ts_ok = "console.log('isolation-ok');";
+        let transpiled_ok = transpiler::transpile(ts_ok).unwrap();
+        js_modules::console::clear_logs();
+        let _ = execute_js(
+            &transpiled_ok.code,
+            "<isolation-ok>",
+            transpiled_ok.line_map.as_deref(),
+        )
+        .unwrap();
+        let logs = js_modules::console::get_logs();
+        assert!(logs.contains("isolation-ok"), "logs: {}", logs);
+    }
+
+    #[test]
+    fn test_integration_cjs_require_esm_reexport_chain() {
+        let root = unique_temp_path("cjs-require-esm-reexport", "dir");
+        let _ = std::fs::create_dir_all(&root);
+        let entry_path = format!("{}/entry.ts", root);
+        let dep_path = format!("{}/dep.mjs", root);
+        let reexport_path = format!("{}/reexport.mjs", root);
+
+        std::fs::write(&dep_path, "export default 40; export const named = 2;").unwrap();
+        std::fs::write(
+            &reexport_path,
+            "export { default, named } from './dep.mjs'; export const another = 1;",
+        )
+        .unwrap();
+        std::fs::write(
+            &entry_path,
+            "const mod = require('./reexport.mjs'); console.log(mod.default + mod.named + mod.another);",
+        )
+        .unwrap();
+
+        let source = std::fs::read_to_string(&entry_path).unwrap();
+        let transpiled = transpiler::transpile(&source).unwrap();
+        assert!(!transpiled.contains_module_decls);
+
+        js_modules::console::clear_logs();
+        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let logs = js_modules::console::get_logs();
+        assert!(logs.contains("43"), "logs: {}", logs);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

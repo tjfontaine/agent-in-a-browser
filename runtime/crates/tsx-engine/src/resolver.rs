@@ -827,4 +827,56 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn test_node_modules_exports_exact_match_precedence_over_wildcard() {
+        let root = temp_root("exports-exact-vs-wildcard");
+        let pkg_root = format!("{}/node_modules/foo", root);
+        let _ = std::fs::create_dir_all(format!("{}/dist", pkg_root));
+        let entry = format!("{}/entry.ts", root);
+
+        std::fs::write(
+            format!("{}/package.json", pkg_root),
+            r#"{"name":"foo","exports":{"./feature":"./dist/exact.js","./*":"./dist/*.js"}}"#,
+        )
+        .unwrap();
+        std::fs::write(format!("{}/dist/exact.js", pkg_root), "export const exact = 1;").unwrap();
+        std::fs::write(
+            format!("{}/dist/feature.js", pkg_root),
+            "export const wildcard = 1;",
+        )
+        .unwrap();
+        std::fs::write(&entry, "export {}").unwrap();
+
+        let resolved = resolve(&entry, "foo/feature");
+        assert_eq!(resolved, format!("{}/dist/exact.js", pkg_root));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_node_modules_exports_require_falls_back_to_default_condition() {
+        let root = temp_root("exports-require-default-fallback");
+        let pkg_root = format!("{}/node_modules/foo", root);
+        let _ = std::fs::create_dir_all(format!("{}/dist", pkg_root));
+        let entry = format!("{}/entry.ts", root);
+
+        std::fs::write(
+            format!("{}/package.json", pkg_root),
+            r#"{"name":"foo","exports":{"." :{"import":"./dist/esm.js","default":"./dist/default.js"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(format!("{}/dist/esm.js", pkg_root), "export const esm = 1;").unwrap();
+        std::fs::write(
+            format!("{}/dist/default.js", pkg_root),
+            "module.exports = { fallback: 1 };",
+        )
+        .unwrap();
+        std::fs::write(&entry, "export {}").unwrap();
+
+        let resolved = resolve_for_require(&entry, "foo");
+        assert_eq!(resolved, format!("{}/dist/default.js", pkg_root));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

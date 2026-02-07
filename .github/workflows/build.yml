@@ -171,6 +171,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -209,6 +211,10 @@ jobs:
       - name: Run Rust tests
         working-directory: runtime
         run: cargo test --features sqlite
+
+      - name: Run tsx-engine wasm smoke check
+        working-directory: runtime
+        run: cargo check -p tsx-engine --target wasm32-wasip2
 
       - name: Run frontend tests
         working-directory: frontend
