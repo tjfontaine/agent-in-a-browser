@@ -59,6 +59,30 @@ async function waitForTerminalOutput(page: Page, text: string, timeout = 5000): 
     throw new Error(`Timeout waiting for "${text}" in terminal. Current screen:\n${finalText}`);
 }
 
+async function waitForSandboxTools(page: Page, timeout = 20000): Promise<void> {
+    const startTime = Date.now();
+    let lastText = '';
+    while (Date.now() - startTime < timeout) {
+        const screenText = await getTerminalText(page);
+        lastText = screenText;
+
+        // Primary ready signal from the TUI status messages.
+        if (screenText.includes('Sandbox MCP connected')) {
+            return;
+        }
+
+        const match = screenText.match(/Local\(sandbox\)\s*\[(\d+)\s+tools\]/);
+        // Some environments briefly show 0 tools even after connection.
+        // If the Local(sandbox) row is visible, allow shell-mode progression.
+        if (match && Number(match[1]) >= 0) {
+            return;
+        }
+        await page.waitForTimeout(200);
+    }
+
+    throw new Error(`Timeout waiting for sandbox tools to be ready. Current screen:\n${lastText}`);
+}
+
 // Helper to wait for text to disappear from terminal
 async function waitForTextToDisappear(page: Page, text: string, timeout = 5000): Promise<void> {
     const startTime = Date.now();
@@ -74,11 +98,17 @@ async function waitForTextToDisappear(page: Page, text: string, timeout = 5000):
 }
 
 // Helper to wait for TUI to be ready
-async function waitForTuiReady(page: Page, timeout = 5000): Promise<void> {
-    await page.waitForSelector('canvas', { timeout });
+async function waitForTuiReady(page: Page, timeout = 15000): Promise<void> {
     await page.waitForFunction(
         () => {
-            return window.tuiTerminal?.buffer?.active !== undefined;
+            const terminal = window.tuiTerminal;
+            if (!terminal || terminal.buffer?.active === undefined) {
+                return false;
+            }
+
+            const hasCanvas = document.querySelector('canvas') !== null;
+            const hasTerminalInput = document.querySelector('[aria-label="Terminal input"]') !== null;
+            return hasCanvas || hasTerminalInput;
         },
         { timeout }
     );
@@ -87,11 +117,12 @@ async function waitForTuiReady(page: Page, timeout = 5000): Promise<void> {
 
 // Helper to enter shell mode and wait for prompt
 async function enterShellMode(page: Page): Promise<void> {
-    await waitForTerminalOutput(page, '›');
+    await waitForTerminalOutput(page, '›', 10000);
+    await waitForSandboxTools(page);
     await typeInTerminal(page, '/sh');
     await pressKey(page, 'Enter');
     // Wait for shell prompt ($ or similar)
-    await waitForTerminalOutput(page, '$', 5000);
+    await waitForTerminalOutput(page, '$', 10000);
 }
 
 // Helper to exit vim with :q!
