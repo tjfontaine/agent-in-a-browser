@@ -16,6 +16,7 @@ use bindings::wasi::filesystem::preopens::get_directories;
 use bindings::wasi::filesystem::types::{Descriptor, DescriptorFlags, OpenFlags, PathFlags};
 use bindings::wasi::io::streams::{InputStream, OutputStream};
 
+use anstyle_parse::{DefaultCharAccumulator, Params, Parser, Perform};
 use ropey::Rope;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -62,6 +63,41 @@ enum Mode {
     Visual,
     VisualLine,
     Search,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EscapeKey {
+    Up,
+    Down,
+    Left,
+    Right,
+    Home,
+    End,
+    Delete,
+    PageUp,
+    PageDown,
+}
+
+#[derive(Default)]
+struct EscapeSequenceCapture {
+    key: Option<EscapeKey>,
+}
+
+impl Perform for EscapeSequenceCapture {
+    fn csi_dispatch(
+        &mut self,
+        params: &Params,
+        _intermediates: &[u8],
+        ignore: bool,
+        action: u8,
+    ) {
+        if ignore {
+            self.key = None;
+            return;
+        }
+
+        self.key = map_csi_key(params, action);
+    }
 }
 
 /// Undo state snapshot (edtui-inspired pattern)
@@ -632,43 +668,75 @@ impl Editor {
         self.mark_dirty_from(self.cursor_row); // All lines shifted
     }
 
-    fn delete_line(&mut self) {
+    fn delete_lines(&mut self, count: usize) {
+        let count = count.max(1);
         self.capture();
-        if self.line_count() <= 1 {
-            // Clear the only line
-            self.rope = Rope::from("\n");
-            self.cursor_col = 0;
-        } else {
-            let start = self.rope.line_to_char(self.cursor_row);
-            let end = if self.cursor_row + 1 < self.line_count() {
-                self.rope.line_to_char(self.cursor_row + 1)
-            } else {
-                self.rope.len_chars()
-            };
-            // Yank before delete
-            self.yank_buffer = self.rope.slice(start..end).to_string();
-            self.yank_is_line = true;
+        let total_lines = self.line_count();
 
-            self.rope.remove(start..end);
-            if self.cursor_row >= self.line_count() {
-                self.cursor_row = self.line_count().saturating_sub(1);
-            }
-            self.clamp_cursor_col();
+        if total_lines <= 1 {
+            self.yank_buffer = self.rope.to_string();
+            self.yank_is_line = true;
+            self.rope = Rope::from("\n");
+            self.cursor_row = 0;
+            self.cursor_col = 0;
+            self.modified = true;
+            self.mark_dirty_from(0);
+            return;
         }
+
+        let start_row = self.cursor_row;
+        let end_row = (self.cursor_row + count.saturating_sub(1)).min(total_lines - 1);
+        let start = self.rope.line_to_char(start_row);
+        let end = if end_row + 1 < self.line_count() {
+            self.rope.line_to_char(end_row + 1)
+        } else {
+            self.rope.len_chars()
+        };
+
+        self.yank_buffer = self.rope.slice(start..end).to_string();
+        self.yank_is_line = true;
+        self.rope.remove(start..end);
+
+        if self.rope.len_chars() == 0 {
+            self.rope = Rope::from("\n");
+        }
+
+        let new_last_row = self.line_count().saturating_sub(1);
+        if self.cursor_row > new_last_row {
+            self.cursor_row = new_last_row;
+        }
+        self.clamp_cursor_col();
         self.modified = true;
-        self.mark_dirty_from(self.cursor_row); // Current and following lines affected
+        self.mark_dirty_from(start_row);
+        self.status_message = format!("{} line(s) deleted", end_row - start_row + 1);
     }
 
-    fn yank_line(&mut self) {
+    fn yank_lines(&mut self, count: usize) {
+        let count = count.max(1);
         let start = self.rope.line_to_char(self.cursor_row);
-        let end = if self.cursor_row + 1 < self.line_count() {
-            self.rope.line_to_char(self.cursor_row + 1)
+        let end_row = (self.cursor_row + count.saturating_sub(1)).min(self.line_count() - 1);
+        let end = if end_row + 1 < self.line_count() {
+            self.rope.line_to_char(end_row + 1)
         } else {
             self.rope.len_chars()
         };
         self.yank_buffer = self.rope.slice(start..end).to_string();
         self.yank_is_line = true;
-        self.status_message = "1 line yanked".to_string();
+        self.status_message = format!("{} line(s) yanked", end_row - self.cursor_row + 1);
+    }
+
+    fn paste_times(&mut self, count: usize) {
+        let times = count.max(1);
+        for _ in 0..times {
+            self.paste();
+        }
+    }
+
+    fn delete_chars_at_cursor(&mut self, count: usize) {
+        let times = count.max(1);
+        for _ in 0..times {
+            self.delete_char_at_cursor();
+        }
     }
 
     fn paste(&mut self) {
@@ -813,6 +881,29 @@ impl Editor {
         self.update_selection();
     }
 
+    fn move_to_line_number(&mut self, one_based_line: usize) {
+        let target = one_based_line.saturating_sub(1);
+        let last = self.line_count().saturating_sub(1);
+        self.cursor_row = target.min(last);
+        self.clamp_cursor_col();
+        self.update_selection();
+    }
+
+    fn move_page_up(&mut self, page_height: usize) {
+        let step = page_height.saturating_sub(1).max(1);
+        self.cursor_row = self.cursor_row.saturating_sub(step);
+        self.clamp_cursor_col();
+        self.update_selection();
+    }
+
+    fn move_page_down(&mut self, page_height: usize) {
+        let step = page_height.saturating_sub(1).max(1);
+        let last_row = self.line_count().saturating_sub(1);
+        self.cursor_row = (self.cursor_row + step).min(last_row);
+        self.clamp_cursor_col();
+        self.update_selection();
+    }
+
     /// Execute search and find all matches
     fn execute_search(&mut self) {
         self.search_matches.clear();
@@ -888,6 +979,119 @@ impl Editor {
     }
 }
 
+fn map_csi_key(params: &Params, action: u8) -> Option<EscapeKey> {
+    match action {
+        b'A' => Some(EscapeKey::Up),
+        b'B' => Some(EscapeKey::Down),
+        b'C' => Some(EscapeKey::Right),
+        b'D' => Some(EscapeKey::Left),
+        b'H' => Some(EscapeKey::Home),
+        b'F' => Some(EscapeKey::End),
+        b'~' => {
+            let first_param = params
+                .iter()
+                .next()
+                .and_then(|p| p.first().copied())
+                .unwrap_or(0);
+            match first_param {
+                1 | 7 => Some(EscapeKey::Home),
+                4 | 8 => Some(EscapeKey::End),
+                3 => Some(EscapeKey::Delete),
+                5 => Some(EscapeKey::PageUp),
+                6 => Some(EscapeKey::PageDown),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn decode_escape_sequence(sequence: &[u8]) -> Option<EscapeKey> {
+    let mut parser = Parser::<DefaultCharAccumulator>::new();
+    let mut capture = EscapeSequenceCapture::default();
+    for b in sequence {
+        parser.advance(&mut capture, *b);
+        if capture.key.is_some() {
+            break;
+        }
+    }
+    capture.key
+}
+
+fn parse_escape_key(stdin: &InputStream) -> Option<EscapeKey> {
+    let second = read_single_byte(stdin)?;
+    match second {
+        b'[' => {
+            let mut sequence: Vec<u8> = vec![0x1B, b'['];
+            // Typical key sequences are short. Bound reads to avoid unbounded parse.
+            for _ in 0..12 {
+                let b = read_single_byte(stdin)?;
+                sequence.push(b);
+                if (0x40..=0x7E).contains(&b) {
+                    break;
+                }
+            }
+            decode_escape_sequence(&sequence)
+        }
+        // SS3 key encoding used by some terminals (ESC O A/B/C/D/H/F)
+        b'O' => match read_single_byte(stdin)? {
+            b'A' => Some(EscapeKey::Up),
+            b'B' => Some(EscapeKey::Down),
+            b'C' => Some(EscapeKey::Right),
+            b'D' => Some(EscapeKey::Left),
+            b'H' => Some(EscapeKey::Home),
+            b'F' => Some(EscapeKey::End),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn apply_escape_key(editor: &mut Editor, key: EscapeKey, content_height: usize) {
+    match key {
+        EscapeKey::Up => editor.move_up(),
+        EscapeKey::Down => editor.move_down(),
+        EscapeKey::Left => editor.move_left(),
+        EscapeKey::Right => editor.move_right(),
+        EscapeKey::Home => editor.move_to_line_start(),
+        EscapeKey::End => editor.move_to_line_end(),
+        EscapeKey::Delete => editor.delete_char_at_cursor(),
+        EscapeKey::PageUp => editor.move_page_up(content_height),
+        EscapeKey::PageDown => editor.move_page_down(content_height),
+    }
+}
+
+fn apply_escape_key_with_count(
+    editor: &mut Editor,
+    key: EscapeKey,
+    content_height: usize,
+    count: usize,
+) {
+    let times = count.max(1);
+    match key {
+        EscapeKey::Home | EscapeKey::End => apply_escape_key(editor, key, content_height),
+        _ => {
+            for _ in 0..times {
+                apply_escape_key(editor, key, content_height);
+            }
+        }
+    }
+}
+
+fn append_count_digit(count: &mut Option<usize>, digit: u8) {
+    let current = count.unwrap_or(0);
+    *count = Some(
+        current
+            .saturating_mul(10)
+            .saturating_add(usize::from(digit.saturating_sub(b'0'))),
+    );
+}
+
+fn take_count(count: &mut Option<usize>) -> usize {
+    let value = count.take().unwrap_or(1);
+    value.max(1)
+}
+
 fn run_editor(
     args: Vec<String>,
     env: ExecEnv,
@@ -916,6 +1120,7 @@ fn run_editor(
     let mut editor = Editor::new(initial_content, file_path);
     let mut running = true;
     let mut pending_key: Option<u8> = None; // For multi-key commands (dd, yy, gg)
+    let mut pending_count: Option<usize> = None; // Numeric prefixes (e.g., 3j, 2dd)
 
     write_to_stream(&stdout, CLEAR_SCREEN.as_bytes());
     write_to_stream(&stdout, HOME.as_bytes());
@@ -926,6 +1131,7 @@ fn run_editor(
 
         if let Some(byte) = read_single_byte(&stdin) {
             editor.status_message.clear();
+            let content_height = (dims.rows as usize).saturating_sub(2).max(1);
 
             match editor.mode {
                 Mode::Command => handle_command_mode(&mut editor, &mut running, byte, &env.cwd),
@@ -934,9 +1140,11 @@ fn run_editor(
                     &mut editor,
                     &mut running,
                     &mut pending_key,
+                    &mut pending_count,
                     byte,
                     &stdin,
                     &env.cwd,
+                    content_height,
                 ),
                 Mode::Visual | Mode::VisualLine => {
                     handle_visual_mode(&mut editor, &mut pending_key, byte, &stdin)
@@ -1007,20 +1215,39 @@ fn handle_normal_mode(
     editor: &mut Editor,
     _running: &mut bool,
     pending: &mut Option<u8>,
+    pending_count: &mut Option<usize>,
     byte: u8,
     stdin: &InputStream,
     _cwd: &str,
+    content_height: usize,
 ) {
     // Check for pending multi-key commands
     if let Some(prev) = pending.take() {
+        let count = take_count(pending_count);
         match (prev, byte) {
-            (b'd', b'd') => editor.delete_line(),
-            (b'y', b'y') => editor.yank_line(),
-            (b'g', b'g') => editor.move_to_first_line(),
+            (b'd', b'd') => editor.delete_lines(count),
+            (b'y', b'y') => editor.yank_lines(count),
+            (b'g', b'g') => editor.move_to_line_number(count),
             _ => {} // Unknown combo, ignore
         }
         return;
     }
+
+    // Count prefix parsing.
+    match byte {
+        b'1'..=b'9' => {
+            append_count_digit(pending_count, byte);
+            return;
+        }
+        b'0' if pending_count.is_some() => {
+            append_count_digit(pending_count, byte);
+            return;
+        }
+        _ => {}
+    }
+
+    let has_count = pending_count.is_some();
+    let count = take_count(pending_count);
 
     match byte {
         b':' => {
@@ -1028,17 +1255,56 @@ fn handle_normal_mode(
             editor.command_buffer.clear();
         }
         // Movement
-        b'h' => editor.move_left(),
-        b'j' => editor.move_down(),
-        b'k' => editor.move_up(),
-        b'l' => editor.move_right(),
-        b'w' => editor.move_word_forward(),
-        b'b' => editor.move_word_backward(),
-        b'e' => editor.move_word_end(),
+        b'h' => {
+            for _ in 0..count {
+                editor.move_left();
+            }
+        }
+        b'j' => {
+            for _ in 0..count {
+                editor.move_down();
+            }
+        }
+        b'k' => {
+            for _ in 0..count {
+                editor.move_up();
+            }
+        }
+        b'l' => {
+            for _ in 0..count {
+                editor.move_right();
+            }
+        }
+        b'w' => {
+            for _ in 0..count {
+                editor.move_word_forward();
+            }
+        }
+        b'b' => {
+            for _ in 0..count {
+                editor.move_word_backward();
+            }
+        }
+        b'e' => {
+            for _ in 0..count {
+                editor.move_word_end();
+            }
+        }
         b'0' => editor.move_to_line_start(),
         b'$' => editor.move_to_line_end(),
-        b'G' => editor.move_to_last_line(),
-        b'g' | b'd' | b'y' => *pending = Some(byte),
+        b'G' => {
+            if has_count {
+                editor.move_to_line_number(count);
+            } else {
+                editor.move_to_last_line();
+            }
+        }
+        b'g' | b'd' | b'y' => {
+            *pending = Some(byte);
+            if has_count {
+                *pending_count = Some(count);
+            }
+        }
         // Insert modes
         b'i' => editor.mode = Mode::Insert,
         b'a' => {
@@ -1053,15 +1319,36 @@ fn handle_normal_mode(
             editor.cursor_col = 0;
             editor.mode = Mode::Insert;
         }
-        b'o' => editor.open_line_below(),
-        b'O' => editor.open_line_above(),
+        b'o' => {
+            for _ in 0..count {
+                editor.open_line_below();
+            }
+        }
+        b'O' => {
+            for _ in 0..count {
+                editor.open_line_above();
+            }
+        }
         // Editing
-        b'x' => editor.delete_char_at_cursor(),
-        b'J' => editor.join_line(),
-        b'p' => editor.paste(),
+        b'x' => editor.delete_chars_at_cursor(count),
+        b'J' => {
+            let joins = count.max(1);
+            for _ in 0..joins {
+                editor.join_line();
+            }
+        }
+        b'p' => editor.paste_times(count),
         // Undo/redo
-        b'u' => editor.undo(),
-        0x12 => editor.redo(), // Ctrl+R
+        b'u' => {
+            for _ in 0..count {
+                editor.undo();
+            }
+        }
+        0x12 => {
+            for _ in 0..count {
+                editor.redo();
+            }
+        } // Ctrl+R
         // Visual mode
         b'v' => {
             editor.mode = Mode::Visual;
@@ -1076,18 +1363,20 @@ fn handle_normal_mode(
             editor.mode = Mode::Search;
             editor.search_pattern.clear();
         }
-        b'n' => editor.jump_to_next_match(),
-        b'N' => editor.jump_to_prev_match(),
+        b'n' => {
+            for _ in 0..count {
+                editor.jump_to_next_match();
+            }
+        }
+        b'N' => {
+            for _ in 0..count {
+                editor.jump_to_prev_match();
+            }
+        }
         // Arrow keys
         0x1B => {
-            if let Some(b'[') = read_single_byte(stdin) {
-                match read_single_byte(stdin) {
-                    Some(b'A') => editor.move_up(),
-                    Some(b'B') => editor.move_down(),
-                    Some(b'C') => editor.move_right(),
-                    Some(b'D') => editor.move_left(),
-                    _ => {}
-                }
+            if let Some(key) = parse_escape_key(stdin) {
+                apply_escape_key_with_count(editor, key, content_height, count);
             }
         }
         _ => {}
@@ -1248,6 +1537,20 @@ fn render_to_buffer(editor: &mut Editor, width: usize, height: usize) {
     editor.previous_buffer.resize(width, height);
 
     let content_height = height.saturating_sub(2);
+    if content_height > 0 {
+        let max_scroll = editor.line_count().saturating_sub(content_height);
+        editor.scroll_offset = editor.scroll_offset.min(max_scroll);
+
+        if editor.cursor_row < editor.scroll_offset {
+            editor.scroll_offset = editor.cursor_row;
+        } else {
+            let visible_end = editor.scroll_offset + content_height;
+            if editor.cursor_row >= visible_end {
+                editor.scroll_offset = editor.cursor_row.saturating_sub(content_height - 1);
+            }
+        }
+    }
+
     let bg = Color::bg_default();
     let fg_white = Color::reset();
     let fg_reverse_bg = Color::new(0, 0, 0); // Black text on reverse
@@ -1684,6 +1987,96 @@ fn write_file(cwd: &str, path: &str, content: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to write: {:?}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_escape_sequence_maps_arrow_and_home_end_keys() {
+        assert_eq!(decode_escape_sequence(b"\x1b[A"), Some(EscapeKey::Up));
+        assert_eq!(decode_escape_sequence(b"\x1b[B"), Some(EscapeKey::Down));
+        assert_eq!(decode_escape_sequence(b"\x1b[C"), Some(EscapeKey::Right));
+        assert_eq!(decode_escape_sequence(b"\x1b[D"), Some(EscapeKey::Left));
+        assert_eq!(decode_escape_sequence(b"\x1b[H"), Some(EscapeKey::Home));
+        assert_eq!(decode_escape_sequence(b"\x1b[F"), Some(EscapeKey::End));
+    }
+
+    #[test]
+    fn decode_escape_sequence_maps_tilde_variants() {
+        assert_eq!(decode_escape_sequence(b"\x1b[1~"), Some(EscapeKey::Home));
+        assert_eq!(decode_escape_sequence(b"\x1b[4~"), Some(EscapeKey::End));
+        assert_eq!(decode_escape_sequence(b"\x1b[3~"), Some(EscapeKey::Delete));
+        assert_eq!(decode_escape_sequence(b"\x1b[5~"), Some(EscapeKey::PageUp));
+        assert_eq!(decode_escape_sequence(b"\x1b[6~"), Some(EscapeKey::PageDown));
+    }
+
+    #[test]
+    fn apply_escape_delete_removes_char_at_cursor() {
+        let mut editor = Editor::new("abc\n".to_string(), None);
+        editor.cursor_row = 0;
+        editor.cursor_col = 1;
+
+        apply_escape_key(&mut editor, EscapeKey::Delete, 20);
+
+        assert_eq!(editor.get_line(0), "ac");
+    }
+
+    #[test]
+    fn apply_escape_page_navigation_uses_view_height() {
+        let mut content = String::new();
+        for i in 0..30 {
+            content.push_str(&format!("line{}\n", i));
+        }
+        let mut editor = Editor::new(content, Some("page_nav_test.txt".to_string()));
+        editor.cursor_row = 0;
+        editor.cursor_col = 0;
+
+        apply_escape_key(&mut editor, EscapeKey::PageDown, 10);
+        assert_eq!(editor.cursor_row, 9);
+
+        apply_escape_key(&mut editor, EscapeKey::PageUp, 10);
+        assert_eq!(editor.cursor_row, 0);
+    }
+
+    #[test]
+    fn count_helpers_accumulate_digits() {
+        let mut count = None;
+        append_count_digit(&mut count, b'3');
+        append_count_digit(&mut count, b'0');
+        append_count_digit(&mut count, b'4');
+        assert_eq!(take_count(&mut count), 304);
+        assert_eq!(take_count(&mut count), 1);
+    }
+
+    #[test]
+    fn delete_lines_removes_requested_range() {
+        let mut editor = Editor::new("a\nb\nc\nd\n".to_string(), None);
+        editor.cursor_row = 1; // b
+        editor.delete_lines(2);
+        assert_eq!(editor.rope.to_string(), "a\nd\n");
+        assert_eq!(editor.yank_buffer, "b\nc\n");
+    }
+
+    #[test]
+    fn move_to_line_number_is_one_based_and_clamped() {
+        let mut editor = Editor::new("a\nb\nc".to_string(), None);
+        editor.move_to_line_number(2);
+        assert_eq!(editor.cursor_row, 1);
+        editor.move_to_line_number(999);
+        assert_eq!(editor.cursor_row, 2);
+    }
+
+    #[test]
+    fn repeated_word_motion_then_delete_hits_third_word() {
+        let mut editor = Editor::new("one two three\n".to_string(), None);
+        editor.move_to_line_start();
+        editor.move_word_forward();
+        editor.move_word_forward();
+        editor.delete_char_at_cursor();
+        assert_eq!(editor.get_line(0), "one two hree");
+    }
 }
 
 bindings::export!(EdtuiModule with_types_in bindings);

@@ -530,4 +530,164 @@ test.describe('Vim File Operations', () => {
         await typeInTerminal(page, 'rm e2e_test_file.txt');
         await pressKey(page, 'Enter');
     });
+
+    test('ArrowDown escape sequence navigates lines in NORMAL mode', async ({ page }) => {
+        await typeInTerminal(page, 'vim arrow_nav_test.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        await pressKey(page, 'i');
+        await typeInTerminal(page, 'abc');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'xyz');
+        await pressKey(page, 'Escape');
+
+        // Move to first line/column, then navigate down via ANSI arrow sequence.
+        await pressKey(page, 'g');
+        await pressKey(page, 'g');
+        await pressKey(page, '0');
+        await pressKey(page, 'ArrowDown');
+        await pressKey(page, 'x');
+
+        await typeInTerminal(page, ':wq');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
+        await typeInTerminal(page, 'cat arrow_nav_test.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'abc');
+        await waitForTerminalOutput(page, 'yz');
+        await waitForTextToDisappear(page, 'xyz', 3000);
+
+        await typeInTerminal(page, 'rm arrow_nav_test.txt');
+        await pressKey(page, 'Enter');
+    });
+});
+
+test.describe('Vim Count Prefix Motions', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/');
+        await waitForTuiReady(page);
+        await enterShellMode(page);
+    });
+
+    test('3j moves down three lines before edit', async ({ page }) => {
+        await typeInTerminal(page, 'echo "line1" > count_3j.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line2" >> count_3j.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line3" >> count_3j.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "delta" >> count_3j.txt');
+        await pressKey(page, 'Enter');
+
+        await typeInTerminal(page, 'vim count_3j.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        await pressKey(page, 'g');
+        await pressKey(page, 'g');
+        await pressKey(page, '0');
+        await typeInTerminal(page, '3jx');
+
+        await typeInTerminal(page, ':wq');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
+        await typeInTerminal(page, 'tail -n 1 count_3j.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'elta');
+
+        await typeInTerminal(page, 'rm count_3j.txt');
+        await pressKey(page, 'Enter');
+    });
+
+    test('5x deletes five characters at cursor', async ({ page }) => {
+        await typeInTerminal(page, 'echo "abcdefghi" > count_5x.txt');
+        await pressKey(page, 'Enter');
+
+        await typeInTerminal(page, 'vim count_5x.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        await pressKey(page, 'g');
+        await pressKey(page, 'g');
+        await pressKey(page, '0');
+        await typeInTerminal(page, '5x');
+
+        await typeInTerminal(page, ':wq');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
+        await typeInTerminal(page, 'cat count_5x.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'fghi');
+
+        await typeInTerminal(page, 'rm count_5x.txt');
+        await pressKey(page, 'Enter');
+    });
+
+    test('2dd deletes two lines', async ({ page }) => {
+        await typeInTerminal(page, 'echo "line1" > count_2dd.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line2" >> count_2dd.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line3" >> count_2dd.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line4" >> count_2dd.txt');
+        await pressKey(page, 'Enter');
+
+        await typeInTerminal(page, 'vim count_2dd.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        await pressKey(page, 'g');
+        await pressKey(page, 'g');
+        await typeInTerminal(page, '2dd');
+
+        await typeInTerminal(page, ':wq');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
+        await typeInTerminal(page, 'tail -n 2 count_2dd.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'line3');
+        await waitForTerminalOutput(page, 'line4');
+
+        await typeInTerminal(page, 'rm count_2dd.txt');
+        await pressKey(page, 'Enter');
+    });
+
+    test('4G jumps to line 4 before edit', async ({ page }) => {
+        await typeInTerminal(page, 'echo "line1" > count_4g.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line2" >> count_4g.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line3" >> count_4g.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "XYZ" >> count_4g.txt');
+        await pressKey(page, 'Enter');
+        await typeInTerminal(page, 'echo "line5" >> count_4g.txt');
+        await pressKey(page, 'Enter');
+
+        await typeInTerminal(page, 'vim count_4g.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'NORMAL', 5000);
+
+        await pressKey(page, 'g');
+        await pressKey(page, 'g');
+        await pressKey(page, '0');
+        await typeInTerminal(page, '4Gx');
+
+        await typeInTerminal(page, ':wq');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
+        await typeInTerminal(page, 'cat count_4g.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, 'YZ');
+
+        await typeInTerminal(page, 'rm count_4g.txt');
+        await pressKey(page, 'Enter');
+    });
 });
