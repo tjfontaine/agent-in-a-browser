@@ -1,6 +1,6 @@
 //! Module loader that fetches from network or filesystem.
 
-use rquickjs::loader::Loader;
+use rquickjs::loader::{ImportAttributes, Loader};
 use rquickjs::module::Declared;
 use rquickjs::{Ctx, Module, Result};
 use std::path::Path;
@@ -16,7 +16,19 @@ use crate::transpiler;
 pub struct HybridLoader;
 
 impl Loader for HybridLoader {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js, Declared>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        path: &str,
+        attributes: Option<ImportAttributes<'js>>,
+    ) -> Result<Module<'js, Declared>> {
+        let import_type = attributes
+            .as_ref()
+            .map(|attrs| attrs.get_type())
+            .transpose()
+            .map_err(|e| rquickjs::Error::new_loading_message(path, format!("{}", e)))?
+            .flatten();
+
         let local_path = crate::resolver::file_url_to_path(path);
         // Fetch source code
         let source = if path.starts_with("https://") || path.starts_with("http://") {
@@ -42,14 +54,30 @@ impl Loader for HybridLoader {
 
         // Auto-transpile TypeScript (modules don't need async IIFE wrapping)
         let fs_path = local_path.as_deref().unwrap_or(path);
-        let js_source = if fs_path.ends_with(".cjs") {
-            wrap_commonjs_as_esm_with_swc(fs_path, &source)
-                .map_err(|e| rquickjs::Error::new_loading_message(path, e))?
-        } else if fs_path.ends_with(".ts") || fs_path.ends_with(".tsx") {
-            transpiler::transpile_code_only(&source)
-                .map_err(|e| rquickjs::Error::new_loading_message(path, e))?
-        } else {
-            source
+        let js_source = match import_type.as_deref() {
+            Some("json") => {
+                let parsed: serde_json::Value = serde_json::from_str(&source).map_err(|e| {
+                    rquickjs::Error::new_loading_message(path, format!("Invalid JSON module: {}", e))
+                })?;
+                format!("export default {};", parsed)
+            }
+            Some(other) => {
+                return Err(rquickjs::Error::new_loading_message(
+                    path,
+                    format!("Unsupported import attribute type: {}", other),
+                ));
+            }
+            None => {
+                if fs_path.ends_with(".cjs") {
+                    wrap_commonjs_as_esm_with_swc(fs_path, &source)
+                        .map_err(|e| rquickjs::Error::new_loading_message(path, e))?
+                } else if fs_path.ends_with(".ts") || fs_path.ends_with(".tsx") {
+                    transpiler::transpile_code_only(&source)
+                        .map_err(|e| rquickjs::Error::new_loading_message(path, e))?
+                } else {
+                    source
+                }
+            }
         };
 
         // Declare the module

@@ -14,9 +14,15 @@ mod transpiler;
 
 use bindings::exports::shell::unix::command::{ExecEnv, Guest};
 use bindings::wasi::io::streams::{InputStream, OutputStream};
+use std::time::{Duration, Instant};
 
 // QuickJS runtime for execution
 use rquickjs::{context::EvalOptions, AsyncContext, AsyncRuntime, CatchResultExt};
+
+const QUICKJS_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+const QUICKJS_MAX_STACK_BYTES: usize = 1024 * 1024;
+const QUICKJS_GC_THRESHOLD_BYTES: usize = 32 * 1024 * 1024;
+const QUICKJS_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct TsxEngine;
 
@@ -332,6 +338,7 @@ fn execute_js_with_source_map(
     source_map: Option<&[u8]>,
 ) -> Result<String, String> {
     let runtime = AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
+    configure_runtime(&runtime);
     let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
         .map_err(|e| format!("Failed to create context: {}", e))?;
 
@@ -375,25 +382,15 @@ fn execute_js_with_source_map(
     // This ensures console.log calls inside async code are captured
     futures_lite::future::block_on(runtime.idle());
 
-    let pending_error = futures_lite::future::block_on(context.with(|ctx| {
-        let globals = ctx.globals();
-        let val: rquickjs::Value = globals
-            .get("__lastUnhandledError")
-            .unwrap_or_else(|_| rquickjs::Value::new_null(ctx.clone()));
-        if val.is_null() || val.is_undefined() {
-            return None;
+    if result.is_ok() {
+        if let Some(raw_err) = take_unhandled_error(&context) {
+            return Err(format_js_unhandled_error(
+                source_name,
+                line_map,
+                source_map,
+                &raw_err,
+            ));
         }
-        // Clear after reading so subsequent runs do not inherit stale state.
-        let _ = globals.set("__lastUnhandledError", rquickjs::Value::new_null(ctx.clone()));
-        Some(format!("{:?}", val))
-    }));
-    if let Some(raw_err) = pending_error {
-        return Err(format_js_unhandled_error(
-            source_name,
-            line_map,
-            source_map,
-            &raw_err,
-        ));
     }
 
     result
@@ -415,6 +412,7 @@ fn execute_js_module_with_source_map(
     source_map: Option<&[u8]>,
 ) -> Result<String, String> {
     let runtime = AsyncRuntime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
+    configure_runtime(&runtime);
     let context = futures_lite::future::block_on(AsyncContext::full(&runtime))
         .map_err(|e| format!("Failed to create context: {}", e))?;
 
@@ -487,7 +485,67 @@ fn execute_js_module_with_source_map(
     }));
 
     let _ = std::fs::remove_file(&temp_name);
+    if result.is_ok() {
+        if let Some(raw_err) = take_unhandled_error(&context) {
+            return Err(format_js_unhandled_error(
+                source_name,
+                line_map,
+                source_map,
+                &raw_err,
+            ));
+        }
+    }
     result
+}
+
+fn configure_runtime(runtime: &AsyncRuntime) {
+    let started_at = Instant::now();
+    futures_lite::future::block_on(async {
+        runtime.set_memory_limit(QUICKJS_MEMORY_LIMIT_BYTES).await;
+        runtime.set_max_stack_size(QUICKJS_MAX_STACK_BYTES).await;
+        runtime.set_gc_threshold(QUICKJS_GC_THRESHOLD_BYTES).await;
+
+        runtime
+            .set_interrupt_handler(Some(Box::new(move || {
+                started_at.elapsed() >= QUICKJS_EXECUTION_TIMEOUT
+            })))
+            .await;
+
+        runtime
+            .set_host_promise_rejection_tracker(Some(Box::new(|ctx, promise, reason, is_handled| {
+                let globals = ctx.globals();
+                if is_handled {
+                    let previous: rquickjs::Value = globals
+                        .get("__lastUnhandledPromise")
+                        .unwrap_or_else(|_| rquickjs::Value::new_null(ctx.clone()));
+                    if !previous.is_null() && previous == promise {
+                        let _ =
+                            globals.set("__lastUnhandledPromise", rquickjs::Value::new_null(ctx.clone()));
+                        let _ = globals.set("__lastUnhandledError", rquickjs::Value::new_null(ctx.clone()));
+                    }
+                    return;
+                }
+                let _ = globals.set("__lastUnhandledPromise", promise);
+                let _ = globals.set("__lastUnhandledError", reason);
+            })))
+            .await;
+    });
+}
+
+fn take_unhandled_error(context: &AsyncContext) -> Option<String> {
+    futures_lite::future::block_on(context.with(|ctx| {
+        let globals = ctx.globals();
+        let val: rquickjs::Value = globals
+            .get("__lastUnhandledError")
+            .unwrap_or_else(|_| rquickjs::Value::new_null(ctx.clone()));
+        if val.is_null() || val.is_undefined() {
+            return None;
+        }
+        // Clear after reading so subsequent runs do not inherit stale state.
+        let _ = globals.set("__lastUnhandledError", rquickjs::Value::new_null(ctx.clone()));
+        let _ = globals.set("__lastUnhandledPromise", rquickjs::Value::new_null(ctx.clone()));
+        Some(format!("{:?}", val))
+    }))
 }
 
 fn temp_module_path(source_name: &str) -> String {
@@ -812,6 +870,22 @@ mod integration_tests {
 
         let _ = std::fs::remove_file(&dep_path);
         let _ = std::fs::remove_file(&entry_path);
+    }
+
+    #[test]
+    fn test_integration_module_mode_imports_json_with_attributes() {
+        let root = unique_temp_path("json-attrs", "dir");
+        let _ = std::fs::create_dir_all(&root);
+        let json_path = format!("{}/data.json", root);
+        std::fs::write(&json_path, r#"{"value":41}"#).unwrap();
+        let source_name = format!("{}/entry.ts", root);
+        let js = "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
+
+        let output = execute_js_module(js, &source_name, None).unwrap();
+        assert_eq!(output, "42");
+
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

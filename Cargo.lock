@@ -801,9 +801,9 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -3339,7 +3339,7 @@ dependencies = [
 [[package]]
 name = "rquickjs"
 version = "0.11.0"
-source = "git+https://github.com/DelSkayn/rquickjs.git?rev=c99675e5#c99675e50201d74554d0f667094f800e1287001b"
+source = "git+https://github.com/DelSkayn/rquickjs.git?rev=172ef4b4#172ef4b45c45e2cd6b6f83fe7faef58a6033429b"
 dependencies = [
  "rquickjs-core",
  "rquickjs-macro",
@@ -3348,7 +3348,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-core"
 version = "0.11.0"
-source = "git+https://github.com/DelSkayn/rquickjs.git?rev=c99675e5#c99675e50201d74554d0f667094f800e1287001b"
+source = "git+https://github.com/DelSkayn/rquickjs.git?rev=172ef4b4#172ef4b45c45e2cd6b6f83fe7faef58a6033429b"
 dependencies = [
  "async-lock",
  "hashbrown 0.16.1",
@@ -3359,7 +3359,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-macro"
 version = "0.11.0"
-source = "git+https://github.com/DelSkayn/rquickjs.git?rev=c99675e5#c99675e50201d74554d0f667094f800e1287001b"
+source = "git+https://github.com/DelSkayn/rquickjs.git?rev=172ef4b4#172ef4b45c45e2cd6b6f83fe7faef58a6033429b"
 dependencies = [
  "convert_case",
  "fnv",
@@ -3375,7 +3375,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-sys"
 version = "0.11.0"
-source = "git+https://github.com/DelSkayn/rquickjs.git?rev=c99675e5#c99675e50201d74554d0f667094f800e1287001b"
+source = "git+https://github.com/DelSkayn/rquickjs.git?rev=172ef4b4#172ef4b45c45e2cd6b6f83fe7faef58a6033429b"
 dependencies = [
  "cc",
 ]

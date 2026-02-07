@@ -211,21 +211,6 @@ globalThis.process.stderr = {
 };
 
 
-// Track unhandled rejections - this helps surface async errors
+// Track unhandled rejections - the runtime host sets this from rejection hooks.
 globalThis.__lastUnhandledError = null;
-
-// Install unhandled rejection handler
-// QuickJS doesn't have addEventListener, but we can override Promise behavior
-const OriginalPromise = globalThis.Promise;
-const originalThen = OriginalPromise.prototype.then;
-
-// Wrap Promise.then to catch unhandled rejections
-OriginalPromise.prototype.then = function (onFulfilled, onRejected) {
-    const wrappedRejected = onRejected ? function (error) {
-        globalThis.__lastUnhandledError = error;
-        console.error('[UnhandledRejection]', error?.message || String(error));
-        return onRejected(error);
-    } : undefined;
-
-    return originalThen.call(this, onFulfilled, wrappedRejected);
-};
+globalThis.__lastUnhandledPromise = null;
