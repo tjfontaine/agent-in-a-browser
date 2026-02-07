@@ -42,8 +42,3 @@ pub use jsonrpc::{JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResp
 pub use protocol::{
     LogLevel, LogMessage, ServerInfo, ToolAnnotations, ToolContent, ToolDefinition, ToolResult,
 };
-
-#[cfg(feature = "stdio")]
-mod stdio;
-#[cfg(feature = "stdio")]
-pub use stdio::run_stdio_server;

@@ -24,7 +24,11 @@ fn get_random_u64() -> u64 {
 }
 
 /// Expand all shell expansions in a string (variables, commands, arithmetic)
-pub fn expand_string(input: &str, env: &ShellEnv, in_double_quotes: bool) -> Result<String, String> {
+pub fn expand_string(
+    input: &str,
+    env: &ShellEnv,
+    in_double_quotes: bool,
+) -> Result<String, String> {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
 
@@ -57,7 +61,11 @@ pub fn expand_string(input: &str, env: &ShellEnv, in_double_quotes: bool) -> Res
 }
 
 /// Expand a $ expression
-fn expand_dollar(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEnv, _in_double_quotes: bool) -> Result<String, String> {
+fn expand_dollar(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    env: &ShellEnv,
+    _in_double_quotes: bool,
+) -> Result<String, String> {
     match chars.peek() {
         Some('{') => {
             chars.next(); // consume '{'
@@ -111,9 +119,15 @@ fn expand_dollar(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEn
             chars.next();
             // Current shell options - format as string
             let mut opts = String::new();
-            if env.options.errexit { opts.push('e'); }
-            if env.options.nounset { opts.push('u'); }
-            if env.options.xtrace { opts.push('x'); }
+            if env.options.errexit {
+                opts.push('e');
+            }
+            if env.options.nounset {
+                opts.push('u');
+            }
+            if env.options.xtrace {
+                opts.push('x');
+            }
             Ok(opts)
         }
         _ => {
@@ -124,9 +138,12 @@ fn expand_dollar(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEn
 }
 
 /// Expand a simple variable name (letters, digits, underscores)
-fn expand_simple_variable(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEnv) -> Result<String, String> {
+fn expand_simple_variable(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    env: &ShellEnv,
+) -> Result<String, String> {
     let mut name = String::new();
-    
+
     while let Some(&c) = chars.peek() {
         if c.is_ascii_alphanumeric() || c == '_' {
             name.push(chars.next().unwrap());
@@ -197,7 +214,10 @@ fn expand_simple_variable(chars: &mut std::iter::Peekable<std::str::Chars>, env:
 }
 
 /// Expand a braced variable ${...}
-fn expand_braced_variable(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEnv) -> Result<String, String> {
+fn expand_braced_variable(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    env: &ShellEnv,
+) -> Result<String, String> {
     let mut content = String::new();
     let mut brace_depth = 1;
 
@@ -229,18 +249,18 @@ fn expand_braced_variable(chars: &mut std::iter::Peekable<std::str::Chars>, env:
 /// Parse and expand the content inside ${...}
 fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, String> {
     // Check for special forms first
-    
+
     // ${#var} - length of variable
     if content.starts_with('#') && content.len() > 1 {
         let name = &content[1..];
         let value = env.get_var(name).cloned().unwrap_or_default();
         return Ok(value.len().to_string());
     }
-    
+
     // ${!var} - indirect expansion or name expansion
     if content.starts_with('!') && content.len() > 1 {
         let indirect_name = &content[1..];
-        
+
         // ${!prefix*} or ${!prefix@} - variable names matching prefix
         if indirect_name.ends_with('*') || indirect_name.ends_with('@') {
             let prefix = &indirect_name[..indirect_name.len() - 1];
@@ -253,7 +273,7 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
                 matching_names.join(" ")
             });
         }
-        
+
         // ${!arr[@]} or ${!arr[*]} - array keys
         if indirect_name.ends_with("[@]") || indirect_name.ends_with("[*]") {
             let var_name = &indirect_name[..indirect_name.len() - 3];
@@ -272,14 +292,14 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
             }
             return Ok(String::new());
         }
-        
+
         // ${!var} - simple indirect expansion
         if let Some(actual_name) = env.get_var(indirect_name) {
             return Ok(env.get_var(actual_name).cloned().unwrap_or_default());
         }
         return Ok(String::new());
     }
-    
+
     // ${var@op} - transformation operators
     if let Some(at_pos) = content.rfind('@') {
         let name = &content[..at_pos];
@@ -289,14 +309,14 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
             return apply_transform_operator(&value, transform);
         }
     }
-    
+
     // ${var:offset} or ${var:offset:length} - substring expansion
     // Need to check this BEFORE the default/substitute operators that start with :
     // BUT we must not confuse :- := :+ :? which are default value operators
     if let Some(colon_pos) = content.find(':') {
         let name = &content[..colon_pos];
         let rest = &content[colon_pos + 1..];
-        
+
         // Check if this is a default value operator (starts with - = + ?)
         // These are NOT substring operations
         let first_char = rest.chars().next();
@@ -323,9 +343,11 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
     }
 
     // Find operator position for default/substitute operations
-    let ops = [":-", ":=", ":+", ":?", "-", "=", "+", "?", 
-               "##", "#", "%%", "%", "//", "/", "^^", "^", ",,", ","];
-    
+    let ops = [
+        ":-", ":=", ":+", ":?", "-", "=", "+", "?", "##", "#", "%%", "%", "//", "/", "^^", "^",
+        ",,", ",",
+    ];
+
     for op in ops.iter() {
         if let Some(pos) = content.find(op) {
             let name = &content[..pos];
@@ -351,13 +373,14 @@ fn parse_braced_expansion(content: &str, env: &ShellEnv) -> Result<String, Strin
 fn apply_substring_expansion(value: &str, spec: &str) -> Result<String, String> {
     let parts: Vec<&str> = spec.splitn(2, ':').collect();
     let offset_str = parts[0].trim();
-    
+
     // Parse offset (can be negative)
-    let offset: i64 = offset_str.parse()
+    let offset: i64 = offset_str
+        .parse()
         .map_err(|_| format!("bad substring offset: {}", offset_str))?;
-    
+
     let len = value.len() as i64;
-    
+
     // Calculate actual start position
     let start = if offset < 0 {
         // Negative offset counts from end
@@ -365,13 +388,14 @@ fn apply_substring_expansion(value: &str, spec: &str) -> Result<String, String> 
     } else {
         (offset as usize).min(value.len())
     };
-    
+
     // Get length if specified
     if parts.len() > 1 {
         let length_str = parts[1].trim();
-        let length: i64 = length_str.parse()
+        let length: i64 = length_str
+            .parse()
             .map_err(|_| format!("bad substring length: {}", length_str))?;
-        
+
         if length < 0 {
             // Negative length means end position from end
             let end = (len + length).max(start as i64) as usize;
@@ -452,7 +476,12 @@ fn apply_transform_operator(value: &str, op: &str) -> Result<String, String> {
 }
 
 /// Apply a parameter expansion operator
-fn apply_expansion_operator(name: &str, op: &str, arg: &str, env: &ShellEnv) -> Result<String, String> {
+fn apply_expansion_operator(
+    name: &str,
+    op: &str,
+    arg: &str,
+    env: &ShellEnv,
+) -> Result<String, String> {
     let value = env.get_var(name).cloned();
     let is_unset = value.is_none();
     let is_null = value.as_ref().map(|v| v.is_empty()).unwrap_or(true);
@@ -509,7 +538,15 @@ fn apply_expansion_operator(name: &str, op: &str, arg: &str, env: &ShellEnv) -> 
         ":?" => {
             // Error if unset or null
             if is_null {
-                Err(format!("{}: {}", name, if arg.is_empty() { "parameter null or not set" } else { arg }))
+                Err(format!(
+                    "{}: {}",
+                    name,
+                    if arg.is_empty() {
+                        "parameter null or not set"
+                    } else {
+                        arg
+                    }
+                ))
             } else {
                 Ok(value.unwrap())
             }
@@ -517,7 +554,15 @@ fn apply_expansion_operator(name: &str, op: &str, arg: &str, env: &ShellEnv) -> 
         "?" => {
             // Error if unset
             if is_unset {
-                Err(format!("{}: {}", name, if arg.is_empty() { "parameter not set" } else { arg }))
+                Err(format!(
+                    "{}: {}",
+                    name,
+                    if arg.is_empty() {
+                        "parameter not set"
+                    } else {
+                        arg
+                    }
+                ))
             } else {
                 Ok(value.unwrap())
             }
@@ -612,7 +657,7 @@ fn remove_prefix(value: &str, pattern: &str, longest: bool) -> String {
             }
         }
     }
-    
+
     // Exact prefix match
     if value.starts_with(pattern) {
         value[pattern.len()..].to_string()
@@ -635,7 +680,7 @@ fn remove_suffix(value: &str, pattern: &str, longest: bool) -> String {
             }
         }
     }
-    
+
     // Exact suffix match
     if value.ends_with(pattern) {
         value[..value.len() - pattern.len()].to_string()
@@ -645,7 +690,10 @@ fn remove_suffix(value: &str, pattern: &str, longest: bool) -> String {
 }
 
 /// Expand command substitution $(...)
-fn expand_command_substitution(chars: &mut std::iter::Peekable<std::str::Chars>, _env: &ShellEnv) -> Result<String, String> {
+fn expand_command_substitution(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    _env: &ShellEnv,
+) -> Result<String, String> {
     let mut content = String::new();
     let mut paren_depth = 1;
 
@@ -676,9 +724,12 @@ fn expand_command_substitution(chars: &mut std::iter::Peekable<std::str::Chars>,
 }
 
 /// Expand arithmetic expression $((...))
-fn expand_arithmetic(chars: &mut std::iter::Peekable<std::str::Chars>, env: &ShellEnv) -> Result<String, String> {
+fn expand_arithmetic(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    env: &ShellEnv,
+) -> Result<String, String> {
     let mut content = String::new();
-    let mut paren_depth = 2; // We've already consumed $(( 
+    let mut paren_depth = 2; // We've already consumed $((
 
     while let Some(c) = chars.next() {
         match c {
@@ -704,7 +755,7 @@ fn expand_arithmetic(chars: &mut std::iter::Peekable<std::str::Chars>, env: &She
     // Expand variables inside the arithmetic expression before evaluation
     // (handles $VAR and ${VAR} syntax before brush-parser sees it)
     let expanded = expand_string(&content, env, false)?;
-    
+
     // Use the new brush-parser based arithmetic evaluator
     evaluate_arithmetic_with_env(&expanded, env)
 }
@@ -723,11 +774,11 @@ pub fn evaluate_arithmetic(expr: &str) -> Result<String, String> {
 /// Evaluate arithmetic with access to the shell environment for variable lookups.
 fn evaluate_arithmetic_with_env(expr: &str, env: &ShellEnv) -> Result<String, String> {
     let expr = expr.trim();
-    
+
     if expr.is_empty() {
         return Ok("0".to_string());
     }
-    
+
     // Use the brush-parser based arithmetic module
     let mut env_clone = env.clone();
     match super::arithmetic::evaluate(expr, &mut env_clone) {
@@ -736,14 +787,12 @@ fn evaluate_arithmetic_with_env(expr: &str, env: &ShellEnv) -> Result<String, St
     }
 }
 
-
-
 /// Expand backtick command substitution
 #[allow(dead_code)] // kept for future backtick expansion support
 pub fn expand_backticks(input: &str, _env: &ShellEnv) -> Result<String, String> {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '`' {
             let mut command = String::new();
@@ -770,7 +819,7 @@ pub fn expand_backticks(input: &str, _env: &ShellEnv) -> Result<String, String> 
             result.push(c);
         }
     }
-    
+
     Ok(result)
 }
 
@@ -1033,7 +1082,7 @@ mod tests {
         let mut env = ShellEnv::new();
         env.last_exit_code = 42;
         env.positional_params = vec!["a".to_string(), "b".to_string()];
-        
+
         assert_eq!(expand_string("$?", &env, false).unwrap(), "42");
         assert_eq!(expand_string("$#", &env, false).unwrap(), "2");
         assert_eq!(expand_string("$1", &env, false).unwrap(), "a");
@@ -1042,8 +1091,12 @@ mod tests {
     #[test]
     fn test_positional_params() {
         let mut env = ShellEnv::new();
-        env.positional_params = vec!["first".to_string(), "second".to_string(), "third".to_string()];
-        
+        env.positional_params = vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ];
+
         assert_eq!(expand_string("$1", &env, false).unwrap(), "first");
         assert_eq!(expand_string("$2", &env, false).unwrap(), "second");
         assert_eq!(expand_string("$3", &env, false).unwrap(), "third");
@@ -1054,7 +1107,7 @@ mod tests {
     fn test_all_positional_params() {
         let mut env = ShellEnv::new();
         env.positional_params = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-        
+
         assert_eq!(expand_string("$*", &env, false).unwrap(), "a b c");
         assert_eq!(expand_string("$@", &env, false).unwrap(), "a b c");
     }
@@ -1162,7 +1215,7 @@ mod tests {
     fn test_range_expansion() {
         let result = expand_braces("{1..3}");
         assert_eq!(result, vec!["1", "2", "3"]);
-        
+
         let result = expand_braces("{a..c}");
         assert_eq!(result, vec!["a", "b", "c"]);
     }
@@ -1171,7 +1224,7 @@ mod tests {
     fn test_reverse_range() {
         let result = expand_braces("{3..1}");
         assert_eq!(result, vec!["3", "2", "1"]);
-        
+
         let result = expand_braces("{c..a}");
         assert_eq!(result, vec!["c", "b", "a"]);
     }
@@ -1218,7 +1271,7 @@ mod tests {
     fn test_case_modification() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("FOO", "hello");
-        
+
         assert_eq!(expand_string("${FOO^}", &env, false).unwrap(), "Hello");
         assert_eq!(expand_string("${FOO^^}", &env, false).unwrap(), "HELLO");
     }
@@ -1227,7 +1280,7 @@ mod tests {
     fn test_lowercase_modification() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("FOO", "HELLO");
-        
+
         assert_eq!(expand_string("${FOO,}", &env, false).unwrap(), "hELLO");
         assert_eq!(expand_string("${FOO,,}", &env, false).unwrap(), "hello");
     }
@@ -1236,32 +1289,41 @@ mod tests {
     fn test_prefix_removal() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("PATH", "/usr/local/bin");
-        
-        assert_eq!(expand_string("${PATH#/usr}", &env, false).unwrap(), "/local/bin");
+
+        assert_eq!(
+            expand_string("${PATH#/usr}", &env, false).unwrap(),
+            "/local/bin"
+        );
     }
 
     #[test]
     fn test_suffix_removal() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("FILE", "document.txt");
-        
-        assert_eq!(expand_string("${FILE%.txt}", &env, false).unwrap(), "document");
+
+        assert_eq!(
+            expand_string("${FILE%.txt}", &env, false).unwrap(),
+            "document"
+        );
     }
 
     #[test]
     fn test_replacement() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("STR", "hello world");
-        
+
         // Replace first occurrence
-        assert_eq!(expand_string("${STR/world/universe}", &env, false).unwrap(), "hello universe");
+        assert_eq!(
+            expand_string("${STR/world/universe}", &env, false).unwrap(),
+            "hello universe"
+        );
     }
 
     #[test]
     fn test_replacement_all() {
         let mut env = ShellEnv::new();
         let _ = env.set_var("STR", "aaa");
-        
+
         // Replace all occurrences
         assert_eq!(expand_string("${STR//a/b}", &env, false).unwrap(), "bbb");
     }
@@ -1567,4 +1629,3 @@ mod tests {
         assert!(!result.contains("OTHER"));
     }
 }
-

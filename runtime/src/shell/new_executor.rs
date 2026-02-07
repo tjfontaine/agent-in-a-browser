@@ -364,7 +364,9 @@ async fn execute_prepared_streaming_pipeline(
         let stderr_writer = stderr_writers[i].take().expect("missing stderr writer");
         let PreparedPipelineStage { cmd_fn, args, env } = stage;
 
-        stage_futures.push(async move { cmd_fn(args, &env, stdin_reader, stdout_writer, stderr_writer).await });
+        stage_futures.push(async move {
+            cmd_fn(args, &env, stdin_reader, stdout_writer, stderr_writer).await
+        });
     }
 
     let stderr_futures: Vec<_> = stderr_readers.into_iter().map(drain_reader).collect();
@@ -383,7 +385,11 @@ async fn execute_prepared_streaming_pipeline(
     let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
     let code = codes.last().copied().unwrap_or(0);
 
-    ShellResult { stdout, stderr, code }
+    ShellResult {
+        stdout,
+        stderr,
+        code,
+    }
 }
 
 /// Execute a simple command with stdin support

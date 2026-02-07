@@ -17,16 +17,30 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
 
     // Create low-level sync fetch function that the JS shim calls
     let sync_fetch_fn = Function::new(ctx.clone(), |args: Rest<Value>| {
-        let url = args.0.first().and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
-        let options_json = args.0.get(1).and_then(|v| v.as_string()).and_then(|s| s.to_string().ok());
+        let url = args
+            .0
+            .first()
+            .and_then(|v| v.as_string())
+            .and_then(|s| s.to_string().ok());
+        let options_json = args
+            .0
+            .get(1)
+            .and_then(|v| v.as_string())
+            .and_then(|s| s.to_string().ok());
 
         match url {
             Some(url_str) => {
                 let (method, headers_json, body, timeout_ms) = if let Some(opts) = &options_json {
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(opts) {
-                        let m = parsed.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
+                        let m = parsed
+                            .get("method")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("GET");
                         let h = parsed.get("headers").map(|v| v.to_string());
-                        let b = parsed.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        let b = parsed
+                            .get("body")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                         let timeout_ms = parsed.get("timeoutMs").and_then(|v| v.as_u64());
                         (m.to_string(), h, b, timeout_ms)
                     } else {
@@ -35,7 +49,7 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                 } else {
                     ("GET".to_string(), None, None, None)
                 };
-                
+
                 let result = crate::http_client::fetch_request(
                     &method,
                     &url_str,
@@ -43,17 +57,16 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                     body.as_deref(),
                     timeout_ms,
                 );
-                
+
                 match result {
-                    Ok(response) => {
-                        serde_json::json!({
-                            "ok": response.ok,
-                            "status": response.status,
-                            "statusText": if response.ok { "OK" } else { "" },
-                            "headers": [],
-                            "body": response.body()
-                        }).to_string()
-                    }
+                    Ok(response) => serde_json::json!({
+                        "ok": response.ok,
+                        "status": response.status,
+                        "statusText": if response.ok { "OK" } else { "" },
+                        "headers": [],
+                        "body": response.body()
+                    })
+                    .to_string(),
                     Err(e) => {
                         eprintln!("[__syncFetch__] Error: {}", e);
                         serde_json::json!({
@@ -62,19 +75,19 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                             "statusText": e,
                             "headers": [],
                             "body": ""
-                        }).to_string()
+                        })
+                        .to_string()
                     }
                 }
             }
-            None => {
-                serde_json::json!({
-                    "ok": false,
-                    "status": 0,
-                    "statusText": "No URL provided",
-                    "headers": [],
-                    "body": ""
-                }).to_string()
-            }
+            None => serde_json::json!({
+                "ok": false,
+                "status": 0,
+                "statusText": "No URL provided",
+                "headers": [],
+                "body": ""
+            })
+            .to_string(),
         }
     })?;
 

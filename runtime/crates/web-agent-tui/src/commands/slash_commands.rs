@@ -19,7 +19,7 @@ pub fn handle_command(cmd: &str) -> CommandResult {
     let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
     let command = parts.first().map(|s| *s).unwrap_or("");
     let _args = &parts[1..];
-    
+
     match command {
         "/help" | "/h" => CommandResult::Message(
             "Commands:\n\
@@ -28,7 +28,8 @@ pub fn handle_command(cmd: &str) -> CommandResult {
              /agent        - Return to agent mode\n\
              /model        - Select AI model\n\
              /clear        - Clear message history\n\
-             /quit, /q     - Exit application".to_string()
+             /quit, /q     - Exit application"
+                .to_string(),
         ),
         "/shell" | "/sh" => CommandResult::SwitchMode(crate::ui::Mode::Shell),
         "/agent" => CommandResult::SwitchMode(crate::ui::Mode::Agent),

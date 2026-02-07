@@ -125,7 +125,10 @@ fn run_tsx(
                 break;
             }
             _ => {
-                write_to_stream(&stderr, format!("tsx: unknown option: {}\n", arg).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("tsx: unknown option: {}\n", arg).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -338,6 +341,7 @@ fn transpile(ts_code: &str) -> Result<String, String> {
 }
 
 /// Execute JavaScript using QuickJS with full Node.js-like runtime
+#[cfg(test)]
 fn execute_js(
     js_code: &str,
     source_name: &str,
@@ -428,6 +432,7 @@ fn execute_js_with_source_map_and_limits(
 }
 
 /// Execute module JavaScript by writing it to a temporary file and importing it.
+#[cfg(test)]
 fn execute_js_module(
     js_code: &str,
     source_name: &str,
@@ -559,22 +564,29 @@ fn configure_runtime_with_limits(runtime: &AsyncRuntime, limits: RuntimeLimits) 
             .await;
 
         runtime
-            .set_host_promise_rejection_tracker(Some(Box::new(|ctx, promise, reason, is_handled| {
-                let globals = ctx.globals();
-                if is_handled {
-                    let previous: rquickjs::Value = globals
-                        .get("__lastUnhandledPromise")
-                        .unwrap_or_else(|_| rquickjs::Value::new_null(ctx.clone()));
-                    if !previous.is_null() && previous == promise {
-                        let _ =
-                            globals.set("__lastUnhandledPromise", rquickjs::Value::new_null(ctx.clone()));
-                        let _ = globals.set("__lastUnhandledError", rquickjs::Value::new_null(ctx.clone()));
+            .set_host_promise_rejection_tracker(Some(Box::new(
+                |ctx, promise, reason, is_handled| {
+                    let globals = ctx.globals();
+                    if is_handled {
+                        let previous: rquickjs::Value = globals
+                            .get("__lastUnhandledPromise")
+                            .unwrap_or_else(|_| rquickjs::Value::new_null(ctx.clone()));
+                        if !previous.is_null() && previous == promise {
+                            let _ = globals.set(
+                                "__lastUnhandledPromise",
+                                rquickjs::Value::new_null(ctx.clone()),
+                            );
+                            let _ = globals.set(
+                                "__lastUnhandledError",
+                                rquickjs::Value::new_null(ctx.clone()),
+                            );
+                        }
+                        return;
                     }
-                    return;
-                }
-                let _ = globals.set("__lastUnhandledPromise", promise);
-                let _ = globals.set("__lastUnhandledError", reason);
-            })))
+                    let _ = globals.set("__lastUnhandledPromise", promise);
+                    let _ = globals.set("__lastUnhandledError", reason);
+                },
+            )))
             .await;
     });
 }
@@ -589,8 +601,14 @@ fn take_unhandled_error(context: &AsyncContext) -> Option<String> {
             return None;
         }
         // Clear after reading so subsequent runs do not inherit stale state.
-        let _ = globals.set("__lastUnhandledError", rquickjs::Value::new_null(ctx.clone()));
-        let _ = globals.set("__lastUnhandledPromise", rquickjs::Value::new_null(ctx.clone()));
+        let _ = globals.set(
+            "__lastUnhandledError",
+            rquickjs::Value::new_null(ctx.clone()),
+        );
+        let _ = globals.set(
+            "__lastUnhandledPromise",
+            rquickjs::Value::new_null(ctx.clone()),
+        );
         Some(format!("{:?}", val))
     }))
 }
@@ -603,8 +621,8 @@ fn temp_module_path(source_name: &str) -> String {
     if source_name.starts_with('<') {
         return format!("/tmp/tsx-entry-{}.mjs", nanos);
     }
-    let source_local = resolver::file_url_to_path(source_name)
-        .unwrap_or_else(|| source_name.to_string());
+    let source_local =
+        resolver::file_url_to_path(source_name).unwrap_or_else(|| source_name.to_string());
     let source_path = std::path::Path::new(&source_local);
     if let Some(parent) = source_path.parent() {
         if parent.exists() {
@@ -885,10 +903,7 @@ mod integration_tests {
         let dep_path = unique_temp_path("dep", "ts");
         let entry_ts = format!(
             "import {{ value }} from './{}';\nconsole.log(value + 1);\nexport default value + 1;",
-            dep_path
-                .rsplit('/')
-                .next()
-                .unwrap_or("dep.ts")
+            dep_path.rsplit('/').next().unwrap_or("dep.ts")
         );
         let entry_dir = dep_path
             .rsplit_once('/')
@@ -926,7 +941,8 @@ mod integration_tests {
         let json_path = format!("{}/data.json", root);
         std::fs::write(&json_path, r#"{"value":41}"#).unwrap();
         let source_name = format!("{}/entry.ts", root);
-        let js = "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
+        let js =
+            "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
 
         let output = execute_js_module(js, &source_name, None).unwrap();
         assert_eq!(output, "42");
@@ -983,7 +999,12 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         assert_eq!(output, "42");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1013,7 +1034,12 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         assert_eq!(output, "18");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1044,7 +1070,12 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         assert_eq!(output, "7");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1080,7 +1111,12 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         assert_eq!(output, "11");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1107,7 +1143,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("7"), "logs: {}", logs);
 
@@ -1135,14 +1176,23 @@ mod integration_tests {
             "module.exports = { kind: 'cjs' };",
         )
         .unwrap();
-        std::fs::write(&entry_path, "const x = require('foo'); console.log(x.kind);").unwrap();
+        std::fs::write(
+            &entry_path,
+            "const x = require('foo'); console.log(x.kind);",
+        )
+        .unwrap();
 
         let source = std::fs::read_to_string(&entry_path).unwrap();
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("cjs"), "logs: {}", logs);
 
@@ -1168,7 +1218,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("42"), "logs: {}", logs);
 
@@ -1194,7 +1249,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("8"), "logs: {}", logs);
 
@@ -1226,7 +1286,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("10"), "logs: {}", logs);
 
@@ -1256,7 +1321,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("1|1|1"), "logs: {}", logs);
 
@@ -1282,8 +1352,11 @@ mod integration_tests {
         assert!(transpiled.contains_module_decls);
 
         let file_url_source = format!("file://{}", entry_path);
-        let output =
-            execute_js_module(&transpiled.code, &file_url_source, transpiled.line_map.as_deref());
+        let output = execute_js_module(
+            &transpiled.code,
+            &file_url_source,
+            transpiled.line_map.as_deref(),
+        );
         assert_eq!(output.unwrap(), "42");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1307,7 +1380,11 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref());
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        );
         assert_eq!(output.unwrap(), "42");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1331,7 +1408,11 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref());
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        );
         assert_eq!(output.unwrap(), "10");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1344,7 +1425,11 @@ mod integration_tests {
         let cjs_path = format!("{}/helper.cjs", root);
         let entry_path = format!("{}/entry.ts", root);
 
-        std::fs::write(&cjs_path, "if (true) { module.exports = { value: 5 }; return; }").unwrap();
+        std::fs::write(
+            &cjs_path,
+            "if (true) { module.exports = { value: 5 }; return; }",
+        )
+        .unwrap();
         std::fs::write(
             &entry_path,
             "import helper from './helper.cjs'; export default helper.value + 1;",
@@ -1355,7 +1440,11 @@ mod integration_tests {
         let transpiled = transpiler::transpile(&source).unwrap();
         assert!(transpiled.contains_module_decls);
 
-        let output = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref());
+        let output = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        );
         assert_eq!(output.unwrap(), "6");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1388,8 +1477,12 @@ mod integration_tests {
             throw new Error('boom');
         "#;
         let transpiled = transpiler::transpile(ts).unwrap();
-        let err = execute_js(&transpiled.code, "mapped.ts", transpiled.line_map.as_deref())
-            .unwrap_err();
+        let err = execute_js(
+            &transpiled.code,
+            "mapped.ts",
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap_err();
         assert!(err.contains("mapped.ts"), "err: {}", err);
         assert!(err.contains("mapped from generated line"), "err: {}", err);
     }
@@ -1419,8 +1512,16 @@ mod integration_tests {
         let dense = vec![10usize, 11usize, 12usize, 13usize, 14usize];
         let (remapped, first) = remap_error_positions(raw, Some(&dense), None);
 
-        assert!(remapped.contains("/tmp/gen.js:11:3"), "remapped: {}", remapped);
-        assert!(remapped.contains("/tmp/gen.js:13:5"), "remapped: {}", remapped);
+        assert!(
+            remapped.contains("/tmp/gen.js:11:3"),
+            "remapped: {}",
+            remapped
+        );
+        assert!(
+            remapped.contains("/tmp/gen.js:13:5"),
+            "remapped: {}",
+            remapped
+        );
         assert_eq!(first, Some((2, 11, 3)));
     }
 
@@ -1454,7 +1555,12 @@ mod integration_tests {
         .unwrap_err();
 
         let count = err.matches("mapped-multi.ts:").count();
-        assert!(count >= 2, "expected >=2 mapped frames, got {} in: {}", count, err);
+        assert!(
+            count >= 2,
+            "expected >=2 mapped frames, got {} in: {}",
+            count,
+            err
+        );
     }
 
     #[test]
@@ -1474,7 +1580,12 @@ mod integration_tests {
         "#;
         let transpiled = transpiler::transpile(ts).unwrap();
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, "<fetch-abort>", transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            "<fetch-abort>",
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("true"), "logs: {}", logs);
     }
@@ -1494,7 +1605,12 @@ mod integration_tests {
         "#;
         let transpiled = transpiler::transpile(ts).unwrap();
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, "<fetch-timeout>", transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            "<fetch-timeout>",
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("true"), "logs: {}", logs);
     }
@@ -1611,8 +1727,12 @@ mod integration_tests {
             Promise.resolve().then(() => Promise.reject('second-unhandled'));
         "#;
         let transpiled = transpiler::transpile(ts).unwrap();
-        let err = execute_js(&transpiled.code, "<multi-unhandled>", transpiled.line_map.as_deref())
-            .unwrap_err();
+        let err = execute_js(
+            &transpiled.code,
+            "<multi-unhandled>",
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap_err();
         assert!(err.contains("Unhandled error"), "err: {}", err);
         assert!(
             err.contains("first-unhandled") || err.contains("second-unhandled"),
@@ -1628,10 +1748,15 @@ mod integration_tests {
         let json_path = format!("{}/data.json", root);
         std::fs::write(&json_path, r#"{"value":41}"#).unwrap();
         let source_name = format!("{}/entry.ts", root);
-        let js = "import data from './data.json' with { type: 'jsonx' }; export default data.value + 1;";
+        let js =
+            "import data from './data.json' with { type: 'jsonx' }; export default data.value + 1;";
 
         let err = execute_js_module(js, &source_name, None).unwrap_err();
-        assert!(err.contains("Unsupported import attribute type: jsonx"), "err: {}", err);
+        assert!(
+            err.contains("Unsupported import attribute type: jsonx"),
+            "err: {}",
+            err
+        );
 
         let _ = std::fs::remove_file(&json_path);
         let _ = std::fs::remove_dir_all(&root);
@@ -1644,7 +1769,8 @@ mod integration_tests {
         let json_path = format!("{}/data.json", root);
         std::fs::write(&json_path, r#"{"value":"#).unwrap();
         let source_name = format!("{}/entry.ts", root);
-        let js = "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
+        let js =
+            "import data from './data.json' with { type: 'json' }; export default data.value + 1;";
 
         let err = execute_js_module(js, &source_name, None).unwrap_err();
         assert!(err.contains("Invalid JSON module"), "err: {}", err);
@@ -1693,14 +1819,21 @@ mod integration_tests {
         .unwrap();
         std::fs::write(
             &entry_path,
-            format!("import {{ value }} from './{}'; export default value;", dep_name),
+            format!(
+                "import {{ value }} from './{}'; export default value;",
+                dep_name
+            ),
         )
         .unwrap();
 
         let source = std::fs::read_to_string(&entry_path).unwrap();
         let transpiled = transpiler::transpile(&source).unwrap();
-        let err = execute_js_module(&transpiled.code, &entry_path, transpiled.line_map.as_deref())
-            .unwrap_err();
+        let err = execute_js_module(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap_err();
         assert!(err.contains("dep-async-unhandled"), "err: {}", err);
         assert!(err.contains(dep_name), "err: {}", err);
 
@@ -1757,7 +1890,12 @@ mod integration_tests {
         assert!(!transpiled.contains_module_decls);
 
         js_modules::console::clear_logs();
-        let _ = execute_js(&transpiled.code, &entry_path, transpiled.line_map.as_deref()).unwrap();
+        let _ = execute_js(
+            &transpiled.code,
+            &entry_path,
+            transpiled.line_map.as_deref(),
+        )
+        .unwrap();
         let logs = js_modules::console::get_logs();
         assert!(logs.contains("43"), "logs: {}", logs);
 

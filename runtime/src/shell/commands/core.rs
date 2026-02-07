@@ -14,8 +14,8 @@ pub struct CoreCommands;
 impl CoreCommands {
     /// echo - output arguments
     #[shell_command(
-        name = "echo", 
-        usage = "echo [-e] [-n] [STRING]...", 
+        name = "echo",
+        usage = "echo [-e] [-n] [STRING]...",
         description = "Display line of text"
     )]
     fn cmd_echo(
@@ -33,12 +33,12 @@ impl CoreCommands {
                     return 0;
                 }
             }
-            
+
             // Parse echo-specific flags
             let mut interpret_escapes = false;
             let mut trailing_newline = true;
             let mut args_to_print: Vec<&str> = Vec::new();
-            
+
             for arg in &remaining {
                 if arg == "-e" {
                     interpret_escapes = true;
@@ -46,7 +46,12 @@ impl CoreCommands {
                     trailing_newline = false;
                 } else if arg == "-E" {
                     interpret_escapes = false;
-                } else if arg.starts_with('-') && arg.chars().skip(1).all(|c| c == 'e' || c == 'n' || c == 'E') {
+                } else if arg.starts_with('-')
+                    && arg
+                        .chars()
+                        .skip(1)
+                        .all(|c| c == 'e' || c == 'n' || c == 'E')
+                {
                     // Combined flags like -en
                     for c in arg.chars().skip(1) {
                         match c {
@@ -60,9 +65,9 @@ impl CoreCommands {
                     args_to_print.push(arg);
                 }
             }
-            
+
             let mut output = args_to_print.join(" ");
-            
+
             // Handle escape sequences if -e is specified
             if interpret_escapes {
                 output = output
@@ -72,7 +77,7 @@ impl CoreCommands {
                     .replace("\\\\", "\\")
                     .replace("\\0", "\0");
             }
-            
+
             if stdout.write_all(output.as_bytes()).await.is_err() {
                 return 1;
             }
@@ -226,21 +231,28 @@ impl CoreCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 // List all commands
                 let commands = ShellCommands::list_commands();
                 let _ = stdout.write_all(b"Available commands:\n").await;
-                
+
                 // Display in columns
                 for chunk in commands.chunks(5) {
-                    let line = chunk.iter()
+                    let line = chunk
+                        .iter()
                         .map(|c| format!("{:<12}", c))
                         .collect::<Vec<_>>()
                         .join("");
-                    let _ = stdout.write_all(format!("  {}\n", line.trim_end()).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("  {}\n", line.trim_end()).as_bytes())
+                        .await;
                 }
-                let _ = stdout.write_all(b"\nUse 'help COMMAND' for more information on a specific command.\n").await;
+                let _ = stdout
+                    .write_all(
+                        b"\nUse 'help COMMAND' for more information on a specific command.\n",
+                    )
+                    .await;
                 0
             } else {
                 // Show help for specific command
@@ -249,7 +261,9 @@ impl CoreCommands {
                     let _ = stdout.write_all(help.as_bytes()).await;
                     0
                 } else {
-                    let _ = stderr.write_all(format!("help: no help for '{}'\n", cmd_name).as_bytes()).await;
+                    let _ = stderr
+                        .write_all(format!("help: no help for '{}'\n", cmd_name).as_bytes())
+                        .await;
                     1
                 }
             }

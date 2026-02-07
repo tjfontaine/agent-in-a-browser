@@ -3,9 +3,8 @@
 //! Client for communicating with the remote MCP server via HTTP.
 //! This keeps the MCP server decoupled from the TUI.
 
-use super::http_client::{HttpClient, HttpError};
-use agent_bridge::McpTransport;
-pub use agent_bridge::{McpError, ToolContent, ToolDefinition, ToolResult};
+use super::http_client::HttpClient;
+pub use agent_bridge::{McpError, ToolDefinition};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 

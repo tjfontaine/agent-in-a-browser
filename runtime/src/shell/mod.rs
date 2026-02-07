@@ -14,5 +14,3 @@ pub mod pipeline;
 
 pub use env::ShellEnv;
 pub use pipeline::run_pipeline;
-
-

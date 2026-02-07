@@ -32,26 +32,26 @@ impl PathCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"basename: missing operand\n").await;
                 return 1;
             }
-            
+
             let path = &remaining[0];
             let suffix = remaining.get(1).map(|s| s.as_str());
-            
+
             let mut name = std::path::Path::new(path)
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.clone());
-                
+
             if let Some(suf) = suffix {
                 if name.ends_with(suf) {
                     name = name[..name.len() - suf.len()].to_string();
                 }
             }
-            
+
             let _ = stdout.write_all(name.as_bytes()).await;
             let _ = stdout.write_all(b"\n").await;
             0
@@ -79,20 +79,20 @@ impl PathCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"dirname: missing operand\n").await;
                 return 1;
             }
-            
+
             let path = &remaining[0];
             let parent = std::path::Path::new(path)
                 .parent()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| ".".to_string());
-                
+
             let result = if parent.is_empty() { "." } else { &parent };
-            
+
             let _ = stdout.write_all(result.as_bytes()).await;
             let _ = stdout.write_all(b"\n").await;
             0

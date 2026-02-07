@@ -1,14 +1,14 @@
 //! sqlite-module
-//! 
+//!
 //! Provides sqlite3 command via the unix-command WIT interface.
 
 #[allow(warnings)]
 mod bindings;
 
-use std::sync::Arc;
 use bindings::exports::shell::unix::command::{ExecEnv, Guest};
 use bindings::wasi::io::streams::{InputStream, OutputStream};
-use turso_core::{Database, MemoryIO, IO, Value};
+use std::sync::Arc;
+use turso_core::{Database, MemoryIO, Value, IO};
 
 struct SqliteModule;
 
@@ -48,7 +48,11 @@ fn run_sqlite3(
         1 => {
             let arg = &args[0];
             // If it looks like a database path, use it as database
-            if arg == ":memory:" || arg.ends_with(".db") || arg.ends_with(".sqlite") || arg.contains('/') {
+            if arg == ":memory:"
+                || arg.ends_with(".db")
+                || arg.ends_with(".sqlite")
+                || arg.contains('/')
+            {
                 (arg.clone(), None)
             } else {
                 // Treat as SQL
@@ -70,7 +74,10 @@ fn run_sqlite3(
         match read_all_from_stream(&stdin) {
             Ok(data) => String::from_utf8_lossy(&data).to_string(),
             Err(e) => {
-                write_to_stream(&stderr, format!("sqlite3: failed to read stdin: {}\n", e).as_bytes());
+                write_to_stream(
+                    &stderr,
+                    format!("sqlite3: failed to read stdin: {}\n", e).as_bytes(),
+                );
                 return 1;
             }
         }
@@ -88,7 +95,10 @@ fn run_sqlite3(
     let db = match Database::open_file(io.clone(), &db_path) {
         Ok(db) => db,
         Err(e) => {
-            write_to_stream(&stderr, format!("Error: unable to open database \"{}\": {}\n", db_path, e).as_bytes());
+            write_to_stream(
+                &stderr,
+                format!("Error: unable to open database \"{}\": {}\n", db_path, e).as_bytes(),
+            );
             return 1;
         }
     };
@@ -103,7 +113,8 @@ fn run_sqlite3(
     };
 
     // Execute SQL statements
-    let statements: Vec<&str> = sql.split(';')
+    let statements: Vec<&str> = sql
+        .split(';')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .collect();
@@ -120,7 +131,7 @@ fn run_sqlite3(
 
         // Collect output and write after
         let mut output_lines: Vec<String> = Vec::new();
-        
+
         let result = stmt.run_with_row_callback(|row| {
             let values = row.get_values();
             let formatted: Vec<String> = values.map(format_value).collect();
@@ -162,16 +173,11 @@ fn write_to_stream(stream: &OutputStream, data: &[u8]) {
 /// Helper to read all data from an input stream
 fn read_all_from_stream(stream: &InputStream) -> Result<Vec<u8>, String> {
     let mut result = Vec::new();
-    loop {
-        match stream.blocking_read(4096) {
-            Ok(chunk) => {
-                if chunk.is_empty() {
-                    break;
-                }
-                result.extend_from_slice(&chunk);
-            }
-            Err(_) => break,
+    while let Ok(chunk) = stream.blocking_read(4096) {
+        if chunk.is_empty() {
+            break;
         }
+        result.extend_from_slice(&chunk);
     }
     Ok(result)
 }

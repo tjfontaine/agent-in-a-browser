@@ -10,8 +10,8 @@
 //! - Add CommonJS → ESM transform (require() → import)
 //! - Add global shim injection at AST level (console, fs, Buffer, etc.)
 
-use std::mem;
 use std::collections::BTreeMap;
+use std::mem;
 use swc_common::{
     source_map::DefaultSourceMapGenConfig, sync::Lrc, FileName, Mark, SourceMap, Spanned, DUMMY_SP,
     GLOBALS,
@@ -63,14 +63,12 @@ struct AwaitLastExpr;
 
 impl VisitMut for AwaitLastExpr {
     fn visit_mut_module_items(&mut self, items: &mut Vec<ModuleItem>) {
-        if let Some(last) = items.last_mut() {
-            if let ModuleItem::Stmt(Stmt::Expr(expr_stmt)) = last {
-                let original_expr = mem::take(&mut expr_stmt.expr);
-                expr_stmt.expr = Box::new(Expr::Await(AwaitExpr {
-                    span: DUMMY_SP,
-                    arg: original_expr,
-                }));
-            }
+        if let Some(ModuleItem::Stmt(Stmt::Expr(expr_stmt))) = items.last_mut() {
+            let original_expr = mem::take(&mut expr_stmt.expr);
+            expr_stmt.expr = Box::new(Expr::Await(AwaitExpr {
+                span: DUMMY_SP,
+                arg: original_expr,
+            }));
         }
     }
 }
@@ -276,7 +274,7 @@ fn transpile_inner(ts_code: &str, wrap_in_iife: bool) -> Result<TranspileResult,
         .any(|item| matches!(item, ModuleItem::ModuleDecl(_)));
 
     // Check for parse errors
-    for err in parser.take_errors() {
+    if let Some(err) = parser.take_errors().into_iter().next() {
         return Err(format_parse_error(ts_code, err));
     }
 

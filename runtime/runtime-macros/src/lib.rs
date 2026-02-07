@@ -5,10 +5,9 @@
 //! - `#[mcp_tool_router]` - Generates list_tools() and call_tool() dispatcher
 
 use proc_macro::TokenStream;
-use quote::{quote, format_ident, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse_macro_input, Attribute, FnArg, Ident, ImplItem, ImplItemFn, ItemImpl,
-    Pat, Type, LitStr,
+    parse_macro_input, Attribute, FnArg, Ident, ImplItem, ImplItemFn, ItemImpl, LitStr, Pat, Type,
 };
 
 /// Attribute macro to mark a function as an MCP tool.
@@ -28,13 +27,13 @@ pub fn mcp_tool(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the description from attributes
     let attr_args: ToolAttrArgs = parse_macro_input!(attr as ToolAttrArgs);
     let func: ImplItemFn = parse_macro_input!(item as ImplItemFn);
-    
+
     // Just return the function unchanged - the router macro will collect metadata
     let output = quote! {
         #[mcp_tool_marker(description = #attr_args)]
         #func
     };
-    
+
     output.into()
 }
 
@@ -77,7 +76,7 @@ fn parse_tool_description(attr: &Attribute) -> Option<String> {
     if !attr.path().is_ident("mcp_tool") {
         return None;
     }
-    
+
     let args: syn::Result<ToolAttrArgs> = attr.parse_args();
     args.ok().map(|a| a.description.value())
 }
@@ -100,24 +99,23 @@ fn parse_tool_description(attr: &Attribute) -> Option<String> {
 #[proc_macro_attribute]
 pub fn mcp_tool_router(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
-    
+
     // Collect tool information
     let mut tools: Vec<ToolInfo> = Vec::new();
     let mut methods: Vec<ImplItemFn> = Vec::new();
     let mut other_items: Vec<ImplItem> = Vec::new();
-    
+
     for item in input.items {
         match item {
             ImplItem::Fn(mut method) => {
                 // Check if this method has #[mcp_tool] attribute
-                let tool_attr = method.attrs.iter()
-                    .find(|a| a.path().is_ident("mcp_tool"));
-                
+                let tool_attr = method.attrs.iter().find(|a| a.path().is_ident("mcp_tool"));
+
                 if let Some(attr) = tool_attr {
                     if let Some(description) = parse_tool_description(attr) {
                         // Extract parameter info
                         let params = extract_params(&method);
-                        
+
                         tools.push(ToolInfo {
                             name: method.sig.ident.to_string(),
                             description,
@@ -125,33 +123,33 @@ pub fn mcp_tool_router(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             method_ident: method.sig.ident.clone(),
                         });
                     }
-                    
+
                     // Remove the mcp_tool attribute from the output
                     method.attrs.retain(|a| !a.path().is_ident("mcp_tool"));
                 }
-                
+
                 methods.push(method);
             }
             other => other_items.push(other),
         }
     }
-    
+
     // Generate list_tools() method
     let list_tools_body = generate_list_tools(&tools);
-    
+
     // Generate call_tool() method
     let call_tool_body = generate_call_tool(&tools);
-    
+
     // Reconstruct the impl block
     let self_ty = &input.self_ty;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    
+
     let output = quote! {
         impl #impl_generics #self_ty #ty_generics #where_clause {
             #(#methods)*
         }
-        
+
         impl #impl_generics crate::mcp_server::McpServer for #self_ty #ty_generics #where_clause {
             fn server_info(&self) -> crate::mcp_server::ServerInfo {
                 crate::mcp_server::ServerInfo {
@@ -159,12 +157,12 @@ pub fn mcp_tool_router(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     version: "0.1.0".to_string(),
                 }
             }
-            
+
             #list_tools_body
             #call_tool_body
         }
     };
-    
+
     output.into()
 }
 
@@ -182,7 +180,10 @@ struct ParamInfo {
 }
 
 fn extract_params(method: &ImplItemFn) -> Vec<ParamInfo> {
-    method.sig.inputs.iter()
+    method
+        .sig
+        .inputs
+        .iter()
         .filter_map(|arg| {
             match arg {
                 FnArg::Typed(pat_type) => {
@@ -190,14 +191,14 @@ fn extract_params(method: &ImplItemFn) -> Vec<ParamInfo> {
                         Pat::Ident(ident) => ident.ident.to_string(),
                         _ => return None,
                     };
-                    
+
                     // Skip self
                     if name == "self" {
                         return None;
                     }
-                    
+
                     let (param_type, is_optional) = parse_type(&pat_type.ty);
-                    
+
                     Some(ParamInfo {
                         name,
                         param_type,
@@ -215,10 +216,10 @@ fn parse_type(ty: &Type) -> (String, bool) {
         Type::Path(type_path) => {
             let path = &type_path.path;
             let segment = path.segments.last();
-            
+
             if let Some(seg) = segment {
                 let ident = seg.ident.to_string();
-                
+
                 // Check for Option<T>
                 if ident == "Option" {
                     if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
@@ -229,7 +230,7 @@ fn parse_type(ty: &Type) -> (String, bool) {
                     }
                     return ("string".to_string(), true);
                 }
-                
+
                 // Map Rust types to JSON schema types
                 let json_type = match ident.as_str() {
                     "String" | "str" => "string",
@@ -238,10 +239,10 @@ fn parse_type(ty: &Type) -> (String, bool) {
                     "bool" => "boolean",
                     _ => "string",
                 };
-                
+
                 return (json_type.to_string(), false);
             }
-            
+
             ("string".to_string(), false)
         }
         _ => ("string".to_string(), false),
@@ -252,13 +253,13 @@ fn generate_list_tools(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
     let tool_definitions = tools.iter().map(|tool| {
         let name = &tool.name;
         let description = &tool.description;
-        
+
         // Build properties object
         let properties = tool.params.iter().map(|p| {
             let param_name = &p.name;
             let param_type = &p.param_type;
             let param_desc = format!("The {} parameter", param_name);
-            
+
             quote! {
                 #param_name: {
                     "type": #param_type,
@@ -266,13 +267,15 @@ fn generate_list_tools(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
                 }
             }
         });
-        
+
         // Build required array (non-optional params)
-        let required: Vec<_> = tool.params.iter()
+        let required: Vec<_> = tool
+            .params
+            .iter()
             .filter(|p| !p.is_optional)
             .map(|p| &p.name)
             .collect();
-        
+
         quote! {
             crate::mcp_server::ToolDefinition {
                 name: #name.to_string(),
@@ -290,7 +293,7 @@ fn generate_list_tools(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
             }
         }
     });
-    
+
     quote! {
         fn list_tools(&self) -> Vec<crate::mcp_server::ToolDefinition> {
             vec![
@@ -304,12 +307,12 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
     let match_arms = tools.iter().map(|tool| {
         let name = &tool.name;
         let method_ident = &tool.method_ident;
-        
+
         // Generate argument extraction
         let arg_extractions = tool.params.iter().map(|p| {
             let param_name = &p.name;
             let param_ident = format_ident!("{}", param_name);
-            
+
             if p.is_optional {
                 quote! {
                     let #param_ident = arguments.get(#param_name)
@@ -327,12 +330,14 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
                 }
             }
         });
-        
+
         // Generate method call with arguments
-        let arg_idents: Vec<_> = tool.params.iter()
+        let arg_idents: Vec<_> = tool
+            .params
+            .iter()
             .map(|p| format_ident!("{}", p.name))
             .collect();
-        
+
         quote! {
             #name => {
                 #(#arg_extractions)*
@@ -340,7 +345,7 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
             }
         }
     });
-    
+
     quote! {
         fn call_tool(&mut self, name: &str, arguments: serde_json::Value) -> crate::mcp_server::ToolResult {
             match name {
@@ -367,29 +372,35 @@ impl syn::parse::Parse for ShellCommandAttrArgs {
         let mut name = None;
         let mut usage = None;
         let mut description = None;
-        
+
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
             input.parse::<syn::Token![=]>()?;
             let value: LitStr = input.parse()?;
-            
+
             match ident.to_string().as_str() {
                 "name" => name = Some(value.value()),
                 "usage" => usage = Some(value.value()),
                 "description" => description = Some(value.value()),
-                other => return Err(syn::Error::new(ident.span(), format!("unknown attribute: {}", other))),
+                other => {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        format!("unknown attribute: {}", other),
+                    ))
+                }
             }
-            
+
             // Consume optional comma
             if input.peek(syn::Token![,]) {
                 input.parse::<syn::Token![,]>()?;
             }
         }
-        
+
         Ok(ShellCommandAttrArgs {
             name: name.ok_or_else(|| syn::Error::new(input.span(), "missing `name`"))?,
             usage: usage.ok_or_else(|| syn::Error::new(input.span(), "missing `usage`"))?,
-            description: description.ok_or_else(|| syn::Error::new(input.span(), "missing `description`"))?,
+            description: description
+                .ok_or_else(|| syn::Error::new(input.span(), "missing `description`"))?,
         })
     }
 }
@@ -413,17 +424,17 @@ pub fn shell_command(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
     let func: ImplItemFn = parse_macro_input!(item as ImplItemFn);
-    
+
     let name = &attr_args.name;
     let usage = &attr_args.usage;
     let description = &attr_args.description;
-    
+
     // Pass through with marker attribute containing the metadata
     let output = quote! {
         #[shell_command_marker(name = #name, usage = #usage, description = #description)]
         #func
     };
-    
+
     output.into()
 }
 
@@ -439,7 +450,7 @@ fn parse_shell_command_attr(attr: &Attribute) -> Option<ShellCommandInfo> {
     if !attr.path().is_ident("shell_command") {
         return None;
     }
-    
+
     let args: syn::Result<ShellCommandAttrArgs> = attr.parse_args();
     args.ok().map(|a| ShellCommandInfo {
         name: a.name,
@@ -475,35 +486,37 @@ struct ShellCommandInfo {
 #[proc_macro_attribute]
 pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
-    
+
     // Collect command information
     let mut commands: Vec<ShellCommandInfo> = Vec::new();
     let mut methods: Vec<ImplItemFn> = Vec::new();
     let mut other_items: Vec<ImplItem> = Vec::new();
-    
+
     for item in input.items {
         match item {
             ImplItem::Fn(mut method) => {
                 // Check if this method has #[shell_command] attribute
-                let cmd_attr = method.attrs.iter()
+                let cmd_attr = method
+                    .attrs
+                    .iter()
                     .find(|a| a.path().is_ident("shell_command"));
-                
+
                 if let Some(attr) = cmd_attr {
                     if let Some(mut info) = parse_shell_command_attr(attr) {
                         info.method_ident = Some(method.sig.ident.clone());
                         commands.push(info);
                     }
-                    
+
                     // Remove the shell_command attribute from the output
                     method.attrs.retain(|a| !a.path().is_ident("shell_command"));
                 }
-                
+
                 methods.push(method);
             }
             other => other_items.push(other),
         }
     }
-    
+
     // Generate get_command() dispatcher
     let get_command_arms = commands.iter().map(|cmd| {
         let name = &cmd.name;
@@ -512,7 +525,7 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #name => Some(Self::#method_ident)
         }
     });
-    
+
     // Generate show_help() function
     let help_arms = commands.iter().map(|cmd| {
         let name = &cmd.name;
@@ -523,21 +536,21 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #name => Some(#help_text)
         }
     });
-    
+
     // Generate list_commands()
     let command_names: Vec<_> = commands.iter().map(|cmd| &cmd.name).collect();
-    
+
     // Reconstruct the impl block
     let self_ty = &input.self_ty;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    
+
     let output = quote! {
         impl #impl_generics #self_ty #ty_generics #where_clause {
             #(#methods)*
-            
+
             #(#other_items)*
-            
+
             /// Get a command function by name.
             pub fn get_command(name: &str) -> Option<crate::shell::commands::CommandFn> {
                 match name {
@@ -545,7 +558,7 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     _ => None,
                 }
             }
-            
+
             /// Get help text for a command.
             pub fn show_help(name: &str) -> Option<&'static str> {
                 match name {
@@ -553,13 +566,13 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     _ => None,
                 }
             }
-            
+
             /// List all available commands.
             pub fn list_commands() -> &'static [&'static str] {
                 &[#(#command_names),*]
             }
         }
     };
-    
+
     output.into()
 }

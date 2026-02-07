@@ -39,7 +39,11 @@ impl TestCommands {
 
             // Evaluate the expression
             let result = evaluate_test_expression(&remaining);
-            if result { 0 } else { 1 }
+            if result {
+                0
+            } else {
+                1
+            }
         })
     }
 
@@ -72,7 +76,11 @@ impl TestCommands {
             remaining.pop(); // Remove ]
 
             let result = evaluate_test_expression(&remaining);
-            if result { 0 } else { 1 }
+            if result {
+                0
+            } else {
+                1
+            }
         })
     }
 
@@ -110,7 +118,11 @@ impl TestCommands {
             remaining.pop(); // Remove ]]
 
             let result = evaluate_extended_test_expression(&remaining);
-            if result { 0 } else { 1 }
+            if result {
+                0
+            } else {
+                1
+            }
         })
     }
 }
@@ -128,7 +140,7 @@ fn evaluate_test_expression(args: &[String]) -> bool {
 
     // Handle parentheses
     if args[0] == "(" && args.last().map(|s| s.as_str()) == Some(")") {
-        return evaluate_test_expression(&args[1..args.len()-1]);
+        return evaluate_test_expression(&args[1..args.len() - 1]);
     }
 
     // Look for binary logical operators (lowest precedence)
@@ -136,8 +148,8 @@ fn evaluate_test_expression(args: &[String]) -> bool {
         match arg.as_str() {
             "-o" => {
                 // OR: return true if either side is true
-                return evaluate_test_expression(&args[..i]) 
-                    || evaluate_test_expression(&args[i+1..]);
+                return evaluate_test_expression(&args[..i])
+                    || evaluate_test_expression(&args[i + 1..]);
             }
             _ => {}
         }
@@ -147,8 +159,8 @@ fn evaluate_test_expression(args: &[String]) -> bool {
         match arg.as_str() {
             "-a" => {
                 // AND: return true only if both sides are true
-                return evaluate_test_expression(&args[..i]) 
-                    && evaluate_test_expression(&args[i+1..]);
+                return evaluate_test_expression(&args[..i])
+                    && evaluate_test_expression(&args[i + 1..]);
             }
             _ => {}
         }
@@ -158,15 +170,31 @@ fn evaluate_test_expression(args: &[String]) -> bool {
     if args.len() >= 2 {
         match args[0].as_str() {
             "-e" => return std::fs::metadata(&args[1]).is_ok(),
-            "-f" => return std::fs::metadata(&args[1]).map(|m| m.is_file()).unwrap_or(false),
-            "-d" => return std::fs::metadata(&args[1]).map(|m| m.is_dir()).unwrap_or(false),
+            "-f" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+            }
+            "-d" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false)
+            }
             "-r" => return std::fs::metadata(&args[1]).is_ok(), // Simplified - assume readable if exists
             "-w" => return std::fs::metadata(&args[1]).is_ok(), // Simplified
             "-x" => return std::fs::metadata(&args[1]).is_ok(), // Simplified
-            "-s" => return std::fs::metadata(&args[1]).map(|m| m.len() > 0).unwrap_or(false),
+            "-s" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.len() > 0)
+                    .unwrap_or(false)
+            }
             "-z" => return args[1].is_empty(),
             "-n" => return !args[1].is_empty(),
-            "-L" | "-h" => return std::fs::symlink_metadata(&args[1]).map(|m| m.file_type().is_symlink()).unwrap_or(false),
+            "-L" | "-h" => {
+                return std::fs::symlink_metadata(&args[1])
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+            }
             _ => {}
         }
     }
@@ -230,23 +258,23 @@ fn evaluate_extended_test_expression(args: &[String]) -> bool {
 
     // Handle parentheses
     if args[0] == "(" && args.last().map(|s| s.as_str()) == Some(")") {
-        return evaluate_extended_test_expression(&args[1..args.len()-1]);
+        return evaluate_extended_test_expression(&args[1..args.len() - 1]);
     }
 
     // Look for binary logical operators (lowest precedence)
     // || has lowest precedence
     for (i, arg) in args.iter().enumerate() {
         if arg == "||" {
-            return evaluate_extended_test_expression(&args[..i]) 
-                || evaluate_extended_test_expression(&args[i+1..]);
+            return evaluate_extended_test_expression(&args[..i])
+                || evaluate_extended_test_expression(&args[i + 1..]);
         }
     }
 
     // && has higher precedence than ||
     for (i, arg) in args.iter().enumerate() {
         if arg == "&&" {
-            return evaluate_extended_test_expression(&args[..i]) 
-                && evaluate_extended_test_expression(&args[i+1..]);
+            return evaluate_extended_test_expression(&args[..i])
+                && evaluate_extended_test_expression(&args[i + 1..]);
         }
     }
 
@@ -254,15 +282,31 @@ fn evaluate_extended_test_expression(args: &[String]) -> bool {
     if args.len() >= 2 {
         match args[0].as_str() {
             "-e" => return std::fs::metadata(&args[1]).is_ok(),
-            "-f" => return std::fs::metadata(&args[1]).map(|m| m.is_file()).unwrap_or(false),
-            "-d" => return std::fs::metadata(&args[1]).map(|m| m.is_dir()).unwrap_or(false),
+            "-f" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+            }
+            "-d" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false)
+            }
             "-r" => return std::fs::metadata(&args[1]).is_ok(),
             "-w" => return std::fs::metadata(&args[1]).is_ok(),
             "-x" => return std::fs::metadata(&args[1]).is_ok(),
-            "-s" => return std::fs::metadata(&args[1]).map(|m| m.len() > 0).unwrap_or(false),
+            "-s" => {
+                return std::fs::metadata(&args[1])
+                    .map(|m| m.len() > 0)
+                    .unwrap_or(false)
+            }
             "-z" => return args[1].is_empty(),
             "-n" => return !args[1].is_empty(),
-            "-L" | "-h" => return std::fs::symlink_metadata(&args[1]).map(|m| m.file_type().is_symlink()).unwrap_or(false),
+            "-L" | "-h" => {
+                return std::fs::symlink_metadata(&args[1])
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+            }
             _ => {}
         }
     }
@@ -291,7 +335,13 @@ fn evaluate_extended_test_expression(args: &[String]) -> bool {
                 let left_time = std::fs::metadata(left).and_then(|m| m.modified()).ok();
                 let right_time = std::fs::metadata(right).and_then(|m| m.modified()).ok();
                 return match (left_time, right_time) {
-                    (Some(l), Some(r)) => if op == "-nt" { l > r } else { l < r },
+                    (Some(l), Some(r)) => {
+                        if op == "-nt" {
+                            l > r
+                        } else {
+                            l < r
+                        }
+                    }
                     _ => false,
                 };
             }
@@ -317,31 +367,63 @@ mod tests {
 
     #[test]
     fn test_string_empty() {
-        assert!(evaluate_test_expression(&["-z".to_string(), "".to_string()]));
-        assert!(!evaluate_test_expression(&["-z".to_string(), "hello".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "-z".to_string(),
+            "".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "-z".to_string(),
+            "hello".to_string()
+        ]));
     }
 
     #[test]
     fn test_string_non_empty() {
-        assert!(evaluate_test_expression(&["-n".to_string(), "hello".to_string()]));
-        assert!(!evaluate_test_expression(&["-n".to_string(), "".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "-n".to_string(),
+            "hello".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "-n".to_string(),
+            "".to_string()
+        ]));
     }
 
     #[test]
     fn test_string_equal() {
-        assert!(evaluate_test_expression(&["foo".to_string(), "=".to_string(), "foo".to_string()]));
-        assert!(!evaluate_test_expression(&["foo".to_string(), "=".to_string(), "bar".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "foo".to_string(),
+            "=".to_string(),
+            "foo".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "foo".to_string(),
+            "=".to_string(),
+            "bar".to_string()
+        ]));
     }
 
     #[test]
     fn test_string_equal_double() {
-        assert!(evaluate_test_expression(&["foo".to_string(), "==".to_string(), "foo".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "foo".to_string(),
+            "==".to_string(),
+            "foo".to_string()
+        ]));
     }
 
     #[test]
     fn test_string_not_equal() {
-        assert!(evaluate_test_expression(&["foo".to_string(), "!=".to_string(), "bar".to_string()]));
-        assert!(!evaluate_test_expression(&["foo".to_string(), "!=".to_string(), "foo".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "foo".to_string(),
+            "!=".to_string(),
+            "bar".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "foo".to_string(),
+            "!=".to_string(),
+            "foo".to_string()
+        ]));
     }
 
     #[test]
@@ -362,53 +444,129 @@ mod tests {
 
     #[test]
     fn test_numeric() {
-        assert!(evaluate_test_expression(&["5".to_string(), "-gt".to_string(), "3".to_string()]));
-        assert!(evaluate_test_expression(&["5".to_string(), "-eq".to_string(), "5".to_string()]));
-        assert!(!evaluate_test_expression(&["5".to_string(), "-lt".to_string(), "3".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-gt".to_string(),
+            "3".to_string()
+        ]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-eq".to_string(),
+            "5".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "5".to_string(),
+            "-lt".to_string(),
+            "3".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_eq() {
-        assert!(evaluate_test_expression(&["10".to_string(), "-eq".to_string(), "10".to_string()]));
-        assert!(!evaluate_test_expression(&["10".to_string(), "-eq".to_string(), "20".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "10".to_string(),
+            "-eq".to_string(),
+            "10".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "10".to_string(),
+            "-eq".to_string(),
+            "20".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_ne() {
-        assert!(evaluate_test_expression(&["10".to_string(), "-ne".to_string(), "20".to_string()]));
-        assert!(!evaluate_test_expression(&["10".to_string(), "-ne".to_string(), "10".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "10".to_string(),
+            "-ne".to_string(),
+            "20".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "10".to_string(),
+            "-ne".to_string(),
+            "10".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_lt() {
-        assert!(evaluate_test_expression(&["5".to_string(), "-lt".to_string(), "10".to_string()]));
-        assert!(!evaluate_test_expression(&["10".to_string(), "-lt".to_string(), "5".to_string()]));
-        assert!(!evaluate_test_expression(&["5".to_string(), "-lt".to_string(), "5".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-lt".to_string(),
+            "10".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "10".to_string(),
+            "-lt".to_string(),
+            "5".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "5".to_string(),
+            "-lt".to_string(),
+            "5".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_le() {
-        assert!(evaluate_test_expression(&["5".to_string(), "-le".to_string(), "10".to_string()]));
-        assert!(evaluate_test_expression(&["5".to_string(), "-le".to_string(), "5".to_string()]));
-        assert!(!evaluate_test_expression(&["10".to_string(), "-le".to_string(), "5".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-le".to_string(),
+            "10".to_string()
+        ]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-le".to_string(),
+            "5".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "10".to_string(),
+            "-le".to_string(),
+            "5".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_gt() {
-        assert!(evaluate_test_expression(&["10".to_string(), "-gt".to_string(), "5".to_string()]));
-        assert!(!evaluate_test_expression(&["5".to_string(), "-gt".to_string(), "10".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "10".to_string(),
+            "-gt".to_string(),
+            "5".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "5".to_string(),
+            "-gt".to_string(),
+            "10".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_ge() {
-        assert!(evaluate_test_expression(&["10".to_string(), "-ge".to_string(), "5".to_string()]));
-        assert!(evaluate_test_expression(&["5".to_string(), "-ge".to_string(), "5".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "10".to_string(),
+            "-ge".to_string(),
+            "5".to_string()
+        ]));
+        assert!(evaluate_test_expression(&[
+            "5".to_string(),
+            "-ge".to_string(),
+            "5".to_string()
+        ]));
     }
 
     #[test]
     fn test_numeric_negative() {
-        assert!(evaluate_test_expression(&["-5".to_string(), "-lt".to_string(), "0".to_string()]));
-        assert!(evaluate_test_expression(&["0".to_string(), "-gt".to_string(), "-5".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "-5".to_string(),
+            "-lt".to_string(),
+            "0".to_string()
+        ]));
+        assert!(evaluate_test_expression(&[
+            "0".to_string(),
+            "-gt".to_string(),
+            "-5".to_string()
+        ]));
     }
 
     // ========================================================================
@@ -417,49 +575,68 @@ mod tests {
 
     #[test]
     fn test_negation() {
-        assert!(evaluate_test_expression(&["!".to_string(), "-z".to_string(), "hello".to_string()]));
-        assert!(!evaluate_test_expression(&["!".to_string(), "-n".to_string(), "hello".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "!".to_string(),
+            "-z".to_string(),
+            "hello".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "!".to_string(),
+            "-n".to_string(),
+            "hello".to_string()
+        ]));
     }
 
     #[test]
     fn test_negation_single() {
         assert!(evaluate_test_expression(&["!".to_string(), "".to_string()]));
-        assert!(!evaluate_test_expression(&["!".to_string(), "nonempty".to_string()]));
+        assert!(!evaluate_test_expression(&[
+            "!".to_string(),
+            "nonempty".to_string()
+        ]));
     }
 
     #[test]
     fn test_logical_and() {
         assert!(evaluate_test_expression(&[
-            "-n".to_string(), "hello".to_string(),
+            "-n".to_string(),
+            "hello".to_string(),
             "-a".to_string(),
-            "-n".to_string(), "world".to_string()
+            "-n".to_string(),
+            "world".to_string()
         ]));
     }
 
     #[test]
     fn test_logical_and_false() {
         assert!(!evaluate_test_expression(&[
-            "-n".to_string(), "hello".to_string(),
+            "-n".to_string(),
+            "hello".to_string(),
             "-a".to_string(),
-            "-z".to_string(), "world".to_string()
+            "-z".to_string(),
+            "world".to_string()
         ]));
     }
 
     #[test]
     fn test_logical_or() {
         assert!(evaluate_test_expression(&[
-            "-z".to_string(), "hello".to_string(),
+            "-z".to_string(),
+            "hello".to_string(),
             "-o".to_string(),
-            "-n".to_string(), "world".to_string()
+            "-n".to_string(),
+            "world".to_string()
         ]));
     }
 
     #[test]
     fn test_logical_or_both_false() {
         assert!(!evaluate_test_expression(&[
-            "-z".to_string(), "hello".to_string(),
+            "-z".to_string(),
+            "hello".to_string(),
             "-o".to_string(),
-            "-z".to_string(), "world".to_string()
+            "-z".to_string(),
+            "world".to_string()
         ]));
     }
 
@@ -470,19 +647,30 @@ mod tests {
     #[test]
     fn test_file_exists() {
         // Cargo.toml should exist in root
-        assert!(evaluate_test_expression(&["-e".to_string(), "Cargo.toml".to_string()]) || 
-                evaluate_test_expression(&["-e".to_string(), "/".to_string()]));
+        assert!(
+            evaluate_test_expression(&["-e".to_string(), "Cargo.toml".to_string()])
+                || evaluate_test_expression(&["-e".to_string(), "/".to_string()])
+        );
     }
 
     #[test]
     fn test_file_not_exists() {
-        assert!(!evaluate_test_expression(&["-e".to_string(), "/nonexistent/file/path".to_string()]));
+        assert!(!evaluate_test_expression(&[
+            "-e".to_string(),
+            "/nonexistent/file/path".to_string()
+        ]));
     }
 
     #[test]
     fn test_directory() {
-        assert!(evaluate_test_expression(&["-d".to_string(), "/".to_string()]));
-        assert!(!evaluate_test_expression(&["-d".to_string(), "/nonexistent".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "-d".to_string(),
+            "/".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            "-d".to_string(),
+            "/nonexistent".to_string()
+        ]));
     }
 
     // ========================================================================
@@ -492,7 +680,10 @@ mod tests {
     #[test]
     fn test_parentheses() {
         assert!(evaluate_test_expression(&[
-            "(".to_string(), "-n".to_string(), "hello".to_string(), ")".to_string()
+            "(".to_string(),
+            "-n".to_string(),
+            "hello".to_string(),
+            ")".to_string()
         ]));
     }
 
@@ -502,13 +693,24 @@ mod tests {
 
     #[test]
     fn test_empty_string_comparison() {
-        assert!(evaluate_test_expression(&["".to_string(), "=".to_string(), "".to_string()]));
+        assert!(evaluate_test_expression(&[
+            "".to_string(),
+            "=".to_string(),
+            "".to_string()
+        ]));
     }
 
     #[test]
     fn test_whitespace_comparison() {
-        assert!(evaluate_test_expression(&[" ".to_string(), "=".to_string(), " ".to_string()]));
-        assert!(!evaluate_test_expression(&[" ".to_string(), "=".to_string(), "".to_string()]));
+        assert!(evaluate_test_expression(&[
+            " ".to_string(),
+            "=".to_string(),
+            " ".to_string()
+        ]));
+        assert!(!evaluate_test_expression(&[
+            " ".to_string(),
+            "=".to_string(),
+            "".to_string()
+        ]));
     }
 }
-

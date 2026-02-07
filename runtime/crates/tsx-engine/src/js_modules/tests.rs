@@ -144,11 +144,14 @@ fn test_buffer_is_buffer() {
 
 #[test]
 fn test_buffer_concat() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const a = Buffer.from('hel');
         const b = Buffer.from('lo');
         return Buffer.concat([a, b]).toString();
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "hello");
 }
 
@@ -182,16 +185,20 @@ fn test_url_pathname() {
 
 #[test]
 fn test_url_search_params() {
-    let result = eval_js("return new URL('https://example.com?a=1&b=2').searchParams.get('a')").unwrap();
+    let result =
+        eval_js("return new URL('https://example.com?a=1&b=2').searchParams.get('a')").unwrap();
     assert_eq!(result, "1");
 }
 
 #[test]
 fn test_url_search_params_multiple() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const u = new URL('https://example.com?a=1&a=2');
         return u.searchParams.getAll('a').join(',');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "1,2");
 }
 
@@ -215,20 +222,26 @@ fn test_url_relative() {
 
 #[test]
 fn test_urlsearchparams_standalone() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const p = new URLSearchParams('a=1&b=2');
         return p.get('b');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "2");
 }
 
 #[test]
 fn test_urlsearchparams_set() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const p = new URLSearchParams('a=1');
         p.set('a', '2');
         return p.get('a');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "2");
 }
 
@@ -238,44 +251,56 @@ fn test_urlsearchparams_set() {
 
 #[test]
 fn test_textencoder_basic() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const encoder = new TextEncoder();
         const bytes = encoder.encode('hello');
         return bytes.length;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "5");
 }
 
 #[test]
 fn test_textdecoder_basic() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const bytes = encoder.encode('hello');
         return decoder.decode(bytes);
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "hello");
 }
 
 #[test]
 fn test_textencoder_unicode() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const encoder = new TextEncoder();
         const bytes = encoder.encode('日本語');
         return bytes.length;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     // Japanese text is 3 characters, 9 bytes in UTF-8
     assert_eq!(result, "9");
 }
 
 #[test]
 fn test_textdecoder_unicode() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const bytes = encoder.encode('日本語');
         return decoder.decode(bytes);
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "日本語");
 }
 
@@ -345,18 +370,24 @@ fn test_path_relative() {
 
 #[test]
 fn test_path_parse() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const p = path.parse('/home/user/file.txt');
         return p.name;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "file");
 }
 
 #[test]
 fn test_path_format() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         return path.format({ dir: '/home/user', base: 'file.txt' });
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "/home/user/file.txt");
 }
 
@@ -395,42 +426,54 @@ fn test_console_warn() {
 
 #[test]
 fn test_headers_basic() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const h = new Headers();
         h.set('Content-Type', 'application/json');
         return h.get('Content-Type');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "application/json");
 }
 
 #[test]
 fn test_headers_case_insensitive() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const h = new Headers();
         h.set('Content-Type', 'application/json');
         return h.get('content-type');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "application/json");
 }
 
 #[test]
 fn test_headers_append() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const h = new Headers();
         h.append('Accept', 'text/html');
         h.append('Accept', 'application/json');
         return h.get('Accept');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert!(result.contains("text/html"));
     assert!(result.contains("application/json"));
 }
 
 #[test]
 fn test_headers_from_object() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const h = new Headers({ 'X-Custom': 'value' });
         return h.get('X-Custom');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "value");
 }
 
@@ -440,47 +483,62 @@ fn test_headers_from_object() {
 
 #[test]
 fn test_response_basic() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const r = new Response('body content');
         return r.status;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "200");
 }
 
 #[test]
 fn test_response_ok() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const r = new Response('body', { status: 200 });
         return r.ok;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "true");
 }
 
 #[test]
 fn test_response_not_ok() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const r = new Response('body', { status: 404 });
         return r.ok;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "false");
 }
 
 #[test]
 fn test_request_class_basic_fields() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const req = new Request('https://example.com/a', { method: 'POST' });
         return req.url + '|' + req.method;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "https://example.com/a|POST");
 }
 
 #[test]
 fn test_abort_controller_signal() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const c = new AbortController();
         c.abort();
         return c.signal.aborted;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "true");
 }
 
@@ -502,10 +560,13 @@ fn test_fs_exists_sync_false() {
 
 #[test]
 fn test_fs_write_and_read_sync() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.writeFileSync('/tmp/js_test_file.txt', 'hello world');
         return fs.readFileSync('/tmp/js_test_file.txt');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "hello world");
     // Cleanup
     let _ = std::fs::remove_file("/tmp/js_test_file.txt");
@@ -514,19 +575,25 @@ fn test_fs_write_and_read_sync() {
 #[test]
 fn test_fs_readdir_sync() {
     // /tmp should have entries
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const entries = fs.readdirSync('/tmp');
         return Array.isArray(entries) ? 'array' : 'not array';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "array");
 }
 
 #[test]
 fn test_fs_stat_sync() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const stat = fs.statSync('/tmp');
         return stat.isDirectory() ? 'dir' : 'not dir';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "dir");
 }
 
@@ -534,10 +601,13 @@ fn test_fs_stat_sync() {
 fn test_fs_stat_sync_is_file() {
     // Create a test file first
     std::fs::write("/tmp/js_test_stat.txt", "test").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const stat = fs.statSync('/tmp/js_test_stat.txt');
         return stat.isFile() ? 'file' : 'not file';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "file");
     let _ = std::fs::remove_file("/tmp/js_test_stat.txt");
 }
@@ -545,55 +615,70 @@ fn test_fs_stat_sync_is_file() {
 #[test]
 fn test_fs_stat_sync_size() {
     std::fs::write("/tmp/js_test_size.txt", "12345").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         const stat = fs.statSync('/tmp/js_test_size.txt');
         return stat.size;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "5");
     let _ = std::fs::remove_file("/tmp/js_test_size.txt");
 }
 
 #[test]
 fn test_fs_mkdir_and_rmdir_sync() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.mkdirSync('/tmp/js_test_dir_123');
         const exists = fs.existsSync('/tmp/js_test_dir_123');
         fs.rmdirSync('/tmp/js_test_dir_123');
         return exists ? 'created' : 'not created';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "created");
 }
 
 #[test]
 fn test_fs_mkdir_recursive() {
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.mkdirSync('/tmp/js_test_nested/a/b/c', { recursive: true });
         const exists = fs.existsSync('/tmp/js_test_nested/a/b/c');
         fs.rmSync('/tmp/js_test_nested', { recursive: true });
         return exists ? 'created' : 'not created';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "created");
 }
 
 #[test]
 fn test_fs_unlink_sync() {
     std::fs::write("/tmp/js_test_unlink.txt", "test").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.unlinkSync('/tmp/js_test_unlink.txt');
         return fs.existsSync('/tmp/js_test_unlink.txt') ? 'exists' : 'deleted';
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "deleted");
 }
 
 #[test]
 fn test_fs_rename_sync() {
     std::fs::write("/tmp/js_test_rename_a.txt", "content").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.renameSync('/tmp/js_test_rename_a.txt', '/tmp/js_test_rename_b.txt');
         const a_exists = fs.existsSync('/tmp/js_test_rename_a.txt');
         const b_exists = fs.existsSync('/tmp/js_test_rename_b.txt');
         return a_exists ? 'old exists' : (b_exists ? 'renamed' : 'both gone');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "renamed");
     let _ = std::fs::remove_file("/tmp/js_test_rename_b.txt");
 }
@@ -601,10 +686,13 @@ fn test_fs_rename_sync() {
 #[test]
 fn test_fs_copy_file_sync() {
     std::fs::write("/tmp/js_test_copy_src.txt", "copy this").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.copyFileSync('/tmp/js_test_copy_src.txt', '/tmp/js_test_copy_dst.txt');
         return fs.readFileSync('/tmp/js_test_copy_dst.txt');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "copy this");
     let _ = std::fs::remove_file("/tmp/js_test_copy_src.txt");
     let _ = std::fs::remove_file("/tmp/js_test_copy_dst.txt");
@@ -613,10 +701,13 @@ fn test_fs_copy_file_sync() {
 #[test]
 fn test_fs_append_file_sync() {
     std::fs::write("/tmp/js_test_append.txt", "hello").unwrap();
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         fs.appendFileSync('/tmp/js_test_append.txt', ' world');
         return fs.readFileSync('/tmp/js_test_append.txt');
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert_eq!(result, "hello world");
     let _ = std::fs::remove_file("/tmp/js_test_append.txt");
 }
@@ -628,12 +719,14 @@ fn test_fs_append_file_sync() {
 #[test]
 fn test_fs_promises_write_and_read() {
     // Note: Our async wraps sync, so these work the same way
-    let result = eval_js(r#"
+    let result = eval_js(
+        r#"
         (async function() {
             await fs.promises.writeFile('/tmp/js_async_test.txt', 'async content');
             return await fs.promises.readFile('/tmp/js_async_test.txt');
         })()
-    "#);
+    "#,
+    );
     // Since we're in sync context, the promise returns immediately
     // We can't fully test async semantics but we can verify the API exists
     assert!(result.is_ok() || result.is_err()); // Just check it doesn't crash

@@ -130,7 +130,7 @@ impl UtilCommands {
             // In a real shell, we'd set env variables directly
             // For now, we output in a format the caller can parse
             let words: Vec<&str> = line.split_whitespace().collect();
-            
+
             for (i, name) in var_names.iter().enumerate() {
                 let value = if i == var_names.len() - 1 {
                     // Last variable gets remainder
@@ -138,7 +138,9 @@ impl UtilCommands {
                 } else {
                     words.get(i).unwrap_or(&"").to_string()
                 };
-                let _ = stdout.write_all(format!("{}={}\n", name, value).as_bytes()).await;
+                let _ = stdout
+                    .write_all(format!("{}={}\n", name, value).as_bytes())
+                    .await;
             }
 
             0
@@ -192,25 +194,33 @@ impl UtilCommands {
                             "other"
                         };
 
-                        let _ = stdout.write_all(format!(
-                            "  File: {}\n  Size: {}\t\tType: {}\n",
-                            file,
-                            metadata.len(),
-                            file_type
-                        ).as_bytes()).await;
+                        let _ = stdout
+                            .write_all(
+                                format!(
+                                    "  File: {}\n  Size: {}\t\tType: {}\n",
+                                    file,
+                                    metadata.len(),
+                                    file_type
+                                )
+                                .as_bytes(),
+                            )
+                            .await;
 
                         // Try to get times
                         if let Ok(modified) = metadata.modified() {
                             if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
-                                let _ = stdout.write_all(format!(
-                                    "Modify: {}\n",
-                                    duration.as_secs()
-                                ).as_bytes()).await;
+                                let _ = stdout
+                                    .write_all(
+                                        format!("Modify: {}\n", duration.as_secs()).as_bytes(),
+                                    )
+                                    .await;
                             }
                         }
                     }
                     Err(e) => {
-                        let _ = stderr.write_all(format!("stat: {}: {}\n", file, e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("stat: {}: {}\n", file, e).as_bytes())
+                            .await;
                         exit_code = 1;
                     }
                 }
@@ -357,11 +367,15 @@ impl UtilCommands {
 
             match result {
                 Ok(_) => {
-                    let _ = stdout.write_all(format!("{}\n", full_path).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("{}\n", full_path).as_bytes())
+                        .await;
                     0
                 }
                 Err(e) => {
-                    let _ = stderr.write_all(format!("mktemp: {}\n", e).as_bytes()).await;
+                    let _ = stderr
+                        .write_all(format!("mktemp: {}\n", e).as_bytes())
+                        .await;
                     1
                 }
             }
@@ -393,11 +407,17 @@ impl UtilCommands {
 
             for name in &remaining {
                 if ShellCommands::get_command(name).is_some() {
-                    let _ = stdout.write_all(format!("{} is a shell builtin\n", name).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("{} is a shell builtin\n", name).as_bytes())
+                        .await;
                 } else if is_shell_keyword(name) {
-                    let _ = stdout.write_all(format!("{} is a shell keyword\n", name).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("{} is a shell keyword\n", name).as_bytes())
+                        .await;
                 } else {
-                    let _ = stderr.write_all(format!("type: {}: not found\n", name).as_bytes()).await;
+                    let _ = stderr
+                        .write_all(format!("type: {}: not found\n", name).as_bytes())
+                        .await;
                     exit_code = 1;
                 }
             }
@@ -431,9 +451,13 @@ impl UtilCommands {
 
             for name in &remaining {
                 if ShellCommands::get_command(name).is_some() {
-                    let _ = stdout.write_all(format!("{}: shell builtin\n", name).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("{}: shell builtin\n", name).as_bytes())
+                        .await;
                 } else {
-                    let _ = stderr.write_all(format!("{}: not found\n", name).as_bytes()).await;
+                    let _ = stderr
+                        .write_all(format!("{}: not found\n", name).as_bytes())
+                        .await;
                     exit_code = 1;
                 }
             }
@@ -450,65 +474,63 @@ fn format_printf(format: &str, args: &[String], arg_idx: &mut usize) -> String {
 
     while let Some(c) = chars.next() {
         match c {
-            '%' => {
-                match chars.peek() {
-                    Some('%') => {
-                        chars.next();
-                        result.push('%');
-                    }
-                    Some('s') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            result.push_str(arg);
-                            *arg_idx += 1;
-                        }
-                    }
-                    Some('d') | Some('i') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            let num: i64 = arg.parse().unwrap_or(0);
-                            result.push_str(&num.to_string());
-                            *arg_idx += 1;
-                        }
-                    }
-                    Some('x') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            let num: i64 = arg.parse().unwrap_or(0);
-                            result.push_str(&format!("{:x}", num));
-                            *arg_idx += 1;
-                        }
-                    }
-                    Some('X') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            let num: i64 = arg.parse().unwrap_or(0);
-                            result.push_str(&format!("{:X}", num));
-                            *arg_idx += 1;
-                        }
-                    }
-                    Some('o') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            let num: i64 = arg.parse().unwrap_or(0);
-                            result.push_str(&format!("{:o}", num));
-                            *arg_idx += 1;
-                        }
-                    }
-                    Some('c') => {
-                        chars.next();
-                        if let Some(arg) = args.get(*arg_idx) {
-                            if let Some(c) = arg.chars().next() {
-                                result.push(c);
-                            }
-                            *arg_idx += 1;
-                        }
-                    }
-                    _ => {
-                        result.push('%');
+            '%' => match chars.peek() {
+                Some('%') => {
+                    chars.next();
+                    result.push('%');
+                }
+                Some('s') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        result.push_str(arg);
+                        *arg_idx += 1;
                     }
                 }
-            }
+                Some('d') | Some('i') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        let num: i64 = arg.parse().unwrap_or(0);
+                        result.push_str(&num.to_string());
+                        *arg_idx += 1;
+                    }
+                }
+                Some('x') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        let num: i64 = arg.parse().unwrap_or(0);
+                        result.push_str(&format!("{:x}", num));
+                        *arg_idx += 1;
+                    }
+                }
+                Some('X') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        let num: i64 = arg.parse().unwrap_or(0);
+                        result.push_str(&format!("{:X}", num));
+                        *arg_idx += 1;
+                    }
+                }
+                Some('o') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        let num: i64 = arg.parse().unwrap_or(0);
+                        result.push_str(&format!("{:o}", num));
+                        *arg_idx += 1;
+                    }
+                }
+                Some('c') => {
+                    chars.next();
+                    if let Some(arg) = args.get(*arg_idx) {
+                        if let Some(c) = arg.chars().next() {
+                            result.push(c);
+                        }
+                        *arg_idx += 1;
+                    }
+                }
+                _ => {
+                    result.push('%');
+                }
+            },
             '\\' => {
                 match chars.next() {
                     Some('n') => result.push('\n'),
@@ -547,10 +569,27 @@ fn format_printf(format: &str, args: &[String], arg_idx: &mut usize) -> String {
 
 /// Check if a name is a shell keyword
 fn is_shell_keyword(name: &str) -> bool {
-    matches!(name, "if" | "then" | "else" | "elif" | "fi" | 
-                   "for" | "while" | "until" | "do" | "done" |
-                   "case" | "esac" | "in" | 
-                   "function" | "{" | "}" | "!" | "[[" | "]]")
+    matches!(
+        name,
+        "if" | "then"
+            | "else"
+            | "elif"
+            | "fi"
+            | "for"
+            | "while"
+            | "until"
+            | "do"
+            | "done"
+            | "case"
+            | "esac"
+            | "in"
+            | "function"
+            | "{"
+            | "}"
+            | "!"
+            | "[["
+            | "]]"
+    )
 }
 
 #[cfg(test)]
@@ -560,24 +599,36 @@ mod tests {
     #[test]
     fn test_printf_string() {
         let mut idx = 0;
-        assert_eq!(format_printf("Hello %s!", &["world".to_string()], &mut idx), "Hello world!");
+        assert_eq!(
+            format_printf("Hello %s!", &["world".to_string()], &mut idx),
+            "Hello world!"
+        );
     }
 
     #[test]
     fn test_printf_number() {
         let mut idx = 0;
-        assert_eq!(format_printf("Number: %d", &["42".to_string()], &mut idx), "Number: 42");
+        assert_eq!(
+            format_printf("Number: %d", &["42".to_string()], &mut idx),
+            "Number: 42"
+        );
     }
 
     #[test]
     fn test_printf_hex() {
         let mut idx = 0;
-        assert_eq!(format_printf("Hex: %x", &["255".to_string()], &mut idx), "Hex: ff");
+        assert_eq!(
+            format_printf("Hex: %x", &["255".to_string()], &mut idx),
+            "Hex: ff"
+        );
     }
 
     #[test]
     fn test_printf_escape() {
         let mut idx = 0;
-        assert_eq!(format_printf("Line1\\nLine2", &[], &mut idx), "Line1\nLine2");
+        assert_eq!(
+            format_printf("Line1\\nLine2", &[], &mut idx),
+            "Line1\nLine2"
+        );
     }
 }

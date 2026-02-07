@@ -51,16 +51,8 @@ impl Guest for EdtuiModule {
 // ANSI escape sequences
 const CLEAR_SCREEN: &str = "\x1B[2J";
 const HOME: &str = "\x1B[H";
-const HIDE_CURSOR: &str = "\x1B[?25l";
 const SHOW_CURSOR: &str = "\x1B[?25h";
-const CLEAR_LINE: &str = "\x1B[K";
-const REVERSE_VIDEO: &str = "\x1B[7m";
 const RESET: &str = "\x1B[0m";
-const YELLOW_BG: &str = "\x1B[43m";
-const BLACK_FG: &str = "\x1B[30m";
-// Cursor shape sequences (DECSCUSR)
-const CURSOR_BLOCK: &str = "\x1B[2 q"; // Steady block
-const CURSOR_BAR: &str = "\x1B[6 q"; // Steady bar (vertical line)
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
@@ -142,14 +134,6 @@ impl Cell {
             modifiers: 0,
         }
     }
-
-    /// Convert cell to ANSI escape sequence
-    fn to_ansi(&self) -> String {
-        format!(
-            "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m{}",
-            self.fg.r, self.fg.g, self.fg.b, self.bg.r, self.bg.g, self.bg.b, self.ch
-        )
-    }
 }
 
 /// Screen buffer for double-buffering
@@ -173,12 +157,6 @@ impl ScreenBuffer {
             self.width = width;
             self.height = height;
             self.cells = vec![Cell::default(); width * height];
-        }
-    }
-
-    fn clear(&mut self) {
-        for cell in &mut self.cells {
-            *cell = Cell::default();
         }
     }
 
@@ -282,10 +260,6 @@ impl Editor {
             last_cursor_pos: (0, 0),
             force_full_redraw: true, // First render is full
         }
-    }
-
-    fn to_string(&self) -> String {
-        self.rope.to_string()
     }
 
     /// Mark lines as needing re-highlighting from a given line onwards.
@@ -1222,7 +1196,7 @@ fn execute_command(cmd: &str, editor: &mut Editor, cwd: &str) -> CommandResult {
         "q!" | "quit!" => CommandResult::Quit,
         "w" | "write" => {
             if let Some(ref path) = editor.file_path {
-                match write_file(cwd, path, &editor.to_string()) {
+                match write_file(cwd, path, &editor.rope.to_string()) {
                     Ok(()) => CommandResult::Saved,
                     Err(e) => CommandResult::Error(format!("Write failed: {}", e)),
                 }
@@ -1232,7 +1206,7 @@ fn execute_command(cmd: &str, editor: &mut Editor, cwd: &str) -> CommandResult {
         }
         "wq" | "x" => {
             if let Some(ref path) = editor.file_path {
-                match write_file(cwd, path, &editor.to_string()) {
+                match write_file(cwd, path, &editor.rope.to_string()) {
                     Ok(()) => CommandResult::SavedAndQuit,
                     Err(e) => CommandResult::Error(format!("Write failed: {}", e)),
                 }
@@ -1241,9 +1215,9 @@ fn execute_command(cmd: &str, editor: &mut Editor, cwd: &str) -> CommandResult {
             }
         }
         _ => {
-            if cmd.starts_with("w ") {
-                let new_path = cmd[2..].trim();
-                match write_file(cwd, new_path, &editor.to_string()) {
+            if let Some(stripped) = cmd.strip_prefix("w ") {
+                let new_path = stripped.trim();
+                match write_file(cwd, new_path, &editor.rope.to_string()) {
                     Ok(()) => {
                         editor.file_path = Some(new_path.to_string());
                         CommandResult::Saved
@@ -1255,12 +1229,6 @@ fn execute_command(cmd: &str, editor: &mut Editor, cwd: &str) -> CommandResult {
             }
         }
     }
-}
-
-/// Convert a syntect Style to an ANSI escape sequence for foreground color
-fn style_to_ansi(style: &Style) -> String {
-    let fg = style.foreground;
-    format!("\x1B[38;2;{};{};{}m", fg.r, fg.g, fg.b)
 }
 
 /// Convert a syntect Style's foreground color to our Color type

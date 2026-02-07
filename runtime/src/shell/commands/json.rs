@@ -35,11 +35,11 @@ impl JsonCommands {
                     return 0;
                 }
             }
-            
+
             let mut raw_output = false;
             let mut positional: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
-            
+
             while let Some(arg) = parser.next().ok().flatten() {
                 match arg {
                     Short('r') => raw_output = true,
@@ -47,15 +47,15 @@ impl JsonCommands {
                     _ => {}
                 }
             }
-            
+
             if positional.is_empty() {
                 let _ = stderr.write_all(b"jq: missing filter\n").await;
                 return 1;
             }
-            
+
             let filter = &positional[0];
             let file = positional.get(1);
-            
+
             // Read JSON input
             let input = if let Some(file_path) = file {
                 let path = if file_path.starts_with('/') {
@@ -63,7 +63,7 @@ impl JsonCommands {
                 } else {
                     format!("{}/{}", cwd, file_path)
                 };
-                
+
                 match std::fs::read_to_string(&path) {
                     Ok(content) => content,
                     Err(e) => {
@@ -83,7 +83,7 @@ impl JsonCommands {
                 }
                 content
             };
-            
+
             // Parse JSON
             let json: serde_json::Value = match serde_json::from_str(&input) {
                 Ok(v) => v,
@@ -93,7 +93,7 @@ impl JsonCommands {
                     return 1;
                 }
             };
-            
+
             // Apply filter
             let result = match apply_jq_filter(&json, filter) {
                 Ok(v) => v,
@@ -103,7 +103,7 @@ impl JsonCommands {
                     return 1;
                 }
             };
-            
+
             // Output result
             for value in result {
                 let output = if raw_output {
@@ -117,7 +117,7 @@ impl JsonCommands {
                 let _ = stdout.write_all(output.as_bytes()).await;
                 let _ = stdout.write_all(b"\n").await;
             }
-            
+
             0
         })
     }
@@ -143,12 +143,12 @@ impl JsonCommands {
                     return 0;
                 }
             }
-            
+
             let mut max_args: Option<usize> = None;
             let mut replace_str: Option<String> = None;
             let mut command_args: Vec<String> = Vec::new();
             let mut in_options = true;
-            
+
             let mut i = 0;
             while i < remaining.len() {
                 if in_options {
@@ -178,32 +178,33 @@ impl JsonCommands {
                 }
                 i += 1;
             }
-            
+
             if command_args.is_empty() {
                 command_args.push("echo".to_string());
             }
-            
+
             // Read items from stdin
             let mut items: Vec<String> = Vec::new();
             let reader = BufReader::new(stdin);
             let mut lines = reader.lines();
-            
+
             while let Some(Ok(line)) = lines.next().await {
                 for word in line.split_whitespace() {
                     items.push(word.to_string());
                 }
             }
-            
+
             if items.is_empty() {
                 return 0;
             }
-            
+
             // Output the command(s) that would be executed
             // In a full implementation, we'd actually execute these
             if let Some(ref repl) = replace_str {
                 // -I mode: one command per item, replacing the placeholder
                 for item in &items {
-                    let cmd_line: Vec<String> = command_args.iter()
+                    let cmd_line: Vec<String> = command_args
+                        .iter()
                         .map(|arg| arg.replace(repl, item))
                         .collect();
                     let _ = stdout.write_all(cmd_line.join(" ").as_bytes()).await;
@@ -224,24 +225,28 @@ impl JsonCommands {
                 let _ = stdout.write_all(cmd_line.join(" ").as_bytes()).await;
                 let _ = stdout.write_all(b"\n").await;
             }
-            
+
             0
         })
     }
 }
 
 /// Apply a jq-style filter to a JSON value
-fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_json::Value>, String> {
+fn apply_jq_filter(
+    json: &serde_json::Value,
+    filter: &str,
+) -> Result<Vec<serde_json::Value>, String> {
     let filter = filter.trim();
-    
+
     if filter == "." {
         return Ok(vec![json.clone()]);
     }
-    
+
     if filter == "keys" {
         return match json {
             serde_json::Value::Object(map) => {
-                let keys: Vec<serde_json::Value> = map.keys()
+                let keys: Vec<serde_json::Value> = map
+                    .keys()
                     .map(|k| serde_json::Value::String(k.clone()))
                     .collect();
                 Ok(vec![serde_json::Value::Array(keys)])
@@ -255,7 +260,7 @@ fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_j
             _ => Err("keys: not an object or array".to_string()),
         };
     }
-    
+
     if filter == "length" {
         return match json {
             serde_json::Value::Object(map) => Ok(vec![serde_json::json!(map.len())]),
@@ -265,7 +270,7 @@ fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_j
             _ => Err("length: not applicable".to_string()),
         };
     }
-    
+
     if filter == ".[]" {
         return match json {
             serde_json::Value::Array(arr) => Ok(arr.clone()),
@@ -273,22 +278,22 @@ fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_j
             _ => Err(".[] requires an array or object".to_string()),
         };
     }
-    
+
     // Handle field access: .field or .field1.field2
     if filter.starts_with('.') {
         let path = &filter[1..];
         let mut current = json;
-        
+
         for part in path.split('.') {
             if part.is_empty() {
                 continue;
             }
-            
+
             // Check for array index: [n]
             if let Some(bracket_start) = part.find('[') {
                 let field = &part[..bracket_start];
                 let rest = &part[bracket_start..];
-                
+
                 // Access field first if present
                 if !field.is_empty() {
                     current = match current.get(field) {
@@ -296,7 +301,7 @@ fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_j
                         None => return Ok(vec![serde_json::Value::Null]),
                     };
                 }
-                
+
                 // Then handle bracket(s)
                 let mut temp = current;
                 for cap in rest.split('[').skip(1) {
@@ -317,10 +322,10 @@ fn apply_jq_filter(json: &serde_json::Value, filter: &str) -> Result<Vec<serde_j
                 };
             }
         }
-        
+
         return Ok(vec![current.clone()]);
     }
-    
+
     Err(format!("unsupported filter: {}", filter))
 }
 
@@ -375,7 +380,7 @@ mod tests {
         let arr = json!([1, 2, 3, 4]);
         let result = apply_jq_filter(&arr, "length").unwrap();
         assert_eq!(result, vec![json!(4)]);
-        
+
         let obj = json!({"a": 1, "b": 2});
         let result = apply_jq_filter(&obj, "length").unwrap();
         assert_eq!(result, vec![json!(2)]);

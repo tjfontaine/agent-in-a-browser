@@ -5,9 +5,9 @@
 //!
 //! See: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http
 
-use crate::http_transport::{HttpError, HttpTransport};
+use crate::http_transport::HttpTransport;
 use crate::mcp_transport::{JsonRpcResponse, McpError, McpTransport, ToolDefinition, ToolResult};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 /// MCP protocol version we support

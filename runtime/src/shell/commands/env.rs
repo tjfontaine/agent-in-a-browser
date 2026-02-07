@@ -33,7 +33,7 @@ impl EnvCommands {
                     return 0;
                 }
             }
-            
+
             for (key, value) in &env_vars {
                 let line = format!("{}={}\n", key, value);
                 let _ = stdout.write_all(line.as_bytes()).await;
@@ -64,7 +64,7 @@ impl EnvCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 for (key, value) in &env_vars {
                     let line = format!("{}={}\n", key, value);

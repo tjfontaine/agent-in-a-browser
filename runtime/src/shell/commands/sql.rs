@@ -49,7 +49,12 @@ impl SqlCommands {
                 1 => {
                     let arg = &remaining[0];
                     // If it looks like a database path/name, use it as database
-                    if arg == ":memory:" || arg.ends_with(".db") || arg.ends_with(".sqlite") || arg.ends_with(".sqlite3") || arg.contains('/') {
+                    if arg == ":memory:"
+                        || arg.ends_with(".db")
+                        || arg.ends_with(".sqlite")
+                        || arg.ends_with(".sqlite3")
+                        || arg.contains('/')
+                    {
                         (arg.clone(), None)
                     } else {
                         // Treat as SQL
@@ -87,7 +92,7 @@ impl SqlCommands {
             } else {
                 Arc::new(WasiIO::new())
             };
-            
+
             // Open database
             let db = match Database::open_file(io.clone(), &db_path) {
                 Ok(db) => db,
@@ -109,7 +114,8 @@ impl SqlCommands {
             };
 
             // Execute SQL statements (split by semicolon for multiple statements)
-            let statements: Vec<&str> = sql.split(';')
+            let statements: Vec<&str> = sql
+                .split(';')
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
                 .collect();
@@ -155,7 +161,7 @@ impl SqlCommands {
 /// Format a Value for output
 fn format_value(val: &turso_core::Value) -> String {
     match val {
-        turso_core::Value::Null => "".to_string(),  // sqlite3 shows empty for NULL
+        turso_core::Value::Null => "".to_string(), // sqlite3 shows empty for NULL
         turso_core::Value::Integer(i) => i.to_string(),
         turso_core::Value::Float(f) => f.to_string(),
         turso_core::Value::Text(s) => s.to_string(),

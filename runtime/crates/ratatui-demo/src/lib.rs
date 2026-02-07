@@ -47,7 +47,6 @@ impl Guest for AnsiDemo {
 }
 
 // ANSI escape sequences
-const ESC: &str = "\x1B";
 const CSI: &str = "\x1B[";
 const CLEAR_SCREEN: &str = "\x1B[2J";
 const HOME: &str = "\x1B[H";
@@ -55,22 +54,18 @@ const HIDE_CURSOR: &str = "\x1B[?25l";
 const SHOW_CURSOR: &str = "\x1B[?25h";
 
 /// Counter demo using pure ANSI escape codes
-fn run_counter_demo(
-    stdin: InputStream,
-    stdout: OutputStream,
-    _stderr: OutputStream,
-) -> i32 {
+fn run_counter_demo(stdin: InputStream, stdout: OutputStream, _stderr: OutputStream) -> i32 {
     let mut counter: i32 = 0;
     let mut running = true;
-    
+
     // Setup: clear screen, hide cursor, move to home position
     write_to_stream(&stdout, CLEAR_SCREEN.as_bytes());
     write_to_stream(&stdout, HOME.as_bytes());
     write_to_stream(&stdout, HIDE_CURSOR.as_bytes());
-    
+
     // Initial draw
     draw_ui(&stdout, counter);
-    
+
     while running {
         // Read input (blocking)
         match read_single_byte(&stdin) {
@@ -104,11 +99,13 @@ fn run_counter_demo(
                     match read_single_byte(&stdin) {
                         Some(b'A') => {} // Up arrow
                         Some(b'B') => {} // Down arrow
-                        Some(b'C') => { // Right - increment
+                        Some(b'C') => {
+                            // Right - increment
                             counter += 1;
                             draw_ui(&stdout, counter);
                         }
-                        Some(b'D') => { // Left - decrement
+                        Some(b'D') => {
+                            // Left - decrement
                             counter -= 1;
                             draw_ui(&stdout, counter);
                         }
@@ -121,16 +118,16 @@ fn run_counter_demo(
             }
         }
     }
-    
+
     // Cleanup: clear screen, show cursor
     write_to_stream(&stdout, CLEAR_SCREEN.as_bytes());
     write_to_stream(&stdout, HOME.as_bytes());
     write_to_stream(&stdout, SHOW_CURSOR.as_bytes());
-    
+
     // Final message
     let goodbye = format!("Goodbye! Final count: {}\r\n", counter);
     write_to_stream(&stdout, goodbye.as_bytes());
-    
+
     0
 }
 
@@ -138,39 +135,63 @@ fn run_counter_demo(
 fn draw_ui(stdout: &OutputStream, counter: i32) {
     // Move cursor home
     write_to_stream(stdout, HOME.as_bytes());
-    
+
     // Box drawing characters for nice border
     let box_top = "┌──────────────────────────────────┐";
     let box_mid = "│                                  │";
     let box_bot = "└──────────────────────────────────┘";
-    
+
     // Colors: cyan title, yellow counter, dim instructions
     let cyan = format!("{}36m", CSI);
     let yellow = format!("{}33m", CSI);
     let dim = format!("{}2m", CSI);
     let reset = format!("{}0m", CSI);
     let bold = format!("{}1m", CSI);
-    
+
     // Title line
-    write_to_stream(stdout, format!("{}{}🦀 ANSI Demo - Interactive Counter{}\r\n", bold, cyan, reset).as_bytes());
+    write_to_stream(
+        stdout,
+        format!(
+            "{}{}🦀 ANSI Demo - Interactive Counter{}\r\n",
+            bold, cyan, reset
+        )
+        .as_bytes(),
+    );
     write_to_stream(stdout, "\r\n".as_bytes());
-    
+
     // Box with counter
     write_to_stream(stdout, format!("{}\r\n", box_top).as_bytes());
-    write_to_stream(stdout, format!("{}  {}{}Counter: {:>10}{}{}\r\n", 
-        box_mid.chars().next().unwrap(),
-        bold, yellow, counter, reset,
-        &box_mid[box_mid.len()-3..]  // Right border
-    ).as_bytes());
+    write_to_stream(
+        stdout,
+        format!(
+            "{}  {}{}Counter: {:>10}{}{}\r\n",
+            box_mid.chars().next().unwrap(),
+            bold,
+            yellow,
+            counter,
+            reset,
+            &box_mid[box_mid.len() - 3..] // Right border
+        )
+        .as_bytes(),
+    );
     write_to_stream(stdout, format!("{}\r\n", box_mid).as_bytes());
     write_to_stream(stdout, format!("{}\r\n", box_bot).as_bytes());
-    
+
     // Instructions
     write_to_stream(stdout, "\r\n".as_bytes());
     write_to_stream(stdout, format!("{}Controls:{}\r\n", dim, reset).as_bytes());
-    write_to_stream(stdout, format!("{}  SPACE or + : Increment{}\r\n", dim, reset).as_bytes());
-    write_to_stream(stdout, format!("{}  - or ←/→  : Decrement/Increment{}\r\n", dim, reset).as_bytes());
-    write_to_stream(stdout, format!("{}  q         : Quit{}\r\n", dim, reset).as_bytes());
+    write_to_stream(
+        stdout,
+        format!("{}  SPACE or + : Increment{}\r\n", dim, reset).as_bytes(),
+    );
+    write_to_stream(
+        stdout,
+        format!("{}  - or ←/→  : Decrement/Increment{}\r\n", dim, reset).as_bytes(),
+    );
+    write_to_stream(
+        stdout,
+        format!("{}  q         : Quit{}\r\n", dim, reset).as_bytes(),
+    );
 }
 
 /// Read a single byte from stdin (blocking)

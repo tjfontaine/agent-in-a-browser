@@ -16,7 +16,7 @@ const PROCESS_JS: &str = include_str!("shims/process.js");
 
 // Thread-local storage for argv passed to the script
 thread_local! {
-    static SCRIPT_ARGV: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+    static SCRIPT_ARGV: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
     static RUNTIME_ENV: std::cell::RefCell<RuntimeEnv> = std::cell::RefCell::new(RuntimeEnv::default());
 }
 
@@ -110,12 +110,10 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     globals.set("process", process)?;
 
     // __tsxRequireResolve__(base, specifier) -> resolved path/URL
-    let require_resolve = Function::new(
-        ctx.clone(),
-        |base: String, specifier: String| -> String {
+    let require_resolve =
+        Function::new(ctx.clone(), |base: String, specifier: String| -> String {
             crate::resolver::resolve_for_require(&base, &specifier)
-        },
-    )?;
+        })?;
     globals.set("__tsxRequireResolve__", require_resolve)?;
 
     // __tsxRequireLoad__(resolvedPath) -> JSON envelope
@@ -262,11 +260,7 @@ fn transform_esm_to_cjs_for_require(
                                     &mut out_stmts,
                                     &format!(
                                         "const {} = ({} && {}.__esModule) ? {}.default : {};",
-                                        default_spec.local.sym,
-                                        req_var,
-                                        req_var,
-                                        req_var,
-                                        req_var
+                                        default_spec.local.sym, req_var, req_var, req_var, req_var
                                     ),
                                 )?;
                             }
@@ -349,7 +343,8 @@ fn transform_esm_to_cjs_for_require(
                                 &format!("exports.default = {};", ident.sym),
                             )?;
                         } else {
-                            out_stmts.push(make_exports_default_assign_stmt(Expr::Class(class_expr))?);
+                            out_stmts
+                                .push(make_exports_default_assign_stmt(Expr::Class(class_expr))?);
                         }
                     }
                     _ => {}
@@ -402,7 +397,11 @@ fn transform_esm_to_cjs_for_require(
                                     let name = module_export_name_to_string(&ns_spec.name);
                                     push_snippet_stmt(
                                         &mut out_stmts,
-                                        &format!("exports[{}] = {};", js_string_literal(&name), req_var),
+                                        &format!(
+                                            "exports[{}] = {};",
+                                            js_string_literal(&name),
+                                            req_var
+                                        ),
                                     )?;
                                 }
                             }
@@ -489,10 +488,7 @@ fn push_snippet_stmt(target: &mut Vec<Stmt>, snippet: &str) -> std::result::Resu
         .parse_script()
         .map_err(|e| format!("Snippet parse error for `{}`: {:?}", snippet, e))?;
     if let Some(err) = parser.take_errors().into_iter().next() {
-        return Err(format!(
-            "Snippet parse error for `{}`: {:?}",
-            snippet, err
-        ));
+        return Err(format!("Snippet parse error for `{}`: {:?}", snippet, err));
     }
     target.extend(script.body);
     Ok(())

@@ -14,18 +14,13 @@ pub struct Task {
     pub status: TaskStatus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
+    #[default]
     Pending,
     InProgress,
     Completed,
-}
-
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Pending
-    }
 }
 
 /// Result of a local tool execution

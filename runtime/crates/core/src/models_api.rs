@@ -205,7 +205,8 @@ pub fn fetch_models_for_provider<H: ModelFetchHttp>(
     match provider {
         "anthropic" => fetch_anthropic_models(http, api_key, base_url),
         "gemini" | "google" => fetch_gemini_models(http, api_key, base_url),
-        "openai" | "custom" | "openrouter" | _ => fetch_openai_models(http, api_key, base_url),
+        "openai" | "custom" | "openrouter" => fetch_openai_models(http, api_key, base_url),
+        _ => fetch_openai_models(http, api_key, base_url),
     }
 }
 

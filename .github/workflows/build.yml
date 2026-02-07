@@ -12,9 +12,34 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  rust-quality:
+    name: Enforce Rust Quality Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime
+          cache-on-failure: true
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check warning-free build
+        run: cargo check --workspace --all-targets
+
   rust-component:
     name: Build Rust WASM Component
     runs-on: ubuntu-latest
+    needs: rust-quality
 
     steps:
       - uses: actions/checkout@v4

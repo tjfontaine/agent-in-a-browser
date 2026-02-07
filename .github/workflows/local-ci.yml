@@ -29,7 +29,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt
           targets: wasm32-wasip2
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Check warning-free Rust build
+        run: cargo check --workspace --all-targets
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2

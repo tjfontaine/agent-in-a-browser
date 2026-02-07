@@ -19,18 +19,19 @@ mod util;
 
 // Feature-gated modules for modular WASM builds
 // Note: tsx commands are now in tsx-engine (lazy-loaded)
+#[cfg(feature = "archive")]
+mod archive;
+mod git;
 #[cfg(feature = "sqlite")]
 mod sql;
 #[cfg(feature = "sqlite")]
 mod wasi_io;
-#[cfg(feature = "archive")]
-mod archive;
-mod git;
 
 pub use self::core::CoreCommands;
 pub use self::encoding::EncodingCommands;
 pub use self::env::EnvCommands;
 pub use self::file::FileCommands;
+pub use self::git::GitCommands;
 pub use self::json::JsonCommands;
 pub use self::misc::MiscCommands;
 pub use self::path::PathCommands;
@@ -38,13 +39,12 @@ pub use self::string::StringCommands;
 pub use self::test::TestCommands;
 pub use self::text::TextCommands;
 pub use self::util::UtilCommands;
-pub use self::git::GitCommands;
 
 // TsxCommands moved to tsx-engine module (lazy-loaded)
-#[cfg(feature = "sqlite")]
-pub use self::sql::SqlCommands;
 #[cfg(feature = "archive")]
 pub use self::archive::ArchiveCommands;
+#[cfg(feature = "sqlite")]
+pub use self::sql::SqlCommands;
 
 use super::ShellEnv;
 
@@ -73,7 +73,8 @@ pub struct CommonOpts {
 /// Parse common options (--help, -h) from argument list.
 pub fn parse_common(args: &[String]) -> (CommonOpts, Vec<String>) {
     let help = args.iter().any(|a| a == "--help" || a == "-h");
-    let remaining: Vec<String> = args.iter()
+    let remaining: Vec<String> = args
+        .iter()
         .filter(|a| *a != "--help" && *a != "-h")
         .cloned()
         .collect();
@@ -81,7 +82,7 @@ pub fn parse_common(args: &[String]) -> (CommonOpts, Vec<String>) {
 }
 
 /// Unified shell commands interface.
-/// 
+///
 /// This struct provides a single entry point to dispatch commands from
 /// multiple category modules.
 pub struct ShellCommands;
@@ -104,18 +105,26 @@ impl ShellCommands {
             // tsx commands are lazy-loaded from tsx-engine
             .or_else(|| {
                 #[cfg(feature = "sqlite")]
-                { SqlCommands::get_command(name) }
+                {
+                    SqlCommands::get_command(name)
+                }
                 #[cfg(not(feature = "sqlite"))]
-                { None }
+                {
+                    None
+                }
             })
             .or_else(|| {
                 #[cfg(feature = "archive")]
-                { ArchiveCommands::get_command(name) }
+                {
+                    ArchiveCommands::get_command(name)
+                }
                 #[cfg(not(feature = "archive"))]
-                { None }
+                {
+                    None
+                }
             })
     }
-    
+
     pub fn show_help(name: &str) -> Option<&'static str> {
         CoreCommands::show_help(name)
             .or_else(|| FileCommands::show_help(name))
@@ -132,18 +141,26 @@ impl ShellCommands {
             // tsx commands are lazy-loaded from tsx-engine
             .or_else(|| {
                 #[cfg(feature = "sqlite")]
-                { SqlCommands::show_help(name) }
+                {
+                    SqlCommands::show_help(name)
+                }
                 #[cfg(not(feature = "sqlite"))]
-                { None }
+                {
+                    None
+                }
             })
             .or_else(|| {
                 #[cfg(feature = "archive")]
-                { ArchiveCommands::show_help(name) }
+                {
+                    ArchiveCommands::show_help(name)
+                }
                 #[cfg(not(feature = "archive"))]
-                { None }
+                {
+                    None
+                }
             })
     }
-    
+
     pub fn list_commands() -> Vec<&'static str> {
         let mut cmds = Vec::new();
         cmds.extend_from_slice(CoreCommands::list_commands());
@@ -158,13 +175,13 @@ impl ShellCommands {
         cmds.extend_from_slice(EncodingCommands::list_commands());
         cmds.extend_from_slice(StringCommands::list_commands());
         cmds.extend_from_slice(GitCommands::list_commands());
-        
+
         // tsx commands are lazy-loaded from tsx-engine
         #[cfg(feature = "sqlite")]
         cmds.extend_from_slice(SqlCommands::list_commands());
         #[cfg(feature = "archive")]
         cmds.extend_from_slice(ArchiveCommands::list_commands());
-        
+
         cmds.sort();
         cmds
     }
@@ -177,7 +194,7 @@ pub fn copy_dir_recursive(src: &str, dst: &str) -> std::io::Result<()> {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = format!("{}/{}", dst, entry.file_name().to_string_lossy());
-        
+
         if entry.file_type()?.is_dir() {
             copy_dir_recursive(&src_path.to_string_lossy(), &dst_path)?;
         } else {
@@ -199,7 +216,7 @@ mod tests {
         assert!(ShellCommands::get_command("basename").is_some());
         assert!(ShellCommands::get_command("nonexistent").is_none());
     }
-    
+
     #[test]
     fn test_show_help() {
         let help = ShellCommands::show_help("echo");
@@ -208,7 +225,7 @@ mod tests {
         assert!(text.contains("Usage:"));
         assert!(text.contains("echo"));
     }
-    
+
     #[test]
     fn test_list_commands() {
         let commands = ShellCommands::list_commands();
@@ -226,13 +243,13 @@ mod tests {
             assert!(commands.contains(&"tsx"));
         }
     }
-    
+
     #[test]
     fn test_parse_common() {
         let (opts, remaining) = parse_common(&["--help".to_string(), "foo".to_string()]);
         assert!(opts.help);
         assert_eq!(remaining, vec!["foo"]);
-        
+
         let (opts2, remaining2) = parse_common(&["bar".to_string()]);
         assert!(!opts2.help);
         assert_eq!(remaining2, vec!["bar"]);

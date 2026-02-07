@@ -57,7 +57,10 @@ impl Loader for HybridLoader {
         let js_source = match import_type.as_deref() {
             Some("json") => {
                 let parsed: serde_json::Value = serde_json::from_str(&source).map_err(|e| {
-                    rquickjs::Error::new_loading_message(path, format!("Invalid JSON module: {}", e))
+                    rquickjs::Error::new_loading_message(
+                        path,
+                        format!("Invalid JSON module: {}", e),
+                    )
                 })?;
                 format!("export default {};", parsed)
             }
@@ -154,9 +157,15 @@ pub async fn load_module(path: &str) -> std::result::Result<String, String> {
     Ok(source)
 }
 
-fn wrap_commonjs_as_esm_with_swc(module_path: &str, source: &str) -> std::result::Result<String, String> {
+fn wrap_commonjs_as_esm_with_swc(
+    module_path: &str,
+    source: &str,
+) -> std::result::Result<String, String> {
     let cm: Lrc<SourceMap> = Default::default();
-    let cjs_fm = cm.new_source_file(Lrc::new(FileName::Custom(module_path.into())), source.to_string());
+    let cjs_fm = cm.new_source_file(
+        Lrc::new(FileName::Custom(module_path.into())),
+        source.to_string(),
+    );
     let cjs_lexer = Lexer::new(
         Syntax::Es(EsSyntax {
             allow_return_outside_function: true,
@@ -193,8 +202,10 @@ fn wrap_commonjs_as_esm_with_swc(module_path: &str, source: &str) -> std::result
          export default __tsxCjs;\n",
         escaped_path, escaped_dir
     );
-    let wrapper_fm =
-        cm.new_source_file(Lrc::new(FileName::Custom("tsx-cjs-wrapper.mjs".into())), wrapper_source);
+    let wrapper_fm = cm.new_source_file(
+        Lrc::new(FileName::Custom("tsx-cjs-wrapper.mjs".into())),
+        wrapper_source,
+    );
     let wrapper_lexer = Lexer::new(
         Syntax::Es(EsSyntax::default()),
         EsVersion::Es2020,

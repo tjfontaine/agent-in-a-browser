@@ -49,7 +49,8 @@ Note: Git is provided by gix-module (lazy-loaded).\n";
 
             // This should not normally be reached - the shell executor should
             // dispatch to the lazy module via get_lazy_module("git") -> "gix-module"
-            let msg = "git: gix-module not loaded. Git commands require the gix-module WASM component.\n";
+            let msg =
+                "git: gix-module not loaded. Git commands require the gix-module WASM component.\n";
             let _ = stderr.write_all(msg.as_bytes()).await;
             1
         })

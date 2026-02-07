@@ -5,7 +5,7 @@ use rquickjs::{Ctx, Function, Object, Result, Value};
 
 // Captured console output logs.
 thread_local! {
-    pub static CAPTURED_LOGS: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+    pub static CAPTURED_LOGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Clear captured logs.

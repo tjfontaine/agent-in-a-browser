@@ -1,10 +1,10 @@
 //! Encoding and crypto commands: base64, md5sum, sha256sum, xxd
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use md5::Md5;
 use runtime_macros::shell_commands;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 use super::super::ShellEnv;
 use super::parse_common;
@@ -58,7 +58,9 @@ impl EncodingCommands {
                 match std::fs::read(&path) {
                     Ok(data) => data,
                     Err(e) => {
-                        let _ = stderr.write_all(format!("base64: {}: {}\n", path, e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("base64: {}: {}\n", path, e).as_bytes())
+                            .await;
                         return 1;
                     }
                 }
@@ -76,7 +78,8 @@ impl EncodingCommands {
 
             if decode {
                 // Filter whitespace before decoding
-                let filtered: Vec<u8> = input.iter()
+                let filtered: Vec<u8> = input
+                    .iter()
                     .filter(|&&c| !c.is_ascii_whitespace())
                     .cloned()
                     .collect();
@@ -85,7 +88,9 @@ impl EncodingCommands {
                         let _ = stdout.write_all(&decoded).await;
                     }
                     Err(e) => {
-                        let _ = stderr.write_all(format!("base64: {}\n", e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("base64: {}\n", e).as_bytes())
+                            .await;
                         return 1;
                     }
                 }
@@ -146,10 +151,14 @@ impl EncodingCommands {
                     match std::fs::read(&path) {
                         Ok(data) => {
                             let hash = format!("{:x}", Md5::digest(&data));
-                            let _ = stdout.write_all(format!("{}  {}\n", hash, file).as_bytes()).await;
+                            let _ = stdout
+                                .write_all(format!("{}  {}\n", hash, file).as_bytes())
+                                .await;
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("md5sum: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("md5sum: {}: {}\n", file, e).as_bytes())
+                                .await;
                             exit_code = 1;
                         }
                     }
@@ -206,10 +215,14 @@ impl EncodingCommands {
                     match std::fs::read(&path) {
                         Ok(data) => {
                             let hash = format!("{:x}", Sha256::digest(&data));
-                            let _ = stdout.write_all(format!("{}  {}\n", hash, file).as_bytes()).await;
+                            let _ = stdout
+                                .write_all(format!("{}  {}\n", hash, file).as_bytes())
+                                .await;
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("sha256sum: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("sha256sum: {}: {}\n", file, e).as_bytes())
+                                .await;
                             exit_code = 1;
                         }
                     }
@@ -264,7 +277,9 @@ impl EncodingCommands {
                 match std::fs::read(&path) {
                     Ok(data) => data,
                     Err(e) => {
-                        let _ = stderr.write_all(format!("xxd: {}: {}\n", path, e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("xxd: {}: {}\n", path, e).as_bytes())
+                            .await;
                         return 1;
                     }
                 }
@@ -286,7 +301,7 @@ impl EncodingCommands {
                     .chars()
                     .filter(|c| c.is_ascii_hexdigit())
                     .collect();
-                
+
                 let mut bytes = Vec::new();
                 let mut chars = hex_str.chars().peekable();
                 while chars.peek().is_some() {
@@ -299,8 +314,10 @@ impl EncodingCommands {
                 // Create hexdump
                 for (offset, chunk) in input.chunks(16).enumerate() {
                     // Offset
-                    let _ = stdout.write_all(format!("{:08x}: ", offset * 16).as_bytes()).await;
-                    
+                    let _ = stdout
+                        .write_all(format!("{:08x}: ", offset * 16).as_bytes())
+                        .await;
+
                     // Hex bytes
                     for (i, byte) in chunk.iter().enumerate() {
                         let _ = stdout.write_all(format!("{:02x}", byte).as_bytes()).await;
@@ -308,7 +325,7 @@ impl EncodingCommands {
                             let _ = stdout.write_all(b" ").await;
                         }
                     }
-                    
+
                     // Padding for incomplete lines
                     for i in chunk.len()..16 {
                         let _ = stdout.write_all(b"  ").await;
@@ -316,7 +333,7 @@ impl EncodingCommands {
                             let _ = stdout.write_all(b" ").await;
                         }
                     }
-                    
+
                     // ASCII representation
                     let _ = stdout.write_all(b" ").await;
                     for byte in chunk {
@@ -356,13 +373,19 @@ mod tests {
     #[test]
     fn test_sha256() {
         let hash = format!("{:x}", Sha256::digest(b"hello"));
-        assert_eq!(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+        assert_eq!(
+            hash,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
     }
 
     #[test]
     fn test_sha256_empty() {
         let hash = format!("{:x}", Sha256::digest(b""));
-        assert_eq!(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(
+            hash,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 
     #[test]

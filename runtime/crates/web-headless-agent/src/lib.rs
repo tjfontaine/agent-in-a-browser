@@ -93,6 +93,7 @@ fn build_tool_server(
 
     // Aggregate tools from all MCP servers
     for client in mcp_clients {
+        client.initialize().map_err(|e| e.to_string())?;
         // Get tools from this client and add them individually
         let tools = agent_bridge::McpToolAdapter::from_transport(client)?;
         for tool in tools {

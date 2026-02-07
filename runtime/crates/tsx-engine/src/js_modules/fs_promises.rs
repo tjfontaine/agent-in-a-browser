@@ -10,48 +10,57 @@ use std::path::Path;
 /// Install fs and fs.promises on the global object.
 pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     let globals = ctx.globals();
-    
+
     // Create fs object
     let fs = Object::new(ctx.clone())?;
-    
+
     // ========================================================================
     // Sync Functions
     // ========================================================================
-    
+
     // fs.readFileSync(path, options?)
-    let read_file_sync = Function::new(ctx.clone(), |path: String, options: Value| -> rquickjs::Result<String> {
-        let _encoding = get_encoding(&options);
-        std::fs::read_to_string(&path).map_err(rquickjs::Error::Io)
-    })?;
+    let read_file_sync = Function::new(
+        ctx.clone(),
+        |path: String, options: Value| -> rquickjs::Result<String> {
+            let _encoding = get_encoding(&options);
+            std::fs::read_to_string(&path).map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("readFileSync", read_file_sync)?;
-    
+
     // fs.writeFileSync(path, data, options?)
-    let write_file_sync = Function::new(ctx.clone(), |path: String, data: String| -> rquickjs::Result<()> {
-        std::fs::write(&path, data.as_bytes()).map_err(rquickjs::Error::Io)
-    })?;
+    let write_file_sync = Function::new(
+        ctx.clone(),
+        |path: String, data: String| -> rquickjs::Result<()> {
+            std::fs::write(&path, data.as_bytes()).map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("writeFileSync", write_file_sync)?;
-    
+
     // fs.existsSync(path)
     let exists_sync = Function::new(ctx.clone(), |path: String| -> bool {
         Path::new(&path).exists()
     })?;
     fs.set("existsSync", exists_sync)?;
-    
+
     // fs.readdirSync(path)
-    let readdir_sync = Function::new(ctx.clone(), |path: String| -> rquickjs::Result<Vec<String>> {
-        match std::fs::read_dir(&path) {
-            Ok(entries) => {
-                let names: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.file_name().to_string_lossy().to_string())
-                    .collect();
-                Ok(names)
+    let readdir_sync = Function::new(
+        ctx.clone(),
+        |path: String| -> rquickjs::Result<Vec<String>> {
+            match std::fs::read_dir(&path) {
+                Ok(entries) => {
+                    let names: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_string_lossy().to_string())
+                        .collect();
+                    Ok(names)
+                }
+                Err(e) => Err(rquickjs::Error::Io(e)),
             }
-            Err(e) => Err(rquickjs::Error::Io(e)),
-        }
-    })?;
+        },
+    )?;
     fs.set("readdirSync", readdir_sync)?;
-    
+
     // fs.__statSyncRaw(path) - returns raw stats as array [size, isFile, isDir, isSym, mode]
     // This avoids lifetime issues with returning objects from Rust
     let stat_sync_raw = Function::new(ctx.clone(), |path: String| -> rquickjs::Result<Vec<i64>> {
@@ -64,7 +73,7 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
                 };
                 #[cfg(not(unix))]
                 let mode = 0i64;
-                
+
                 Ok(vec![
                     meta.len() as i64,
                     if meta.is_file() { 1 } else { 0 },
@@ -77,108 +86,128 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
         }
     })?;
     fs.set("__statSyncRaw", stat_sync_raw)?;
-    
+
     // fs.__lstatSyncRaw(path) - returns raw stats for symlink
-    let lstat_sync_raw = Function::new(ctx.clone(), |path: String| -> rquickjs::Result<Vec<i64>> {
-        match std::fs::symlink_metadata(&path) {
-            Ok(meta) => {
-                #[cfg(unix)]
-                let mode = {
-                    use std::os::unix::fs::MetadataExt;
-                    meta.mode() as i64
-                };
-                #[cfg(not(unix))]
-                let mode = 0i64;
-                
-                Ok(vec![
-                    meta.len() as i64,
-                    if meta.is_file() { 1 } else { 0 },
-                    if meta.is_dir() { 1 } else { 0 },
-                    if meta.file_type().is_symlink() { 1 } else { 0 },
-                    mode,
-                ])
+    let lstat_sync_raw =
+        Function::new(ctx.clone(), |path: String| -> rquickjs::Result<Vec<i64>> {
+            match std::fs::symlink_metadata(&path) {
+                Ok(meta) => {
+                    #[cfg(unix)]
+                    let mode = {
+                        use std::os::unix::fs::MetadataExt;
+                        meta.mode() as i64
+                    };
+                    #[cfg(not(unix))]
+                    let mode = 0i64;
+
+                    Ok(vec![
+                        meta.len() as i64,
+                        if meta.is_file() { 1 } else { 0 },
+                        if meta.is_dir() { 1 } else { 0 },
+                        if meta.file_type().is_symlink() { 1 } else { 0 },
+                        mode,
+                    ])
+                }
+                Err(e) => Err(rquickjs::Error::Io(e)),
             }
-            Err(e) => Err(rquickjs::Error::Io(e)),
-        }
-    })?;
+        })?;
     fs.set("__lstatSyncRaw", lstat_sync_raw)?;
-    
+
     // fs.mkdirSync(path, options?)
-    let mkdir_sync = Function::new(ctx.clone(), |path: String, options: Value| -> rquickjs::Result<()> {
-        let recursive = options.as_object()
-            .and_then(|o| o.get::<_, bool>("recursive").ok())
-            .unwrap_or(false);
-        
-        let result = if recursive {
-            std::fs::create_dir_all(&path)
-        } else {
-            std::fs::create_dir(&path)
-        };
-        
-        result.map_err(rquickjs::Error::Io)
-    })?;
+    let mkdir_sync = Function::new(
+        ctx.clone(),
+        |path: String, options: Value| -> rquickjs::Result<()> {
+            let recursive = options
+                .as_object()
+                .and_then(|o| o.get::<_, bool>("recursive").ok())
+                .unwrap_or(false);
+
+            let result = if recursive {
+                std::fs::create_dir_all(&path)
+            } else {
+                std::fs::create_dir(&path)
+            };
+
+            result.map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("mkdirSync", mkdir_sync)?;
-    
+
     // fs.rmdirSync(path)
     let rmdir_sync = Function::new(ctx.clone(), |path: String| -> rquickjs::Result<()> {
         std::fs::remove_dir(&path).map_err(rquickjs::Error::Io)
     })?;
     fs.set("rmdirSync", rmdir_sync)?;
-    
+
     // fs.unlinkSync(path)
     let unlink_sync = Function::new(ctx.clone(), |path: String| -> rquickjs::Result<()> {
         std::fs::remove_file(&path).map_err(rquickjs::Error::Io)
     })?;
     fs.set("unlinkSync", unlink_sync)?;
-    
+
     // fs.rmSync(path, options?)
-    let rm_sync = Function::new(ctx.clone(), |path: String, options: Value| -> rquickjs::Result<()> {
-        let recursive = options.as_object()
-            .and_then(|o| o.get::<_, bool>("recursive").ok())
-            .unwrap_or(false);
-        
-        let p = Path::new(&path);
-        let result = if p.is_dir() {
-            if recursive {
-                std::fs::remove_dir_all(&path)
+    let rm_sync = Function::new(
+        ctx.clone(),
+        |path: String, options: Value| -> rquickjs::Result<()> {
+            let recursive = options
+                .as_object()
+                .and_then(|o| o.get::<_, bool>("recursive").ok())
+                .unwrap_or(false);
+
+            let p = Path::new(&path);
+            let result = if p.is_dir() {
+                if recursive {
+                    std::fs::remove_dir_all(&path)
+                } else {
+                    std::fs::remove_dir(&path)
+                }
             } else {
-                std::fs::remove_dir(&path)
-            }
-        } else {
-            std::fs::remove_file(&path)
-        };
-        
-        result.map_err(rquickjs::Error::Io)
-    })?;
+                std::fs::remove_file(&path)
+            };
+
+            result.map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("rmSync", rm_sync)?;
-    
+
     // fs.renameSync(oldPath, newPath)
-    let rename_sync = Function::new(ctx.clone(), |old_path: String, new_path: String| -> rquickjs::Result<()> {
-        std::fs::rename(&old_path, &new_path).map_err(rquickjs::Error::Io)
-    })?;
+    let rename_sync = Function::new(
+        ctx.clone(),
+        |old_path: String, new_path: String| -> rquickjs::Result<()> {
+            std::fs::rename(&old_path, &new_path).map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("renameSync", rename_sync)?;
-    
+
     // fs.copyFileSync(src, dest)
-    let copy_file_sync = Function::new(ctx.clone(), |src: String, dest: String| -> rquickjs::Result<()> {
-        std::fs::copy(&src, &dest).map(|_| ()).map_err(rquickjs::Error::Io)
-    })?;
+    let copy_file_sync = Function::new(
+        ctx.clone(),
+        |src: String, dest: String| -> rquickjs::Result<()> {
+            std::fs::copy(&src, &dest)
+                .map(|_| ())
+                .map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("copyFileSync", copy_file_sync)?;
-    
+
     // fs.appendFileSync(path, data)
-    let append_file_sync = Function::new(ctx.clone(), |path: String, data: String| -> rquickjs::Result<()> {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-        
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(rquickjs::Error::Io)?;
-        
-        file.write_all(data.as_bytes()).map_err(rquickjs::Error::Io)
-    })?;
+    let append_file_sync = Function::new(
+        ctx.clone(),
+        |path: String, data: String| -> rquickjs::Result<()> {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(rquickjs::Error::Io)?;
+
+            file.write_all(data.as_bytes()).map_err(rquickjs::Error::Io)
+        },
+    )?;
     fs.set("appendFileSync", append_file_sync)?;
-    
+
     // fs.constants
     let constants = Object::new(ctx.clone())?;
     constants.set("F_OK", 0)?;
@@ -186,16 +215,16 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     constants.set("W_OK", 2)?;
     constants.set("X_OK", 1)?;
     fs.set("constants", constants)?;
-    
+
     // ========================================================================
     // Set up fs on globals and create fs.promises wrappers and stat helpers
     // ========================================================================
-    
+
     globals.set("fs", fs)?;
-    
+
     // Create statSync/lstatSync wrappers and fs.promises
     ctx.eval::<(), _>(FS_HELPERS_JS)?;
-    
+
     Ok(())
 }
 
@@ -204,7 +233,8 @@ fn get_encoding(options: &Value) -> Option<String> {
     if let Some(s) = options.as_string() {
         return Some(s.to_string().unwrap_or_default());
     }
-    options.as_object()
+    options
+        .as_object()
         .and_then(|o| o.get::<_, String>("encoding").ok())
 }
 
@@ -378,4 +408,3 @@ fs.promises = {
     }
 };
 "#;
-

@@ -121,10 +121,10 @@ fn join_paths(base: &str, relative: &str) -> String {
     }
 
     // Extract scheme and path
-    let (scheme, base_path) = if base.starts_with("https://") {
-        ("https://", &base[8..])
-    } else if base.starts_with("http://") {
-        ("http://", &base[7..])
+    let (scheme, base_path) = if let Some(base_path) = base.strip_prefix("https://") {
+        ("https://", base_path)
+    } else if let Some(base_path) = base.strip_prefix("http://") {
+        ("http://", base_path)
     } else {
         ("", base)
     };
@@ -402,10 +402,8 @@ fn resolve_node_module_specifier(base: &str, specifier: &str, mode: ResolveMode)
                 {
                     return Some(resolved);
                 }
-            } else if let Some(resolved) =
-                resolve_local_candidate(&package_root.to_string_lossy()).or(Some(
-                    normalize_path_string(&package_root.to_string_lossy()),
-                ))
+            } else if let Some(resolved) = resolve_local_candidate(&package_root.to_string_lossy())
+                .or(Some(normalize_path_string(&package_root.to_string_lossy())))
             {
                 return Some(resolved);
             }
@@ -527,7 +525,7 @@ mod tests {
         // .. -> https://esm.sh/axios@1.13.2/es2022/unsafe
         // .. -> https://esm.sh/axios@1.13.2/es2022
         // + utils.mjs -> https://esm.sh/axios@1.13.2/es2022/utils.mjs
-        
+
         assert_eq!(
             resolve(base, specifier),
             "https://esm.sh/axios@1.13.2/es2022/utils.mjs"
@@ -807,7 +805,11 @@ mod tests {
             r#"{"name":"foo","exports":{"." :{"node":{"import":"./dist/node-esm.js","require":"./dist/node-cjs.cjs"},"default":"./dist/default.js"}}}"#,
         )
         .unwrap();
-        std::fs::write(format!("{}/dist/node-esm.js", pkg_root), "export const esm = 1;").unwrap();
+        std::fs::write(
+            format!("{}/dist/node-esm.js", pkg_root),
+            "export const esm = 1;",
+        )
+        .unwrap();
         std::fs::write(
             format!("{}/dist/node-cjs.cjs", pkg_root),
             "module.exports = { cjs: 1 };",
@@ -840,7 +842,11 @@ mod tests {
             r#"{"name":"foo","exports":{"./feature":"./dist/exact.js","./*":"./dist/*.js"}}"#,
         )
         .unwrap();
-        std::fs::write(format!("{}/dist/exact.js", pkg_root), "export const exact = 1;").unwrap();
+        std::fs::write(
+            format!("{}/dist/exact.js", pkg_root),
+            "export const exact = 1;",
+        )
+        .unwrap();
         std::fs::write(
             format!("{}/dist/feature.js", pkg_root),
             "export const wildcard = 1;",

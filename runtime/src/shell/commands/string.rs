@@ -136,7 +136,7 @@ impl StringCommands {
             };
 
             let mut nr = 0;
-            
+
             // Helper macro to process a line
             async fn write_awk_line(
                 parsed: &AwkProgram,
@@ -150,7 +150,7 @@ impl StringCommands {
                 } else {
                     line.split(field_sep).collect()
                 };
-                
+
                 let output = execute_awk_action(parsed, line, &fields, nr);
                 if !output.is_empty() {
                     stdout.write_all(output.as_bytes()).await?;
@@ -160,7 +160,7 @@ impl StringCommands {
                 }
                 Ok(())
             }
-            
+
             if files.is_empty() {
                 // Read from stdin
                 let reader = BufReader::new(stdin);
@@ -176,16 +176,19 @@ impl StringCommands {
                     } else {
                         format!("{}/{}", cwd, file)
                     };
-                    
+
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
                             for line in content.lines() {
                                 nr += 1;
-                                let _ = write_awk_line(&parsed, line, &field_sep, nr, &mut stdout).await;
+                                let _ = write_awk_line(&parsed, line, &field_sep, nr, &mut stdout)
+                                    .await;
                             }
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("awk: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("awk: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -253,10 +256,12 @@ impl StringCommands {
             for file in &files {
                 if file == "-" {
                     // stdin as file not supported in this implementation
-                    let _ = stderr.write_all(b"paste: reading from stdin with - not supported\n").await;
+                    let _ = stderr
+                        .write_all(b"paste: reading from stdin with - not supported\n")
+                        .await;
                     return 1;
                 }
-                
+
                 let path = if file.starts_with('/') {
                     file.clone()
                 } else {
@@ -270,7 +275,9 @@ impl StringCommands {
                         file_lines.push(lines);
                     }
                     Err(e) => {
-                        let _ = stderr.write_all(format!("paste: {}: {}\n", file, e).as_bytes()).await;
+                        let _ = stderr
+                            .write_all(format!("paste: {}: {}\n", file, e).as_bytes())
+                            .await;
                         return 1;
                     }
                 }
@@ -282,7 +289,9 @@ impl StringCommands {
                 for file_content in &file_lines {
                     parts.push(file_content.get(i).map(|s| s.as_str()).unwrap_or(""));
                 }
-                let _ = stdout.write_all(format!("{}\n", parts.join(&delimiter)).as_bytes()).await;
+                let _ = stdout
+                    .write_all(format!("{}\n", parts.join(&delimiter)).as_bytes())
+                    .await;
             }
 
             0
@@ -312,16 +321,16 @@ impl StringCommands {
                 }
             }
 
-            let reverse_line = |line: &str| -> String {
-                line.chars().rev().collect()
-            };
+            let reverse_line = |line: &str| -> String { line.chars().rev().collect() };
 
             if remaining.is_empty() {
                 // Read from stdin
                 let reader = BufReader::new(stdin);
                 let mut lines = reader.lines();
                 while let Some(Ok(line)) = lines.next().await {
-                    let _ = stdout.write_all(format!("{}\n", reverse_line(&line)).as_bytes()).await;
+                    let _ = stdout
+                        .write_all(format!("{}\n", reverse_line(&line)).as_bytes())
+                        .await;
                 }
             } else {
                 for file in &remaining {
@@ -334,11 +343,15 @@ impl StringCommands {
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
                             for line in content.lines() {
-                                let _ = stdout.write_all(format!("{}\n", reverse_line(line)).as_bytes()).await;
+                                let _ = stdout
+                                    .write_all(format!("{}\n", reverse_line(line)).as_bytes())
+                                    .await;
                             }
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("rev: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("rev: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -428,12 +441,15 @@ impl StringCommands {
                         Ok(content) => {
                             for line in content.lines() {
                                 for folded in fold_line(line, width) {
-                                    let _ = stdout.write_all(format!("{}\n", folded).as_bytes()).await;
+                                    let _ =
+                                        stdout.write_all(format!("{}\n", folded).as_bytes()).await;
                                 }
                             }
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("fold: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("fold: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -467,7 +483,7 @@ impl StringCommands {
                 }
             }
 
-            let mut number_empty = false; // -b a 
+            let mut number_empty = false; // -b a
             let mut files: Vec<String> = Vec::new();
             let mut i = 0;
 
@@ -518,11 +534,14 @@ impl StringCommands {
                         Ok(content) => {
                             for line in content.lines() {
                                 let numbered = number_line(line, &mut line_num, number_empty);
-                                let _ = stdout.write_all(format!("{}\n", numbered).as_bytes()).await;
+                                let _ =
+                                    stdout.write_all(format!("{}\n", numbered).as_bytes()).await;
                             }
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("nl: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("nl: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -594,7 +613,9 @@ impl StringCommands {
                             lines.extend(content.lines().map(|s| s.to_string()));
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("shuf: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("shuf: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -685,7 +706,9 @@ impl StringCommands {
                             lines.extend(content.lines().map(|s| s.to_string()));
                         }
                         Err(e) => {
-                            let _ = stderr.write_all(format!("column: {}: {}\n", file, e).as_bytes()).await;
+                            let _ = stderr
+                                .write_all(format!("column: {}: {}\n", file, e).as_bytes())
+                                .await;
                             return 1;
                         }
                     }
@@ -694,18 +717,21 @@ impl StringCommands {
 
             if table_mode {
                 // Split lines into fields and find max width for each column
-                let split_lines: Vec<Vec<&str>> = lines.iter().map(|l| {
-                    if separator == " \t" {
-                        l.split_whitespace().collect()
-                    } else {
-                        l.split(&separator).collect()
-                    }
-                }).collect();
+                let split_lines: Vec<Vec<&str>> = lines
+                    .iter()
+                    .map(|l| {
+                        if separator == " \t" {
+                            l.split_whitespace().collect()
+                        } else {
+                            l.split(&separator).collect()
+                        }
+                    })
+                    .collect();
 
                 // Find max columns and max width per column
                 let max_cols = split_lines.iter().map(|r| r.len()).max().unwrap_or(0);
                 let mut col_widths = vec![0usize; max_cols];
-                
+
                 for row in &split_lines {
                     for (i, field) in row.iter().enumerate() {
                         col_widths[i] = col_widths[i].max(field.len());
@@ -714,14 +740,20 @@ impl StringCommands {
 
                 // Output formatted table
                 for row in &split_lines {
-                    let formatted: Vec<String> = row.iter().enumerate().map(|(i, field)| {
-                        if i < row.len() - 1 {
-                            format!("{:width$}", field, width = col_widths[i] + 2)
-                        } else {
-                            field.to_string()
-                        }
-                    }).collect();
-                    let _ = stdout.write_all(format!("{}\n", formatted.join("")).as_bytes()).await;
+                    let formatted: Vec<String> = row
+                        .iter()
+                        .enumerate()
+                        .map(|(i, field)| {
+                            if i < row.len() - 1 {
+                                format!("{:width$}", field, width = col_widths[i] + 2)
+                            } else {
+                                field.to_string()
+                            }
+                        })
+                        .collect();
+                    let _ = stdout
+                        .write_all(format!("{}\n", formatted.join("")).as_bytes())
+                        .await;
                 }
             } else {
                 // Simple output
@@ -752,7 +784,7 @@ fn evaluate_expr(tokens: &[String]) -> Result<String, String> {
 
     // Try to find the lowest precedence operator from right to left
     // Precedence (lowest to highest): | & < <= = != >= > + - * / %
-    
+
     let ops_by_prec = [
         vec!["|"],
         vec!["&"],
@@ -845,12 +877,8 @@ fn apply_expr_op(op: &str, left: &str, right: &str) -> Result<String, String> {
                 Ok(if left <= right { "1" } else { "0" }.to_string())
             }
         }
-        "=" => {
-            Ok(if left == right { "1" } else { "0" }.to_string())
-        }
-        "!=" => {
-            Ok(if left != right { "1" } else { "0" }.to_string())
-        }
+        "=" => Ok(if left == right { "1" } else { "0" }.to_string()),
+        "!=" => Ok(if left != right { "1" } else { "0" }.to_string()),
         ">=" => {
             if let (Ok(l), Ok(r)) = (&left_num, &right_num) {
                 Ok(if l >= r { "1" } else { "0" }.to_string())
@@ -920,13 +948,13 @@ struct AwkProgram {
 /// Parse a simplified awk program
 fn parse_awk_program(program: &str) -> Result<AwkProgram, String> {
     let trimmed = program.trim();
-    
+
     // Handle common patterns:
     // '{print}' or '{print $0}' - print whole line
     // '{print $1}' - print first field
     // '{print $1,$2}' - print first two fields
     // '/pattern/{print}' - pattern matching
-    
+
     let (pattern, action) = if trimmed.starts_with('/') {
         // Has pattern
         if let Some(end) = trimmed[1..].find('/') {
@@ -939,13 +967,13 @@ fn parse_awk_program(program: &str) -> Result<AwkProgram, String> {
     } else {
         (None, trimmed.to_string())
     };
-    
+
     // Parse action
     let action = action.trim_start_matches('{').trim_end_matches('}').trim();
-    
+
     let mut print_fields = Vec::new();
     let ofs = " ".to_string();
-    
+
     if action.is_empty() || action == "print" || action == "print $0" {
         print_fields.push(0); // whole line
     } else if action.starts_with("print ") {
@@ -965,7 +993,7 @@ fn parse_awk_program(program: &str) -> Result<AwkProgram, String> {
         // Default: print whole line
         print_fields.push(0);
     }
-    
+
     Ok(AwkProgram {
         print_fields,
         ofs,
@@ -981,18 +1009,22 @@ fn execute_awk_action(program: &AwkProgram, line: &str, fields: &[&str], _nr: us
             return String::new();
         }
     }
-    
+
     // Generate output
-    let output_parts: Vec<&str> = program.print_fields.iter().map(|&field| {
-        if field == 0 {
-            line
-        } else if field > 0 {
-            fields.get((field - 1) as usize).copied().unwrap_or("")
-        } else {
-            ""
-        }
-    }).collect();
-    
+    let output_parts: Vec<&str> = program
+        .print_fields
+        .iter()
+        .map(|&field| {
+            if field == 0 {
+                line
+            } else if field > 0 {
+                fields.get((field - 1) as usize).copied().unwrap_or("")
+            } else {
+                ""
+            }
+        })
+        .collect();
+
     output_parts.join(&program.ofs)
 }
 
@@ -1044,17 +1076,19 @@ mod tests {
     fn test_expr_compare() {
         let result = evaluate_expr(&["5".to_string(), "<".to_string(), "10".to_string()]).unwrap();
         assert_eq!(result, "1");
-        
+
         let result = evaluate_expr(&["10".to_string(), "<".to_string(), "5".to_string()]).unwrap();
         assert_eq!(result, "0");
     }
 
     #[test]
     fn test_expr_equal() {
-        let result = evaluate_expr(&["hello".to_string(), "=".to_string(), "hello".to_string()]).unwrap();
+        let result =
+            evaluate_expr(&["hello".to_string(), "=".to_string(), "hello".to_string()]).unwrap();
         assert_eq!(result, "1");
-        
-        let result = evaluate_expr(&["hello".to_string(), "=".to_string(), "world".to_string()]).unwrap();
+
+        let result =
+            evaluate_expr(&["hello".to_string(), "=".to_string(), "world".to_string()]).unwrap();
         assert_eq!(result, "0");
     }
 
@@ -1066,16 +1100,24 @@ mod tests {
 
     #[test]
     fn test_expr_substr() {
-        let result = evaluate_expr(&["substr".to_string(), "hello".to_string(), "2".to_string(), "3".to_string()]).unwrap();
+        let result = evaluate_expr(&[
+            "substr".to_string(),
+            "hello".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+        ])
+        .unwrap();
         assert_eq!(result, "ell");
     }
 
     #[test]
     fn test_expr_index() {
-        let result = evaluate_expr(&["index".to_string(), "hello".to_string(), "l".to_string()]).unwrap();
+        let result =
+            evaluate_expr(&["index".to_string(), "hello".to_string(), "l".to_string()]).unwrap();
         assert_eq!(result, "3");
-        
-        let result = evaluate_expr(&["index".to_string(), "hello".to_string(), "z".to_string()]).unwrap();
+
+        let result =
+            evaluate_expr(&["index".to_string(), "hello".to_string(), "z".to_string()]).unwrap();
         assert_eq!(result, "0");
     }
 
@@ -1140,7 +1182,8 @@ mod tests {
 
     #[test]
     fn test_expr_string_not_equal() {
-        let result = evaluate_expr(&["abc".to_string(), "!=".to_string(), "def".to_string()]).unwrap();
+        let result =
+            evaluate_expr(&["abc".to_string(), "!=".to_string(), "def".to_string()]).unwrap();
         assert_eq!(result, "1");
     }
 
@@ -1154,10 +1197,10 @@ mod tests {
     fn test_expr_less_than_or_equal() {
         let result = evaluate_expr(&["5".to_string(), "<=".to_string(), "5".to_string()]).unwrap();
         assert_eq!(result, "1");
-        
+
         let result = evaluate_expr(&["4".to_string(), "<=".to_string(), "5".to_string()]).unwrap();
         assert_eq!(result, "1");
-        
+
         let result = evaluate_expr(&["6".to_string(), "<=".to_string(), "5".to_string()]).unwrap();
         assert_eq!(result, "0");
     }
@@ -1171,14 +1214,26 @@ mod tests {
     #[test]
     fn test_expr_substr_zero_position() {
         // substr with position 0 should return empty
-        let result = evaluate_expr(&["substr".to_string(), "hello".to_string(), "0".to_string(), "3".to_string()]).unwrap();
+        let result = evaluate_expr(&[
+            "substr".to_string(),
+            "hello".to_string(),
+            "0".to_string(),
+            "3".to_string(),
+        ])
+        .unwrap();
         assert_eq!(result, "");
     }
 
     #[test]
     fn test_expr_substr_beyond_length() {
         // substr beyond string length should handle gracefully
-        let result = evaluate_expr(&["substr".to_string(), "hi".to_string(), "1".to_string(), "10".to_string()]).unwrap();
+        let result = evaluate_expr(&[
+            "substr".to_string(),
+            "hi".to_string(),
+            "1".to_string(),
+            "10".to_string(),
+        ])
+        .unwrap();
         assert_eq!(result, "hi");
     }
 
@@ -1256,12 +1311,12 @@ mod tests {
     fn test_awk_with_pattern() {
         let prog = parse_awk_program("/hello/{print $1}").unwrap();
         assert!(prog.pattern.is_some());
-        
+
         // Line matching pattern
         let fields = vec!["hello", "world"];
         let result = execute_awk_action(&prog, "hello world", &fields, 1);
         assert_eq!(result, "hello");
-        
+
         // Line not matching pattern
         let result = execute_awk_action(&prog, "goodbye world", &["goodbye", "world"], 1);
         assert_eq!(result, "");

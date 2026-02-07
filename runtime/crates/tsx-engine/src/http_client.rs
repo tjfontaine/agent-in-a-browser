@@ -39,10 +39,10 @@ impl FetchResponse {
 
 /// Parse a URL into scheme, authority, and path components
 fn parse_url(url: &str) -> Result<(Scheme, String, String), String> {
-    let (scheme, rest) = if url.starts_with("https://") {
-        (Scheme::Https, &url[8..])
-    } else if url.starts_with("http://") {
-        (Scheme::Http, &url[7..])
+    let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {
+        (Scheme::Https, rest)
+    } else if let Some(rest) = url.strip_prefix("http://") {
+        (Scheme::Http, rest)
     } else {
         return Err(format!("Unsupported URL scheme: {}", url));
     };
@@ -156,7 +156,7 @@ pub fn fetch(
     // Build headers
     let header_fields = Fields::new();
     for (key, value) in headers {
-        let _ = header_fields.append(&key.to_string(), &value.as_bytes().to_vec());
+        let _ = header_fields.append(key.as_ref(), value.as_bytes());
     }
 
     // Build request
@@ -222,7 +222,7 @@ pub fn fetch(
                 .map_err(|e| format!("HTTP error: {:?}", e))?;
 
             let status = response.status();
-            let ok = status >= 200 && status < 300;
+            let ok = (200..300).contains(&status);
 
             let body_handle = response
                 .consume()
@@ -301,19 +301,14 @@ mod tests {
         let headers = parse_headers_json(Some(
             r#"{"Authorization":"Bearer a:b,c","X-Flag":true,"X-Retry":3}"#,
         ));
-        assert!(headers.contains(&(
-            "Authorization".to_string(),
-            "Bearer a:b,c".to_string()
-        )));
+        assert!(headers.contains(&("Authorization".to_string(), "Bearer a:b,c".to_string())));
         assert!(headers.contains(&("X-Flag".to_string(), "true".to_string())));
         assert!(headers.contains(&("X-Retry".to_string(), "3".to_string())));
     }
 
     #[test]
     fn test_parse_headers_json_ignores_non_scalar_values() {
-        let headers = parse_headers_json(Some(
-            r#"{"X-Obj":{"a":1},"X-Arr":[1,2],"X-Ok":"value"}"#,
-        ));
+        let headers = parse_headers_json(Some(r#"{"X-Obj":{"a":1},"X-Arr":[1,2],"X-Ok":"value"}"#));
         assert_eq!(headers.len(), 1);
         assert_eq!(headers[0], ("X-Ok".to_string(), "value".to_string()));
     }

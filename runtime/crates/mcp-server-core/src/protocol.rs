@@ -10,10 +10,11 @@ pub struct ServerInfo {
 }
 
 /// MCP Log Level for notifications/message
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Debug,
+    #[default]
     Info,
     Notice,
     Warning,
@@ -21,12 +22,6 @@ pub enum LogLevel {
     Critical,
     Alert,
     Emergency,
-}
-
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
 }
 
 /// MCP Log Message for notifications/message notification

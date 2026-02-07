@@ -84,11 +84,11 @@ pub enum ParsedRedirect {
 pub fn parse_command(input: &str) -> Result<Vec<ParsedCommand>, String> {
     let input_with_newline = format!("{}\n", input);
     let cursor = Cursor::new(input_with_newline);
-    
+
     let options = ParserOptions::default();
     let source_info = SourceInfo::default();
     let mut parser = Parser::new(cursor, &options, &source_info);
-    
+
     match parser.parse_program() {
         Ok(program) => {
             let commands: Vec<ParsedCommand> = program
@@ -106,9 +106,9 @@ pub fn parse_command(input: &str) -> Result<Vec<ParsedCommand>, String> {
 /// Uses brush_parser::word::parse() to properly handle quoting
 fn word_to_string(word: &ast::Word) -> String {
     use brush_parser::word;
-    
+
     let options = ParserOptions::default();
-    
+
     // Parse the word string into pieces
     match word::parse(&word.value, &options) {
         Ok(pieces) => {
@@ -128,10 +128,10 @@ fn word_to_string(word: &ast::Word) -> String {
 /// Convert a single WordPiece to string
 fn wordpiece_to_string(piece: &brush_parser::word::WordPiece) -> String {
     use brush_parser::word::WordPiece;
-    
+
     match piece {
         WordPiece::Text(s) => s.clone(),
-        WordPiece::SingleQuotedText(s) => s.clone(),  // Already unquoted by parser
+        WordPiece::SingleQuotedText(s) => s.clone(), // Already unquoted by parser
         WordPiece::AnsiCQuotedText(s) => s.clone(),
         WordPiece::DoubleQuotedSequence(seq) => {
             seq.iter().map(|p| wordpiece_to_string(&p.piece)).collect()
@@ -154,16 +154,19 @@ fn wordpiece_to_string(piece: &brush_parser::word::WordPiece) -> String {
             // Render parameter expansion for later expansion by our shell
             format_parameter_expansion(param)
         }
-        WordPiece::ArithmeticExpression(expr) => format!("$(({}))",expr.value),
+        WordPiece::ArithmeticExpression(expr) => format!("$(({}))", expr.value),
     }
 }
 
 /// Format a parameter expansion as a shell-compatible string
 fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> String {
-    use brush_parser::word::{ParameterExpr, Parameter};
-    
+    use brush_parser::word::{Parameter, ParameterExpr};
+
     match expr {
-        ParameterExpr::Parameter { parameter, indirect } => {
+        ParameterExpr::Parameter {
+            parameter,
+            indirect,
+        } => {
             if *indirect {
                 let param_str = format_parameter(parameter);
                 format!("${{!{}}}", param_str)
@@ -181,7 +184,10 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
             }
         }
         // ${!prefix*} or ${!prefix@} - variable names matching prefix
-        ParameterExpr::VariableNames { prefix, concatenate } => {
+        ParameterExpr::VariableNames {
+            prefix,
+            concatenate,
+        } => {
             if *concatenate {
                 format!("${{!{}*}}", prefix)
             } else {
@@ -189,7 +195,10 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
             }
         }
         // ${!arr[@]} or ${!arr[*]} - array keys
-        ParameterExpr::MemberKeys { variable_name, concatenate } => {
+        ParameterExpr::MemberKeys {
+            variable_name,
+            concatenate,
+        } => {
             if *concatenate {
                 format!("${{!{}[*]}}", variable_name)
             } else {
@@ -201,9 +210,16 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
             format!("${{#{}}}", format_parameter(parameter))
         }
         // ${var:-default} etc - use default values
-        ParameterExpr::UseDefaultValues { parameter, indirect, test_type, default_value } => {
-            let op = if *indirect { ":-" } else { 
-                match test_type { 
+        ParameterExpr::UseDefaultValues {
+            parameter,
+            indirect,
+            test_type,
+            default_value,
+        } => {
+            let op = if *indirect {
+                ":-"
+            } else {
+                match test_type {
                     brush_parser::word::ParameterTestType::UnsetOrNull => ":-",
                     brush_parser::word::ParameterTestType::Unset => "-",
                 }
@@ -226,7 +242,7 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
 /// Format a parameter reference
 fn format_parameter(param: &brush_parser::word::Parameter) -> String {
     use brush_parser::word::Parameter;
-    
+
     match param {
         Parameter::Positional(n) => n.to_string(),
         Parameter::Special(sp) => format_special_parameter(sp),
@@ -245,10 +261,14 @@ fn format_parameter(param: &brush_parser::word::Parameter) -> String {
 /// Format a special parameter
 fn format_special_parameter(sp: &brush_parser::word::SpecialParameter) -> String {
     use brush_parser::word::SpecialParameter;
-    
+
     match sp {
         SpecialParameter::AllPositionalParameters { concatenate } => {
-            if *concatenate { "*".to_string() } else { "@".to_string() }
+            if *concatenate {
+                "*".to_string()
+            } else {
+                "@".to_string()
+            }
         }
         SpecialParameter::PositionalParameterCount => "#".to_string(),
         SpecialParameter::LastExitStatus => "?".to_string(),
@@ -261,16 +281,19 @@ fn format_special_parameter(sp: &brush_parser::word::SpecialParameter) -> String
 
 /// Convert a CompoundList to ParsedCommands.
 fn convert_compound_list(list: ast::CompoundList) -> Vec<ParsedCommand> {
-    list.0.into_iter().filter_map(convert_compound_list_item).collect()
+    list.0
+        .into_iter()
+        .filter_map(convert_compound_list_item)
+        .collect()
 }
 
 /// Convert a CompoundListItem to ParsedCommand.
 fn convert_compound_list_item(item: ast::CompoundListItem) -> Option<ParsedCommand> {
     let and_or_list = item.0;
     let separator = item.1;
-    
+
     let cmd = convert_and_or_list(and_or_list)?;
-    
+
     // If it's async (background), wrap it
     match separator {
         ast::SeparatorOperator::Async => Some(ParsedCommand::Background(Box::new(cmd))),
@@ -281,11 +304,11 @@ fn convert_compound_list_item(item: ast::CompoundListItem) -> Option<ParsedComma
 /// Convert an AndOrList to ParsedCommand.
 fn convert_and_or_list(list: ast::AndOrList) -> Option<ParsedCommand> {
     let first = convert_pipeline(list.first)?;
-    
+
     if list.additional.is_empty() {
         return Some(first);
     }
-    
+
     // Build chain of And/Or
     let mut result = first;
     for and_or in list.additional {
@@ -300,7 +323,7 @@ fn convert_and_or_list(list: ast::AndOrList) -> Option<ParsedCommand> {
             }
         }
     }
-    
+
     Some(result)
 }
 
@@ -311,11 +334,11 @@ fn convert_pipeline(pipeline: ast::Pipeline) -> Option<ParsedCommand> {
         .into_iter()
         .filter_map(convert_command)
         .collect();
-    
+
     if commands.is_empty() {
         return None;
     }
-    
+
     if commands.len() == 1 && !pipeline.bang {
         Some(commands.into_iter().next().unwrap())
     } else {
@@ -330,9 +353,7 @@ fn convert_pipeline(pipeline: ast::Pipeline) -> Option<ParsedCommand> {
 fn convert_command(cmd: ast::Command) -> Option<ParsedCommand> {
     match cmd {
         ast::Command::Simple(simple) => convert_simple_command(simple),
-        ast::Command::Compound(compound, _redirects) => {
-            convert_compound_command(compound)
-        }
+        ast::Command::Compound(compound, _redirects) => convert_compound_command(compound),
         ast::Command::Function(func_def) => {
             let body = convert_function_body(func_def.body)?;
             Some(ParsedCommand::FunctionDef {
@@ -382,7 +403,11 @@ fn convert_extended_test_expr(expr: &ast::ExtendedTestExpr) -> Vec<String> {
             vec![format!("{}", pred), word_to_string(word)]
         }
         ast::ExtendedTestExpr::BinaryTest(pred, left, right) => {
-            vec![word_to_string(left), format!("{}", pred), word_to_string(right)]
+            vec![
+                word_to_string(left),
+                format!("{}", pred),
+                word_to_string(right),
+            ]
         }
     }
 }
@@ -393,7 +418,7 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
     let mut args = Vec::new();
     let mut env_vars = Vec::new();
     let mut redirects = Vec::new();
-    
+
     // Process prefix (assignments and redirects before command)
     if let Some(prefix) = cmd.prefix {
         for item in prefix.0 {
@@ -402,9 +427,11 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
                     let key = format!("{}", assignment.name);
                     let value = match &assignment.value {
                         ast::AssignmentValue::Scalar(word) => format!("{}", word),
-                        ast::AssignmentValue::Array(words) => {
-                            words.iter().map(|w| format!("{}", w.1)).collect::<Vec<_>>().join(" ")
-                        }
+                        ast::AssignmentValue::Array(words) => words
+                            .iter()
+                            .map(|w| format!("{}", w.1))
+                            .collect::<Vec<_>>()
+                            .join(" "),
                     };
                     env_vars.push((key, value));
                 }
@@ -427,12 +454,12 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
             }
         }
     }
-    
+
     // Process command word (name)
     if let Some(word) = cmd.word_or_name {
         name = word_to_string(&word);
     }
-    
+
     // Process suffix (args and redirects after command)
     if let Some(suffix) = cmd.suffix {
         for item in suffix.0 {
@@ -455,7 +482,7 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
             }
         }
     }
-    
+
     // If we only have env vars, no command
     if name.is_empty() && !env_vars.is_empty() {
         return Some(ParsedCommand::Simple {
@@ -465,11 +492,11 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
             env_vars,
         });
     }
-    
+
     if name.is_empty() {
         return None;
     }
-    
+
     Some(ParsedCommand::Simple {
         name,
         args,
@@ -490,7 +517,8 @@ fn convert_compound_command(cmd: ast::CompoundCommand) -> Option<ParsedCommand> 
             Some(ParsedCommand::Subshell(commands))
         }
         ast::CompoundCommand::ForClause(for_clause) => {
-            let words = for_clause.values
+            let words = for_clause
+                .values
                 .map(|ws| ws.into_iter().map(|w| word_to_string(&w)).collect())
                 .unwrap_or_default();
             let body = convert_do_group(&for_clause.body);
@@ -521,12 +549,12 @@ fn convert_compound_command(cmd: ast::CompoundCommand) -> Option<ParsedCommand> 
         ast::CompoundCommand::IfClause(if_clause) => {
             let mut conditionals = Vec::new();
             let mut else_branch_result = None;
-            
+
             // First if condition
             let guard = convert_compound_list(if_clause.condition);
             let then_body = convert_compound_list(if_clause.then);
             conditionals.push((guard, then_body));
-            
+
             // elif clauses
             if let Some(elses) = if_clause.elses {
                 for else_clause in elses {
@@ -540,8 +568,7 @@ fn convert_compound_command(cmd: ast::CompoundCommand) -> Option<ParsedCommand> 
                     }
                 }
             }
-            
-            
+
             Some(ParsedCommand::If {
                 conditionals,
                 else_branch: else_branch_result,
@@ -564,14 +591,12 @@ fn convert_compound_command(cmd: ast::CompoundCommand) -> Option<ParsedCommand> 
                 .collect();
             Some(ParsedCommand::Case { word, cases })
         }
-        ast::CompoundCommand::Arithmetic(arith) => {
-            Some(ParsedCommand::Simple {
-                name: "((".to_string(),
-                args: vec![format!("{}", arith.expr), "))".to_string()],
-                redirects: vec![],
-                env_vars: vec![],
-            })
-        }
+        ast::CompoundCommand::Arithmetic(arith) => Some(ParsedCommand::Simple {
+            name: "((".to_string(),
+            args: vec![format!("{}", arith.expr), "))".to_string()],
+            redirects: vec![],
+            env_vars: vec![],
+        }),
         ast::CompoundCommand::ArithmeticForClause(arith_for) => {
             let body = convert_do_group(&arith_for.body);
             Some(ParsedCommand::While {
@@ -610,13 +635,28 @@ fn convert_io_redirect(redir: ast::IoRedirect) -> Option<ParsedRedirect> {
                 }
                 ast::IoFileRedirectTarget::Duplicate(w) => word_to_string(&w),
             };
-            
+
             match kind {
-                ast::IoFileRedirectKind::Read => Some(ParsedRedirect::Read { fd: fd_num, target: target_str }),
-                ast::IoFileRedirectKind::Write => Some(ParsedRedirect::Write { fd: fd_num, target: target_str }),
-                ast::IoFileRedirectKind::Append => Some(ParsedRedirect::Append { fd: fd_num, target: target_str }),
-                ast::IoFileRedirectKind::DuplicateInput => Some(ParsedRedirect::DupRead { fd: fd_num, target: target_str }),
-                ast::IoFileRedirectKind::DuplicateOutput => Some(ParsedRedirect::DupWrite { fd: fd_num, target: target_str }),
+                ast::IoFileRedirectKind::Read => Some(ParsedRedirect::Read {
+                    fd: fd_num,
+                    target: target_str,
+                }),
+                ast::IoFileRedirectKind::Write => Some(ParsedRedirect::Write {
+                    fd: fd_num,
+                    target: target_str,
+                }),
+                ast::IoFileRedirectKind::Append => Some(ParsedRedirect::Append {
+                    fd: fd_num,
+                    target: target_str,
+                }),
+                ast::IoFileRedirectKind::DuplicateInput => Some(ParsedRedirect::DupRead {
+                    fd: fd_num,
+                    target: target_str,
+                }),
+                ast::IoFileRedirectKind::DuplicateOutput => Some(ParsedRedirect::DupWrite {
+                    fd: fd_num,
+                    target: target_str,
+                }),
                 _ => None,
             }
         }
@@ -703,7 +743,10 @@ mod tests {
         let cmds = parse_command("if true; then echo yes; else echo no; fi").unwrap();
         assert_eq!(cmds.len(), 1);
         match &cmds[0] {
-            ParsedCommand::If { conditionals, else_branch } => {
+            ParsedCommand::If {
+                conditionals,
+                else_branch,
+            } => {
                 assert_eq!(conditionals.len(), 1);
                 assert!(else_branch.is_some());
             }

@@ -117,7 +117,7 @@ fn may_contain_braces_to_expand(word: &str) -> bool {
     if !word.contains('{') || !word.contains('}') {
         return false;
     }
-    
+
     // Must have either a comma or '..' inside braces for expansion
     word.contains(',') || word.contains("..")
 }
@@ -140,7 +140,9 @@ mod tests {
 
     #[test]
     fn test_number_sequence_with_step() {
-        let result: Vec<String> = expand_braces_with_parser("{1..10..2}").into_iter().collect();
+        let result: Vec<String> = expand_braces_with_parser("{1..10..2}")
+            .into_iter()
+            .collect();
         assert_eq!(result, vec!["1", "3", "5", "7", "9"]);
     }
 
@@ -180,9 +182,7 @@ mod tests {
 
     #[test]
     fn test_single_brace_no_match() {
-        let result: Vec<String> = expand_braces_with_parser("{single}")
-            .into_iter()
-            .collect();
+        let result: Vec<String> = expand_braces_with_parser("{single}").into_iter().collect();
         // No comma or .., should return as-is
         assert_eq!(result, vec!["{single}"]);
     }

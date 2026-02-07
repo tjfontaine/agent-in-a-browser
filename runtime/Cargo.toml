@@ -145,8 +145,3 @@ world = "ts-runtime-mcp"
 "shell:unix" = { path = "wit/deps/shell-unix" }
 
 [package.metadata.component.dependencies]
-
-[profile.release]
-opt-level = "s"
-lto = true
-debug = true    # Enable debug info for browser profiling

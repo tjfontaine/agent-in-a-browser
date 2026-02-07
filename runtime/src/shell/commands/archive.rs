@@ -81,7 +81,9 @@ impl ArchiveCommands {
                 let archive_path = match &archive_file {
                     Some(f) => resolve(f),
                     None => {
-                        let _ = stderr.write_all(b"tar: no archive file specified (-f)\n").await;
+                        let _ = stderr
+                            .write_all(b"tar: no archive file specified (-f)\n")
+                            .await;
                         return 1;
                     }
                 };
@@ -100,7 +102,10 @@ impl ArchiveCommands {
                     let writer: Box<dyn Write> = if gzip {
                         Box::new(flate2::write::GzEncoder::new(file, Compression::default()))
                     } else if bzip2 {
-                        Box::new(bzip2::write::BzEncoder::new(file, bzip2::Compression::default()))
+                        Box::new(bzip2::write::BzEncoder::new(
+                            file,
+                            bzip2::Compression::default(),
+                        ))
                     } else {
                         Box::new(file)
                     };
@@ -121,7 +126,7 @@ impl ArchiveCommands {
 
                         // Archive paths must be relative - strip leading slash
                         let archive_path = file_path.trim_start_matches('/');
-                        
+
                         if verbose {
                             stdout_msgs.push(format!("a {}\n", archive_path));
                         }
@@ -139,24 +144,34 @@ impl ArchiveCommands {
                                     continue;
                                 }
                             };
-                            
+
                             // Create header manually
                             let mut header = tar::Header::new_gnu();
                             header.set_path(archive_path).unwrap_or_else(|_| {});
                             header.set_size(content.len() as u64);
                             header.set_mode(0o644);
-                            header.set_mtime(metadata.modified()
-                                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
-                                .unwrap_or(0));
+                            header.set_mtime(
+                                metadata
+                                    .modified()
+                                    .map(|t| {
+                                        t.duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs()
+                                    })
+                                    .unwrap_or(0),
+                            );
                             header.set_cksum();
-                            
-                            if let Err(e) = builder.append_data(&mut header, archive_path, content.as_slice()) {
+
+                            if let Err(e) =
+                                builder.append_data(&mut header, archive_path, content.as_slice())
+                            {
                                 stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
                             }
                         }
                     }
 
-                    builder.finish()
+                    builder
+                        .finish()
                         .map_err(|e| format!("tar: error finishing archive: {}\n", e))?;
 
                     Ok((stdout_msgs, stderr_msgs))
@@ -182,13 +197,19 @@ impl ArchiveCommands {
                 let archive_path = match &archive_file {
                     Some(f) => resolve(f),
                     None => {
-                        let _ = stderr.write_all(b"tar: no archive file specified (-f)\n").await;
+                        let _ = stderr
+                            .write_all(b"tar: no archive file specified (-f)\n")
+                            .await;
                         return 1;
                     }
                 };
 
-                let is_gzip = gzip || archive_path.ends_with(".gz") || archive_path.ends_with(".tgz");
-                let is_bzip2 = bzip2 || archive_path.ends_with(".bz2") || archive_path.ends_with(".tbz") || archive_path.ends_with(".tbz2");
+                let is_gzip =
+                    gzip || archive_path.ends_with(".gz") || archive_path.ends_with(".tgz");
+                let is_bzip2 = bzip2
+                    || archive_path.ends_with(".bz2")
+                    || archive_path.ends_with(".tbz")
+                    || archive_path.ends_with(".tbz2");
 
                 // Do all tar operations synchronously
                 let result: Result<(Vec<String>, Vec<String>), String> = (|| {
@@ -204,7 +225,8 @@ impl ArchiveCommands {
                     };
 
                     let mut archive = tar::Archive::new(reader);
-                    let entries = archive.entries()
+                    let entries = archive
+                        .entries()
                         .map_err(|e| format!("tar: error reading archive: {}\n", e))?;
 
                     let mut stdout_msgs = Vec::new();
@@ -253,13 +275,19 @@ impl ArchiveCommands {
                 let archive_path = match &archive_file {
                     Some(f) => resolve(f),
                     None => {
-                        let _ = stderr.write_all(b"tar: no archive file specified (-f)\n").await;
+                        let _ = stderr
+                            .write_all(b"tar: no archive file specified (-f)\n")
+                            .await;
                         return 1;
                     }
                 };
 
-                let is_gzip = gzip || archive_path.ends_with(".gz") || archive_path.ends_with(".tgz");
-                let is_bzip2 = bzip2 || archive_path.ends_with(".bz2") || archive_path.ends_with(".tbz") || archive_path.ends_with(".tbz2");
+                let is_gzip =
+                    gzip || archive_path.ends_with(".gz") || archive_path.ends_with(".tgz");
+                let is_bzip2 = bzip2
+                    || archive_path.ends_with(".bz2")
+                    || archive_path.ends_with(".tbz")
+                    || archive_path.ends_with(".tbz2");
 
                 // Do all tar operations synchronously
                 let result: Result<(Vec<String>, Vec<String>), String> = (|| {
@@ -275,7 +303,8 @@ impl ArchiveCommands {
                     };
 
                     let mut archive = tar::Archive::new(reader);
-                    let entries = archive.entries()
+                    let entries = archive
+                        .entries()
                         .map_err(|e| format!("tar: error reading archive: {}\n", e))?;
 
                     let mut stdout_msgs = Vec::new();
@@ -287,7 +316,11 @@ impl ArchiveCommands {
                                 if let Ok(path) = e.path() {
                                     if verbose {
                                         let size = e.size();
-                                        stdout_msgs.push(format!("{:>10} {}\n", size, path.display()));
+                                        stdout_msgs.push(format!(
+                                            "{:>10} {}\n",
+                                            size,
+                                            path.display()
+                                        ));
                                     } else {
                                         stdout_msgs.push(format!("{}\n", path.display()));
                                     }
@@ -408,7 +441,7 @@ impl ArchiveCommands {
 
             for file_path in &files {
                 let input_path = resolve(file_path);
-                
+
                 let input_data = match std::fs::read(&input_path) {
                     Ok(d) => d,
                     Err(e) => {
@@ -585,7 +618,8 @@ impl ArchiveCommands {
                     }
                     let _ = stdout.write_all(&output).await;
                 } else {
-                    let mut encoder = bzip2::read::BzEncoder::new(&input_data[..], bzip2::Compression::default());
+                    let mut encoder =
+                        bzip2::read::BzEncoder::new(&input_data[..], bzip2::Compression::default());
                     let mut output = Vec::new();
                     if let Err(e) = encoder.read_to_end(&mut output) {
                         let msg = format!("bzip2: {}\n", e);
@@ -599,7 +633,7 @@ impl ArchiveCommands {
 
             for file_path in &files {
                 let input_path = resolve(file_path);
-                
+
                 let input_data = match std::fs::read(&input_path) {
                     Ok(d) => d,
                     Err(e) => {
@@ -638,7 +672,8 @@ impl ArchiveCommands {
                         }
                     }
                 } else {
-                    let mut encoder = bzip2::read::BzEncoder::new(&input_data[..], bzip2::Compression::default());
+                    let mut encoder =
+                        bzip2::read::BzEncoder::new(&input_data[..], bzip2::Compression::default());
                     let mut output = Vec::new();
                     if let Err(e) = encoder.read_to_end(&mut output) {
                         let msg = format!("bzip2: {}: {}\n", input_path, e);
@@ -720,7 +755,9 @@ impl ArchiveCommands {
             }
 
             if files.len() < 2 {
-                let _ = stderr.write_all(b"zip: need archive name and files to add\n").await;
+                let _ = stderr
+                    .write_all(b"zip: need archive name and files to add\n")
+                    .await;
                 return 1;
             }
 
@@ -749,8 +786,8 @@ impl ArchiveCommands {
                     archive_name: &str,
                     options: zip_next::write::SimpleFileOptions,
                 ) -> Result<(), String> {
-                    let content = std::fs::read(file_path)
-                        .map_err(|e| format!("{}: {}", file_path, e))?;
+                    let content =
+                        std::fs::read(file_path).map_err(|e| format!("{}: {}", file_path, e))?;
                     zip.start_file(archive_name, options)
                         .map_err(|e| format!("{}: {}", archive_name, e))?;
                     zip.write_all(&content)
@@ -764,13 +801,13 @@ impl ArchiveCommands {
                     base_name: &str,
                     options: zip_next::write::SimpleFileOptions,
                 ) -> Result<(), String> {
-                    for entry in std::fs::read_dir(dir_path)
-                        .map_err(|e| format!("{}: {}", dir_path, e))?
+                    for entry in
+                        std::fs::read_dir(dir_path).map_err(|e| format!("{}: {}", dir_path, e))?
                     {
                         let entry = entry.map_err(|e| format!("{}", e))?;
                         let path = entry.path();
                         let name = format!("{}/{}", base_name, entry.file_name().to_string_lossy());
-                        
+
                         if path.is_dir() {
                             add_dir_to_zip(zip, &path.to_string_lossy(), &name, options)?;
                         } else {
@@ -889,12 +926,12 @@ impl ArchiveCommands {
                 None => cwd.clone(),
             };
 
-            // Do all zip operations synchronously to avoid Send issues with ZipFile  
+            // Do all zip operations synchronously to avoid Send issues with ZipFile
             let result: Result<(Vec<String>, Vec<String>), String> = (|| {
                 // Read entire file into memory to avoid WASI File::seek issues
                 let file_data = std::fs::read(&archive_path)
                     .map_err(|e| format!("unzip: {}: {}\n", archive_path, e))?;
-                
+
                 let cursor = std::io::Cursor::new(file_data);
                 let mut zip = zip_next::ZipArchive::new(cursor)
                     .map_err(|e| format!("unzip: {}: {}\n", archive_path, e))?;

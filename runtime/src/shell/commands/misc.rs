@@ -36,11 +36,9 @@ impl MiscCommands {
                     return 0;
                 }
             }
-            
-            let nums: Vec<i64> = remaining.iter()
-                .filter_map(|s| s.parse().ok())
-                .collect();
-            
+
+            let nums: Vec<i64> = remaining.iter().filter_map(|s| s.parse().ok()).collect();
+
             let (first, incr, last) = match nums.len() {
                 0 => {
                     let _ = stderr.write_all(b"seq: missing operand\n").await;
@@ -50,7 +48,7 @@ impl MiscCommands {
                 2 => (nums[0], 1, nums[1]),
                 _ => (nums[0], nums[1], nums[2]),
             };
-            
+
             let mut current = first;
             if incr > 0 {
                 while current <= last {
@@ -88,23 +86,23 @@ impl MiscCommands {
                     return 0;
                 }
             }
-            
+
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"sleep: missing operand\n").await;
                 return 1;
             }
-            
+
             let secs: f64 = remaining[0].parse().unwrap_or(0.0);
-            
+
             // Convert seconds to nanoseconds for WASI Duration
             let nanos = (secs * 1_000_000_000.0) as u64;
-            
+
             if nanos > 0 {
                 // Idiomatic WASI: subscribe to a duration pollable and block until ready
                 let pollable = monotonic_clock::subscribe_duration(nanos);
                 pollable.block();
             }
-            
+
             0
         })
     }
@@ -130,35 +128,35 @@ impl MiscCommands {
                     return 0;
                 }
             }
-            
+
             // Get current wall clock time from WASI
             let datetime = wall_clock::now();
-            
+
             // Convert to human-readable format
             // datetime.seconds is seconds since Unix epoch (1970-01-01 00:00:00 UTC)
             let total_secs = datetime.seconds;
-            
+
             // Simple date/time calculation (UTC)
             const SECS_PER_MIN: u64 = 60;
             const SECS_PER_HOUR: u64 = 3600;
             const SECS_PER_DAY: u64 = 86400;
-            
+
             let days_since_epoch = total_secs / SECS_PER_DAY;
             let time_of_day = total_secs % SECS_PER_DAY;
-            
+
             let hours = time_of_day / SECS_PER_HOUR;
             let minutes = (time_of_day % SECS_PER_HOUR) / SECS_PER_MIN;
             let seconds = time_of_day % SECS_PER_MIN;
-            
+
             // Calculate year, month, day from days since epoch
             // Using a simplified algorithm
             let (year, month, day) = days_to_ymd(days_since_epoch);
-            
+
             let output = format!(
                 "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC\n",
                 year, month, day, hours, minutes, seconds
             );
-            
+
             let _ = stdout.write_all(output.as_bytes()).await;
             0
         })
@@ -186,14 +184,14 @@ impl MiscCommands {
                     return 0;
                 }
             }
-            
+
             let mut method = "GET".to_string();
             let mut headers: Vec<(String, String)> = Vec::new();
             let mut data: Option<String> = None;
             let mut output_file: Option<String> = None;
             let mut silent = false;
             let mut url: Option<String> = None;
-            
+
             // Manual argument parsing for complex options
             let mut i = 0;
             while i < remaining.len() {
@@ -241,7 +239,7 @@ impl MiscCommands {
                 }
                 i += 1;
             }
-            
+
             let url = match url {
                 Some(u) => u,
                 None => {
@@ -249,17 +247,18 @@ impl MiscCommands {
                     return 1;
                 }
             };
-            
+
             // Build headers JSON
             let headers_json = if headers.is_empty() {
                 None
             } else {
-                let pairs: Vec<String> = headers.iter()
+                let pairs: Vec<String> = headers
+                    .iter()
                     .map(|(k, v)| format!("\"{}\":\"{}\"", k, v))
                     .collect();
                 Some(format!("{{{}}}", pairs.join(",")))
             };
-            
+
             // Make HTTP request using our existing http_client
             match crate::http_client::fetch_request(
                 &method,
@@ -285,13 +284,17 @@ impl MiscCommands {
                             let _ = stdout.write_all(b"\n").await;
                         }
                     }
-                    
+
                     if !silent && !response.ok {
                         let msg = format!("curl: HTTP {}\n", response.status);
                         let _ = stderr.write_all(msg.as_bytes()).await;
                     }
-                    
-                    if response.ok { 0 } else { 22 } // curl uses 22 for HTTP errors
+
+                    if response.ok {
+                        0
+                    } else {
+                        22
+                    } // curl uses 22 for HTTP errors
                 }
                 Err(e) => {
                     if !silent {
@@ -310,7 +313,7 @@ fn days_to_ymd(days: u64) -> (i32, u32, u32) {
     // Days since 1970-01-01
     let mut remaining_days = days as i64;
     let mut year = 1970i32;
-    
+
     loop {
         let days_in_year = if is_leap_year(year) { 366 } else { 365 };
         if remaining_days < days_in_year {
@@ -319,14 +322,14 @@ fn days_to_ymd(days: u64) -> (i32, u32, u32) {
         remaining_days -= days_in_year;
         year += 1;
     }
-    
+
     let leap = is_leap_year(year);
     let days_in_months: [i64; 12] = if leap {
         [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     } else {
         [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     };
-    
+
     let mut month = 1u32;
     for days_in_month in days_in_months.iter() {
         if remaining_days < *days_in_month {
@@ -335,9 +338,9 @@ fn days_to_ymd(days: u64) -> (i32, u32, u32) {
         remaining_days -= days_in_month;
         month += 1;
     }
-    
+
     let day = (remaining_days + 1) as u32;
-    
+
     (year, month, day)
 }
 
