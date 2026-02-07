@@ -97,7 +97,8 @@ impl AgentCore {
 
     /// Add a user message to history
     pub fn add_user_message(&mut self, content: &str) {
-        self.conversation.append_turn(ConversationTurn::user(content));
+        self.conversation
+            .append_turn(ConversationTurn::user(content));
         self.emit(AgentEvent::UserMessage {
             content: content.to_string(),
         });

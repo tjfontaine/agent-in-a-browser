@@ -265,12 +265,7 @@ impl ConversationHistory {
     pub fn user_assistant_messages(&self) -> Vec<&ConversationTurn> {
         self.turns
             .iter()
-            .filter(|t| {
-                matches!(
-                    t.role,
-                    ConversationRole::User | ConversationRole::Assistant
-                )
-            })
+            .filter(|t| matches!(t.role, ConversationRole::User | ConversationRole::Assistant))
             .collect()
     }
 
@@ -478,7 +473,9 @@ mod tests {
     fn test_clear_history() {
         let mut history = ConversationHistory::new();
         history.append_turn(ConversationTurn::user("Hello"));
-        history.state_mut().add_pinned_fact("User prefers concise answers");
+        history
+            .state_mut()
+            .add_pinned_fact("User prefers concise answers");
 
         history.clear();
 
@@ -493,7 +490,9 @@ mod tests {
         state.add_pinned_fact("User timezone: UTC");
 
         assert_eq!(state.pinned_facts.len(), 2);
-        assert!(state.pinned_facts.contains(&"User prefers Python".to_string()));
+        assert!(state
+            .pinned_facts
+            .contains(&"User prefers Python".to_string()));
     }
 
     #[test]

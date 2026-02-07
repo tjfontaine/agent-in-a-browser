@@ -408,9 +408,7 @@ impl HeadlessAgent {
         let history: Vec<RigMessage> = history_turns
             .iter()
             .filter_map(|turn| match turn.role {
-                agent_bridge::ConversationRole::User => {
-                    Some(RigMessage::user(&turn.content))
-                }
+                agent_bridge::ConversationRole::User => Some(RigMessage::user(&turn.content)),
                 agent_bridge::ConversationRole::Assistant => {
                     Some(RigMessage::assistant(&turn.content))
                 }
