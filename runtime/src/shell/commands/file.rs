@@ -1034,7 +1034,14 @@ impl FileCommands {
                 match calculate_disk_usage(&full_path, summary_only, human_readable, &mut stdout)
                     .await
                 {
-                    Ok(_) => {}
+                    Ok(total) => {
+                        if summary_only {
+                            let display = format_size(total, human_readable);
+                            let _ = stdout
+                                .write_all(format!("{}\t{}\n", display, full_path).as_bytes())
+                                .await;
+                        }
+                    }
                     Err(e) => {
                         let _ = stderr
                             .write_all(format!("du: {}: {}\n", path, e).as_bytes())

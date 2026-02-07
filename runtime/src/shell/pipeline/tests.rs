@@ -3,6 +3,17 @@
 use super::*;
 use crate::shell::env::ShellEnv;
 
+fn make_test_dir(prefix: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = format!("/tmp/{}_{}_{}", prefix, std::process::id(), nanos);
+    let _ = std::fs::remove_dir_all(&path);
+    std::fs::create_dir_all(&path).unwrap();
+    path
+}
+
 #[test]
 fn test_run_echo() {
     let mut env = ShellEnv::new();
@@ -1211,6 +1222,350 @@ fn test_edge_case_piped_control_flow() {
     ));
     assert_eq!(result.code, 0);
     assert!(result.stdout.contains("test"));
+}
+
+#[test]
+fn test_coreutils_help_completeness() {
+    let mut env = ShellEnv::new();
+    let commands = [
+        "echo",
+        "pwd",
+        "yes",
+        "help",
+        "ls",
+        "cat",
+        "touch",
+        "mkdir",
+        "rmdir",
+        "rm",
+        "mv",
+        "cp",
+        "find",
+        "diff",
+        "file",
+        "realpath",
+        "du",
+        "readlink",
+        "head",
+        "tail",
+        "grep",
+        "wc",
+        "sort",
+        "uniq",
+        "tee",
+        "sed",
+        "cut",
+        "tr",
+        "basename",
+        "dirname",
+        "env",
+        "printenv",
+        "seq",
+        "sleep",
+        "date",
+        "printf",
+        "base64",
+        "md5sum",
+        "sha256sum",
+        "xxd",
+    ];
+
+    for cmd in commands {
+        let result = futures_lite::future::block_on(run_pipeline(&format!("{cmd} --help"), &mut env));
+        assert_eq!(result.code, 0, "{cmd} --help failed: {}", result.stderr);
+    }
+}
+
+#[test]
+fn test_help_unknown_command_errors() {
+    let mut env = ShellEnv::new();
+    let result =
+        futures_lite::future::block_on(run_pipeline("help definitely_not_a_command", &mut env));
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("no help for"));
+}
+
+#[test]
+fn test_yes_help_exits_without_hanging() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("yes --help", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("yes"));
+}
+
+#[test]
+fn test_yes_head_pipeline_terminates_and_limits_output() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("yes edge | head -n 3", &mut env));
+    assert_eq!(result.code, 0, "stderr: {}", result.stderr);
+    assert_eq!(
+        result.stdout.lines().collect::<Vec<_>>(),
+        vec!["edge", "edge", "edge"]
+    );
+}
+
+#[test]
+fn test_touch_mkdir_rmdir_edge_cases() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_touch_mkdir");
+
+    let result = futures_lite::future::block_on(run_pipeline("touch", &mut env));
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("missing file operand"));
+
+    let nested = format!("{root}/a/b");
+    let result = futures_lite::future::block_on(run_pipeline(&format!("mkdir -p {nested}"), &mut env));
+    assert_eq!(result.code, 0, "mkdir failed: {}", result.stderr);
+    assert!(std::path::Path::new(&nested).exists());
+
+    let file1 = format!("{nested}/one.txt");
+    let file2 = format!("{nested}/two.txt");
+    let result = futures_lite::future::block_on(run_pipeline(&format!("touch {file1} {file2}"), &mut env));
+    assert_eq!(result.code, 0, "touch create failed: {}", result.stderr);
+    assert!(std::path::Path::new(&file1).exists());
+    assert!(std::path::Path::new(&file2).exists());
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("rmdir {nested}"), &mut env));
+    assert_eq!(result.code, 1, "rmdir should fail on non-empty directory");
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("rm {file1} {file2}"), &mut env));
+    assert_eq!(result.code, 0, "rm files failed: {}", result.stderr);
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("rmdir {nested}"), &mut env));
+    assert_eq!(result.code, 0, "rmdir empty directory failed: {}", result.stderr);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_cp_and_mv_file_and_directory_behaviors() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_cp_mv");
+
+    let src = format!("{root}/src.txt");
+    let copied = format!("{root}/copied.txt");
+    let moved = format!("{root}/moved.txt");
+    std::fs::write(&src, "copy me\n").unwrap();
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("cp {src} {copied}"), &mut env));
+    assert_eq!(result.code, 0, "cp file failed: {}", result.stderr);
+    assert_eq!(std::fs::read_to_string(&copied).unwrap(), "copy me\n");
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("mv {copied} {moved}"), &mut env));
+    assert_eq!(result.code, 0, "mv failed: {}", result.stderr);
+    assert!(!std::path::Path::new(&copied).exists());
+    assert_eq!(std::fs::read_to_string(&moved).unwrap(), "copy me\n");
+
+    let src_dir = format!("{root}/dir");
+    let src_nested = format!("{src_dir}/nested.txt");
+    let dst_dir = format!("{root}/dir_copy");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    std::fs::write(&src_nested, "nested\n").unwrap();
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("cp {src_dir} {dst_dir}"), &mut env));
+    assert_eq!(result.code, 1, "cp without -r should fail for directories");
+    assert!(result.stderr.contains("is a directory"));
+
+    let result =
+        futures_lite::future::block_on(run_pipeline(&format!("cp -r {src_dir} {dst_dir}"), &mut env));
+    assert_eq!(result.code, 0, "cp -r failed: {}", result.stderr);
+    assert_eq!(
+        std::fs::read_to_string(format!("{dst_dir}/nested.txt")).unwrap(),
+        "nested\n"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_find_with_name_and_type_filters() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_find");
+
+    let sub = format!("{root}/sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(format!("{root}/a.txt"), "a").unwrap();
+    std::fs::write(format!("{root}/b.md"), "b").unwrap();
+    std::fs::write(format!("{sub}/c.txt"), "c").unwrap();
+
+    let result = futures_lite::future::block_on(run_pipeline(
+        &format!("find {root} --name '*.txt' --type f"),
+        &mut env,
+    ));
+    assert_eq!(result.code, 0, "find failed: {}", result.stderr);
+    assert!(result.stdout.contains("a.txt"));
+    assert!(result.stdout.contains("c.txt"));
+    assert!(!result.stdout.contains("b.md"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_diff_equal_and_unified_difference_output() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_diff");
+    let left = format!("{root}/left.txt");
+    let right = format!("{root}/right.txt");
+
+    std::fs::write(&left, "alpha\nbeta\n").unwrap();
+    std::fs::write(&right, "alpha\nbeta\n").unwrap();
+
+    let result = futures_lite::future::block_on(run_pipeline(&format!("diff {left} {right}"), &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.trim().is_empty());
+
+    std::fs::write(&right, "alpha\nBETA\n").unwrap();
+    let result =
+        futures_lite::future::block_on(run_pipeline(&format!("diff -u {left} {right}"), &mut env));
+    assert_eq!(result.code, 1);
+    assert!(result.stdout.contains("--- "));
+    assert!(result.stdout.contains("+++ "));
+    assert!(result.stdout.contains("-beta"));
+    assert!(result.stdout.contains("+BETA"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_file_realpath_du_and_readlink_flags() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_paths");
+    env.cwd = std::path::PathBuf::from(&root);
+
+    let file_path = format!("{root}/sample.txt");
+    std::fs::write(&file_path, "hello\nworld\n").unwrap();
+
+    let result = futures_lite::future::block_on(run_pipeline("file sample.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("sample.txt:"));
+    assert!(result.stdout.contains("ASCII text"));
+
+    let result = futures_lite::future::block_on(run_pipeline("realpath sample.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), file_path);
+
+    let result = futures_lite::future::block_on(run_pipeline("realpath missing.txt", &mut env));
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("No such file or directory"));
+
+    let result = futures_lite::future::block_on(run_pipeline("du -s .", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains(&root));
+
+    let result = futures_lite::future::block_on(run_pipeline("readlink -f ./sample.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), file_path);
+
+    let result = futures_lite::future::block_on(run_pipeline("readlink sample.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.trim().is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_head_tail_sed_cut_tr_and_tee_behaviors() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_text");
+    let lines_file = format!("{root}/lines.txt");
+    let tee_file = format!("{root}/tee.txt");
+    std::fs::write(&lines_file, "l1\nl2\nl3\nl4\n").unwrap();
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("echo -e 'l1\\nl2\\nl3\\nl4' | head -n 2", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.lines().collect::<Vec<_>>(), vec!["l1", "l2"]);
+
+    let result =
+        futures_lite::future::block_on(run_pipeline(&format!("tail -n 2 {lines_file}"), &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.lines().collect::<Vec<_>>(), vec!["l3", "l4"]);
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("echo 'foo foo' | sed 's/foo/bar/g'", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "bar bar");
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("echo 'a:b:c' | cut -d: -f2,3", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "b:c");
+
+    let result = futures_lite::future::block_on(run_pipeline("echo 'a:b' | cut -d:", &mut env));
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("must specify a list of fields"));
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("echo banana | tr -d an", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "b");
+
+    let result =
+        futures_lite::future::block_on(run_pipeline(&format!("echo first | tee {tee_file}"), &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "first");
+
+    let result = futures_lite::future::block_on(run_pipeline(
+        &format!("echo second | tee -a {tee_file}"),
+        &mut env,
+    ));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "second");
+    assert_eq!(std::fs::read_to_string(&tee_file).unwrap(), "first\nsecond\n");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_wc_multiple_files_includes_total() {
+    let mut env = ShellEnv::new();
+    let root = make_test_dir("coreutils_wc");
+    let file1 = format!("{root}/f1.txt");
+    let file2 = format!("{root}/f2.txt");
+
+    std::fs::write(&file1, "one two\n").unwrap();
+    std::fs::write(&file2, "three\nfour five\n").unwrap();
+
+    let result =
+        futures_lite::future::block_on(run_pipeline(&format!("wc -l -w {file1} {file2}"), &mut env));
+    assert_eq!(result.code, 0);
+
+    let lines: Vec<&str> = result.stdout.lines().collect();
+    assert_eq!(lines.len(), 3, "unexpected wc output: {}", result.stdout);
+    assert!(lines[0].contains("f1.txt"));
+    assert!(lines[1].contains("f2.txt"));
+    assert!(lines[2].contains("total"));
+    assert!(lines[2].trim_start().starts_with('3'));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn test_basename_dirname_env_and_printenv() {
+    let mut env = ShellEnv::new();
+    env.env_vars
+        .insert("COREUTILS_TEST_VAR".to_string(), "value123".to_string());
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("basename /tmp/example.txt .txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "example");
+
+    let result =
+        futures_lite::future::block_on(run_pipeline("dirname /tmp/example.txt", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "/tmp");
+
+    let result = futures_lite::future::block_on(run_pipeline("env", &mut env));
+    assert_eq!(result.code, 0);
+    assert!(result.stdout.contains("COREUTILS_TEST_VAR=value123"));
+
+    let result = futures_lite::future::block_on(run_pipeline("printenv COREUTILS_TEST_VAR", &mut env));
+    assert_eq!(result.code, 0);
+    assert_eq!(result.stdout.trim(), "value123");
+
+    let result = futures_lite::future::block_on(run_pipeline("printenv DOES_NOT_EXIST", &mut env));
+    assert_eq!(result.code, 1);
 }
 
 // ========================================================================

@@ -12,6 +12,7 @@ use super::env::{ShellEnv, ShellResult};
 use super::expand;
 use super::parser::ParsedCommand;
 use super::parser::ParsedRedirect;
+use futures::future::{join, join_all};
 use futures_lite::io::AsyncWriteExt;
 
 const PIPE_CAPACITY: usize = 65536;
@@ -168,6 +169,19 @@ async fn execute_pipeline(
         return Box::pin(execute_command(&commands[0], env, initial_stdin)).await;
     }
 
+    // Fast path: if every stage is a plain shell command, run the pipeline
+    // concurrently with connected pipes so producers/consumers can make progress.
+    // This avoids deadlocks like `yes | head -n 3` in the legacy sequential model.
+    match try_prepare_streaming_pipeline(commands, env).await {
+        Ok(Some(stages)) => {
+            return execute_prepared_streaming_pipeline(stages, initial_stdin).await;
+        }
+        Ok(None) => {
+            // Fall back to legacy behavior for complex stages.
+        }
+        Err(err) => return err,
+    }
+
     // Execute each command, threading stdout → stdin
     let mut current_stdin = initial_stdin;
     let mut final_result = ShellResult::success("");
@@ -204,6 +218,172 @@ async fn execute_pipeline(
         stderr: all_stderr,
         code: final_result.code,
     }
+}
+
+struct PreparedPipelineStage {
+    cmd_fn: super::commands::CommandFn,
+    args: Vec<String>,
+    env: ShellEnv,
+}
+
+/// Attempt to prepare a pipeline for streaming execution.
+///
+/// Returns:
+/// - `Ok(Some(...))` for fast-path eligible pipelines
+/// - `Ok(None)` when pipeline should use legacy sequential fallback
+/// - `Err(...)` for expansion/parse errors that should fail the command
+async fn try_prepare_streaming_pipeline(
+    commands: &[ParsedCommand],
+    env: &ShellEnv,
+) -> Result<Option<Vec<PreparedPipelineStage>>, ShellResult> {
+    let mut stages = Vec::with_capacity(commands.len());
+
+    for cmd in commands {
+        let ParsedCommand::Simple {
+            name,
+            args,
+            redirects,
+            env_vars,
+        } = cmd
+        else {
+            return Ok(None);
+        };
+
+        // Keep complex redirection/env assignment semantics in legacy path for now.
+        if !redirects.is_empty() || !env_vars.is_empty() {
+            return Ok(None);
+        }
+
+        let mut stage_env = env.subshell();
+
+        let expanded_name = match expand::expand_string(name, &stage_env, false) {
+            Ok(s) => s,
+            Err(e) => return Err(ShellResult::error(e, 1)),
+        };
+        let expanded_name =
+            super::pipeline::execute_command_substitutions(&expanded_name, &mut stage_env).await;
+
+        let mut expanded_args = Vec::new();
+        for arg in args {
+            let brace_expanded = expand::expand_braces(arg);
+            for be in brace_expanded {
+                let expanded = match expand::expand_string(&be, &stage_env, false) {
+                    Ok(s) => s,
+                    Err(e) => return Err(ShellResult::error(e, 1)),
+                };
+                let final_exp =
+                    super::pipeline::execute_command_substitutions(&expanded, &mut stage_env).await;
+                let glob_results = expand::expand_glob(
+                    &final_exp,
+                    &stage_env.cwd.to_string_lossy(),
+                    &stage_env.options,
+                );
+                expanded_args.extend(glob_results);
+            }
+        }
+
+        // If command doesn't resolve to a shell command, use legacy path
+        // (e.g., function calls or special builtins).
+        let Some(cmd_fn) = ShellCommands::get_command(&expanded_name) else {
+            return Ok(None);
+        };
+
+        stages.push(PreparedPipelineStage {
+            cmd_fn,
+            args: expanded_args,
+            env: stage_env,
+        });
+    }
+
+    Ok(Some(stages))
+}
+
+/// Execute a prepared pipeline concurrently with pipe-connected stages.
+async fn execute_prepared_streaming_pipeline(
+    stages: Vec<PreparedPipelineStage>,
+    initial_stdin: Option<Vec<u8>>,
+) -> ShellResult {
+    let stage_count = stages.len();
+    if stage_count == 0 {
+        return ShellResult::success("");
+    }
+
+    // stdin for stage 0
+    let (stage0_stdin_reader, mut stage0_stdin_writer) = piper::pipe(PIPE_CAPACITY);
+    if let Some(data) = initial_stdin {
+        let _ = stage0_stdin_writer.write_all(&data).await;
+    }
+    drop(stage0_stdin_writer);
+
+    // pipes between stages
+    let mut inter_readers: Vec<Option<piper::Reader>> = Vec::with_capacity(stage_count - 1);
+    let mut inter_writers: Vec<Option<piper::Writer>> = Vec::with_capacity(stage_count - 1);
+    for _ in 0..(stage_count - 1) {
+        let (r, w) = piper::pipe(PIPE_CAPACITY);
+        inter_readers.push(Some(r));
+        inter_writers.push(Some(w));
+    }
+
+    // final stdout pipe
+    let (final_stdout_reader, final_stdout_writer) = piper::pipe(PIPE_CAPACITY);
+    let mut final_stdout_writer = Some(final_stdout_writer);
+
+    // stderr pipe per stage (preserve stage-order aggregation)
+    let mut stderr_readers = Vec::with_capacity(stage_count);
+    let mut stderr_writers: Vec<Option<piper::Writer>> = Vec::with_capacity(stage_count);
+    for _ in 0..stage_count {
+        let (r, w) = piper::pipe(PIPE_CAPACITY);
+        stderr_readers.push(r);
+        stderr_writers.push(Some(w));
+    }
+
+    let mut stage0_stdin_reader = Some(stage0_stdin_reader);
+    let mut stage_futures = Vec::with_capacity(stage_count);
+
+    for (i, stage) in stages.into_iter().enumerate() {
+        let stdin_reader = if i == 0 {
+            stage0_stdin_reader
+                .take()
+                .expect("missing stage0 stdin reader")
+        } else {
+            inter_readers[i - 1]
+                .take()
+                .expect("missing intermediate stdin reader")
+        };
+
+        let stdout_writer = if i == stage_count - 1 {
+            final_stdout_writer
+                .take()
+                .expect("missing final stdout writer")
+        } else {
+            inter_writers[i]
+                .take()
+                .expect("missing intermediate stdout writer")
+        };
+
+        let stderr_writer = stderr_writers[i].take().expect("missing stderr writer");
+        let PreparedPipelineStage { cmd_fn, args, env } = stage;
+
+        stage_futures.push(async move { cmd_fn(args, &env, stdin_reader, stdout_writer, stderr_writer).await });
+    }
+
+    let stderr_futures: Vec<_> = stderr_readers.into_iter().map(drain_reader).collect();
+
+    let (codes, (stderr_chunks, stdout_bytes)) = join(
+        join_all(stage_futures),
+        join(join_all(stderr_futures), drain_reader(final_stdout_reader)),
+    )
+    .await;
+
+    let mut stderr = String::new();
+    for chunk in stderr_chunks {
+        stderr.push_str(&String::from_utf8_lossy(&chunk));
+    }
+
+    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+    let code = codes.last().copied().unwrap_or(0);
+
+    ShellResult { stdout, stderr, code }
 }
 
 /// Execute a simple command with stdin support

@@ -4648,6 +4648,7 @@ dependencies = [
  "bzip2",
  "console_error_panic_hook",
  "flate2",
+ "futures",
  "futures-lite",
  "itertools",
  "js-sys",

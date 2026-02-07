@@ -87,6 +87,7 @@ thiserror = "2"
 
 # Async executor for WASI
 futures-lite = "2"
+futures = "0.3"
 
 # Shell infrastructure
 piper = "0.2"            # Bounded SPSC async pipe
