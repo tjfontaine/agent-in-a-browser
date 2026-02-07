@@ -87,6 +87,8 @@ frontend/src/wasm/web-headless-agent/
 
 # Generated WIT bindings
 runtime/crates/*/src/bindings.rs
+!runtime/crates/wasmtime-runner/src/bindings.rs
+!runtime/crates/web-headless-agent/src/bindings.rs
 
 # Website build outputs
 website/dist/

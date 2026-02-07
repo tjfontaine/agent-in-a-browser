@@ -34,7 +34,7 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Check warning-free build
-        run: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --exclude wasmtime-runner
 
   rust-component:
     name: Build Rust WASM Component
@@ -98,6 +98,9 @@ jobs:
 
       - name: Verify main component
         run: wasm-tools component wit target/wasm32-wasip2/release/ts_runtime_mcp.wasm
+
+      - name: Check wasmtime-runner
+        run: cargo check -p wasmtime-runner
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
