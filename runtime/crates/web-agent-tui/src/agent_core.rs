@@ -11,6 +11,7 @@ use crate::display::{NoticeKind, ToolStatus};
 use crate::events::AgentEvent;
 use crate::servers::{RemoteServerEntry, ServerConnectionStatus, ToolCollector};
 use agent_bridge::decode_request_execution;
+use agent_bridge::{ConversationHistory, ConversationRole, ConversationTurn};
 use std::collections::VecDeque;
 
 // Simple server status for AgentCore
@@ -36,8 +37,8 @@ pub struct Message {
 
 /// Core agent state - no UI dependencies
 pub struct AgentCore {
-    /// Conversation history - API only (User/Assistant pairs)
-    messages: Vec<Message>,
+    /// Conversation history using unified conversation model
+    conversation: ConversationHistory,
     /// Rig-core Agent for multi-turn tool calling
     rig_agent: Option<RigAgent>,
     /// MCP client (local sandbox)
@@ -62,7 +63,7 @@ impl AgentCore {
     /// Create a new AgentCore with the given configuration
     pub fn new(config: Config, mcp_client: McpClient) -> Self {
         Self {
-            messages: Vec::new(),
+            conversation: ConversationHistory::new(),
             rig_agent: None,
             mcp_client,
             config,
@@ -77,17 +78,26 @@ impl AgentCore {
 
     // === Message Access ===
 
-    /// Get the conversation history
-    pub fn messages(&self) -> &[Message] {
-        &self.messages
+    /// Get the conversation history (backward compatibility)
+    /// Returns only user/assistant messages for display
+    pub fn messages(&self) -> Vec<Message> {
+        self.conversation
+            .user_assistant_messages()
+            .iter()
+            .map(|turn| Message {
+                role: match turn.role {
+                    ConversationRole::User => Role::User,
+                    ConversationRole::Assistant => Role::Assistant,
+                    _ => Role::Assistant, // Shouldn't happen given the filter
+                },
+                content: turn.content.clone(),
+            })
+            .collect()
     }
 
     /// Add a user message to history
     pub fn add_user_message(&mut self, content: &str) {
-        self.messages.push(Message {
-            role: Role::User,
-            content: content.to_string(),
-        });
+        self.conversation.append_turn(ConversationTurn::user(content));
         self.emit(AgentEvent::UserMessage {
             content: content.to_string(),
         });
@@ -95,27 +105,18 @@ impl AgentCore {
 
     /// Add an assistant message to history
     pub fn add_assistant_message(&mut self, content: &str) {
-        self.messages.push(Message {
-            role: Role::Assistant,
-            content: content.to_string(),
-        });
+        self.conversation
+            .append_turn(ConversationTurn::assistant(content));
     }
 
     /// Update the last assistant message (for streaming)
     pub fn update_last_assistant(&mut self, content: &str) {
-        if let Some(last) = self.messages.last_mut() {
-            if last.role == Role::Assistant {
-                last.content = content.to_string();
-            }
-        } else {
-            // Should not happen if stream started correctly, but handle gracefully
-            self.add_assistant_message(content);
-        }
+        self.conversation.update_last_assistant(content);
     }
 
     /// Clear conversation history
     pub fn clear_messages(&mut self) {
-        self.messages.clear();
+        self.conversation.clear();
     }
 
     // === Configuration ===
@@ -294,18 +295,24 @@ impl AgentCore {
 
         let agent = self.rig_agent.as_ref().unwrap();
 
-        // Convert history to Rig format
-        let history = self
-            .messages
+        // Get history from conversation (excludes current/last message)
+        let all_turns = self.conversation.turns();
+        let history_turns = if all_turns.len() > 0 {
+            &all_turns[..all_turns.len() - 1]
+        } else {
+            &[]
+        };
+
+        // Convert to Rig format (only user/assistant messages)
+        let history = history_turns
             .iter()
-            .take(if self.messages.len() > 0 {
-                self.messages.len() - 1
-            } else {
-                0
-            })
-            .map(|m| match m.role {
-                Role::User => rig::completion::Message::user(m.content.clone()),
-                Role::Assistant => rig::completion::Message::assistant(m.content.clone()),
+            .filter_map(|turn| match turn.role {
+                ConversationRole::User => Some(rig::completion::Message::user(&turn.content)),
+                ConversationRole::Assistant => {
+                    Some(rig::completion::Message::assistant(&turn.content))
+                }
+                // Tool calls/results are handled by rig internally
+                _ => None,
             })
             .collect();
 
@@ -442,9 +449,10 @@ mod tests {
         let mut core = AgentCore::new(test_config(), test_mcp_client());
         core.add_user_message("Hello, world!");
 
-        assert_eq!(core.messages().len(), 1);
-        assert_eq!(core.messages()[0].role, Role::User);
-        assert_eq!(core.messages()[0].content, "Hello, world!");
+        let messages = core.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, Role::User);
+        assert_eq!(messages[0].content, "Hello, world!");
     }
 
     #[test]
@@ -452,9 +460,10 @@ mod tests {
         let mut core = AgentCore::new(test_config(), test_mcp_client());
         core.add_assistant_message("I'm an assistant.");
 
-        assert_eq!(core.messages().len(), 1);
-        assert_eq!(core.messages()[0].role, Role::Assistant);
-        assert_eq!(core.messages()[0].content, "I'm an assistant.");
+        let messages = core.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, Role::Assistant);
+        assert_eq!(messages[0].content, "I'm an assistant.");
     }
 
     #[test]
@@ -463,8 +472,9 @@ mod tests {
         core.add_assistant_message("Partial...");
         core.update_last_assistant("Full response.");
 
-        assert_eq!(core.messages().len(), 1);
-        assert_eq!(core.messages()[0].content, "Full response.");
+        let messages = core.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Full response.");
     }
 
     #[test]
@@ -473,8 +483,9 @@ mod tests {
         core.update_last_assistant("New message");
 
         // Should add a new assistant message
-        assert_eq!(core.messages().len(), 1);
-        assert_eq!(core.messages()[0].role, Role::Assistant);
+        let messages = core.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, Role::Assistant);
     }
 
     #[test]
