@@ -67,7 +67,7 @@ impl<'a, R: PollableRead, W: Write> AppWidget<'a, R, W> {
 
         // Messages
         MessagesWidget::new(
-            self.app.agent.messages(),
+            &self.app.agent.messages(),
             &self.app.timeline,
             self.app.state,
             &theme,

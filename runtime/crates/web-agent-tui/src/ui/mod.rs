@@ -180,7 +180,7 @@ pub fn render_app<R: crate::PollableRead, W: std::io::Write>(
         app.state,
         app.input.text(),
         app.input.cursor_pos(),
-        app.agent.messages(),
+        &app.agent.messages(),
         &app.timeline,
         &app.aux_content,
         &app.server_status,

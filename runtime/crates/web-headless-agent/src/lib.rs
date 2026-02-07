@@ -225,7 +225,7 @@ enum AgentProvider {
 
 struct HeadlessAgent {
     provider: AgentProvider,
-    messages: Vec<Message>,
+    conversation: agent_bridge::ConversationHistory,
     events: std::collections::VecDeque<AgentEvent>,
     is_streaming: bool,
     max_turns: usize,
@@ -371,7 +371,7 @@ impl HeadlessAgent {
 
         Ok(Self {
             provider,
-            messages: Vec::new(),
+            conversation: agent_bridge::ConversationHistory::new(),
             events: std::collections::VecDeque::new(),
             is_streaming: false,
             max_turns,
@@ -389,23 +389,33 @@ impl HeadlessAgent {
         self.events.clear();
         self.last_tool_activity = None;
 
-        // Add user message to history
-        self.messages.push(Message {
-            role: MessageRole::User,
-            content: message.to_string(),
-        });
+        // Add user message to conversation history
+        self.conversation
+            .append_turn(agent_bridge::ConversationTurn::user(message));
 
         self.events.push_back(AgentEvent::StreamStart);
         self.is_streaming = true;
 
-        // Convert message history to rig format
-        let history: Vec<RigMessage> = self
-            .messages
+        // Get history from conversation (excludes current/last message)
+        let all_turns = self.conversation.turns();
+        let history_turns = if all_turns.len() > 0 {
+            &all_turns[..all_turns.len() - 1]
+        } else {
+            &[]
+        };
+
+        // Convert to Rig format (only user/assistant messages)
+        let history: Vec<RigMessage> = history_turns
             .iter()
-            .take(self.messages.len().saturating_sub(1)) // Exclude current message
-            .map(|m| match m.role {
-                MessageRole::User => RigMessage::user(&m.content),
-                MessageRole::Assistant => RigMessage::assistant(&m.content),
+            .filter_map(|turn| match turn.role {
+                agent_bridge::ConversationRole::User => {
+                    Some(RigMessage::user(&turn.content))
+                }
+                agent_bridge::ConversationRole::Assistant => {
+                    Some(RigMessage::assistant(&turn.content))
+                }
+                // Tool calls/results are handled by rig internally
+                _ => None,
             })
             .collect();
 
@@ -425,10 +435,8 @@ impl HeadlessAgent {
                         self.events.push_back(AgentEvent::StreamChunk(text.clone()));
                         self.events
                             .push_back(AgentEvent::StreamComplete(text.clone()));
-                        self.messages.push(Message {
-                            role: MessageRole::Assistant,
-                            content: text,
-                        });
+                        self.conversation
+                            .append_turn(agent_bridge::ConversationTurn::assistant(&text));
                     }
                     Err(e) => {
                         self.events.push_back(AgentEvent::StreamError(e));
@@ -561,10 +569,8 @@ impl HeadlessAgent {
                         .push_back(AgentEvent::StreamChunk(content.clone()));
                     self.events
                         .push_back(AgentEvent::StreamComplete(content.clone()));
-                    self.messages.push(Message {
-                        role: MessageRole::Assistant,
-                        content,
-                    });
+                    self.conversation
+                        .append_turn(agent_bridge::ConversationTurn::assistant(&content));
                     self.is_streaming = false;
                     self.active_stream = None;
                     self.events.push_back(AgentEvent::Ready);
@@ -594,11 +600,23 @@ impl HeadlessAgent {
     }
 
     fn get_history(&self) -> Vec<Message> {
-        self.messages.clone()
+        // Convert conversation to Message format for backward compatibility
+        self.conversation
+            .user_assistant_messages()
+            .iter()
+            .map(|turn| Message {
+                role: match turn.role {
+                    agent_bridge::ConversationRole::User => MessageRole::User,
+                    agent_bridge::ConversationRole::Assistant => MessageRole::Assistant,
+                    _ => MessageRole::Assistant, // Shouldn't happen given the filter
+                },
+                content: turn.content.clone(),
+            })
+            .collect()
     }
 
     fn clear_history(&mut self) {
-        self.messages.clear();
+        self.conversation.clear();
     }
 }
 
