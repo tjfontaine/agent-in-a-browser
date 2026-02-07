@@ -84,13 +84,7 @@ struct EscapeSequenceCapture {
 }
 
 impl Perform for EscapeSequenceCapture {
-    fn csi_dispatch(
-        &mut self,
-        params: &Params,
-        _intermediates: &[u8],
-        ignore: bool,
-        action: u8,
-    ) {
+    fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], ignore: bool, action: u8) {
         if ignore {
             self.key = None;
             return;
@@ -2009,7 +2003,10 @@ mod tests {
         assert_eq!(decode_escape_sequence(b"\x1b[4~"), Some(EscapeKey::End));
         assert_eq!(decode_escape_sequence(b"\x1b[3~"), Some(EscapeKey::Delete));
         assert_eq!(decode_escape_sequence(b"\x1b[5~"), Some(EscapeKey::PageUp));
-        assert_eq!(decode_escape_sequence(b"\x1b[6~"), Some(EscapeKey::PageDown));
+        assert_eq!(
+            decode_escape_sequence(b"\x1b[6~"),
+            Some(EscapeKey::PageDown)
+        );
     }
 
     #[test]
