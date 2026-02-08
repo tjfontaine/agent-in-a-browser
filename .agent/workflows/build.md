@@ -11,10 +11,35 @@ This workflow builds the Rust WASM components, runs tests, and transpiles for th
 - Rust toolchain with `wasm32-wasip2` target
 - `cargo-component` installed: `cargo install cargo-component`
 - `wit-deps-cli` installed: `cargo install wit-deps-cli`
+- `wit-bindgen-cli` installed: `cargo install wit-bindgen-cli`
+- `wasm-tools` installed: `cargo install wasm-tools`
 - Node.js 22+ and pnpm
 - Playwright browsers: `cd frontend && npx playwright install chromium`
 
 ## Steps
+
+### 0. Regenerate WIT Bindings (only when `.wit` files change)
+
+Each WASM crate uses selective symlinks in its `wit/deps/` directory pointing to `runtime/wit/deps/<package>` for WASI dependencies. This avoids conflicts with the crate's own package namespace.
+
+To regenerate bindings for a crate (e.g., tsx-engine):
+
+// turbo
+
+```bash
+cd runtime && wit-bindgen rust crates/tsx-engine/wit --world tsx-engine --runtime-path wit_bindgen_rt --generate-all --out-dir crates/tsx-engine/src/ && mv crates/tsx-engine/src/tsx_engine.rs crates/tsx-engine/src/bindings.rs
+```
+
+> **Note:** Only needed when WIT interfaces change. The generated `bindings.rs` is committed to the repo.
+
+If a crate's `wit/deps/` symlinks are missing, create them:
+
+```bash
+mkdir -p crates/<crate>/wit/deps
+for dep in io filesystem clocks http sockets random cli; do
+  ln -sf ../../../../wit/deps/$dep crates/<crate>/wit/deps/$dep
+done
+```
 
 ### 1. Build Rust WASM Components (Release)
 

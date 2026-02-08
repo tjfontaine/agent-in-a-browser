@@ -11,6 +11,8 @@ final class ConfigManagerTests: XCTestCase {
         defaults.removeObject(forKey: "apiKey")
         defaults.removeObject(forKey: "baseUrl")
         defaults.removeObject(forKey: "maxTurns")
+        defaults.removeObject(forKey: "bundleMode")
+        defaults.removeObject(forKey: "bundleRepairMode")
     }
     
     @MainActor
@@ -18,7 +20,7 @@ final class ConfigManagerTests: XCTestCase {
         let manager = ConfigManager()
         
         XCTAssertEqual(manager.provider, "anthropic")
-        XCTAssertEqual(manager.model, "claude-sonnet-4-20250514")
+        XCTAssertEqual(manager.model, "claude-sonnet-4-5")
         XCTAssertEqual(manager.apiKey, "")
         XCTAssertEqual(manager.baseUrl, "")
         XCTAssertEqual(manager.maxTurns, 25)
@@ -27,7 +29,7 @@ final class ConfigManagerTests: XCTestCase {
     @MainActor
     func testPersistence() throws {
         // Set values
-        var manager = ConfigManager()
+        let manager = ConfigManager()
         manager.provider = "openai"
         manager.model = "gpt-4o"
         manager.apiKey = "sk-test-key"
@@ -60,7 +62,8 @@ final class ConfigManagerTests: XCTestCase {
         XCTAssertEqual(config.maxTurns, 10)
         XCTAssertNotNil(config.mcpServers)
         XCTAssertEqual(config.mcpServers?.count, 1)
-        XCTAssertEqual(config.mcpServers?.first?.url, "wasm://mcp-server")
+        XCTAssertEqual(config.mcpServers?.first?.url, "http://127.0.0.1:9292")
+        XCTAssertEqual(config.mcpServers?.first?.name, "ios-tools")
     }
     
     @MainActor
@@ -89,7 +92,7 @@ final class ConfigManagerTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         
         XCTAssertEqual(json?["provider"] as? String, "anthropic")
-        XCTAssertEqual(json?["api_key"] as? String, "test-key")
-        XCTAssertNotNil(json?["mcp_servers"])
+        XCTAssertEqual(json?["apiKey"] as? String, "test-key")
+        XCTAssertNotNil(json?["mcpServers"])
     }
 }

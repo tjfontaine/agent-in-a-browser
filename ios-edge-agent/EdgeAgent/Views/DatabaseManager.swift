@@ -62,6 +62,18 @@ struct ConversationHistoryItem: Identifiable, Hashable {
     let createdAt: Date
 }
 
+struct ScriptRecord: Identifiable, Hashable {
+    let id: String
+    var name: String
+    var description: String?
+    var source: String
+    var permissions: [String]
+    var appId: String?
+    var version: String
+    let createdAt: Date
+    var updatedAt: Date
+}
+
 /// Manages SQLite database for view templates and app state persistence using GRDB
 /// GRDB is thread-safe, so no @MainActor needed
 public final class DatabaseManager: @unchecked Sendable {
@@ -79,6 +91,11 @@ public final class DatabaseManager: @unchecked Sendable {
         Log.app.info("DatabaseManager: Database path: \(dbPath.path)")
     }
     
+    /// Public access for repositories that need direct GRDB access.
+    func getDatabase() throws -> DatabaseQueue {
+        try ensureInitialized()
+    }
+
     /// Ensure the database is initialized (lazy initialization for direct queries)
     private func ensureInitialized() throws -> DatabaseQueue {
         if let dbQueue = dbQueue {
@@ -211,6 +228,24 @@ public final class DatabaseManager: @unchecked Sendable {
                     created_at TEXT NOT NULL
                 )
             """)
+
+            // Persistent script registry (legacy — kept for backward compat of ensureInitialized)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS scripts (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    source TEXT NOT NULL,
+                    permissions TEXT,
+                    app_id TEXT,
+                    version TEXT DEFAULT '1.0.0',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
+            // App-scoped bundle tables
+            try Self.createBundleTables(db)
             
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_nav_history_timestamp ON navigation_history(timestamp DESC)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_agent_memory_category ON agent_memory(category)")
@@ -220,6 +255,8 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_feedback_app_created ON feedback_items(app_id, created_at DESC)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tasks_app_updated ON app_tasks(app_id, updated_at DESC)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_conversation_app_created ON conversation_messages(app_id, created_at DESC)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_scripts_name ON scripts(name)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_scripts_app_id ON scripts(app_id)")
         }
         
         dbQueue = queue
@@ -227,6 +264,117 @@ public final class DatabaseManager: @unchecked Sendable {
         return queue
     }
     
+    // MARK: - App Bundle Tables
+
+    /// Creates the five app-scoped bundle tables. Called from both lazy and
+    /// async init paths ensuring the schema is identical in both code paths.
+    private static func createBundleTables(_ db: GRDB.Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_templates (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                version TEXT NOT NULL,
+                template TEXT NOT NULL,
+                default_data TEXT,
+                animation TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(app_id, name)
+            )
+        """)
+
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_scripts (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                source TEXT NOT NULL,
+                required_capabilities TEXT,
+                metadata TEXT,
+                version TEXT NOT NULL DEFAULT '1.0.0',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(app_id, name)
+            )
+        """)
+
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_bundle_revisions (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                summary TEXT,
+                bundle_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                promoted_at TEXT
+            )
+        """)
+
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_runs (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                revision_id TEXT NOT NULL,
+                entrypoint TEXT NOT NULL,
+                status TEXT NOT NULL,
+                failure_signature TEXT,
+                started_at TEXT NOT NULL,
+                ended_at TEXT
+            )
+        """)
+
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_repair_attempts (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                app_id TEXT NOT NULL,
+                revision_id TEXT NOT NULL,
+                attempt_no INTEGER NOT NULL,
+                patch_summary TEXT,
+                outcome TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT
+            )
+        """)
+
+        // Indexes for app bundle tables
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_app_templates_app ON app_templates(app_id, updated_at DESC)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_app_scripts_app ON app_scripts(app_id, updated_at DESC)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bundle_revisions_app ON app_bundle_revisions(app_id, created_at DESC)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_app_runs_app ON app_runs(app_id, started_at DESC)")
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_repair_attempts_run ON app_repair_attempts(run_id, attempt_no)")
+
+        // Phase 3: Bindings table for revision fidelity
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_bindings (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                template TEXT NOT NULL,
+                component_path TEXT NOT NULL,
+                action_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_app_bindings_app ON app_bindings(app_id)")
+
+        // Phase 4: Permission audit log
+        try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS app_permission_audit (
+                id TEXT PRIMARY KEY,
+                app_id TEXT NOT NULL,
+                script_name TEXT NOT NULL,
+                capability TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        """)
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_permission_audit_app ON app_permission_audit(app_id, timestamp DESC)")
+    }
+
     // MARK: - Database Setup
     
     /// Initialize the database with schema
@@ -363,6 +511,24 @@ public final class DatabaseManager: @unchecked Sendable {
                         created_at TEXT NOT NULL
                     )
                 """)
+
+                // Persistent script registry (legacy)
+                try db.execute(sql: """
+                    CREATE TABLE IF NOT EXISTS scripts (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        description TEXT,
+                        source TEXT NOT NULL,
+                        permissions TEXT,
+                        app_id TEXT,
+                        version TEXT DEFAULT '1.0.0',
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                """)
+
+                // App-scoped bundle tables
+                try Self.createBundleTables(db)
                 
                 // Create indexes
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_nav_history_timestamp ON navigation_history(timestamp DESC)")
@@ -373,6 +539,8 @@ public final class DatabaseManager: @unchecked Sendable {
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_feedback_app_created ON feedback_items(app_id, created_at DESC)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tasks_app_updated ON app_tasks(app_id, updated_at DESC)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_conversation_app_created ON conversation_messages(app_id, created_at DESC)")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_scripts_name ON scripts(name)")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_scripts_app_id ON scripts(app_id)")
             }
             
             Log.app.info("DatabaseManager: Database initialized successfully")
@@ -1074,11 +1242,11 @@ public final class DatabaseManager: @unchecked Sendable {
     
     // MARK: - Helpers
 
-    private func iso8601Now() -> String {
+    func iso8601Now() -> String {
         ISO8601DateFormatter().string(from: Date())
     }
 
-    private func parseDate(_ raw: String?) -> Date {
+    func parseDate(_ raw: String?) -> Date {
         guard let raw else { return Date() }
 
         let iso = ISO8601DateFormatter()
@@ -1253,6 +1421,204 @@ public final class DatabaseManager: @unchecked Sendable {
     private func escapeSql(_ str: String) -> String {
         return str.replacingOccurrences(of: "'", with: "''")
     }
+
+    // MARK: - Script Registry
+
+    /// Save or update a script, also writing the source to the sandbox filesystem.
+    @discardableResult
+    func saveScript(
+        name: String,
+        source: String,
+        description: String? = nil,
+        permissions: [String] = [],
+        appId: String? = nil,
+        version: String = "1.0.0"
+    ) throws -> ScriptRecord {
+        try validateScriptName(name)
+        
+        let dbQueue = try ensureInitialized()
+        let now = iso8601Now()
+
+        // Check if a script with this name already exists
+        let existing = try getScript(name: name)
+        let id = existing?.id ?? UUID().uuidString
+
+        let permsJSON: String? = permissions.isEmpty ? nil : {
+            if let data = try? JSONSerialization.data(withJSONObject: permissions) {
+                return String(data: data, encoding: .utf8)
+            }
+            return nil
+        }()
+
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO scripts
+                    (id, name, description, source, permissions, app_id, version, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM scripts WHERE id = ?), ?), ?)
+                """,
+                arguments: [id, name, description, source, permsJSON, appId, version, id, now, now]
+            )
+            
+            // Keep DB + filesystem in sync: fail the write transaction if file write fails.
+            try self.writeScriptToSandbox(name: name, source: source)
+        }
+
+        Log.app.info("DatabaseManager: Saved script '\(name)' v\(version)")
+        return try getScript(name: name) ?? ScriptRecord(
+            id: id,
+            name: name,
+            description: description,
+            source: source,
+            permissions: permissions,
+            appId: appId,
+            version: version,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+
+    /// List all scripts (lightweight — no source code included).
+    func listScripts(appId: String? = nil) throws -> [ScriptRecord] {
+        let dbQueue = try ensureInitialized()
+        let sql: String
+        let args: [DatabaseValueConvertible?]
+        if let appId {
+            sql = "SELECT * FROM scripts WHERE app_id = ? ORDER BY updated_at DESC"
+            args = [appId]
+        } else {
+            sql = "SELECT * FROM scripts ORDER BY updated_at DESC"
+            args = []
+        }
+        let rows = try dbQueue.read { db in
+            try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+        }
+        return rows.compactMap { script(from: $0) }
+    }
+
+    /// Get a single script by name (includes source).
+    func getScript(name: String) throws -> ScriptRecord? {
+        let dbQueue = try ensureInitialized()
+        let row = try dbQueue.read { db in
+            try Row.fetchOne(db, sql: "SELECT * FROM scripts WHERE name = ?", arguments: [name])
+        }
+        guard let row else { return nil }
+        return script(from: row)
+    }
+
+    /// Delete a script by name and remove its sandbox file.
+    func deleteScript(name: String) throws {
+        let dbQueue = try ensureInitialized()
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM scripts WHERE name = ?", arguments: [name])
+        }
+        removeScriptFromSandbox(name: name)
+        Log.app.info("DatabaseManager: Deleted script '\(name)'")
+    }
+
+    /// Path to a script on the sandbox filesystem (relative to sandbox root).
+    static func scriptSandboxPath(name: String) -> String {
+        "/scripts/\(name).ts"
+    }
+
+    /// Path to an app-scoped script on the sandbox filesystem.
+    static func appScriptSandboxPath(appId: String, name: String) -> String {
+        "/apps/\(appId)/scripts/\(name).ts"
+    }
+    
+    static func isValidScriptName(_ name: String) -> Bool {
+        name.range(
+            of: #"^[a-z0-9]+(?:-[a-z0-9]+)*$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    static func validateScriptName(_ name: String) throws {
+        guard isValidScriptName(name) else {
+            throw DatabaseError.invalidScriptName(name)
+        }
+    }
+    
+    private func validateScriptName(_ name: String) throws {
+        guard Self.isValidScriptName(name) else {
+            throw DatabaseError.invalidScriptName(name)
+        }
+    }
+
+    /// Write a script's source to the WASM sandbox filesystem.
+    private func writeScriptToSandbox(name: String, source: String) throws {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let scriptsDir = docs.appendingPathComponent("sandbox/scripts")
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: scriptsDir.path) {
+            try fm.createDirectory(at: scriptsDir, withIntermediateDirectories: true)
+        }
+        let filePath = scriptsDir.appendingPathComponent("\(name).ts")
+        try source.write(to: filePath, atomically: true, encoding: .utf8)
+        Log.app.debug("DatabaseManager: Wrote script to \(filePath.path)")
+    }
+
+    /// Remove a script file from the sandbox filesystem.
+    private func removeScriptFromSandbox(name: String) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let filePath = docs.appendingPathComponent("sandbox/scripts/\(name).ts")
+        try? FileManager.default.removeItem(at: filePath)
+    }
+
+    // MARK: - App-Scoped Sandbox Helpers
+
+    /// Write an app-scoped script's source to the WASM sandbox filesystem.
+    func writeScriptToAppSandbox(appId: String, name: String, source: String) throws {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let scriptsDir = docs.appendingPathComponent("sandbox/apps/\(appId)/scripts")
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: scriptsDir.path) {
+            try fm.createDirectory(at: scriptsDir, withIntermediateDirectories: true)
+        }
+        let filePath = scriptsDir.appendingPathComponent("\(name).ts")
+        try source.write(to: filePath, atomically: true, encoding: .utf8)
+        Log.app.debug("DatabaseManager: Wrote app script to \(filePath.path)")
+    }
+
+    /// Remove an app-scoped script file from the sandbox filesystem.
+    func removeScriptFromAppSandbox(appId: String, name: String) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let filePath = docs.appendingPathComponent("sandbox/apps/\(appId)/scripts/\(name).ts")
+        try? FileManager.default.removeItem(at: filePath)
+    }
+
+    private func script(from row: Row) -> ScriptRecord? {
+        let id: String? = row["id"]
+        let name: String? = row["name"]
+        let source: String? = row["source"]
+        guard let id, let name, let source else { return nil }
+
+        let description: String? = row["description"]
+        let permsRaw: String? = row["permissions"]
+        let appId: String? = row["app_id"]
+        let version: String = row["version"] ?? "1.0.0"
+        let createdAt: String? = row["created_at"]
+        let updatedAt: String? = row["updated_at"]
+
+        var permissions: [String] = []
+        if let permsRaw,
+           let data = permsRaw.data(using: .utf8),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [String] {
+            permissions = decoded
+        }
+
+        return ScriptRecord(
+            id: id,
+            name: name,
+            description: description,
+            source: source,
+            permissions: permissions,
+            appId: appId,
+            version: version,
+            createdAt: parseDate(createdAt),
+            updatedAt: parseDate(updatedAt)
+        )
+    }
 }
 
 // MARK: - Errors
@@ -1260,6 +1626,7 @@ public final class DatabaseManager: @unchecked Sendable {
 public enum DatabaseError: Error, LocalizedError {
     case initializationFailed(String)
     case queryFailed(String)
+    case invalidScriptName(String)
     
     public var errorDescription: String? {
         switch self {
@@ -1267,6 +1634,8 @@ public enum DatabaseError: Error, LocalizedError {
             return "Database initialization failed: \(reason)"
         case .queryFailed(let reason):
             return "Database query failed: \(reason)"
+        case .invalidScriptName(let name):
+            return "Invalid script name '\(name)'. Use kebab-case (lowercase letters, numbers, and dashes only)."
         }
     }
 }

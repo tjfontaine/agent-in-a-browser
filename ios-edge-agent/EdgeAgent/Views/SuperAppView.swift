@@ -1,14 +1,8 @@
 import SwiftUI
 import MCPServerKit
+import WASIShims
 
-private enum WorkspaceMode: String, CaseIterable, Identifiable {
-    case build = "Build"
-    case preview = "Preview"
-    case data = "Data"
-    case logs = "Logs"
 
-    var id: String { rawValue }
-}
 
 private struct ActivityLogEntry: Identifiable, Hashable {
     let id: UUID
@@ -39,14 +33,18 @@ struct SuperAppView: View {
     @StateObject private var agent = NativeAgentHost.shared
     @StateObject private var componentState = ComponentState()
     @ObservedObject private var viewRegistry = ViewRegistry.shared
+    
+    /// Event handler for script-first action dispatch
+    private let eventHandler = EventHandler()
 
     @State private var hasInitialized = false
     @State private var showSettings = false
-    @State private var showProjectManager = false
+
+    @State private var showLogs = false
     @State private var showInput = true
     @State private var loadError: String?
 
-    @State private var selectedMode: WorkspaceMode = .build
+
     @State private var inputText = ""
     @State private var newProjectName = ""
     @State private var conversationSearchQuery = ""
@@ -68,9 +66,26 @@ struct SuperAppView: View {
     @State private var tasks: [SuperAppTask] = []
     @State private var conversationHistory: [ConversationHistoryItem] = []
     @State private var activityLog: [ActivityLogEntry] = []
-
+    
+    // ask_user state
+    @State private var pendingAskUserId: String?
+    @State private var pendingAskUserType: String = "confirm"
+    @State private var pendingAskUserPrompt: String = ""
+    @State private var pendingAskUserOptions: [String]?
+    @State private var askUserTextInput: String = ""
+    
+    // Live activity bar state
+    @State private var agentProgressStep: Int = 0
+    @State private var agentProgressTotal: Int = 0
+    @State private var agentProgressDescription: String = ""
+    @State private var currentToolName: String = ""
+    @State private var isAgentWorking: Bool = false
+    
+    // Conversation timeline + mid-stream interjection
+    @State private var timelineEntries: [TimelineEntry] = []
+    @State private var queuedInterjection: String? = nil
     private let feedbackSeverities = ["low", "medium", "high", "critical"]
-    private let projectStatuses = ["active", "paused", "archived"]
+
 
     private var activeProject: SuperAppProject? {
         projects.first(where: { $0.id == activeProjectId })
@@ -87,29 +102,100 @@ struct SuperAppView: View {
     }
 
     private var previewRenderArea: some View {
-        ScrollView {
-            if let error = loadError {
-                errorView(error)
-            } else if !viewRegistry.renderedComponents.isEmpty {
-                viewRegistryGrid
-            } else if !componentState.rootComponents.isEmpty {
-                componentGrid
-            } else if !agent.currentStreamText.isEmpty {
-                thinkingView
-            } else {
-                emptyStateView
+        AppCanvasView(
+            componentState: componentState,
+            viewRegistry: viewRegistry,
+            isAgentStreaming: isAgentWorking,
+            streamText: agent.currentStreamText,
+            loadError: loadError,
+            onAction: { action, payload in
+                handleAction(action, payload: payload)
+            },
+            onAnnotate: { componentType, key, props in
+                // Pre-fill input with component context for targeted feedback
+                let label = (props["text"] as? String) ?? (props["title"] as? String) ?? key
+                let context = "[\(componentType) \"\(label)\"] "
+                inputText = context
+                addTimelineEntry(.systemNote("Annotating \(componentType): \(label)"))
+                // Haptic feedback
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+            },
+            onRetry: {
+                loadError = nil
+                setupAgentIfNeeded(force: true)
             }
-        }
+        )
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
-            modePicker
-            modeContent
-
-            if showInput && agent.isReady && (selectedMode == .build || selectedMode == .preview) {
-                inputArea
+        Group {
+            if activeProjectId == nil {
+                // FTUE / launcher when no project is active
+                LauncherView(
+                    projects: projects,
+                    onSelectProject: { project in
+                        activeProjectId = project.id
+                        Task {
+                            await loadActiveProjectDataAndRestoreState()
+                            setupAgentIfNeeded(force: false)
+                        }
+                    },
+                    onNewProject: {
+                        quickStartProject()
+                    }
+                )
+            } else {
+                // Active workspace — canvas-first layout
+                VStack(spacing: 0) {
+                    canvasHeader
+                    
+                    ZStack(alignment: .bottom) {
+                        // Full-screen canvas
+                        previewRenderArea
+                        
+                        // Agent overlay at bottom
+                        VStack(spacing: 0) {
+                            // Conversation timeline (collapsible)
+                            if !timelineEntries.isEmpty {
+                                Divider()
+                                ConversationTimeline(entries: timelineEntries)
+                                    .frame(maxHeight: 200)
+                                    .background(Color(.systemBackground).opacity(0.95))
+                            }
+                            
+                            if showInput && agent.isReady {
+                                AgentOverlayView(
+                                    inputText: $inputText,
+                                    isAgentWorking: isAgentWorking,
+                                    currentToolName: currentToolName,
+                                    progressStep: agentProgressStep,
+                                    progressTotal: agentProgressTotal,
+                                    progressDescription: agentProgressDescription,
+                                    pendingAskUserId: pendingAskUserId,
+                                    pendingAskUserType: pendingAskUserType,
+                                    pendingAskUserPrompt: pendingAskUserPrompt,
+                                    pendingAskUserOptions: pendingAskUserOptions,
+                                    askUserTextInput: $askUserTextInput,
+                                    onSend: { sendMessage() },
+                                    onResolveAskUser: { response in
+                                        resolveAskUserResponse(response)
+                                    },
+                                    onStop: {
+                                        agent.cancel()
+                                        isAgentWorking = false
+                                        currentToolName = ""
+                                        agentProgressStep = 0
+                                        agentProgressTotal = 0
+                                        agentProgressDescription = ""
+                                        appendLog(level: "system", "Stop requested by user")
+                                        addTimelineEntry(.systemNote("Agent stopped by user"))
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         .onAppear {
@@ -126,9 +212,18 @@ struct SuperAppView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .sheet(isPresented: $showProjectManager) {
-            projectManagerView
+        .sheet(isPresented: $showLogs) {
+            NavigationStack {
+                logsModeView
+                    .navigationTitle("Logs")
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showLogs = false }
+                        }
+                    }
+            }
         }
+
         .alert(
             "Potentially Destructive Change",
             isPresented: $showGuardrailConfirmation,
@@ -150,122 +245,57 @@ struct SuperAppView: View {
 
     // MARK: - Top Level UI
 
-    private var headerView: some View {
+    private var canvasHeader: some View {
         HStack(spacing: 12) {
-            if selectedMode == .preview && viewRegistry.navigationStack.count > 1 {
+            // Back to launcher
+            Button(action: { activeProjectId = nil }) {
+                Image(systemName: "chevron.left")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            
+            // Nav back for SDUI stack
+            if viewRegistry.navigationStack.count > 1 {
                 Button(action: {
                     viewRegistry.popView()
                     appendLog(level: "nav", "Popped preview navigation stack")
                 }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title3)
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.caption)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-
-            Button(action: { showProjectManager = true }) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(activeProject?.name ?? "Select Project")
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(activeProject?.status.capitalized ?? "No project")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-
+            
+            Text(activeProject?.name ?? "Untitled")
+                .font(.headline)
+                .lineLimit(1)
+            
             Spacer()
-
-            Text("Edge Super App")
-                .font(.title3.weight(.semibold))
-
-            Text("Native")
-                .font(.caption)
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.green)
-                .cornerRadius(6)
-
-            Spacer()
-
+            
             if !agent.isReady && loadError == nil {
                 ProgressView().controlSize(.small)
             }
-
-            Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
+            
+            Menu {
+                Button(action: { showLogs = true }) {
+                    Label("Logs", systemImage: "text.alignleft")
+                }
+                Button(action: { showSettings = true }) {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
                     .font(.title3)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
         }
-        .padding()
+        .padding(.horizontal)
+        .padding(.vertical, 8)
         .background(Color(.systemBackground))
     }
 
-    private var modePicker: some View {
-        Picker("Mode", selection: $selectedMode) {
-            ForEach(WorkspaceMode.allCases) { mode in
-                Text(mode.rawValue).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.bottom, 10)
-    }
 
-    @ViewBuilder
-    private var modeContent: some View {
-        switch selectedMode {
-        case .build:
-            buildModeView
-        case .preview:
-            previewRenderArea
-        case .data:
-            dataModeView
-        case .logs:
-            logsModeView
-        }
-    }
-
-    private var buildModeView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                projectOverviewCard
-                guardrailsCard
-                tasksCard
-                revisionsCard
-                feedbackCard
-                conversationCard
-            }
-            .padding()
-        }
-    }
-
-    private var dataModeView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if let activeProject {
-                    dataRow("Project ID", activeProject.id)
-                    dataRow("Status", activeProject.status)
-                    dataRow("Current Revision", activeProject.currentRevisionId ?? "None")
-                    dataRow("Last Prompt", activeProject.lastPrompt ?? "None")
-                    dataRow("Use Conversation Context", activeProject.useConversationContext ? "Yes" : "No")
-                    dataRow("Guardrails", activeProject.guardrailsEnabled ? "Enabled" : "Disabled")
-                    dataRow("Require Plan Approval", activeProject.requirePlanApproval ? "Yes" : "No")
-                    dataRow("Revisions", "\(revisions.count)")
-                    dataRow("Open Feedback", "\(feedbackItems.filter { $0.status == "open" }.count)")
-                    dataRow("Tasks", "\(tasks.count)")
-                    dataRow("Conversation Messages", "\(conversationHistory.count)")
-                } else {
-                    Text("No active project selected")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-        }
-    }
 
     private var logsModeView: some View {
         ScrollView {
@@ -285,315 +315,6 @@ struct SuperAppView: View {
                 }
             }
             .padding()
-        }
-    }
-
-    // MARK: - Build Mode Cards
-
-    private var projectOverviewCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Project Workspace")
-                .font(.headline)
-            if let activeProject {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(activeProject.name).font(.title3.weight(.semibold))
-                        Text(activeProject.summary ?? "No summary yet")
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Menu {
-                        ForEach(projectStatuses, id: \.self) { status in
-                            Button(status.capitalized) {
-                                updateActiveProjectStatus(status)
-                            }
-                        }
-                    } label: {
-                        Text(activeProject.status.capitalized)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.orange.opacity(0.15))
-                            .clipShape(Capsule())
-                    }
-                }
-            } else {
-                Text("Create or select a project to begin.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var guardrailsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Guardrails")
-                .font(.headline)
-
-            Toggle(
-                "Enable guardrails for destructive operations",
-                isOn: Binding(
-                    get: { activeProject?.guardrailsEnabled ?? true },
-                    set: { updateActiveProjectFlags(guardrailsEnabled: $0) }
-                )
-            )
-
-            Toggle(
-                "Require plan approval before destructive changes",
-                isOn: Binding(
-                    get: { activeProject?.requirePlanApproval ?? true },
-                    set: { updateActiveProjectFlags(requirePlanApproval: $0) }
-                )
-            )
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var tasksCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Milestones & Tasks")
-                .font(.headline)
-
-            if tasks.isEmpty {
-                Text("No tasks yet. Prompts and feedback create tasks automatically.")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            } else {
-                ForEach(Array(tasks.prefix(8)), id: \.id) { task in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(task.title).font(.subheadline.weight(.medium))
-                            Text(task.details ?? task.source)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(task.status)
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.gray.opacity(0.2))
-                            .clipShape(Capsule())
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var revisionsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Revisions")
-                .font(.headline)
-
-            if revisions.isEmpty {
-                Text("No revisions yet. Sending a build prompt creates a draft revision.")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            } else {
-                ForEach(Array(revisions.prefix(10)), id: \.id) { revision in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(revision.summary)
-                                    .font(.subheadline.weight(.semibold))
-                                Text("\(revision.status.capitalized) • \(relativeTime(revision.createdAt))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if (revision.status == "draft" || revision.status == "ready"), revision.afterSnapshot != nil {
-                                Button("Promote") {
-                                    promoteRevision(revision)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
-                                Button("Discard", role: .destructive) {
-                                    discardRevision(revision)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            } else if revision.status == "draft" {
-                                Text("In progress")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .background(Color(.tertiarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var feedbackCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Structured Feedback")
-                .font(.headline)
-
-            TextField("What should change?", text: $feedbackWhat)
-                .textFieldStyle(.roundedBorder)
-            TextField("Why does this need to change?", text: $feedbackWhy)
-                .textFieldStyle(.roundedBorder)
-            TextField("Target screen (optional)", text: $feedbackTargetScreen)
-                .textFieldStyle(.roundedBorder)
-            Picker("Severity", selection: $feedbackSeverity) {
-                ForEach(feedbackSeverities, id: \.self) { severity in
-                    Text(severity.capitalized).tag(severity)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Button("Submit Feedback") {
-                submitStructuredFeedback()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(feedbackWhat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || feedbackWhy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            if !feedbackItems.isEmpty {
-                Divider().padding(.vertical, 4)
-                ForEach(Array(feedbackItems.prefix(8)), id: \.id) { item in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("[\(item.severity.uppercased())] \(item.what)")
-                                .font(.subheadline.weight(.medium))
-                            Text(item.why)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let target = item.targetScreen, !target.isEmpty {
-                                Text("Target: \(target)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Menu(item.status.capitalized) {
-                            Button("Open") { updateFeedbackStatus(item, status: "open") }
-                            Button("Applied") { updateFeedbackStatus(item, status: "applied") }
-                            Button("Rejected") { updateFeedbackStatus(item, status: "rejected") }
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var conversationCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Conversation History")
-                    .font(.headline)
-                Spacer()
-                Button("Clear") {
-                    clearConversationHistory()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-
-            Toggle(
-                "Use conversation history for context",
-                isOn: Binding(
-                    get: { activeProject?.useConversationContext ?? true },
-                    set: { updateActiveProjectFlags(useConversationContext: $0) }
-                )
-            )
-
-            TextField("Search conversation history", text: $conversationSearchQuery)
-                .textFieldStyle(.roundedBorder)
-
-            if filteredConversationHistory.isEmpty {
-                Text("No conversation history for this project.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(filteredConversationHistory.prefix(12)), id: \.id) { message in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("[\(message.role.uppercased())] \(message.content)")
-                            .font(.caption)
-                            .lineLimit(3)
-                        Text(relativeTime(message.createdAt))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color(.tertiarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    // MARK: - Project Manager
-
-    private var projectManagerView: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                HStack {
-                    TextField("New project name", text: $newProjectName)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Create") {
-                        createProject()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .padding(.horizontal)
-
-                List(projects) { project in
-                    Button(action: {
-                        if let pendingTurn, pendingTurn.projectId != project.id {
-                            appendLog(level: "guardrail", "Cannot switch projects while a build request is still running")
-                            return
-                        }
-                        activeProjectId = project.id
-                        showProjectManager = false
-                    }) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(project.name)
-                                    .font(.headline)
-                                if project.id == activeProjectId {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                            Text(project.summary ?? "No summary")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(project.status.capitalized) • Updated \(relativeTime(project.updatedAt))")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Projects")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showProjectManager = false
-                    }
-                }
-            }
         }
     }
 
@@ -673,25 +394,18 @@ struct SuperAppView: View {
         .animation(.spring(response: 0.3), value: viewRegistry.renderedComponents.count)
     }
 
-    private var inputArea: some View {
-        HStack {
-            TextField("Build or improve this app by...", text: $inputText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { sendMessage() }
 
-            Button(action: sendMessage) {
-                Image(systemName: "paperplane.fill")
-                    .foregroundColor(.white)
-                    .padding(10)
-                    .background(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.orange)
-                    .clipShape(Circle())
-            }
-            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    
+
+    
+    private func resolveAskUserResponse(_ response: String) {
+        guard let requestId = pendingAskUserId else { return }
+        withAnimation {
+            pendingAskUserId = nil
         }
-        .padding()
-        .background(Color(.systemBackground))
+        MCPServer.shared.resolveAskUser(requestId: requestId, response: response)
     }
-
+    
     // MARK: - Workspace Initialization
 
     private func initializeWorkspace() {
@@ -731,6 +445,91 @@ struct SuperAppView: View {
 
         MCPServer.shared.onShowView = { _, _ in
             componentState.rootComponents = []
+        }
+        
+        MCPServer.shared.onAskUser = { requestId, askType, prompt, options in
+            pendingAskUserId = requestId
+            pendingAskUserType = askType
+            pendingAskUserPrompt = prompt
+            pendingAskUserOptions = options
+            askUserTextInput = ""
+        }
+        
+        // Wire EventHandler callbacks for script-first action dispatch
+        eventHandler.onAgentMessage = { [weak agent] message in
+            agent?.send(message)
+        }
+        
+        eventHandler.onToast = { message in
+            Log.app.info("Toast: \(message)")
+        }
+        
+        let registry = viewRegistry
+        eventHandler.onRenderComponents = { components in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                registry.renderedComponents = components
+            }
+        }
+        
+        eventHandler.onShellEval = { command in
+            // Execute via local shell-tools MCP server (port 9293)
+            guard NativeMCPHost.shared.isReady else {
+                return (false, "Shell tools not available")
+            }
+            
+            do {
+                let url = URL(string: "http://127.0.0.1:9293/mcp")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let rpcBody: [String: Any] = [
+                    "jsonrpc": "2.0",
+                    "method": "tools/call",
+                    "id": UUID().uuidString,
+                    "params": [
+                        "name": "shell_eval",
+                        "arguments": ["command": command]
+                    ]
+                ]
+                request.httpBody = try JSONSerialization.data(withJSONObject: rpcBody)
+                
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse,
+                      httpResponse.statusCode == 200 else {
+                    let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    return (false, "Shell eval HTTP error: \(statusCode)")
+                }
+                
+                // Parse MCP response
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let result = json["result"] as? [String: Any],
+                   let content = result["content"] as? [[String: Any]],
+                   let first = content.first,
+                   let text = first["text"] as? String {
+                    let isError = result["isError"] as? Bool ?? false
+                    return (!isError, text)
+                }
+                
+                return (true, String(data: data, encoding: .utf8))
+            } catch {
+                return (false, "Shell eval error: \(error.localizedDescription)")
+            }
+        }
+        
+        eventHandler.onScriptEval = { code, file, args, appId, scriptName in
+            if let code = code {
+                return await ScriptExecutor.shared.eval(code: code)
+            } else if let file = file {
+                return await ScriptExecutor.shared.evalFile(
+                    path: file,
+                    args: args,
+                    appId: appId ?? "global",
+                    scriptName: scriptName ?? "global"
+                )
+            }
+            return (false, "script_eval requires 'code' or 'file'")
         }
 
         Task {
@@ -801,12 +600,22 @@ struct SuperAppView: View {
             return
         }
 
+        // Mid-stream interjection: if agent is working, queue the input
+        if pendingTurn != nil && isAgentWorking {
+            queuedInterjection = prompt
+            inputText = ""
+            addTimelineEntry(.userMessage("[queued] \(prompt)"))
+            appendLog(level: "system", "Interjection queued — will send after current turn")
+            return
+        }
+        
         if pendingTurn != nil {
             appendLog(level: "guardrail", "A build request is already running. Wait for it to complete before sending another.")
             return
         }
 
         inputText = ""
+        addTimelineEntry(.userMessage(prompt))
 
         if activeProject.guardrailsEnabled && isPotentiallyDestructive(prompt) {
             pendingGuardrailPrompt = prompt
@@ -953,15 +762,38 @@ struct SuperAppView: View {
                 }
             }
         case .toolCall(let name):
+            currentToolName = name
             appendLog(level: "tool", "Tool call: \(name)")
+            addTimelineEntry(.toolCall(name: name))
         case .toolResult(let name, let output, let isError):
             appendLog(level: isError ? "error" : "tool", "Tool result (\(name)): \(output.prefix(120))")
+            addTimelineEntry(.toolResult(name: name, output: output, isError: isError))
         case .complete(let text):
+            isAgentWorking = false
+            currentToolName = ""
+            agentProgressStep = 0
+            agentProgressTotal = 0
+            agentProgressDescription = ""
+            if !text.isEmpty {
+                addTimelineEntry(.agentText(text))
+            }
             Task {
                 await finalizePendingRevisionAndTask(success: true, output: text)
+                // Replay queued interjection if any
+                if let interjection = queuedInterjection {
+                    queuedInterjection = nil
+                    addTimelineEntry(.systemNote("Replaying queued interjection..."))
+                    await dispatchUserPrompt(interjection, destructiveApproved: false)
+                }
             }
             appendLog(level: "agent", "Agent completed response")
         case .error(let message):
+            isAgentWorking = false
+            currentToolName = ""
+            agentProgressStep = 0
+            agentProgressTotal = 0
+            agentProgressDescription = ""
+            addTimelineEntry(.error(message))
             Task {
                 await finalizePendingRevisionAndTask(success: false, output: message)
             }
@@ -971,6 +803,7 @@ struct SuperAppView: View {
         case .chunk:
             break
         case .streamStart:
+            isAgentWorking = true
             appendLog(level: "agent", "Agent streaming started")
         case .planGenerated(let content):
             appendLog(level: "plan", "Plan generated: \(content.prefix(120))")
@@ -982,6 +815,14 @@ struct SuperAppView: View {
             appendLog(level: success ? "task" : "error", "Task completed \(id), success=\(success)")
         case .modelLoading(let text, let progress):
             appendLog(level: "model", "\(text) (\(Int(progress * 100))%)")
+        case .askUser:
+            break  // Handled via MCPServer.onAskUser callback
+        case .progress(let step, let total, let desc):
+            agentProgressStep = step
+            agentProgressTotal = total
+            agentProgressDescription = desc
+        case .cancelled:
+            appendLog(level: "system", "Agent cancelled by user")
         }
     }
 
@@ -1024,6 +865,7 @@ struct SuperAppView: View {
     }
 
     private func handleAction(_ action: String, payload: Any?) {
+        // 1. Handle input_submit (text input component)
         if action == "input_submit",
            let dict = payload as? [String: String],
            let value = dict["value"] {
@@ -1031,6 +873,47 @@ struct SuperAppView: View {
             sendMessage()
             return
         }
+        
+        // 2. Attempt structured event dispatch (script-first)
+        //    Components can emit action dicts with {type, command, onResult, ...}
+        //    This lets buttons run scripts directly without LLM round-trips.
+        if let payloadDict = payload as? [String: Any],
+           let eventType = EventHandlerType.parse(
+               from: payloadDict,
+               data: viewRegistry.currentView?.data ?? [:],
+               itemData: nil
+           ) {
+            let context = EventContext(
+                currentView: nil,
+                itemData: nil,
+                registry: viewRegistry
+            )
+            Task {
+                let _ = await eventHandler.execute(handler: eventType, context: context)
+            }
+            return
+        }
+        
+        // 3. Try parsing the action string itself as a JSON event config
+        if let jsonData = action.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+           let eventType = EventHandlerType.parse(
+               from: dict,
+               data: viewRegistry.currentView?.data ?? [:],
+               itemData: nil
+           ) {
+            let context = EventContext(
+                currentView: nil,
+                itemData: nil,
+                registry: viewRegistry
+            )
+            Task {
+                let _ = await eventHandler.execute(handler: eventType, context: context)
+            }
+            return
+        }
+        
+        // 4. Fallback: send to agent (LLM round-trip)
         if let payload = payload as? String {
             agent.send("\(action): \(payload)")
         } else {
@@ -1040,8 +923,9 @@ struct SuperAppView: View {
 
     // MARK: - Project/Revision/Feedback Actions
 
-    private func createProject() {
-        let trimmed = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func createProject(name: String? = nil) {
+        let nameToUse = name ?? newProjectName
+        let trimmed = nameToUse.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
             let project = try DatabaseManager.shared.createProject(name: trimmed, summary: "Created from super app workspace")
@@ -1054,6 +938,11 @@ struct SuperAppView: View {
         } catch {
             appendLog(level: "error", "Failed creating project: \(error.localizedDescription)")
         }
+    }
+    
+    private func quickStartProject() {
+        let name = "Untitled App \(projects.count + 1)"
+        createProject(name: name)
     }
 
     private func updateActiveProjectStatus(_ status: String) {
@@ -1191,14 +1080,17 @@ struct SuperAppView: View {
     private func loadProjects() async throws {
         let loaded = try DatabaseManager.shared.listProjects()
         if loaded.isEmpty {
-            let created = try DatabaseManager.shared.ensureDefaultProject()
-            projects = [created]
-            activeProjectId = created.id
+            // No projects yet — leave activeProjectId nil so LauncherView shows
+            projects = []
             return
         }
         projects = loaded
-        if activeProjectId == nil || !loaded.contains(where: { $0.id == activeProjectId }) {
-            activeProjectId = loaded.first?.id
+        // Don't auto-select — let the user choose from LauncherView
+        // Only auto-select if they previously had one (e.g. returning from background)
+        if let current = activeProjectId, loaded.contains(where: { $0.id == current }) {
+            // Keep current selection
+        } else {
+            activeProjectId = nil
         }
     }
 
@@ -1256,21 +1148,18 @@ struct SuperAppView: View {
 
     // MARK: - UI Helpers
 
-    private func dataRow(_ key: String, _ value: String) -> some View {
-        HStack {
-            Text(key)
-                .font(.subheadline.weight(.semibold))
-            Spacer()
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.vertical, 2)
-    }
+
 
     private func appendLog(level: String, _ message: String) {
         activityLog.append(ActivityLogEntry(level: level, message: message))
+    }
+    
+    private func addTimelineEntry(_ kind: TimelineEntry.Kind) {
+        timelineEntries.append(TimelineEntry(
+            id: UUID().uuidString,
+            timestamp: Date(),
+            kind: kind
+        ))
     }
 
     private func relativeTime(_ date: Date) -> String {
@@ -1287,39 +1176,148 @@ You are Edge Super App, an on-device app builder running on iOS.
 
 CRITICAL: The user cannot see your plain text responses. Always present progress and results with UI tools.
 
-Primary goals:
-1. Turn user requests into runnable mini-apps/workflows.
-2. Improve existing apps from user feedback.
-3. Keep state in SQLite and reusable SDUI templates.
-4. Use project-scoped revisions and conversation history as available context.
+## Architecture
 
-Tool strategy:
-- Use `query_views` first to discover existing templates/data.
-- Use `register_view` to define reusable screens.
-- Use `show_view` to navigate and render actual experiences.
-- Use `update_view_data` for iterative updates.
-- Use `update_template` when the user asks for layout/style/interaction changes.
-- Use `sqlite_query` for `apps`, `app_revisions`, `feedback_items`, `app_tasks`, and `conversation_messages`.
-- Use shell/file tools to generate and modify code/assets when needed.
+You build mini-apps as persistent TypeScript scripts backed by native SDUI rendering. Separate **view** (SDUI templates) from **logic** (TypeScript scripts). This way, button taps run scripts instantly without waiting for you.
 
-Workflow:
-1. Clarify what to build with a focused UI form or prompt.
+Every app has an `app_id` (UUID). All scripts, templates, and bundles are scoped to that app.
+
+## Tool Strategy
+
+1. **Discover first**: Use `query_views` to find existing templates, `list_scripts(app_id)` to find saved scripts, `bundle_get(app_id)` to see full app state.
+2. **Templates for layout**: Use `register_view(name, version, component, app_id?)` for reusable screen structures.
+3. **Scripts for logic**: Use `save_script(name, source, app_id)` to persist reusable TypeScript scripts. Use `run_script(name, app_id)` to execute them.
+4. **Wire actions to scripts**: Button/card actions should use `run_script` event configs (preferred) or `shell_eval`.
+5. **Show results**: Use `show_view` to render experiences.
+6. **Iterate**: Use `update_template` and `update_view_data` for refinements.
+7. **Bundle management**: Use `bundle_get`, `bundle_put`, `bundle_patch` to snapshot, restore, and patch app state.
+8. **Track runs**: Use `bundle_run` for tracked script execution, `bundle_run_status` to check results, `bundle_repair_trace` for debugging.
+
+## Script-First Actions
+
+When a button should DO something (fetch data, update state, compute), wire it to a script using the typed `run_script` event:
+
+```json
+{
+  "type": "button",
+  "label": "Refresh",
+  "action": {
+    "type": "run_script",
+    "app_id": "your-app-uuid",
+    "script": "my-script",
+    "scriptAction": "refresh",
+    "onResult": { "action": "render" }
+  }
+}
+```
+
+Action types for buttons (preferred order):
+- `{"type": "run_script", "app_id": "...", "script": "name", "scriptAction": "action", "onResult": {"action": "render"}}` — run app-scoped script, render output as UI
+- `{"type": "run_script", "app_id": "...", "script": "name", "onResult": {"action": "navigate", "view": "...", "data": "{{result}}"}}` — run script, navigate with result
+- `{"type": "run_script", "app_id": "...", "script": "name", "onResult": {"action": "update", "changes": {...}}}` — run script, update view data
+- `{"type": "run_script", "app_id": "...", "script": "name", "onResult": {"action": "toast", "message": "Done!"}}` — run script, show toast
+- `{"type": "shell_eval", "command": "...", "onResult": {"action": "render"}}` — fallback: run arbitrary command
+- `{"type": "navigate", "view": "screen-name", "data": {...}}` — navigate to a registered view
+- `{"type": "agent", "message": "..."}` — escalate to you (use sparingly, only for ambiguous user input)
+
+Prefer `run_script` over `shell_eval` — it validates the script exists and is type-safe. Use `"agent"` type ONLY when no script can handle the action.
+
+## Writing Scripts
+
+Scripts are TypeScript files that run in the local WASM sandbox.
+
+### Script Registry
+
+Use the script registry to save, discover, and compose scripts:
+
+- `save_script(name, source, app_id, description?, permissions?)` — persist a reusable script
+- `list_scripts(app_id)` — discover existing scripts before writing new ones
+- `get_script(name, app_id)` — read a script's source code
+- `run_script(name, app_id, args?)` — execute a saved script
+
+Scripts are saved to `/apps/{app_id}/scripts/{name}.ts` and can import each other:
+
+```typescript
+// /apps/{app_id}/scripts/utils.ts — shared utilities
+export function today() { return new Date().toISOString().split('T')[0]; }
+export function getCount(key: string) { return parseInt(localStorage.getItem(key) || '0'); }
+```
+
+```typescript
+// /apps/{app_id}/scripts/water-tracker.ts — imports from utils
+import { today, getCount } from '/apps/{app_id}/scripts/utils.ts';
+
+const action = process.argv[2] || 'status';
+const key = `water:${today()}`;
+
+if (action === 'add') {
+  const glasses = getCount(key) + 1;
+  localStorage.setItem(key, String(glasses));
+  console.log(JSON.stringify({ type: "card", title: "💧 Water Logged", body: `${glasses}/8 glasses` }));
+} else {
+  const glasses = getCount(key);
+  console.log(JSON.stringify({
+    type: "scroll", children: [
+      { type: "card", title: "💧 Today's Water", body: `${glasses}/8 glasses` },
+      { type: "button", label: "Log a Glass",
+        action: { type: "run_script", app_id: "{app_id}", script: "water-tracker",
+                  scriptAction: "add", onResult: { action: "render" } } }
+    ]
+  }));
+}
+```
+
+Always `list_scripts(app_id)` before writing a new script — reuse and compose existing scripts.
+
+## Bundle Management
+
+Bundles snapshot the complete state of an app (templates, scripts, bindings, policy):
+
+- `bundle_get(app_id)` — get live bundle JSON from current DB state
+- `bundle_get(app_id, revision_id)` — get a specific stored revision
+- `bundle_put(app_id, bundle_json, mode)` — save a revision (`draft` or `promote`)
+- `bundle_patch(app_id, patches)` — apply targeted patches to templates or scripts
+- `bundle_run(app_id, entrypoint, args?)` — execute a script as a tracked run
+- `bundle_run_status(run_id)` — check run status and failure details
+- `bundle_repair_trace(run_id)` — list repair attempts for debugging
+
+## Workflow
+
+1. Clarify what to build with a focused UI form/prompt.
 2. Show a plan with milestones and current status.
-3. Build in small increments and surface each result in the UI using Preview mode.
-4. Ask for structured feedback (what/why/severity/target) and apply improvements immediately.
-5. Record a draft revision for each substantial change, then promote or discard as directed.
-6. Persist the app specification and latest state so future requests continue from where it left off.
+3. Write script files for logic, register templates for layout, wire actions.
+4. Build in small increments, surface each result in Preview mode.
+5. Ask for structured feedback and apply improvements immediately.
+6. Persist app specification and state for continuity.
 
-UI conventions:
-- Prefer a clean single-column layout unless the user requests a grid.
+## UI Conventions
+
+- Prefer clean single-column layouts unless the user requests a grid.
 - Use concise labels and obvious actions.
-- Always include a clear "Revise" or "Improve" path once something is generated.
-- Respect guardrails: for destructive actions, provide a short plan and await explicit confirmation.
+- Include "Revise" or "Improve" paths once something is generated.
+- For destructive actions, show a plan and await confirmation.
 
-When starting a new conversation:
+## User Collaboration
+
+Use `ask_user` to involve the user in decisions:
+
+- `ask_user(type: "confirm", prompt: "...")` — yes/no approval (returns "approved" or "rejected")
+- `ask_user(type: "choose", prompt: "...", options: ["A", "B", "C"])` — pick from options (returns selected option)
+- `ask_user(type: "text", prompt: "...")` — free-form input (returns user's text)
+- `ask_user(type: "plan", prompt: "## My Plan\n...")` — plan approval (returns "approved" or "revise")
+
+**When to use ask_user:**
+- Before major layout decisions (grid vs list, tabs vs stack)
+- When multiple valid approaches exist (color scheme, feature scope)
+- Before destructive changes (deleting screens, resetting data)
+- At milestones to confirm direction
+- NEVER assume — ask when uncertain about preferences
+
+## Starting a New Conversation
+
 - Greet briefly.
-- Ask what app/workflow the user wants to create or improve.
-- Offer quick starters (for example: dashboard, form-based tool, data browser, automation assistant).
+- Ask what app/workflow to create or improve.
+- Offer quick starters (dashboard, form tool, data browser, automation).
 """
 
 // MARK: - Preview

@@ -19,6 +19,9 @@ runtime/wit/deps/random/
 runtime/wit/deps/sockets/
 runtime/wit/deps.lock
 
+# WIT dep symlinks in crate directories (point to runtime/wit/deps/)
+runtime/crates/*/wit/deps/
+
 # Vendored crates
 runtime/vendor/
 

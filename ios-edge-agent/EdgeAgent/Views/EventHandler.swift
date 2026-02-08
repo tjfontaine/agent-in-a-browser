@@ -6,6 +6,8 @@ import OSLog
 /// Types of event handlers that can be attached to UI components
 public enum EventHandlerType: @unchecked Sendable {
     case shellEval(command: String, resultMode: ResultMode, onResult: ResultAction?, onError: ResultAction?)
+    case scriptEval(code: String?, file: String?, args: [String], resultMode: ResultMode, onResult: ResultAction?, onError: ResultAction?)
+    case runScript(appId: String, script: String, scriptAction: String?, args: [String], resultMode: ResultMode, onResult: ResultAction?, onError: ResultAction?)
     case navigate(viewName: String, data: [String: Any]?)
     case update(changes: [String: Any])
     case agent(message: String)
@@ -61,6 +63,53 @@ public enum EventHandlerType: @unchecked Sendable {
             let resolvedMessage = TemplateRenderer.resolve(path: message, in: data, itemData: itemData) as? String ?? message
             return .agent(message: resolvedMessage)
             
+        case "script_eval":
+            let code = dict["code"] as? String
+            let file = dict["file"] as? String
+            guard code != nil || file != nil else {
+                Log.app.warning("EventHandler: script_eval requires 'code' or 'file'")
+                return nil
+            }
+            let args = dict["args"] as? [String] ?? []
+            let seResultMode = ResultMode(rawValue: dict["resultMode"] as? String ?? "local") ?? .local
+            
+            var seOnResult: ResultAction? = nil
+            if let onResultDict = dict["onResult"] as? [String: Any] {
+                seOnResult = ResultAction.parse(from: onResultDict)
+            }
+            
+            var seOnError: ResultAction? = nil
+            if let onErrorDict = dict["onError"] as? [String: Any] {
+                seOnError = ResultAction.parse(from: onErrorDict)
+            }
+            
+            return .scriptEval(code: code, file: file, args: args, resultMode: seResultMode, onResult: seOnResult, onError: seOnError)
+            
+        case "run_script":
+            guard let script = dict["script"] as? String else {
+                Log.app.warning("EventHandler: run_script requires 'script'")
+                return nil
+            }
+            guard let appId = dict["app_id"] as? String else {
+                Log.app.warning("EventHandler: run_script requires 'app_id'")
+                return nil
+            }
+            let scriptAction = dict["scriptAction"] as? String
+            let rsArgs = dict["args"] as? [String] ?? []
+            let rsResultMode = ResultMode(rawValue: dict["resultMode"] as? String ?? "local") ?? .local
+            
+            var rsOnResult: ResultAction? = nil
+            if let rsOnResultDict = dict["onResult"] as? [String: Any] {
+                rsOnResult = ResultAction.parse(from: rsOnResultDict)
+            }
+            
+            var rsOnError: ResultAction? = nil
+            if let rsOnErrorDict = dict["onError"] as? [String: Any] {
+                rsOnError = ResultAction.parse(from: rsOnErrorDict)
+            }
+            
+            return .runScript(appId: appId, script: script, scriptAction: scriptAction, args: rsArgs, resultMode: rsResultMode, onResult: rsOnResult, onError: rsOnError)
+            
         case "pop":
             return .popView
             
@@ -83,6 +132,7 @@ public enum ResultAction: @unchecked Sendable {
     case update(changes: [String: Any])
     case toast(message: String)
     case agent(message: String)
+    case render  // Render the script's JSON output as SDUI components directly
     
     static func parse(from dict: [String: Any]) -> ResultAction? {
         guard let action = dict["action"] as? String else {
@@ -114,6 +164,9 @@ public enum ResultAction: @unchecked Sendable {
                 return nil
             }
             return .agent(message: message)
+            
+        case "render":
+            return .render
             
         default:
             return nil
@@ -168,6 +221,13 @@ public class EventHandler {
     /// Callback to execute shell_eval (via NativeMCPHost)
     public var onShellEval: ((String) async -> (Bool, String?))? 
     
+    /// Callback to execute script_eval (direct WASM, no HTTP/MCP).
+    /// Parameters: (code, file, args, appId, scriptName)
+    public var onScriptEval: ((String?, String?, [String], String?, String?) async -> (Bool, String?))?
+    
+    /// Callback to render components directly (script-first rendering)
+    public var onRenderComponents: (([[String: Any]]) -> Void)?
+    
     public init() {}
     
     // MARK: - Execution
@@ -181,6 +241,29 @@ public class EventHandler {
         case .shellEval(let command, let resultMode, let onResult, let onError):
             return await executeShellEval(
                 command: command,
+                resultMode: resultMode,
+                onResult: onResult,
+                onError: onError,
+                context: context
+            )
+            
+        case .scriptEval(let code, let file, let args, let resultMode, let onResult, let onError):
+            return await executeScriptEval(
+                code: code,
+                file: file,
+                args: args,
+                resultMode: resultMode,
+                onResult: onResult,
+                onError: onError,
+                context: context
+            )
+            
+        case .runScript(let appId, let script, let scriptAction, let args, let resultMode, let onResult, let onError):
+            return await executeRunScript(
+                appId: appId,
+                script: script,
+                scriptAction: scriptAction,
+                args: args,
                 resultMode: resultMode,
                 onResult: onResult,
                 onError: onError,
@@ -253,6 +336,135 @@ public class EventHandler {
         }
     }
     
+    private func executeScriptEval(
+        code: String?,
+        file: String?,
+        args: [String],
+        resultMode: ResultMode,
+        onResult: ResultAction?,
+        onError: ResultAction?,
+        context: EventContext
+    ) async -> EventResult {
+        Log.app.info("EventHandler: Executing script_eval: code=\(code?.prefix(50) ?? "nil"), file=\(file ?? "nil")")
+        
+        guard let scriptEval = onScriptEval else {
+            Log.app.error("EventHandler: No script_eval handler configured")
+            return .failure(error: "No script_eval handler configured")
+        }
+        
+        let (success, output) = await scriptEval(code, file, args, nil, nil)
+        
+        if success {
+            // Parse output as JSON if possible
+            var resultData: Any? = output
+            if let output = output,
+               let jsonData = output.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: jsonData) {
+                resultData = json
+            }
+            
+            // Notify agent if requested
+            if resultMode == .notify, let message = output {
+                onAgentMessage?("script_eval completed: \(message)")
+            }
+            
+            // Execute onResult action
+            if let onResult = onResult {
+                return await executeResultAction(onResult, result: resultData, context: context)
+            }
+            
+            return .success(data: resultData)
+        } else {
+            // Handle error
+            let errorMessage = output ?? "script_eval failed"
+            
+            if let onError = onError {
+                return await executeResultAction(onError, result: nil, context: context, error: errorMessage)
+            }
+            
+            // Default: notify agent for error recovery
+            onAgentMessage?("script_eval error: \(errorMessage)")
+            return .failure(error: errorMessage)
+        }
+    }
+    
+    // TODO: Phase 4 — enforce app-scoped permissions before script execution (check appId grants)
+    private func executeRunScript(
+        appId: String,
+        script: String,
+        scriptAction: String?,
+        args: [String],
+        resultMode: ResultMode,
+        onResult: ResultAction?,
+        onError: ResultAction?,
+        context: EventContext
+    ) async -> EventResult {
+        Log.app.info("EventHandler: Executing run_script: app=\(appId), script=\(script), action=\(scriptAction ?? "nil")")
+        
+        // Resolve script from app-scoped repository
+        let repo = AppBundleRepository()
+        do {
+            guard try repo.getAppScript(appId: appId, name: script) != nil else {
+                let errorMsg = "Script '\(script)' not found for app '\(appId)'"
+                Log.app.error("EventHandler: \(errorMsg)")
+                if let onError = onError {
+                    return await executeResultAction(onError, result: nil, context: context, error: errorMsg)
+                }
+                onAgentMessage?("run_script error: \(errorMsg)")
+                return .failure(error: errorMsg)
+            }
+        } catch {
+            let errorMsg = "Failed to resolve script: \(error.localizedDescription)"
+            if let onError = onError {
+                return await executeResultAction(onError, result: nil, context: context, error: errorMsg)
+            }
+            return .failure(error: errorMsg)
+        }
+        
+        // Build args: prepend scriptAction if provided
+        var fullArgs = args
+        if let action = scriptAction {
+            fullArgs.insert(action, at: 0)
+        }
+        
+        // Execute via sandbox filesystem
+        let path = DatabaseManager.appScriptSandboxPath(appId: appId, name: script)
+        guard let scriptEval = onScriptEval else {
+            Log.app.error("EventHandler: No script_eval handler configured")
+            return .failure(error: "No script_eval handler configured")
+        }
+        
+        let (success, output) = await scriptEval(nil, path, fullArgs, appId, script)
+        
+        if success {
+            var resultData: Any? = output
+            if let output = output,
+               let jsonData = output.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: jsonData) {
+                resultData = json
+            }
+            
+            if resultMode == .notify, let message = output {
+                onAgentMessage?("run_script completed (\(script)): \(message)")
+            }
+            
+            if let onResult = onResult {
+                return await executeResultAction(onResult, result: resultData, context: context)
+            }
+            
+            return .success(data: resultData)
+        } else {
+            let errorMessage = output ?? "run_script failed"
+            
+            if let onError = onError {
+                return await executeResultAction(onError, result: nil, context: context, error: errorMessage)
+            }
+            
+            onAgentMessage?("run_script error (\(script)): \(errorMessage)")
+            return .failure(error: errorMessage)
+        }
+    }
+    
     private func executeResultAction(
         _ action: ResultAction,
         result: Any?,
@@ -301,6 +513,9 @@ public class EventHandler {
                 resolvedMessage = message.replacingOccurrences(of: "{{error}}", with: error)
             }
             return executeAgent(message: resolvedMessage)
+            
+        case .render:
+            return executeRenderResult(result: result)
         }
     }
     
@@ -353,6 +568,28 @@ public class EventHandler {
             return .success()
         } else {
             return .failure(error: "Cannot pop - at root view")
+        }
+    }
+    
+    /// Render script output directly as SDUI components
+    private func executeRenderResult(result: Any?) -> EventResult {
+        Log.app.info("EventHandler: Rendering script result as SDUI")
+        
+        guard let onRenderComponents = onRenderComponents else {
+            Log.app.error("EventHandler: No render callback configured")
+            return .failure(error: "No render callback configured")
+        }
+        
+        // Result can be a single component dict or an array of components
+        if let components = result as? [[String: Any]] {
+            onRenderComponents(components)
+            return .success(data: ["rendered": components.count])
+        } else if let component = result as? [String: Any], component["type"] is String {
+            onRenderComponents([component])
+            return .success(data: ["rendered": 1])
+        } else {
+            Log.app.warning("EventHandler: Script result is not a renderable component tree")
+            return .failure(error: "Script output is not a component tree (expected {type, props} or [{type, props}])")
         }
     }
 }

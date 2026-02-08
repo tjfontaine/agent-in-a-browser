@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A8CCA062F38387400BE5444 /* AppBundleModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA052F38387400BE5444 /* AppBundleModels.swift */; };
+		1A8CCA082F3838B200BE5444 /* AppBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA072F3838B200BE5444 /* AppBundle.swift */; };
+		1A8CCA0A2F3838E000BE5444 /* AppBundleRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA092F3838E000BE5444 /* AppBundleRepository.swift */; };
+		1A8CCA0C2F38391800BE5444 /* AppBundleRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA0B2F38391700BE5444 /* AppBundleRepositoryTests.swift */; };
+		1A8CCA0E2F38391800BE5444 /* AppBundleSerializationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA0D2F38391800BE5444 /* AppBundleSerializationTests.swift */; };
+		1A8CCA102F384F6C00BE5444 /* BundleToolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA0F2F384F6C00BE5444 /* BundleToolTests.swift */; };
+		1A8CCA122F38558500BE5444 /* RepairCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA112F38558500BE5444 /* RepairCoordinator.swift */; };
+		1A8CCA142F38ED1300BE5444 /* LauncherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA132F38ED1300BE5444 /* LauncherView.swift */; };
+		1A8CCA162F38ED2500BE5444 /* AppCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA152F38ED2500BE5444 /* AppCanvasView.swift */; };
+		1A8CCA182F38ED2500BE5444 /* AgentOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA172F38ED2500BE5444 /* AgentOverlayView.swift */; };
+		1A8CCA1A2F38EEF600BE5444 /* ConversationTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA192F38EEF600BE5444 /* ConversationTimeline.swift */; };
 		1AF20D502F358267005FA9DC /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = FA45E1BC6223511421635B5C /* GRDB */; };
 		26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */; };
 		299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */; };
@@ -51,6 +62,17 @@
 
 /* Begin PBXFileReference section */
 		19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GeneratedWASMImports.swift; sourceTree = "<group>"; };
+		1A8CCA052F38387400BE5444 /* AppBundleModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleModels.swift; sourceTree = "<group>"; };
+		1A8CCA072F3838B200BE5444 /* AppBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundle.swift; sourceTree = "<group>"; };
+		1A8CCA092F3838E000BE5444 /* AppBundleRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleRepository.swift; sourceTree = "<group>"; };
+		1A8CCA0B2F38391700BE5444 /* AppBundleRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleRepositoryTests.swift; sourceTree = "<group>"; };
+		1A8CCA0D2F38391800BE5444 /* AppBundleSerializationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleSerializationTests.swift; sourceTree = "<group>"; };
+		1A8CCA0F2F384F6C00BE5444 /* BundleToolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleToolTests.swift; sourceTree = "<group>"; };
+		1A8CCA112F38558500BE5444 /* RepairCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepairCoordinator.swift; sourceTree = "<group>"; };
+		1A8CCA132F38ED1300BE5444 /* LauncherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherView.swift; sourceTree = "<group>"; };
+		1A8CCA152F38ED2500BE5444 /* AppCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCanvasView.swift; sourceTree = "<group>"; };
+		1A8CCA172F38ED2500BE5444 /* AgentOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOverlayView.swift; sourceTree = "<group>"; };
+		1A8CCA192F38EEF600BE5444 /* ConversationTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTimeline.swift; sourceTree = "<group>"; };
 		4FFE639729C170C2695401F8 /* EventHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
 		5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoundationModelsTypes.swift; path = EdgeAgent/Services/FoundationModelsTypes.swift; sourceTree = SOURCE_ROOT; };
@@ -83,7 +105,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-					1AF20D502F358267005FA9DC /* GRDB in Frameworks */,
+				1AF20D502F358267005FA9DC /* GRDB in Frameworks */,
 				B1000001201A0001 /* MCP in Frameworks */,
 				B2000001201A0001 /* WasmKit in Frameworks */,
 				B2000002201A0001 /* WASI in Frameworks */,
@@ -163,6 +185,14 @@
 				E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */,
 				4FFE639729C170C2695401F8 /* EventHandler.swift */,
 				5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */,
+				1A8CCA052F38387400BE5444 /* AppBundleModels.swift */,
+				1A8CCA072F3838B200BE5444 /* AppBundle.swift */,
+				1A8CCA092F3838E000BE5444 /* AppBundleRepository.swift */,
+				1A8CCA112F38558500BE5444 /* RepairCoordinator.swift */,
+				1A8CCA132F38ED1300BE5444 /* LauncherView.swift */,
+				1A8CCA152F38ED2500BE5444 /* AppCanvasView.swift */,
+				1A8CCA172F38ED2500BE5444 /* AgentOverlayView.swift */,
+				1A8CCA192F38EEF600BE5444 /* ConversationTimeline.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -210,6 +240,9 @@
 				A2000001101A0001 /* ConfigManagerTests.swift */,
 				A2000002101A0001 /* AgentEventTests.swift */,
 				BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */,
+				1A8CCA0B2F38391700BE5444 /* AppBundleRepositoryTests.swift */,
+				1A8CCA0D2F38391800BE5444 /* AppBundleSerializationTests.swift */,
+				1A8CCA0F2F384F6C00BE5444 /* BundleToolTests.swift */,
 			);
 			path = EdgeAgentTests;
 			sourceTree = "<group>";
@@ -278,7 +311,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					A1000000401A0001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -342,12 +375,17 @@
 			files = (
 				A1000001201A0001 /* EdgeAgentApp.swift in Sources */,
 				A1000002201A0001 /* ConfigManager.swift in Sources */,
+				1A8CCA062F38387400BE5444 /* AppBundleModels.swift in Sources */,
 				A1000003201A0001 /* AgentEvent.swift in Sources */,
+				1A8CCA0A2F3838E000BE5444 /* AppBundleRepository.swift in Sources */,
 				A1000005201A0001 /* SettingsView.swift in Sources */,
+				1A8CCA142F38ED1300BE5444 /* LauncherView.swift in Sources */,
 				A1000010201A0001 /* SuperAppView.swift in Sources */,
+				1A8CCA122F38558500BE5444 /* RepairCoordinator.swift in Sources */,
 				A1000011201A0001 /* ComponentLibrary.swift in Sources */,
 				A1000012201A0001 /* MCPServer.swift in Sources */,
 				C1000001201A0001 /* NativeAgentHost.swift in Sources */,
+				1A8CCA082F3838B200BE5444 /* AppBundle.swift in Sources */,
 				F1000001201A0001 /* MCPSignatures.swift in Sources */,
 				9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */,
 				9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */,
@@ -355,8 +393,11 @@
 				26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */,
 				51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */,
 				67748A744756A00A9DE44D71 /* EventHandler.swift in Sources */,
+				1A8CCA182F38ED2500BE5444 /* AgentOverlayView.swift in Sources */,
 				A029D9C7EDDD0FB353B49E8A /* DatabaseManager.swift in Sources */,
 				C8388861F46676946FAC5F31 /* FoundationModelsServer.swift in Sources */,
+				1A8CCA1A2F38EEF600BE5444 /* ConversationTimeline.swift in Sources */,
+				1A8CCA162F38ED2500BE5444 /* AppCanvasView.swift in Sources */,
 				5207F13AC4EFACA9FC563FB5 /* FoundationModelsTypes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -368,6 +409,9 @@
 				A2000001201A0001 /* ConfigManagerTests.swift in Sources */,
 				A2000002201A0001 /* AgentEventTests.swift in Sources */,
 				B4B63E0F18B169C07EF597D5 /* NativeLoaderImplTests.swift in Sources */,
+				1A8CCA102F384F6C00BE5444 /* BundleToolTests.swift in Sources */,
+				1A8CCA0E2F38391800BE5444 /* AppBundleSerializationTests.swift in Sources */,
+				1A8CCA0C2F38391800BE5444 /* AppBundleRepositoryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -387,6 +431,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -429,22 +474,23 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
-					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-					GCC_WARN_UNUSED_FUNCTION = YES;
-					GCC_WARN_UNUSED_VARIABLE = YES;
-					GCC_TREAT_WARNINGS_AS_ERRORS = YES;
-					IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-					MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-					MTL_FAST_MATH = YES;
-					ONLY_ACTIVE_ARCH = YES;
-					SDKROOT = iphoneos;
-					SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Debug;
 		};
@@ -453,6 +499,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -489,21 +536,22 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
-					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-					GCC_WARN_UNUSED_FUNCTION = YES;
-					GCC_WARN_UNUSED_VARIABLE = YES;
-					GCC_TREAT_WARNINGS_AS_ERRORS = YES;
-					IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-					MTL_ENABLE_DEBUG_INFO = NO;
-					MTL_FAST_MATH = YES;
-					SDKROOT = iphoneos;
-					SWIFT_COMPILATION_MODE = wholemodule;
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					VALIDATE_PRODUCT = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -525,12 +573,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					SWIFT_EMIT_LOC_STRINGS = YES;
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					SWIFT_VERSION = 5.0;
-					TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -552,12 +600,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					SWIFT_EMIT_LOC_STRINGS = YES;
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					SWIFT_VERSION = 5.0;
-					TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -571,12 +619,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					SWIFT_EMIT_LOC_STRINGS = NO;
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					SWIFT_VERSION = 5.0;
-					TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
 			name = Debug;
@@ -591,12 +639,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					SWIFT_EMIT_LOC_STRINGS = NO;
-					SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-					SWIFT_VERSION = 5.0;
-					TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
 			name = Release;

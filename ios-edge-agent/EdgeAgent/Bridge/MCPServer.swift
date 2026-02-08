@@ -3,6 +3,7 @@ import CoreLocation
 import MCP
 import Network
 import OSLog
+import WASIShims
 
 // MARK: - SDUI Validation
 
@@ -169,12 +170,62 @@ class MCPServer: NSObject {
     
     // SDUI: Show view callback - called when agent invokes show_view (navigates to cached view)
     nonisolated(unsafe) var onShowView: ((String, [String: Any]?) -> Void)?
-
     
+    // Ask user callback - called when agent invokes ask_user.
+    // The closure receives (requestId, type, prompt, options) and must eventually call the response closure with the user's answer.
+    nonisolated(unsafe) var onAskUser: ((_ requestId: String, _ type: String, _ prompt: String, _ options: [String]?) -> Void)?
+    
+    // Continuation for pending ask_user requests (keyed by requestId)
+    private var askUserContinuations = [String: CheckedContinuation<String, Never>]()
+    private let askUserLock = NSLock()
+    
+    // Deferred NWConnection responses for ask_user (legacy HTTP path)
+    // Holds the connection open until the user responds, then sends the HTTP response.
+    nonisolated(unsafe) var askUserDeferredConnections = [String: NWConnection]()
+    
+    /// Call this from the UI when the user responds to an ask_user request
+    func resolveAskUser(requestId: String, response: String) {
+        askUserLock.lock()
+        let continuation = askUserContinuations.removeValue(forKey: requestId)
+        let deferredConnection = askUserDeferredConnections.removeValue(forKey: requestId)
+        askUserLock.unlock()
+        
+        // Resume async continuation (MCPServerKit path)
+        continuation?.resume(returning: response)
+        
+        // Send deferred HTTP response (legacy HTTP path)
+        if let connection = deferredConnection {
+            let resultDict: [String: Any] = ["content": [["type": "text", "text": response]], "isError": false]
+            let responseJSON: [String: Any] = [
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": resultDict
+            ]
+            if let responseData = try? JSONSerialization.data(withJSONObject: responseJSON),
+               let responseBody = String(data: responseData, encoding: .utf8) {
+                let httpData = httpResponseSync(status: 200, body: responseBody)
+                connection.send(content: httpData, completion: .contentProcessed { error in
+                    if let error = error {
+                        Log.mcp.error("[ask_user] Deferred send error: \(error)")
+                    } else {
+                        Log.mcp.info("[ask_user] Deferred response sent")
+                    }
+                    connection.cancel()
+                })
+            }
+        }
+    }
     private override init() {
         super.init()
         Task { @MainActor in
             setupLocationManager()
+        }
+        // Wire permission audit callback (Phase 4)
+        ScriptPermissions.shared.onAudit = { appId, scriptName, capability, action, actor in
+            try? AppBundleRepository().logPermissionAudit(
+                appId: appId, scriptName: scriptName,
+                capability: capability, action: action, actor: actor
+            )
         }
     }
     
@@ -314,6 +365,10 @@ class MCPServer: NSObject {
                         "animation": .object([
                             "type": .string("object"),
                             "description": .string("Enter/exit animations: {enter, exit, duration}")
+                        ]),
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional app/project ID. When provided, also persists to app_templates for bundle tracking.")
                         ])
                     ]),
                     "required": .array([.string("name"), .string("version"), .string("component")])
@@ -367,6 +422,10 @@ class MCPServer: NSObject {
                             "items": .object([
                                 "type": .string("object")
                             ])
+                        ]),
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional app/project ID. When provided, persist patched template to app_templates.")
                         ])
                     ]),
                     "required": .array([.string("name"), .string("patches")])
@@ -435,6 +494,303 @@ class MCPServer: NSObject {
                     ]),
                     "required": .array([.string("sql")])
                 ])
+            ),
+            
+            // MARK: - Script Lifecycle Tools
+            
+            Tool(
+                name: "save_script",
+                description: "Save a reusable TypeScript script to the app-scoped registry. Scripts are written to the sandbox filesystem at /apps/{app_id}/scripts/{name}.ts so they can import each other.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Unique script name (kebab-case, e.g. 'weather-widget')")
+                        ]),
+                        "source": .object([
+                            "type": .string("string"),
+                            "description": .string("TypeScript/JavaScript source code")
+                        ]),
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID that this script belongs to")
+                        ]),
+                        "description": .object([
+                            "type": .string("string"),
+                            "description": .string("Human-readable description of what the script does")
+                        ]),
+                        "permissions": .object([
+                            "type": .string("array"),
+                            "description": .string("Required ios.* bridge capabilities (e.g. ['contacts','health'])"),
+                            "items": .object(["type": .string("string")])
+                        ]),
+                        "version": .object([
+                            "type": .string("string"),
+                            "description": .string("Semver version (default '1.0.0')")
+                        ])
+                    ]),
+                    "required": .array([.string("name"), .string("source"), .string("app_id")])
+                ])
+            ),
+            Tool(
+                name: "list_scripts",
+                description: "List all saved scripts for an app with name, description, version, and capabilities.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID to list scripts for")
+                        ])
+                    ]),
+                    "required": .array([.string("app_id")])
+                ])
+            ),
+            Tool(
+                name: "get_script",
+                description: "Get a script's full source code by name within an app.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Name of the script to retrieve")
+                        ]),
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID the script belongs to")
+                        ])
+                    ]),
+                    "required": .array([.string("name"), .string("app_id")])
+                ])
+            ),
+            Tool(
+                name: "run_script",
+                description: "Execute a saved script by name within an app. The script is loaded from the app's sandbox directory and evaluated via the WASM runtime.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object([
+                            "type": .string("string"),
+                            "description": .string("Name of the script to run")
+                        ]),
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID the script belongs to")
+                        ]),
+                        "args": .object([
+                            "type": .string("array"),
+                            "description": .string("Optional arguments to pass to the script"),
+                            "items": .object(["type": .string("string")])
+                        ])
+                    ]),
+                    "required": .array([.string("name"), .string("app_id")])
+                ])
+            ),
+            
+            // MARK: - Bundle Management Tools
+            
+            Tool(
+                name: "bundle_get",
+                description: "Get the app bundle JSON. If revision_id is omitted, builds a live bundle from current DB state.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID")
+                        ]),
+                        "revision_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional specific revision to retrieve")
+                        ])
+                    ]),
+                    "required": .array([.string("app_id")])
+                ])
+            ),
+            Tool(
+                name: "bundle_put",
+                description: "Save a bundle revision. Mode 'draft' creates a revision without promoting. Mode 'promote' creates and immediately promotes the revision.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID")
+                        ]),
+                        "bundle_json": .object([
+                            "type": .string("string"),
+                            "description": .string("The full bundle JSON string")
+                        ]),
+                        "mode": .object([
+                            "type": .string("string"),
+                            "description": .string("'draft' or 'promote'"),
+                            "enum": .array([.string("draft"), .string("promote")])
+                        ])
+                    ]),
+                    "required": .array([.string("app_id"), .string("bundle_json"), .string("mode")])
+                ])
+            ),
+            Tool(
+                name: "bundle_patch",
+                description: "Apply patches to an app's bundle artifacts. Each patch targets a template or script by name.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID")
+                        ]),
+                        "patches": .object([
+                            "type": .string("array"),
+                            "description": .string("Array of patches. Each patch: {target: 'template'|'script', name: string, data: object}"),
+                            "items": .object(["type": .string("object")])
+                        ])
+                    ]),
+                    "required": .array([.string("app_id"), .string("patches")])
+                ])
+            ),
+            Tool(
+                name: "bundle_run",
+                description: "Execute an app's script as a tracked run. Creates a run record and returns the run_id along with the execution result.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID")
+                        ]),
+                        "entrypoint": .object([
+                            "type": .string("string"),
+                            "description": .string("Script name to execute")
+                        ]),
+                        "args": .object([
+                            "type": .string("array"),
+                            "description": .string("Optional arguments"),
+                            "items": .object(["type": .string("string")])
+                        ]),
+                        "revision_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional revision to associate with the run (defaults to 'HEAD')")
+                        ]),
+                        "repair_for_run_id": .object([
+                            "type": .string("string"),
+                            "description": .string("If provided, this run is a repair retry for the specified failed run_id. Subject to repair policy limits.")
+                        ])
+                    ]),
+                    "required": .array([.string("app_id"), .string("entrypoint")])
+                ])
+            ),
+            Tool(
+                name: "bundle_run_status",
+                description: "Get the current status of a tracked run.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "run_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Run ID returned from bundle_run")
+                        ])
+                    ]),
+                    "required": .array([.string("run_id")])
+                ])
+            ),
+            Tool(
+                name: "bundle_repair_trace",
+                description: "List all repair attempts for a given run.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "run_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Run ID to get repair trace for")
+                        ])
+                    ]),
+                    "required": .array([.string("run_id")])
+                ])
+            ),
+            // Phase 5: Reuse tools
+            Tool(
+                name: "bundle_export",
+                description: "Export an app bundle as a portable JSON snapshot. Returns the complete bundle JSON including templates, scripts, bindings, and policy.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("App/project ID to export")
+                        ])
+                    ]),
+                    "required": .array([.string("app_id")])
+                ])
+            ),
+            Tool(
+                name: "bundle_import",
+                description: "Import a bundle JSON snapshot into an app. Creates a new draft revision and optionally promotes it.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Target app/project ID to import into")
+                        ]),
+                        "bundle_json": .object([
+                            "type": .string("string"),
+                            "description": .string("The bundle JSON snapshot to import")
+                        ]),
+                        "promote": .object([
+                            "type": .string("boolean"),
+                            "description": .string("Whether to auto-promote after import (default: false)")
+                        ])
+                    ]),
+                    "required": .array([.string("app_id"), .string("bundle_json")])
+                ])
+            ),
+            Tool(
+                name: "bundle_clone",
+                description: "Clone an app bundle to a new app_id. Copies all templates, scripts, bindings, and policy to the target.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "source_app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Source app/project ID to clone from")
+                        ]),
+                        "target_app_id": .object([
+                            "type": .string("string"),
+                            "description": .string("Target app/project ID to clone into")
+                        ])
+                    ]),
+                    "required": .array([.string("source_app_id"), .string("target_app_id")])
+                ])
+            ),
+            
+            // MARK: - User Collaboration Tools
+            
+            Tool(
+                name: "ask_user",
+                description: "Ask the user a question and wait for their response. Use this to get feedback, request confirmation, or present choices. The agent will block until the user responds.",
+                inputSchema: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "type": .object([
+                            "type": .string("string"),
+                            "description": .string("Type of question: 'confirm' (yes/no), 'choose' (pick from options), 'text' (free-form input), 'plan' (show plan for approval)"),
+                            "enum": .array([.string("confirm"), .string("choose"), .string("text"), .string("plan")])
+                        ]),
+                        "prompt": .object([
+                            "type": .string("string"),
+                            "description": .string("The question or message to show the user. Supports markdown for 'plan' type.")
+                        ]),
+                        "options": .object([
+                            "type": .string("array"),
+                            "description": .string("Options for 'choose' type. Each string becomes a button."),
+                            "items": .object(["type": .string("string")])
+                        ])
+                    ]),
+                    "required": .array([.string("type"), .string("prompt")])
+                ])
             )
         ]
     }
@@ -451,6 +807,40 @@ class MCPServer: NSObject {
             return executeGetLocation()
         case "request_authorization":
             return await executeRequestAuthorization(arguments: arguments)
+        case "ask_user":
+            return await executeAskUser(arguments: arguments)
+        case "save_script":
+            return executeSaveScript(arguments: arguments)
+        case "list_scripts":
+            return executeListScripts(arguments: arguments)
+        case "get_script":
+            return executeGetScript(arguments: arguments)
+        case "run_script":
+            return await executeRunScript(arguments: arguments)
+        case "bundle_get", "bundle_put", "bundle_patch", "bundle_run", "bundle_run_status", "bundle_repair_trace",
+             "bundle_export", "bundle_import", "bundle_clone":
+            switch name {
+            case "bundle_get":
+                return executeBundleGet(arguments: arguments)
+            case "bundle_put":
+                return executeBundlePut(arguments: arguments)
+            case "bundle_patch":
+                return executeBundlePatch(arguments: arguments)
+            case "bundle_run":
+                return await executeBundleRun(arguments: arguments)
+            case "bundle_run_status":
+                return executeBundleRunStatus(arguments: arguments)
+            case "bundle_repair_trace":
+                return executeBundleRepairTrace(arguments: arguments)
+            case "bundle_export":
+                return executeBundleExport(arguments: arguments)
+            case "bundle_import":
+                return executeBundleImport(arguments: arguments)
+            case "bundle_clone":
+                return executeBundleClone(arguments: arguments)
+            default:
+                break
+            }
         default:
             break
         }
@@ -513,6 +903,790 @@ class MCPServer: NSObject {
         )
     }
     
+    // MARK: - Script Lifecycle Handlers
+    
+    // MARK: - User Collaboration Handler
+    
+    private func executeAskUser(arguments: Value?) async -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let typeVal = dict["type"], case .string(let askType) = typeVal,
+              let promptVal = dict["prompt"], case .string(let prompt) = promptVal else {
+            return .init(content: [.text("Missing required parameters: type, prompt")], isError: true)
+        }
+        
+        var options: [String]? = nil
+        if let optionsVal = dict["options"], case .array(let optionsArray) = optionsVal {
+            options = optionsArray.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+        }
+        
+        let requestId = UUID().uuidString
+        
+        // Notify UI to show the ask_user card
+        await MainActor.run {
+            onAskUser?(requestId, askType, prompt, options)
+        }
+        
+        // Suspend until the user responds
+        let userResponse = await withCheckedContinuation { (continuation: CheckedContinuation<String, Never>) in
+            askUserLock.lock()
+            askUserContinuations[requestId] = continuation
+            askUserLock.unlock()
+        }
+        
+        return .init(content: [.text(userResponse)], isError: false)
+    }
+    
+    // MARK: - Script Lifecycle Handlers
+    
+    private func executeSaveScript(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let nameVal = dict["name"], case .string(let name) = nameVal,
+              let sourceVal = dict["source"], case .string(let source) = sourceVal,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameters: name, source, app_id")], isError: true)
+        }
+        
+        var description: String? = nil
+        if let descVal = dict["description"], case .string(let d) = descVal {
+            description = d
+        }
+        
+        var capabilities: [String] = []
+        if let permsVal = dict["permissions"], case .array(let permsArray) = permsVal {
+            capabilities = permsArray.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+        }
+        
+        var version = "1.0.0"
+        if let versionVal = dict["version"], case .string(let v) = versionVal {
+            version = v
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            let record = try repo.saveAppScript(
+                appId: appId,
+                name: name,
+                source: source,
+                description: description,
+                capabilities: capabilities,
+                version: version
+            )
+            let path = DatabaseManager.appScriptSandboxPath(appId: appId, name: name)
+            let result: [String: Any] = [
+                "id": record.id,
+                "name": name,
+                "app_id": appId,
+                "path": path,
+                "version": version
+            ]
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonString)], isError: false)
+            }
+            return .init(content: [.text("{\"id\":\"\(record.id)\",\"name\":\"\(name)\"}")], isError: false)
+        } catch {
+            Log.mcp.error("save_script failed: \(error)")
+            return .init(content: [.text("save_script error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeListScripts(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameter: app_id")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            let scripts = try repo.listAppScripts(appId: appId)
+            let entries: [[String: Any]] = scripts.map { script in
+                var entry: [String: Any] = [
+                    "name": script.name,
+                    "version": script.version,
+                    "app_id": script.appId,
+                    "path": DatabaseManager.appScriptSandboxPath(appId: appId, name: script.name)
+                ]
+                if let desc = script.description { entry["description"] = desc }
+                if !script.requiredCapabilities.isEmpty { entry["capabilities"] = script.requiredCapabilities }
+                return entry
+            }
+            if let jsonData = try? JSONSerialization.data(withJSONObject: entries),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonString)], isError: false)
+            }
+            return .init(content: [.text("[]")], isError: false)
+        } catch {
+            Log.mcp.error("list_scripts failed: \(error)")
+            return .init(content: [.text("list_scripts error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeGetScript(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let nameVal = dict["name"], case .string(let name) = nameVal,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameters: name, app_id")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            guard let script = try repo.getAppScript(appId: appId, name: name) else {
+                return .init(content: [.text("{\"error\": \"Script '\(name)' not found for app '\(appId)'\"}")], isError: true)
+            }
+            var result: [String: Any] = [
+                "name": script.name,
+                "source": script.source,
+                "version": script.version,
+                "app_id": script.appId,
+                "path": DatabaseManager.appScriptSandboxPath(appId: appId, name: script.name)
+            ]
+            if let desc = script.description { result["description"] = desc }
+            if !script.requiredCapabilities.isEmpty { result["capabilities"] = script.requiredCapabilities }
+            
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonString)], isError: false)
+            }
+            return .init(content: [.text("{\"error\": \"serialization failed\"}")], isError: true)
+        } catch {
+            Log.mcp.error("get_script failed: \(error)")
+            return .init(content: [.text("get_script error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeRunScript(arguments: Value?) async -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let nameVal = dict["name"], case .string(let name) = nameVal,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameters: name, app_id")], isError: true)
+        }
+        
+        guard DatabaseManager.isValidScriptName(name) else {
+            return .init(content: [.text("Invalid script name '\(name)'. Use kebab-case.")], isError: true)
+        }
+        
+        // Verify script exists in app-scoped table
+        do {
+            let repo = AppBundleRepository()
+            guard try repo.getAppScript(appId: appId, name: name) != nil else {
+                return .init(content: [.text("{\"error\": \"Script '\(name)' not found for app '\(appId)'\"}")], isError: true)
+            }
+        } catch {
+            return .init(content: [.text("run_script error: \(error.localizedDescription)")], isError: true)
+        }
+        
+        var args: [String] = []
+        if let argsVal = dict["args"], case .array(let argsArray) = argsVal {
+            args = argsArray.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+        }
+        
+        let path = DatabaseManager.appScriptSandboxPath(appId: appId, name: name)
+        let (success, output) = await ScriptExecutor.shared.evalFile(
+            path: path,
+            args: args,
+            appId: appId,
+            scriptName: name
+        )
+        
+        if success {
+            return .init(content: [.text(output ?? "{\"success\": true}")], isError: false)
+        } else {
+            return .init(content: [.text(output ?? "Script execution failed")], isError: true)
+        }
+    }
+    
+    // MARK: - Bundle Tool Handlers
+    
+    private func executeBundleGet(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameter: app_id")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            
+            // If revision_id provided, fetch stored bundle JSON
+            if let revIdVal = dict["revision_id"], case .string(let revisionId) = revIdVal {
+                guard let revision = try repo.getBundleRevision(id: revisionId, appId: appId) else {
+                    return .init(content: [.text("{\"error\": \"Revision '\(revisionId)' not found\"}")], isError: true)
+                }
+                return .init(content: [.text(revision.bundleJSON)], isError: false)
+            }
+            
+            // Otherwise, build live bundle from current DB state
+            let bundle = try AppBundle.build(appId: appId)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(bundle)
+            guard let json = String(data: data, encoding: .utf8) else {
+                return .init(content: [.text("{\"error\": \"Failed to encode bundle\"}")], isError: true)
+            }
+            return .init(content: [.text(json)], isError: false)
+        } catch {
+            Log.mcp.error("bundle_get failed: \(error)")
+            return .init(content: [.text("bundle_get error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundlePut(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal,
+              let bundleVal = dict["bundle_json"], case .string(let bundleJSON) = bundleVal,
+              let modeVal = dict["mode"], case .string(let mode) = modeVal else {
+            return .init(content: [.text("Missing required parameters: app_id, bundle_json, mode")], isError: true)
+        }
+        
+        guard mode == "draft" || mode == "promote" else {
+            return .init(content: [.text("Invalid mode '\(mode)'. Must be 'draft' or 'promote'.")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            
+            // Validate the bundle JSON is parseable
+            guard let jsonData = bundleJSON.data(using: .utf8) else {
+                return .init(content: [.text("{\"error\": \"Invalid bundle JSON encoding\"}")], isError: true)
+            }
+            var bundle = try JSONDecoder().decode(AppBundle.self, from: jsonData)
+            if bundle.manifest.appId != appId {
+                bundle = bundle.retargeted(to: appId)
+            }
+
+            // Validate referential integrity before promote
+            if mode == "promote", let validationErrors = bundle.validate() {
+                return .init(content: [.text("{\"error\": \"validation_failed\", \"issues\": \(validationErrors)}")], isError: true)
+            }
+
+            let canonicalData = try JSONEncoder().encode(bundle)
+            guard let canonicalBundleJSON = String(data: canonicalData, encoding: .utf8) else {
+                return .init(content: [.text("{\"error\": \"Failed to encode bundle\"}")], isError: true)
+            }
+
+            // Save as draft first; if promote succeeds we'll mark it promoted.
+            let revision = try repo.saveBundleRevision(
+                appId: appId,
+                status: .draft,
+                summary: "Bundle \(mode) via bundle_put",
+                bundleJSON: canonicalBundleJSON
+            )
+            
+            // Promote if requested
+            if mode == "promote" {
+                // Restore the bundle contents into the app tables
+                try bundle.restore(appId: appId)
+                try repo.promoteBundleRevision(id: revision.id)
+            }
+
+            let finalStatus: BundleRevisionStatus = mode == "promote" ? .promoted : .draft
+            
+            let result: [String: Any] = [
+                "revision_id": revision.id,
+                "app_id": appId,
+                "mode": mode,
+                "status": finalStatus.rawValue
+            ]
+            if let resultData = try? JSONSerialization.data(withJSONObject: result),
+               let resultStr = String(data: resultData, encoding: .utf8) {
+                return .init(content: [.text(resultStr)], isError: false)
+            }
+            return .init(content: [.text("{\"revision_id\": \"\(revision.id)\"}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_put failed: \(error)")
+            return .init(content: [.text("bundle_put error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundlePatch(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal,
+              let patchesVal = dict["patches"], case .array(let patches) = patchesVal else {
+            return .init(content: [.text("Missing required parameters: app_id, patches")], isError: true)
+        }
+        
+        // Validate patch surfaces against repair policy
+        let patchDicts: [[String: Any]] = patches.compactMap { patchVal in
+            guard case .object(let p) = patchVal else { return nil }
+            return p.reduce(into: [String: Any]()) { result, kv in
+                result[kv.key] = jsonToAny(kv.value)
+            }
+        }
+        if let bundle = try? AppBundle.build(appId: appId),
+           let rejection = RepairCoordinator.validatePatchSurfaces(patches: patchDicts, policy: bundle.manifest.repairPolicy) {
+            return .init(content: [.text("{\"error\": \"\(rejection)\"}")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            var applied = 0
+            var errors: [String] = []
+            
+            for patchVal in patches {
+                guard case .object(let patch) = patchVal,
+                      let targetVal = patch["target"], case .string(let target) = targetVal,
+                      let nameVal = patch["name"], case .string(let name) = nameVal,
+                      let dataVal = patch["data"] else {
+                    errors.append("Invalid patch format — requires target, name, data")
+                    continue
+                }
+                
+                let dataDict = jsonToDictionary(dataVal) ?? [:]
+                
+                switch target {
+                case "template":
+                    let template = jsonString(from: dataDict["template"]) ?? "{}"
+                    let version = dataDict["version"] as? String ?? "1.0.0"
+                    _ = try repo.saveAppTemplate(
+                        appId: appId,
+                        name: name,
+                        version: version,
+                        template: template,
+                        defaultData: jsonString(from: dataDict["defaultData"]),
+                        animation: jsonString(from: dataDict["animation"])
+                    )
+                    applied += 1
+                    
+                case "script":
+                    let source = dataDict["source"] as? String ?? ""
+                    let version = dataDict["version"] as? String ?? "1.0.0"
+                    let capabilities: [String]
+                    if let caps = dataDict["capabilities"] as? [String] {
+                        capabilities = caps
+                    } else if let capsAny = dataDict["capabilities"] as? [Any] {
+                        capabilities = capsAny.compactMap { $0 as? String }
+                    } else {
+                        capabilities = []
+                    }
+                    _ = try repo.saveAppScript(
+                        appId: appId,
+                        name: name,
+                        source: source,
+                        description: dataDict["description"] as? String,
+                        capabilities: capabilities,
+                        version: version
+                    )
+                    applied += 1
+
+                case "binding":
+                    guard let templateName = dataDict["template"] as? String else {
+                        errors.append("Binding patch '\(name)' missing required field 'template'")
+                        continue
+                    }
+                    guard let componentPath = dataDict["componentPath"] as? String, !componentPath.isEmpty else {
+                        errors.append("Binding patch '\(name)' missing required field 'componentPath'")
+                        continue
+                    }
+                    let actionJSON = jsonString(from: dataDict["action"])
+                        ?? (dataDict["actionJSON"] as? String)
+                        ?? "{}"
+                    _ = try repo.saveAppBinding(
+                        appId: appId,
+                        id: name,
+                        template: templateName,
+                        componentPath: componentPath,
+                        actionJSON: actionJSON
+                    )
+                    applied += 1
+                    
+                default:
+                    errors.append("Unknown patch target '\(target)'. Use 'template', 'script', or 'binding'.")
+                }
+            }
+            
+            var result: [String: Any] = ["applied": applied]
+            if !errors.isEmpty { result["errors"] = errors }
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonStr)], isError: false)
+            }
+            return .init(content: [.text("{\"applied\": \(applied)}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_patch failed: \(error)")
+            return .init(content: [.text("bundle_patch error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundleRun(arguments: Value?) async -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal,
+              let entryVal = dict["entrypoint"], case .string(let entrypoint) = entryVal else {
+            return .init(content: [.text("Missing required parameters: app_id, entrypoint")], isError: true)
+        }
+        
+        let revisionId: String
+        if let revIdVal = dict["revision_id"], case .string(let rid) = revIdVal {
+            revisionId = rid
+        } else {
+            revisionId = "HEAD"
+        }
+        
+        var args: [String] = []
+        if let argsVal = dict["args"], case .array(let argsArray) = argsVal {
+            args = argsArray.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+        }
+        
+        // Check for repair_for_run_id — repair loop integration
+        let repairRunId: String?
+        if let repairVal = dict["repair_for_run_id"], case .string(let rid) = repairVal {
+            repairRunId = rid
+        } else {
+            repairRunId = nil
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            
+            // Verify script exists
+            guard try repo.getAppScript(appId: appId, name: entrypoint) != nil else {
+                return .init(content: [.text("{\"error\": \"Script '\(entrypoint)' not found for app '\(appId)'\"}")], isError: true)
+            }
+            if revisionId != "HEAD",
+               try repo.getBundleRevision(id: revisionId, appId: appId) == nil {
+                return .init(content: [.text("{\"error\": \"Revision '\(revisionId)' not found for app '\(appId)'\"}")], isError: true)
+            }
+
+            // If this is a repair attempt, enforce repair policy
+            var repairAttemptNo: Int?
+            if let repairRunId = repairRunId {
+                guard UserDefaults.standard.bool(forKey: "bundleRepairMode") else {
+                    return .init(content: [.text("{\"error\": \"Repair mode is disabled. Enable 'Bundle Repair Loop' in Settings.\"}")], isError: true)
+                }
+                
+                let bundle = try AppBundle.build(appId: appId)
+                let coordinator = RepairCoordinator(
+                    appId: appId,
+                    runId: repairRunId,
+                    policy: bundle.manifest.repairPolicy
+                )
+                
+                if let denial = try coordinator.canRepair() {
+                    try coordinator.abortAndRollback()
+                    return .init(content: [.text("{\"error\": \"\(denial)\", \"action\": \"aborted_and_rolled_back\"}")], isError: true)
+                }
+                
+                repairAttemptNo = try coordinator.recordAttempt(patchSummary: "retry entrypoint: \(entrypoint)")
+            }
+            
+            // Create run record or reuse existing for repair
+            let runId: String
+            if let repairRunId = repairRunId {
+                try repo.updateRunStatus(id: repairRunId, status: .running)
+                runId = repairRunId
+            } else {
+                let run = try repo.saveRun(
+                    appId: appId,
+                    revisionId: revisionId,
+                    entrypoint: entrypoint,
+                    status: .running
+                )
+                runId = run.id
+            }
+            
+            // Execute the script
+            let path = DatabaseManager.appScriptSandboxPath(appId: appId, name: entrypoint)
+            let (success, output) = await ScriptExecutor.shared.evalFile(path: path, args: args, appId: appId, scriptName: entrypoint)
+            
+            // Update run status
+            let finalStatus: RunStatus = success ? .success : .failed
+            let failureSig = success ? nil : (output ?? "Unknown error")
+            try repo.updateRunStatus(id: runId, status: finalStatus, failureSignature: failureSig)
+            if let attemptNo = repairAttemptNo {
+                try repo.updateRepairAttempt(
+                    runId: runId,
+                    attemptNo: attemptNo,
+                    outcome: success ? .success : .failed,
+                    patchSummary: success ? "repair succeeded" : "repair failed: \(failureSig ?? "unknown")"
+                )
+            }
+            
+            var result: [String: Any] = [
+                "run_id": runId,
+                "app_id": appId,
+                "status": finalStatus.rawValue,
+                "entrypoint": entrypoint
+            ]
+            if let output = output { result["output"] = output }
+            if repairRunId != nil { result["is_repair"] = true }
+            
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonStr)], isError: !success)
+            }
+            return .init(content: [.text("{\"run_id\": \"\(runId)\", \"status\": \"\(finalStatus)\"}")], isError: !success)
+        } catch {
+            Log.mcp.error("bundle_run failed: \(error)")
+            return .init(content: [.text("bundle_run error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundleRunStatus(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let runIdVal = dict["run_id"], case .string(let runId) = runIdVal else {
+            return .init(content: [.text("Missing required parameter: run_id")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            guard let run = try repo.getRun(id: runId) else {
+                return .init(content: [.text("{\"error\": \"Run '\(runId)' not found\"}")], isError: true)
+            }
+            
+            let isoFormatter = ISO8601DateFormatter()
+            var result: [String: Any] = [
+                "run_id": run.id,
+                "app_id": run.appId,
+                "revision_id": run.revisionId,
+                "entrypoint": run.entrypoint,
+                "status": run.status.rawValue,
+                "started_at": isoFormatter.string(from: run.startedAt)
+            ]
+            if let failSig = run.failureSignature { result["failure_signature"] = failSig }
+            if let endedAt = run.endedAt { result["ended_at"] = isoFormatter.string(from: endedAt) }
+            
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonStr)], isError: false)
+            }
+            return .init(content: [.text("{\"run_id\": \"\(runId)\", \"status\": \"\(run.status.rawValue)\"}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_run_status failed: \(error)")
+            return .init(content: [.text("bundle_run_status error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundleRepairTrace(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let runIdVal = dict["run_id"], case .string(let runId) = runIdVal else {
+            return .init(content: [.text("Missing required parameter: run_id")], isError: true)
+        }
+        
+        do {
+            let repo = AppBundleRepository()
+            let attempts = try repo.listRepairAttempts(runId: runId)
+            
+            let isoFmt = ISO8601DateFormatter()
+            let entries: [[String: Any]] = attempts.map { attempt in
+                var entry: [String: Any] = [
+                    "id": attempt.id,
+                    "attempt_no": attempt.attemptNo,
+                    "outcome": attempt.outcome.rawValue,
+                    "started_at": isoFmt.string(from: attempt.startedAt)
+                ]
+                if let summary = attempt.patchSummary { entry["patch_summary"] = summary }
+                if let endedAt = attempt.endedAt { entry["ended_at"] = isoFmt.string(from: endedAt) }
+                return entry
+            }
+            
+            let result: [String: Any] = [
+                "run_id": runId,
+                "attempts": entries,
+                "count": entries.count
+            ]
+            if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                return .init(content: [.text(jsonStr)], isError: false)
+            }
+            return .init(content: [.text("{\"run_id\": \"\(runId)\", \"count\": \(entries.count)}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_repair_trace failed: \(error)")
+            return .init(content: [.text("bundle_repair_trace error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    // MARK: - Phase 5: Reuse Tools
+    
+    private func executeBundleExport(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal else {
+            return .init(content: [.text("Missing required parameter: app_id")], isError: true)
+        }
+        
+        do {
+            let bundle = try AppBundle.build(appId: appId)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(bundle)
+            guard let jsonStr = String(data: data, encoding: .utf8) else {
+                return .init(content: [.text("{\"error\": \"Failed to encode bundle\"}")], isError: true)
+            }
+            
+            let result: [String: Any] = [
+                "app_id": appId,
+                "templates_count": bundle.templates.count,
+                "scripts_count": bundle.scripts.count,
+                "bindings_count": bundle.bindings.count,
+                "bundle_json": jsonStr
+            ]
+            if let resultData = try? JSONSerialization.data(withJSONObject: result),
+               let resultStr = String(data: resultData, encoding: .utf8) {
+                return .init(content: [.text(resultStr)], isError: false)
+            }
+            return .init(content: [.text(jsonStr)], isError: false)
+        } catch {
+            Log.mcp.error("bundle_export failed: \(error)")
+            return .init(content: [.text("bundle_export error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundleImport(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let appIdVal = dict["app_id"], case .string(let appId) = appIdVal,
+              let bundleVal = dict["bundle_json"], case .string(let bundleJSON) = bundleVal else {
+            return .init(content: [.text("Missing required parameters: app_id, bundle_json")], isError: true)
+        }
+        
+        let shouldPromote: Bool
+        if let promoteVal = dict["promote"], case .bool(let p) = promoteVal {
+            shouldPromote = p
+        } else {
+            shouldPromote = false
+        }
+        
+        do {
+            guard let jsonData = bundleJSON.data(using: .utf8) else {
+                return .init(content: [.text("{\"error\": \"Invalid bundle JSON encoding\"}")], isError: true)
+            }
+            var bundle = try JSONDecoder().decode(AppBundle.self, from: jsonData)
+            let sourceAppId = bundle.manifest.appId
+            if sourceAppId != appId {
+                bundle = bundle.retargeted(to: appId)
+            }
+            
+            // Validate before import
+            if let validationErrors = bundle.validate() {
+                return .init(content: [.text("{\"error\": \"validation_failed\", \"issues\": \(validationErrors)}")], isError: true)
+            }
+            
+            let repo = AppBundleRepository()
+            let normalizedJSONData = try JSONEncoder().encode(bundle)
+            let normalizedJSON = String(data: normalizedJSONData, encoding: .utf8) ?? bundleJSON
+            let revision = try repo.saveBundleRevision(
+                appId: appId,
+                status: .draft,
+                summary: "Imported bundle via bundle_import",
+                bundleJSON: normalizedJSON
+            )
+            
+            if shouldPromote {
+                try bundle.restore(appId: appId)
+                try repo.promoteBundleRevision(id: revision.id)
+            }
+            let finalStatus: BundleRevisionStatus = shouldPromote ? .promoted : .draft
+            
+            let result: [String: Any] = [
+                "revision_id": revision.id,
+                "app_id": appId,
+                "source_app_id": sourceAppId,
+                "status": finalStatus.rawValue,
+                "promoted": shouldPromote,
+                "templates_count": bundle.templates.count,
+                "scripts_count": bundle.scripts.count,
+                "bindings_count": bundle.bindings.count
+            ]
+            if let resultData = try? JSONSerialization.data(withJSONObject: result),
+               let resultStr = String(data: resultData, encoding: .utf8) {
+                return .init(content: [.text(resultStr)], isError: false)
+            }
+            return .init(content: [.text("{\"revision_id\": \"\(revision.id)\"}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_import failed: \(error)")
+            return .init(content: [.text("bundle_import error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+    
+    private func executeBundleClone(arguments: Value?) -> CallTool.Result {
+        guard let arguments = arguments,
+              case .object(let dict) = arguments,
+              let srcVal = dict["source_app_id"], case .string(let sourceAppId) = srcVal,
+              let tgtVal = dict["target_app_id"], case .string(let targetAppId) = tgtVal else {
+            return .init(content: [.text("Missing required parameters: source_app_id, target_app_id")], isError: true)
+        }
+        
+        do {
+            // Build snapshot from source
+            let sourceBundle = try AppBundle.build(appId: sourceAppId)
+            let bundle = sourceBundle.retargeted(to: targetAppId)
+            
+            // Restore into target
+            try bundle.restore(appId: targetAppId)
+            
+            // Save and promote in target
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(bundle)
+            let bundleJSON = String(data: data, encoding: .utf8) ?? "{}"
+            
+            let repo = AppBundleRepository()
+            let revision = try repo.saveBundleRevision(
+                appId: targetAppId,
+                status: .draft,
+                summary: "Cloned from \(sourceAppId)",
+                bundleJSON: bundleJSON
+            )
+            try repo.promoteBundleRevision(id: revision.id)
+            
+            let result: [String: Any] = [
+                "source_app_id": sourceAppId,
+                "target_app_id": targetAppId,
+                "revision_id": revision.id,
+                "templates_count": bundle.templates.count,
+                "scripts_count": bundle.scripts.count,
+                "bindings_count": bundle.bindings.count
+            ]
+            if let resultData = try? JSONSerialization.data(withJSONObject: result),
+               let resultStr = String(data: resultData, encoding: .utf8) {
+                return .init(content: [.text(resultStr)], isError: false)
+            }
+            return .init(content: [.text("{\"source\": \"\(sourceAppId)\", \"target\": \"\(targetAppId)\"}")], isError: false)
+        } catch {
+            Log.mcp.error("bundle_clone failed: \(error)")
+            return .init(content: [.text("bundle_clone error: \(error.localizedDescription)")], isError: true)
+        }
+    }
+
+    private func persistViewTemplateToAppScope(name: String, appId: String) throws {
+        guard let template = ViewRegistry.shared.templates[name] else {
+            throw NSError(
+                domain: "MCPServer",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Template '\(name)' not found after patch"]
+            )
+        }
+
+        var animationJSON: String? = nil
+        if let animation = template.animation {
+            let animationDict: [String: Any] = [
+                "enter": animation.enter as Any,
+                "exit": animation.exit as Any,
+                "duration": animation.duration as Any
+            ].compactMapValues { $0 }
+            if let data = try? JSONSerialization.data(withJSONObject: animationDict) {
+                animationJSON = String(data: data, encoding: .utf8)
+            }
+        }
+
+        _ = try AppBundleRepository().saveAppTemplate(
+            appId: appId,
+            name: template.name,
+            version: template.version,
+            template: template.template,
+            defaultData: template.defaultData,
+            animation: animationJSON
+        )
+    }
+    
     private func jsonToDictionary(_ json: Value) -> [String: Any]? {
         guard case .object(let dict) = json else { return nil }
         var result: [String: Any] = [:]
@@ -536,6 +1710,19 @@ class MCPServer: NSObject {
             return result
         case .data(_, let d): return d
         }
+    }
+
+    private func jsonString(from value: Any?) -> String? {
+        guard let value else { return nil }
+        if let str = value as? String {
+            return str
+        }
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
     }
     
     private func executeGetLocation() -> CallTool.Result {
@@ -734,6 +1921,12 @@ class MCPServer: NSObject {
                     // If we have the full body, process the request
                     if currentBodyLength >= contentLength {
                         Log.mcp.debug("[\(connectionId)] Request complete, processing sync")
+                        
+                        // Check if this is an ask_user tool call — needs deferred response
+                        if self.tryDeferAskUser(requestData: requestBuffer, connection: connection, connectionId: String(connectionId)) {
+                            return  // Connection held open; response sent later via resolveAskUser
+                        }
+                        
                         // Process synchronously on httpQueue to avoid latency
                         let response = self.handleHTTPRequestSync(requestBuffer)
                         
@@ -760,6 +1953,46 @@ class MCPServer: NSObject {
         }
         
         readMore()
+    }
+    
+    /// Detects ask_user tool calls and defers the HTTP response until the user answers.
+    /// Returns true if this is an ask_user call (connection held open), false otherwise.
+    private nonisolated func tryDeferAskUser(requestData: Data, connection: NWConnection, connectionId: String) -> Bool {
+        guard let requestString = String(data: requestData, encoding: .utf8),
+              let bodyStart = requestString.range(of: "\r\n\r\n")?.upperBound else {
+            return false
+        }
+        
+        let body = String(requestString[bodyStart...])
+        guard let jsonData = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let params = json["params"] as? [String: Any],
+              let toolName = params["name"] as? String,
+              toolName == "ask_user" else {
+            return false
+        }
+        
+        let argsData = params["arguments"] as? [String: Any]
+        guard let askType = argsData?["type"] as? String,
+              let prompt = argsData?["prompt"] as? String else {
+            return false
+        }
+        let options = argsData?["options"] as? [String]
+        let requestId = UUID().uuidString
+        
+        Log.mcp.info("[\(connectionId)] ask_user detected — deferring response for requestId=\(requestId)")
+        
+        // Stash the connection for later response
+        askUserLock.lock()
+        askUserDeferredConnections[requestId] = connection
+        askUserLock.unlock()
+        
+        // Notify UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            self?.onAskUser?(requestId, askType, prompt, options)
+        }
+        
+        return true  // Connection held open
     }
     
     /// Synchronous HTTP request handler - runs on httpQueue without MainActor hop
@@ -926,6 +2159,44 @@ class MCPServer: NSObject {
                     }
                 }
                 
+                // Also persist to app_templates when app_id is provided
+                if let appId = argsData?["app_id"] as? String {
+                    do {
+                        let repo = AppBundleRepository()
+                        let templateJSON = try JSONSerialization.data(withJSONObject: component)
+                        let templateStr = String(data: templateJSON, encoding: .utf8) ?? "{}"
+                        
+                        var defaultDataStr: String? = nil
+                        if let dd = defaultData {
+                            let ddJSON = try JSONSerialization.data(withJSONObject: dd)
+                            defaultDataStr = String(data: ddJSON, encoding: .utf8)
+                        }
+                        
+                        var animationStr: String? = nil
+                        if let anim = animation {
+                            let animDict: [String: Any] = [
+                                "enter": anim.enter as Any,
+                                "exit": anim.exit as Any,
+                                "duration": anim.duration as Any
+                            ].compactMapValues { $0 }
+                            let animJSON = try JSONSerialization.data(withJSONObject: animDict)
+                            animationStr = String(data: animJSON, encoding: .utf8)
+                        }
+                        
+                        _ = try repo.saveAppTemplate(
+                            appId: appId,
+                            name: name,
+                            version: version,
+                            template: templateStr,
+                            defaultData: defaultDataStr,
+                            animation: animationStr
+                        )
+                        Log.mcp.info("register_view: also persisted to app_templates for app \(appId)")
+                    } catch {
+                        Log.mcp.error("register_view: failed to persist to app_templates: \(error)")
+                    }
+                }
+                
                 // Include warning in response if present
                 var responseText = "{\"registered\": \"\(name)\", \"version\": \"\(version)\"}"
                 if let warningMsg = validation.warningMessage {
@@ -973,12 +2244,16 @@ class MCPServer: NSObject {
                       let patches = argsData?["patches"] as? [[String: Any]] else {
                     return ["content": [["type": "text", "text": "Missing required parameters: name, patches"]], "isError": true]
                 }
+                let appId = argsData?["app_id"] as? String
 
                 // Avoid deadlock when called from MainActor path
                 if Thread.isMainThread {
                     do {
                         try MainActor.assumeIsolated {
                             try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
+                            if let appId {
+                                try persistViewTemplateToAppScope(name: name, appId: appId)
+                            }
                         }
                     } catch {
                         return ["content": [["type": "text", "text": "Template patch error: \(error.localizedDescription)"]], "isError": true]
@@ -991,6 +2266,9 @@ class MCPServer: NSObject {
                 DispatchQueue.main.async {
                     do {
                         try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
+                        if let appId {
+                            try self.persistViewTemplateToAppScope(name: name, appId: appId)
+                        }
                     } catch {
                         patchError = error.localizedDescription
                     }

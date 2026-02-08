@@ -18,6 +18,10 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
     @Published var events: [AgentEvent] = []
     @Published var isReady = false
     @Published var currentStreamText = ""
+    @Published private(set) var isCancelled = false
+    
+    // Reference to the active poll task so we can cancel it
+    private var pollTask: Task<Void, Never>?
     
     private var engine: Engine?
     private var store: Store?
@@ -175,6 +179,14 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
     
+    /// Cancel the current agent operation
+    func cancel() {
+        isCancelled = true
+        pollTask?.cancel()
+        pollTask = nil
+        Log.agent.info(" Agent cancelled by user")
+    }
+    
     /// Send a message to the agent
     func send(_ message: String) {
         guard let handle = agentHandle, instance != nil else {
@@ -182,7 +194,10 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             return
         }
         
-        Task {
+        // Reset cancel state for new operation
+        isCancelled = false
+        
+        pollTask = Task {
             do {
                 try await sendInternal(handle: handle, message: message)
                 // Start polling for events
@@ -260,7 +275,7 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
         Log.agent.info(" Starting poll loop for handle=\(handle)")
         
         // Polling loop
-        while true {
+        while !isCancelled {
             do {
                 // Component Model: poll(handle: u32) -> result_ptr: i32
                 // Returns pointer to option<agent-event>
@@ -332,6 +347,11 @@ final class NativeAgentHost: NSObject, ObservableObject, @unchecked Sendable {
             } catch {
                 Log.agent.info(" Poll error: \(error)")
                 break
+            }
+        }
+        if isCancelled {
+            await MainActor.run {
+                self.events.append(.cancelled)
             }
         }
         Log.agent.info(" Poll loop exited")

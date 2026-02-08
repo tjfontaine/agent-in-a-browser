@@ -24,6 +24,17 @@ interface command {
     list-commands: func() -> list<string>;
 }
 
+/// Direct TypeScript evaluation interface.
+/// Bypasses the stream-based command interface for simpler call/return semantics.
+interface eval {
+    /// Transpile and execute TypeScript/JavaScript code inline.
+    /// Returns ok(stdout + expression result) or err(error message).
+    eval: func(code: string, source-name: option<string>) -> result<string, string>;
+    
+    /// Execute a TypeScript/JavaScript file by path.
+    eval-file: func(path: string, args: list<string>) -> result<string, string>;
+}
+
 world tsx-engine {
     // WASI core IO
     import wasi:io/error@0.2.9;
@@ -65,6 +76,22 @@ world tsx-engine {
     import wasi:sockets/tcp@0.2.9;
     import wasi:sockets/ip-name-lookup@0.2.9;
     
+    // iOS bridge (native host APIs)
+    import ios:bridge/storage@0.1.0;
+    import ios:bridge/device@0.1.0;
+    import ios:bridge/render@0.1.0;
+    import ios:bridge/permissions@0.1.0;
+    // Tier 2 — user consent
+    import ios:bridge/contacts@0.1.0;
+    import ios:bridge/calendar@0.1.0;
+    import ios:bridge/notifications@0.1.0;
+    import ios:bridge/clipboard@0.1.0;
+    // Tier 3 — system + user consent
+    import ios:bridge/location@0.1.0;
+    import ios:bridge/health@0.1.0;
+    import ios:bridge/keychain@0.1.0;
+    import ios:bridge/photos@0.1.0;
+    
     export command;
+    export eval;
 }
-

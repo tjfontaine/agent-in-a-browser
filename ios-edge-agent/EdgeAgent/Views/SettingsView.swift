@@ -152,6 +152,12 @@ struct SettingsView: View {
                             in: 1...100)
                 }
                 
+                Section("Developer") {
+                    Toggle("App Bundle Mode", isOn: $configManager.bundleMode)
+                    Toggle("Bundle Repair Loop", isOn: $configManager.bundleRepairMode)
+                        .disabled(!configManager.bundleMode)
+                }
+                
                 Section {
                     Link("Get Anthropic API Key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
                     Link("Get OpenAI API Key", destination: URL(string: "https://platform.openai.com/api-keys")!)

@@ -15,6 +15,9 @@ enum AgentEvent: Identifiable, Equatable {
     case modelLoading(text: String, progress: Float)
     case ready
     case renderUI(componentsJSON: String)  // JSON string for Equatable conformance
+    case askUser(id: String, type: String, prompt: String, options: [String]?)
+    case progress(step: Int, total: Int, description: String)
+    case cancelled
     
     var id: String {
         switch self {
@@ -31,6 +34,9 @@ enum AgentEvent: Identifiable, Equatable {
         case .modelLoading: return "model_loading"
         case .ready: return "ready"
         case .renderUI: return "render_ui"
+        case .askUser(let id, _, _, _): return "ask_user_\(id)"
+        case .progress(let step, _, _): return "progress_\(step)"
+        case .cancelled: return "cancelled"
         }
     }
     
@@ -93,6 +99,18 @@ enum AgentEvent: Identifiable, Equatable {
                 return .renderUI(componentsJSON: jsonString)
             }
             return nil
+        case "ask_user":
+            let id = dict["id"] as? String ?? UUID().uuidString
+            let askType = dict["ask_type"] as? String ?? "confirm"
+            let prompt = dict["prompt"] as? String ?? ""
+            let options = dict["options"] as? [String]
+            return .askUser(id: id, type: askType, prompt: prompt, options: options)
+        case "progress":
+            let step = dict["step"] as? Int ?? 0
+            let total = dict["total"] as? Int ?? 0
+            let desc = dict["description"] as? String ?? ""
+            return .progress(step: step, total: total, description: desc)
+        case "cancelled": return .cancelled
         default: return nil
         }
     }

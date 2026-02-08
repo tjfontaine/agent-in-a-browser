@@ -70,3 +70,4 @@ world = "tsx-engine"
 "wasi:sockets" = { path = "../../wit/deps/sockets" }
 "wasi:random" = { path = "../../wit/deps/random" }
 "wasi:cli" = { path = "../../wit/deps/cli" }
+"ios:bridge" = { path = "../../wit/deps/ios-bridge" }

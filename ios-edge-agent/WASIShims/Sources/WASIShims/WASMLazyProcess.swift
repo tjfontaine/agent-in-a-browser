@@ -295,6 +295,7 @@ public final class WASMLazyProcess: NSObject, LazyProcessProtocol, @unchecked Se
                 SocketsProvider(resources: resources),
                 HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
                 HttpTypesProvider(resources: resources, httpManager: httpManager),
+                IosBridgeProvider(),
             ]
             
             // Register all providers

@@ -53,14 +53,29 @@ class ConfigManager: ObservableObject {
         didSet { UserDefaults.standard.set(maxTurns, forKey: "maxTurns") }
     }
     
+    // MARK: - App Bundle Feature Flags
+    
+    @Published var bundleMode: Bool {
+        didSet { UserDefaults.standard.set(bundleMode, forKey: "bundleMode") }
+    }
+    @Published var bundleRepairMode: Bool {
+        didSet { UserDefaults.standard.set(bundleRepairMode, forKey: "bundleRepairMode") }
+    }
+    
     init() {
         let defaults = UserDefaults.standard
         self.provider = defaults.string(forKey: "provider") ?? "anthropic"
         self.model = defaults.string(forKey: "model") ?? "claude-sonnet-4-5"
         self.apiKey = defaults.string(forKey: "apiKey") ?? ""
         self.baseUrl = defaults.string(forKey: "baseUrl") ?? ""
-        self.maxTurns = defaults.integer(forKey: "maxTurns")
-        if self.maxTurns == 0 { self.maxTurns = 25 }
+        let storedMaxTurns = defaults.integer(forKey: "maxTurns")
+        self.maxTurns = storedMaxTurns == 0 ? 25 : storedMaxTurns
+        if defaults.object(forKey: "bundleMode") == nil {
+            self.bundleMode = true
+        } else {
+            self.bundleMode = defaults.bool(forKey: "bundleMode")
+        }
+        self.bundleRepairMode = defaults.bool(forKey: "bundleRepairMode")
     }
     
     func buildAgentConfig() -> AgentConfig {

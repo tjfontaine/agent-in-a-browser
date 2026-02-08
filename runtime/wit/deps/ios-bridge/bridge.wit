@@ -1,0 +1,126 @@
+package ios:bridge@0.1.0;
+
+/// Key-value storage backed by the host (UserDefaults on iOS).
+/// All keys are automatically scoped with a "script:" prefix.
+interface storage {
+    /// Get a value by key. Returns none if not set.
+    get: func(key: string) -> option<string>;
+    /// Set a key-value pair.
+    set: func(key: string, value: string);
+    /// Remove a key. Returns true if the key existed.
+    remove: func(key: string) -> bool;
+    /// List keys matching an optional prefix filter.
+    keys: func(prefix: option<string>) -> list<string>;
+}
+
+/// Read-only device information.
+interface device {
+    /// Returns JSON: {model, systemVersion, batteryLevel, thermalState, isLowPowerMode}
+    info: func() -> string;
+    /// Returns JSON: {status: "wifi"|"cellular"|"none", isExpensive, isConstrained}
+    connectivity: func() -> string;
+    /// Returns JSON: {identifier, timezone, languages}
+    locale: func() -> string;
+}
+
+/// Push UI component trees to the native renderer.
+interface render {
+    /// Render a component tree (JSON). Returns the view ID assigned by the host.
+    show: func(layout-json: string) -> string;
+}
+
+/// Per-script capability grants for protected ios bridge APIs.
+interface permissions {
+    /// Grant capability access to the current script context.
+    request: func(capability: string) -> bool;
+    /// Revoke a previously granted capability.
+    revoke: func(capability: string) -> bool;
+    /// Check whether a capability is currently granted.
+    check: func(capability: string) -> bool;
+}
+
+// ── Tier 2: User consent required ──────────────────────────────────
+
+/// Contact book access (CNContactStore).
+interface contacts {
+    /// Search contacts by name/email/phone. Returns JSON array.
+    search: func(query: string, limit: option<u32>) -> string;
+    /// Get a single contact by identifier. Returns JSON or none.
+    get: func(identifier: string) -> option<string>;
+    /// Check authorization: "authorized" | "denied" | "notDetermined" | "restricted".
+    authorization-status: func() -> string;
+}
+
+/// Calendar and reminders access (EventKit).
+interface calendar {
+    /// List all calendars. Returns JSON array.
+    calendars: func() -> string;
+    /// Query events in a date range. Returns JSON array.
+    events: func(start-iso: string, end-iso: string, calendar-id: option<string>) -> string;
+    /// Create an event from JSON spec. Returns the event identifier.
+    create-event: func(event-json: string) -> string;
+    /// List reminders for a calendar. Returns JSON array.
+    reminders: func(calendar-id: option<string>) -> string;
+    /// Check authorization.
+    authorization-status: func() -> string;
+}
+
+/// Local notifications (UNUserNotificationCenter).
+interface notifications {
+    /// Schedule a notification. Returns the notification identifier.
+    schedule: func(title: string, body: string, trigger-json: option<string>) -> string;
+    /// Cancel a pending notification by identifier.
+    cancel: func(identifier: string);
+    /// List pending notifications. Returns JSON array.
+    pending: func() -> string;
+}
+
+/// System clipboard (UIPasteboard).
+interface clipboard {
+    /// Get the current clipboard string, if any.
+    get-string: func() -> option<string>;
+    /// Set the clipboard to a string.
+    set-string: func(value: string);
+}
+
+// ── Tier 3: System + user consent required ─────────────────────────
+
+/// Location services (CLLocationManager).
+interface location {
+    /// Get the current location. Returns JSON: {lat, lng, altitude, accuracy}.
+    current: func() -> string;
+    /// Forward geocode an address. Returns JSON array of results.
+    geocode: func(address: string) -> string;
+    /// Reverse geocode coordinates. Returns JSON with address info.
+    reverse-geocode: func(lat: f64, lng: f64) -> string;
+}
+
+/// HealthKit read access.
+interface health {
+    /// Query samples of a given type in a date range. Returns JSON array.
+    query: func(type-id: string, start-iso: string, end-iso: string, limit: option<u32>) -> string;
+    /// Get aggregate statistics for a type in a date range. Returns JSON.
+    statistics: func(type-id: string, start-iso: string, end-iso: string) -> string;
+    /// Check authorization for a specific type.
+    authorization-status: func(type-id: string) -> string;
+}
+
+/// Secure Keychain storage (distinct from UserDefaults-backed storage).
+interface keychain {
+    /// Get a keychain item. Returns the value string or none.
+    get: func(service: string, account: string) -> option<string>;
+    /// Set a keychain item. Returns true on success.
+    set: func(service: string, account: string, value: string) -> bool;
+    /// Remove a keychain item. Returns true if it existed.
+    remove: func(service: string, account: string) -> bool;
+}
+
+/// Photo library access (PHPhotoLibrary).
+interface photos {
+    /// Search assets with options JSON. Returns JSON array of asset metadata.
+    search: func(options-json: string) -> string;
+    /// Get a single asset by identifier. Returns JSON or none.
+    asset: func(identifier: string) -> option<string>;
+    /// List albums. Returns JSON array.
+    albums: func() -> string;
+}

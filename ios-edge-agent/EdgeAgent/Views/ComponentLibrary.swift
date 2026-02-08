@@ -168,11 +168,22 @@ class ComponentState: ObservableObject {
 struct ComponentRouter: View {
     let component: [String: Any]
     let onAction: (String, Any?) -> Void
+    /// Long-press annotation callback: (componentType, key, props)
+    var onAnnotate: ((String, String, [String: Any]) -> Void)? = nil
     
     var body: some View {
         let type = component["type"] as? String ?? ""
         let props = component["props"] as? [String: Any] ?? [:]
+        let key = component["key"] as? String ?? type
         
+        routedView(type: type, props: props)
+            .onLongPressGesture(minimumDuration: 0.5) {
+                onAnnotate?(type, key, props)
+            }
+    }
+    
+    @ViewBuilder
+    private func routedView(type: String, props: [String: Any]) -> some View {
         switch type {
         // Layout
         case "VStack":
@@ -298,8 +309,6 @@ struct CardComponent: View {
         let shadow = props["shadow"] as? Bool ?? true
         let cornerRadius = props["cornerRadius"] as? CGFloat ?? 12
         let children = props["children"] as? [[String: Any]] ?? []
-        let onTap = props["onTap"] as? String  // Format: "action_name:payload"
-        
         let cardContent = VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 ComponentRouter(component: child, onAction: onAction)
@@ -310,9 +319,17 @@ struct CardComponent: View {
         .cornerRadius(cornerRadius)
         .shadow(color: shadow ? .black.opacity(0.1) : .clear, radius: 4, x: 0, y: 2)
         
-        if let onTap = onTap {
+        // Support structured dict actions on onTap (script-first dispatch)
+        if let onTapDict = props["onTap"] as? [String: Any] {
             Button(action: {
-                // Parse action format: "action_name:payload"
+                let actionName = onTapDict["type"] as? String ?? "event"
+                onAction(actionName, onTapDict)
+            }) {
+                cardContent
+            }
+            .buttonStyle(.plain)
+        } else if let onTap = props["onTap"] as? String {
+            Button(action: {
                 if onTap.contains(":") {
                     let parts = onTap.split(separator: ":", maxSplits: 1)
                     let actionName = String(parts[0])
@@ -533,13 +550,22 @@ struct ButtonComponent: View {
     
     var body: some View {
         let label = props["label"] as? String ?? "Button"
-        let action = props["action"] as? String ?? ""
         let style = props["style"] as? String ?? "primary"
         let icon = props["icon"] as? String
         let fullWidth = props["fullWidth"] as? Bool ?? false
         let disabled = props["disabled"] as? Bool ?? false
         
-        Button(action: { onAction(action, nil) }) {
+        Button(action: {
+            // Support structured action configs (dicts) for script-first dispatch
+            if let actionDict = props["action"] as? [String: Any] {
+                // Pass the dict as payload — handleAction will parse it as EventHandlerType
+                let actionName = actionDict["type"] as? String ?? "event"
+                onAction(actionName, actionDict)
+            } else {
+                let action = props["action"] as? String ?? ""
+                onAction(action, nil)
+            }
+        }) {
             HStack(spacing: 6) {
                 if let icon = icon {
                     Image(systemName: icon)
@@ -580,18 +606,24 @@ struct PressableComponent: View {
     let onAction: (String, Any?) -> Void
     
     var body: some View {
-        let action = props["action"] as? String ?? ""
         let children = props["children"] as? [[String: Any]] ?? []
         
         Button(action: {
-            // Parse action format: "action_name:payload"
-            if action.contains(":") {
-                let parts = action.split(separator: ":", maxSplits: 1)
-                let actionName = String(parts[0])
-                let payload = parts.count > 1 ? String(parts[1]) : nil
-                onAction(actionName, payload)
+            // Support structured action configs (dicts) for script-first dispatch
+            if let actionDict = props["action"] as? [String: Any] {
+                let actionName = actionDict["type"] as? String ?? "event"
+                onAction(actionName, actionDict)
             } else {
-                onAction(action, nil)
+                let action = props["action"] as? String ?? ""
+                // Parse action format: "action_name:payload"
+                if action.contains(":") {
+                    let parts = action.split(separator: ":", maxSplits: 1)
+                    let actionName = String(parts[0])
+                    let payload = parts.count > 1 ? String(parts[1]) : nil
+                    onAction(actionName, payload)
+                } else {
+                    onAction(action, nil)
+                }
             }
         }) {
             VStack(spacing: 0) {

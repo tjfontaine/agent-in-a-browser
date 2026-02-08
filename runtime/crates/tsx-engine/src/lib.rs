@@ -13,6 +13,7 @@ mod resolver;
 mod transpiler;
 
 use bindings::exports::shell::unix::command::{ExecEnv, Guest};
+use bindings::exports::shell::unix::eval::Guest as EvalGuest;
 use bindings::wasi::io::streams::{InputStream, OutputStream};
 use std::time::{Duration, Instant};
 
@@ -62,6 +63,94 @@ impl Guest for TsxEngine {
 
     fn list_commands() -> Vec<String> {
         vec!["tsx".to_string(), "tsc".to_string()]
+    }
+}
+
+impl EvalGuest for TsxEngine {
+    fn eval(code: String, source_name: Option<String>) -> Result<String, String> {
+        let source = source_name.unwrap_or_else(|| "<eval>".to_string());
+        eval_code(&code, &source)
+    }
+
+    fn eval_file(path: String, args: Vec<String>) -> Result<String, String> {
+        let fs_path = resolver::file_url_to_path(&path).unwrap_or_else(|| path.clone());
+        let code = std::fs::read_to_string(&fs_path)
+            .map_err(|e| format!("{}: {}", path, e))?;
+        if code.is_empty() {
+            return Err("no code to execute".to_string());
+        }
+
+        js_modules::process::set_argv(args);
+        let result = eval_code(&code, &path);
+        js_modules::process::set_argv(Vec::new());
+        result
+    }
+}
+
+/// Core eval logic shared by EvalGuest methods.
+/// Transpiles TypeScript to JavaScript and executes it, returning
+/// console output + expression result as a single string.
+fn eval_code(ts_code: &str, source_name: &str) -> Result<String, String> {
+    if ts_code.is_empty() {
+        return Err("no code to execute".to_string());
+    }
+
+    // Transpile TypeScript to JavaScript
+    let transpile_result = transpiler::transpile(ts_code)
+        .map_err(|e| format!("transpile error: {}", e))?;
+
+    // Execute with QuickJS
+    js_modules::console::clear_logs();
+
+    let exec_result = if transpile_result.contains_module_decls {
+        execute_js_module_with_source_map(
+            &transpile_result.code,
+            source_name,
+            transpile_result.line_map.as_deref(),
+            transpile_result.source_map.as_deref(),
+        )
+    } else {
+        execute_js_with_source_map(
+            &transpile_result.code,
+            source_name,
+            transpile_result.line_map.as_deref(),
+            transpile_result.source_map.as_deref(),
+        )
+    };
+
+    match exec_result {
+        Ok(output) => {
+            let mut result = String::new();
+
+            // Append console output
+            let console_output = js_modules::console::get_logs();
+            if !console_output.is_empty() {
+                result.push_str(&console_output);
+                if !console_output.ends_with('\n') {
+                    result.push('\n');
+                }
+            }
+
+            // Append expression result if meaningful
+            if !output.is_empty() && output != "undefined" && output != "[object]" {
+                result.push_str(&output);
+            }
+
+            Ok(result)
+        }
+        Err(e) => {
+            // Include any console output before the error
+            let console_output = js_modules::console::get_logs();
+            let mut err_msg = String::new();
+            if !console_output.is_empty() {
+                err_msg.push_str(&console_output);
+                if !console_output.ends_with('\n') {
+                    err_msg.push('\n');
+                }
+            }
+            err_msg.push_str(&e);
+            Err(err_msg)
+        }
     }
 }
 

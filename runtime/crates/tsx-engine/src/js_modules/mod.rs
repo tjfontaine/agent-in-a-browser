@@ -8,6 +8,7 @@ pub mod console;
 pub mod encoding;
 pub mod fetch;
 pub mod fs_promises;
+pub mod ios_bridge;
 pub mod path;
 pub mod process;
 pub mod url;
@@ -28,6 +29,7 @@ pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
     encoding::install(ctx)?;
     buffer::install(ctx)?;
     url::install(ctx)?;
+    ios_bridge::install(ctx)?;
     Ok(())
 }
 
