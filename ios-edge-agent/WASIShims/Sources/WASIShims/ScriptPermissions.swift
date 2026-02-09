@@ -68,10 +68,27 @@ public final class ScriptPermissions: @unchecked Sendable {
     
     private let defaults = UserDefaults.standard
     private let grantKeyPrefix = "scriptPermission:"
+    private let consentHandlerLock = NSLock()
+    private var _requestConsent: ((_ appId: String, _ scriptName: String, _ capability: Capability, _ completion: @escaping (Bool) -> Void) -> Void)?
     
     /// Audit callback for permission grant/revoke events.
     /// Signature: (appId, scriptName, capability, action, actor) -> Void
     public var onAudit: ((String, String, String, String, String) -> Void)?
+    
+    /// Callback used to ask the user whether a script should be granted a capability.
+    /// If unset, non-auto-granted capability requests are denied.
+    public var requestConsent: ((_ appId: String, _ scriptName: String, _ capability: Capability, _ completion: @escaping (Bool) -> Void) -> Void)? {
+        get {
+            consentHandlerLock.lock()
+            defer { consentHandlerLock.unlock() }
+            return _requestConsent
+        }
+        set {
+            consentHandlerLock.lock()
+            _requestConsent = newValue
+            consentHandlerLock.unlock()
+        }
+    }
     
     private init() {}
     
@@ -191,6 +208,59 @@ public final class ScriptPermissions: @unchecked Sendable {
             """
         }
         return nil
+    }
+    
+    /// Request a non-auto-granted capability with explicit user mediation.
+    /// Returns true only when the user approves within the timeout window.
+    @discardableResult
+    public func requestWithUserConsent(
+        _ capability: Capability,
+        appId: String,
+        script: String,
+        actor: String = "script",
+        timeout: TimeInterval = 30
+    ) -> Bool {
+        if capability.isAutoGranted {
+            return true
+        }
+        
+        let handler: ((_ appId: String, _ scriptName: String, _ capability: Capability, _ completion: @escaping (Bool) -> Void) -> Void)?
+        consentHandlerLock.lock()
+        handler = _requestConsent
+        consentHandlerLock.unlock()
+        
+        guard let handler else {
+            Log.mcp.warning("ScriptPermissions: denying \(capability.rawValue) for \(appId)/\(script) (no consent handler)")
+            return false
+        }
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        let decisionLock = NSLock()
+        var approved = false
+        
+        handler(appId, script, capability) { userApproved in
+            decisionLock.lock()
+            approved = userApproved
+            decisionLock.unlock()
+            semaphore.signal()
+        }
+        
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            Log.mcp.warning("ScriptPermissions: timed out waiting for consent (\(capability.rawValue), \(appId)/\(script))")
+            return false
+        }
+        
+        decisionLock.lock()
+        let finalDecision = approved
+        decisionLock.unlock()
+        
+        if finalDecision {
+            grant(capability, appId: appId, script: script, actor: actor)
+            return true
+        }
+        
+        Log.mcp.info("ScriptPermissions: user denied \(capability.rawValue) for \(appId)/\(script)")
+        return false
     }
     
     // MARK: - Private

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // WASIShims Package - Higher-level WASI providers for HTTP, CLI, clocks, and process management
 
 import PackageDescription
@@ -6,8 +6,8 @@ import PackageDescription
 let package = Package(
     name: "WASIShims",
     platforms: [
-        .macOS(.v15),
-        .iOS(.v18)
+        .macOS(.v26),
+        .iOS(.v26)
     ],
     products: [
         .library(

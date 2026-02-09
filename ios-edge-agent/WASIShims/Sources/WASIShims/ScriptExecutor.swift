@@ -15,6 +15,16 @@ public final class ScriptExecutor: @unchecked Sendable {
     
     public static let shared = ScriptExecutor()
     
+    /// Optional callback for `ios:bridge/render@0.1.0#show`.
+    /// Called when a script invokes `render.show(json)` — returns a view ID string.
+    /// Set by `EdgeAgentSession` to forward render events to the UI layer.
+    public var onRenderShow: ((String) -> String)?
+    
+    /// Optional callback for `ios:bridge/render@0.1.0#patch`.
+    /// Called when a script invokes `render.patch(json)` — returns "ok" or error.
+    /// Set by `EdgeAgentSession` to forward patch events to ComponentState.
+    public var onRenderPatch: ((String) -> String)?
+    
     private init() {}
     
     // MARK: - Public API
@@ -198,7 +208,12 @@ public final class ScriptExecutor: @unchecked Sendable {
             SocketsProvider(resources: resources),
             HttpOutgoingHandlerProvider(resources: resources, httpManager: httpManager),
             HttpTypesProvider(resources: resources, httpManager: httpManager),
-            IosBridgeProvider(appId: appId, scriptName: scriptName),
+            {
+                let provider = IosBridgeProvider(appId: appId, scriptName: scriptName)
+                provider.onRenderShow = self.onRenderShow
+                provider.onRenderPatch = self.onRenderPatch
+                return provider
+            }(),
         ]
         
         for provider in providers {

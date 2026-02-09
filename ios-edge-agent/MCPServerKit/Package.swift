@@ -1,12 +1,12 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 
 import PackageDescription
 
 let package = Package(
     name: "MCPServerKit",
     platforms: [
-        .macOS(.v15),
-        .iOS(.v18)
+        .macOS(.v26),
+        .iOS(.v26)
     ],
     products: [
         .library(name: "MCPServerKit", targets: ["MCPServerKit"]),

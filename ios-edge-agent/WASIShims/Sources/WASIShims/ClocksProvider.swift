@@ -17,6 +17,7 @@ public struct ClocksProvider: WASIProvider {
             WASIImportDeclaration(module: "wasi:clocks/monotonic-clock@0.2.4", name: "now", parameters: [], results: [.i64]),
             WASIImportDeclaration(module: "wasi:clocks/monotonic-clock@0.2.4", name: "subscribe-duration", parameters: [.i64], results: [.i32]),
             WASIImportDeclaration(module: "wasi:clocks/monotonic-clock@0.2.9", name: "subscribe-duration", parameters: [.i64], results: [.i32]),
+            WASIImportDeclaration(module: "wasi:clocks/wall-clock@0.2.4", name: "now", parameters: [.i32], results: []),
             WASIImportDeclaration(module: "wasi:clocks/wall-clock@0.2.9", name: "now", parameters: [.i32], results: []),
         ]
     }
@@ -68,25 +69,30 @@ public struct ClocksProvider: WASIProvider {
             }
         )
         
-        // wasi:clocks/wall-clock@0.2.9
-        let wallModule = "wasi:clocks/wall-clock@0.2.9"
-        
-        // now: (ret_ptr) -> ()
-        imports.define(module: wallModule, name: "now",
-            Function(store: store, parameters: WallSig.now.parameters, results: WallSig.now.results) { caller, args in
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
-                
-                let retPtr = UInt(args[0].i32)
-                let now = Date()
-                let seconds = UInt64(now.timeIntervalSince1970)
-                let nanoseconds = UInt32((now.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000_000)
-                
-                memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buf in
-                    buf.storeBytes(of: seconds.littleEndian, toByteOffset: 0, as: UInt64.self)
-                    buf.storeBytes(of: nanoseconds.littleEndian, toByteOffset: 8, as: UInt32.self)
-                }
-                return []
+        // Helper closure for wall-clock now implementation (shared between versions)
+        let wallClockNow: (Caller, [Value]) throws -> [Value] = { caller, args in
+            guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
+            
+            let retPtr = UInt(args[0].i32)
+            let now = Date()
+            let seconds = UInt64(now.timeIntervalSince1970)
+            let nanoseconds = UInt32((now.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000_000)
+            
+            memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 16) { buf in
+                buf.storeBytes(of: seconds.littleEndian, toByteOffset: 0, as: UInt64.self)
+                buf.storeBytes(of: nanoseconds.littleEndian, toByteOffset: 8, as: UInt32.self)
             }
+            return []
+        }
+        
+        // wasi:clocks/wall-clock@0.2.4
+        imports.define(module: "wasi:clocks/wall-clock@0.2.4", name: "now",
+            Function(store: store, parameters: WallSig.now.parameters, results: WallSig.now.results, body: wallClockNow)
+        )
+        
+        // wasi:clocks/wall-clock@0.2.9
+        imports.define(module: "wasi:clocks/wall-clock@0.2.9", name: "now",
+            Function(store: store, parameters: WallSig.now.parameters, results: WallSig.now.results, body: wallClockNow)
         )
     }
 }

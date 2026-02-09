@@ -104,7 +104,7 @@ public struct HttpOutgoingHandlerProvider: WASIProvider {
                 // Start HTTP request using ephemeral session with completion handler
                 // (matches httpManager.performRequest pattern for reliable execution)
                 let ephemeralConfig = URLSessionConfiguration.ephemeral
-                ephemeralConfig.timeoutIntervalForRequest = 60
+                ephemeralConfig.timeoutIntervalForRequest = 300
                 let ephemeralSession = URLSession(configuration: ephemeralConfig)
                 
                 var urlRequest = URLRequest(url: url)

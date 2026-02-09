@@ -83,73 +83,87 @@ final class FoundationModelsServer {
     
     private nonisolated func handleConnection(_ connection: NWConnection) {
         connection.start(queue: httpQueue)
-        
-        var requestBuffer = Data()
-        
-        func readMore() {
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-                guard self != nil else {
-                    connection.cancel()
-                    return
-                }
-                
-                if let error = error {
-                    Log.agent.error("Foundation Models receive error: \(error)")
-                    connection.cancel()
-                    return
-                }
-                
-                if let data = data {
-                    requestBuffer.append(data)
-                }
-                
-                // Check for complete HTTP request
-                let headerSeparator = Data("\r\n\r\n".utf8)
-                if let headerEndRange = requestBuffer.range(of: headerSeparator) {
-                    let headerData = requestBuffer[..<headerEndRange.lowerBound]
-                    
-                    // Parse Content-Length
-                    var contentLength = 0
-                    if let headersString = String(data: headerData, encoding: .utf8) {
-                        for line in headersString.split(separator: "\r\n") {
-                            if line.lowercased().hasPrefix("content-length:") {
-                                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
-                                contentLength = Int(value) ?? 0
-                            }
-                        }
-                    }
-                    
-                    let bodyStartIndex = headerEndRange.upperBound
-                    let currentBodyLength = requestBuffer.count - bodyStartIndex
-                    
-                    if currentBodyLength >= contentLength {
-                        // Process request asynchronously
-                        let fullRequest = requestBuffer
-                        Task { @MainActor [weak self] in
-                            guard let self = self else { return }
-                            let response = await self.handleHTTPRequest(fullRequest)
-                            connection.send(content: response, completion: .contentProcessed { _ in
-                                connection.cancel()
-                            })
-                        }
-                        return
-                    }
-                }
-                
-                if error != nil || isComplete {
-                    connection.cancel()
-                } else {
-                    readMore()
-                }
-            }
-        }
-        
-        readMore()
+        let handler = ConnectionHandler(connection: connection, server: self, queue: httpQueue)
+        handler.readMore()
+    }
+}
+
+// MARK: - Connection Handler
+
+/// Encapsulates per-connection state to satisfy Swift 6 strict concurrency.
+/// All access is serialized on the httpQueue, so the mutable buffer is safe.
+@available(iOS 26.0, macOS 15.0, *)
+private final class ConnectionHandler: @unchecked Sendable {
+    private let connection: NWConnection
+    private let server: FoundationModelsServer
+    private let queue: DispatchQueue
+    private var requestBuffer = Data()
+    
+    init(connection: NWConnection, server: FoundationModelsServer, queue: DispatchQueue) {
+        self.connection = connection
+        self.server = server
+        self.queue = queue
     }
     
-    // MARK: - HTTP Request Handling
+    func readMore() {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [self] data, _, isComplete, error in
+            if let error = error {
+                Log.agent.error("Foundation Models receive error: \(error)")
+                connection.cancel()
+                return
+            }
+            
+            if let data = data {
+                requestBuffer.append(data)
+            }
+            
+            // Check for complete HTTP request
+            let headerSeparator = Data("\r\n\r\n".utf8)
+            if let headerEndRange = requestBuffer.range(of: headerSeparator) {
+                let headerData = requestBuffer[..<headerEndRange.lowerBound]
+                
+                // Parse Content-Length
+                var contentLength = 0
+                if let headersString = String(data: headerData, encoding: .utf8) {
+                    for line in headersString.split(separator: "\r\n") {
+                        if line.lowercased().hasPrefix("content-length:") {
+                            let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                            contentLength = Int(value) ?? 0
+                        }
+                    }
+                }
+                
+                let bodyStartIndex = headerEndRange.upperBound
+                let currentBodyLength = requestBuffer.count - bodyStartIndex
+                
+                if currentBodyLength >= contentLength {
+                    // Process request asynchronously
+                    let fullRequest = requestBuffer
+                    Task { @MainActor [server] in
+                        let response = await server.handleHTTPRequest(fullRequest)
+                        self.connection.send(content: response, completion: .contentProcessed { _ in
+                            self.connection.cancel()
+                        })
+                    }
+                    return
+                }
+            }
+            
+            if error != nil || isComplete {
+                connection.cancel()
+            } else {
+                readMore()
+            }
+        }
+    }
+}
+
+// MARK: - HTTP Request Handling
+
+@available(iOS 26.0, macOS 15.0, *)
+extension FoundationModelsServer {
     
-    private func handleHTTPRequest(_ data: Data) async -> Data {
+    fileprivate func handleHTTPRequest(_ data: Data) async -> Data {
         guard let requestString = String(data: data, encoding: .utf8) else {
             return httpResponse(status: 400, body: "{\"error\": \"Invalid encoding\"}")
         }

@@ -48,6 +48,9 @@ public final class IosBridgeProvider: WASIProvider {
     /// Optional callback for render.show — dispatches component JSON to the UI layer.
     public var onRenderShow: ((String) -> String)?
     
+    /// Optional callback for render.patch — applies incremental patches to the UI tree.
+    public var onRenderPatch: ((String) -> String)?
+    
     /// Execution context for app-scoped permission checks.
     public let appId: String
     public let scriptName: String
@@ -94,6 +97,7 @@ public final class IosBridgeProvider: WASIProvider {
     
     private func registerStorage(_ imports: inout Imports, store: Store) {
         let module = "ios:bridge/storage@0.1.0"
+        let scopedStoragePrefix = "\(Self.storagePrefix)\(appId):\(scriptName):"
         
         // get(key_ptr, key_len, ret_ptr) -> ()
         // ret_ptr layout: option<string> = discriminant (u8) | ptr (i32) | len (i32)
@@ -106,8 +110,17 @@ public final class IosBridgeProvider: WASIProvider {
                 let retPtr = UInt(args[2].i32)
                 
                 let key = Self.readString(from: memory, ptr: keyPtr, len: keyLen)
-                let scopedKey = Self.storagePrefix + key
-                let value = UserDefaults.standard.string(forKey: scopedKey)
+                let scopedKey = scopedStoragePrefix + key
+                let value: String? = {
+                    if let scoped = UserDefaults.standard.string(forKey: scopedKey) {
+                        return scoped
+                    }
+                    // Backward compatibility for legacy global storage keys.
+                    if self.appId == "global", self.scriptName == "global" {
+                        return UserDefaults.standard.string(forKey: Self.storagePrefix + key)
+                    }
+                    return nil
+                }()
                 
                 if let value = value {
                     // option<string> = Some: discriminant=1, then (ptr, len)
@@ -134,23 +147,28 @@ public final class IosBridgeProvider: WASIProvider {
                 
                 let key = Self.readString(from: memory, ptr: UInt(args[0].i32), len: Int(args[1].i32))
                 let value = Self.readString(from: memory, ptr: UInt(args[2].i32), len: Int(args[3].i32))
-                let scopedKey = Self.storagePrefix + key
+                let scopedKey = scopedStoragePrefix + key
                 UserDefaults.standard.set(value, forKey: scopedKey)
                 return []
             }
         )
         
         // remove(key_ptr, key_len) -> i32 (bool)
+        let storageRemoveImpl: (Caller, [Value]) throws -> [Value] = { caller, args in
+            guard let memory = caller.instance?.exports[memory: "memory"] else { return [.i32(0)] }
+            
+            let key = Self.readString(from: memory, ptr: UInt(args[0].i32), len: Int(args[1].i32))
+            let scopedKey = scopedStoragePrefix + key
+            let existed = UserDefaults.standard.object(forKey: scopedKey) != nil
+            UserDefaults.standard.removeObject(forKey: scopedKey)
+            return [.i32(existed ? 1 : 0)]
+        }
         imports.define(module: module, name: "remove",
-            Function(store: store, parameters: [.i32, .i32], results: [.i32]) { caller, args in
-                guard let memory = caller.instance?.exports[memory: "memory"] else { return [.i32(0)] }
-                
-                let key = Self.readString(from: memory, ptr: UInt(args[0].i32), len: Int(args[1].i32))
-                let scopedKey = Self.storagePrefix + key
-                let existed = UserDefaults.standard.object(forKey: scopedKey) != nil
-                UserDefaults.standard.removeObject(forKey: scopedKey)
-                return [.i32(existed ? 1 : 0)]
-            }
+            Function(store: store, parameters: [.i32, .i32], results: [.i32], body: storageRemoveImpl)
+        )
+        // "delete" is the older WIT name; compiled WASM may use either
+        imports.define(module: module, name: "delete",
+            Function(store: store, parameters: [.i32, .i32], results: [.i32], body: storageRemoveImpl)
         )
         
         // keys(opt_flag, prefix_ptr, prefix_len, ret_ptr) -> ()
@@ -170,8 +188,8 @@ public final class IosBridgeProvider: WASIProvider {
                 
                 // Get all script-scoped keys
                 let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
-                    .filter { $0.hasPrefix(Self.storagePrefix) }
-                    .map { String($0.dropFirst(Self.storagePrefix.count)) }
+                    .filter { $0.hasPrefix(scopedStoragePrefix) }
+                    .map { String($0.dropFirst(scopedStoragePrefix.count)) }
                     .filter { key in
                         if let prefix = filterPrefix {
                             return key.hasPrefix(prefix)
@@ -230,9 +248,25 @@ public final class IosBridgeProvider: WASIProvider {
                 guard let capability = ScriptPermissions.Capability(rawValue: rawCapability) else {
                     return [.i32(0)]
                 }
-                
-                ScriptPermissions.shared.grant(capability, appId: self.appId, script: self.scriptName, actor: "script")
-                return [.i32(1)]
+
+                // Auto-granted capabilities require no mediation.
+                if capability.isAutoGranted {
+                    return [.i32(1)]
+                }
+
+                // Require platform-level authorization before user-level grant.
+                guard self.ensureSystemAuthorization(for: capability) else {
+                    Log.mcp.info("IosBridgeProvider: system authorization denied for \(capability.rawValue)")
+                    return [.i32(0)]
+                }
+
+                let granted = ScriptPermissions.shared.requestWithUserConsent(
+                    capability,
+                    appId: self.appId,
+                    script: self.scriptName,
+                    actor: "script"
+                )
+                return [.i32(granted ? 1 : 0)]
             }
         )
         
@@ -335,15 +369,45 @@ public final class IosBridgeProvider: WASIProvider {
                 let jsonStr = Self.readString(from: memory, ptr: UInt(args[0].i32), len: Int(args[1].i32))
                 let retPtr = UInt(args[2].i32)
                 
+                Log.mcp.info("IosBridgeProvider: render.show called, json length=\(jsonStr.count), first 200 chars: \(String(jsonStr.prefix(200)))")
+                
                 let viewId: String
                 if let handler = onRenderShow {
+                    Log.mcp.info("IosBridgeProvider: render.show handler IS set, invoking...")
                     viewId = handler(jsonStr)
+                    Log.mcp.info("IosBridgeProvider: render.show handler returned: \(viewId)")
                 } else {
                     Log.mcp.warning("IosBridgeProvider: render.show called but no handler registered")
                     viewId = "no-handler"
                 }
                 
                 let (strPtr, strLen) = Self.writeStringToWasm(viewId, caller: caller, memory: memory)
+                memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
+                    buf.storeBytes(of: strPtr.littleEndian, as: UInt32.self)
+                    buf.storeBytes(of: strLen.littleEndian, toByteOffset: 4, as: UInt32.self)
+                }
+                return []
+            }
+        )
+        
+        // patch(json_ptr, json_len, ret_ptr) -> ()
+        let onRenderPatch = self.onRenderPatch
+        imports.define(module: module, name: "patch",
+            Function(store: store, parameters: [.i32, .i32, .i32], results: []) { caller, args in
+                guard let memory = caller.instance?.exports[memory: "memory"] else { return [] }
+                
+                let jsonStr = Self.readString(from: memory, ptr: UInt(args[0].i32), len: Int(args[1].i32))
+                let retPtr = UInt(args[2].i32)
+                
+                let result: String
+                if let handler = onRenderPatch {
+                    result = handler(jsonStr)
+                } else {
+                    Log.mcp.warning("IosBridgeProvider: render.patch called but no handler registered")
+                    result = "no-handler"
+                }
+                
+                let (strPtr, strLen) = Self.writeStringToWasm(result, caller: caller, memory: memory)
                 memory.withUnsafeMutableBufferPointer(offset: retPtr, count: 8) { buf in
                     buf.storeBytes(of: strPtr.littleEndian, as: UInt32.self)
                     buf.storeBytes(of: strLen.littleEndian, toByteOffset: 4, as: UInt32.self)
@@ -1372,6 +1436,127 @@ public final class IosBridgeProvider: WASIProvider {
                 return []
             }
         )
+    }
+    
+    // MARK: - Permission Mediation
+    
+    /// Returns true when platform-level authorization is present for the requested capability.
+    /// For statuses that are `.notDetermined`, attempts to request authorization once.
+    private func ensureSystemAuthorization(for capability: ScriptPermissions.Capability) -> Bool {
+        switch capability {
+        case .storage, .device, .render, .clipboard, .keychain:
+            return true
+            
+        case .contacts:
+            #if canImport(Contacts)
+            let status = CNContactStore.authorizationStatus(for: .contacts)
+            switch status {
+            case .authorized:
+                return true
+            case .notDetermined:
+                let store = CNContactStore()
+                return Self.blockingAsync { completion in
+                    store.requestAccess(for: .contacts) { granted, _ in
+                        completion(granted)
+                    }
+                }
+            default:
+                return false
+            }
+            #else
+            return false
+            #endif
+            
+        case .calendar:
+            #if canImport(EventKit)
+            let status = EKEventStore.authorizationStatus(for: .event)
+            switch status {
+            case .authorized, .fullAccess, .writeOnly:
+                return true
+            case .notDetermined:
+                let store = EKEventStore()
+                if #available(iOS 17.0, *) {
+                    return Self.blockingAsync { completion in
+                        store.requestFullAccessToEvents { granted, _ in
+                            completion(granted)
+                        }
+                    }
+                }
+                return Self.blockingAsync { completion in
+                    store.requestAccess(to: .event) { granted, _ in
+                        completion(granted)
+                    }
+                }
+            default:
+                return false
+            }
+            #else
+            return false
+            #endif
+            
+        case .notifications:
+            #if canImport(UserNotifications)
+            let status: UNAuthorizationStatus = Self.blockingAsync { completion in
+                UNUserNotificationCenter.current().getNotificationSettings { settings in
+                    completion(settings.authorizationStatus)
+                }
+            }
+            switch status {
+            case .authorized, .provisional, .ephemeral:
+                return true
+            case .notDetermined:
+                return Self.blockingAsync { completion in
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                        completion(granted)
+                    }
+                }
+            default:
+                return false
+            }
+            #else
+            return false
+            #endif
+            
+        case .location:
+            #if canImport(CoreLocation)
+            switch CLLocationManager.authorizationStatus() {
+            case .authorizedAlways, .authorizedWhenInUse:
+                return true
+            default:
+                return false
+            }
+            #else
+            return false
+            #endif
+            
+        case .health:
+            #if canImport(HealthKit)
+            // HealthKit permissions are type-specific; deny until a type-scoped authorization flow is implemented.
+            return false
+            #else
+            return false
+            #endif
+            
+        case .photos:
+            #if canImport(Photos)
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            switch status {
+            case .authorized, .limited:
+                return true
+            case .notDetermined:
+                let requested = Self.blockingAsync { completion in
+                    PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                        completion(newStatus)
+                    }
+                }
+                return requested == .authorized || requested == .limited
+            default:
+                return false
+            }
+            #else
+            return false
+            #endif
+        }
     }
     
     // MARK: - Option Helpers

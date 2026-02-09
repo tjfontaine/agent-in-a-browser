@@ -142,6 +142,22 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
         )?,
     )?;
 
+    // __iosBridge_render_patch(patchesJson: string) -> string
+    globals.set(
+        "__iosBridge_render_patch",
+        Function::new(
+            ctx.clone(),
+            |args: rquickjs::prelude::Rest<Value>| -> String {
+                let json = args
+                    .0
+                    .first()
+                    .and_then(|v| v.as_string())
+                    .and_then(|s| s.to_string().ok())
+                    .unwrap_or_else(|| "[]".to_string());
+                crate::bindings::ios::bridge::render::patch(&json)
+            },
+        )?,
+    )?;
     // ── permissions ───────────────────────────────────────────────────
 
     globals.set(

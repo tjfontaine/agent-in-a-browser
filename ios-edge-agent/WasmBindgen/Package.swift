@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 
 import PackageDescription
 import CompilerPluginSupport
@@ -6,8 +6,8 @@ import CompilerPluginSupport
 let package = Package(
     name: "WasmBindgen",
     platforms: [
-        .macOS(.v14),
-        .iOS(.v17)
+        .macOS(.v26),
+        .iOS(.v26)
     ],
     products: [
         // Library for WIT parsing and Swift code generation
@@ -26,8 +26,8 @@ let package = Package(
     dependencies: [
         // ArgumentParser for CLI
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
-        // Swift Syntax for macros
-        .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
+        // Swift Syntax for macros (602.x matches Swift 6.2)
+        .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
     ],
     targets: [
         // MARK: - WIT Parser

@@ -14,7 +14,7 @@ enum AgentEvent: Identifiable, Equatable {
     case taskComplete(id: String, success: Bool, output: String?)
     case modelLoading(text: String, progress: Float)
     case ready
-    case renderUI(componentsJSON: String)  // JSON string for Equatable conformance
+
     case askUser(id: String, type: String, prompt: String, options: [String]?)
     case progress(step: Int, total: Int, description: String)
     case cancelled
@@ -33,7 +33,7 @@ enum AgentEvent: Identifiable, Equatable {
         case .taskComplete(let id, _, _): return "task_complete_\(id)"
         case .modelLoading: return "model_loading"
         case .ready: return "ready"
-        case .renderUI: return "render_ui"
+
         case .askUser(let id, _, _, _): return "ask_user_\(id)"
         case .progress(let step, _, _): return "progress_\(step)"
         case .cancelled: return "cancelled"
@@ -54,17 +54,7 @@ enum AgentEvent: Identifiable, Equatable {
             let name = dict["name"] as? String ?? ""
             let output = dict["output"] as? String ?? ""
             let isError = dict["is_error"] as? Bool ?? false
-            
-            // Intercept render_ui tool results and convert to renderUI event
-            if name == "render_ui" && !isError {
-                if let data = output.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let components = json["components"] as? [[String: Any]],
-                   let jsonData = try? JSONSerialization.data(withJSONObject: components),
-                   let jsonString = String(data: jsonData, encoding: .utf8) {
-                    return .renderUI(componentsJSON: jsonString)
-                }
-            }
+
             
             return .toolResult(name: name, output: output, isError: isError)
         case "plan_generated": return .planGenerated(dict["content"] as? String ?? "")
@@ -92,13 +82,7 @@ enum AgentEvent: Identifiable, Equatable {
                 progress: (dict["progress"] as? NSNumber)?.floatValue ?? 0
             )
         case "ready": return .ready
-        case "render_ui":
-            if let components = dict["components"] as? [[String: Any]],
-               let jsonData = try? JSONSerialization.data(withJSONObject: components),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                return .renderUI(componentsJSON: jsonString)
-            }
-            return nil
+
         case "ask_user":
             let id = dict["id"] as? String ?? UUID().uuidString
             let askType = dict["ask_type"] as? String ?? "confirm"

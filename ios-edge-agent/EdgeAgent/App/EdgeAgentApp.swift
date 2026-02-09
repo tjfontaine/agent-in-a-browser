@@ -3,20 +3,17 @@ import SwiftUI
 @main
 struct EdgeAgentApp: App {
     @StateObject private var configManager = ConfigManager()
-    @StateObject private var nativeAgent = NativeAgentHost.shared
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(configManager)
-                .environmentObject(nativeAgent)
         }
     }
 }
 
 struct ContentView: View {
     @EnvironmentObject var configManager: ConfigManager
-    @EnvironmentObject var nativeAgent: NativeAgentHost
     @State private var showSettings = false
     
     var body: some View {

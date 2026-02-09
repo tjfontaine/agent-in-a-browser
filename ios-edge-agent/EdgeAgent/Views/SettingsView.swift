@@ -5,7 +5,6 @@ import FoundationModels
 #endif
 
 struct SettingsView: View {
-    @EnvironmentObject var nativeAgent: NativeAgentHost
     @EnvironmentObject var configManager: ConfigManager
     @Environment(\.dismiss) private var dismiss
     
@@ -178,6 +177,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
-        .environmentObject(NativeAgentHost.shared)
         .environmentObject(ConfigManager())
 }

@@ -281,6 +281,12 @@ public final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendabl
             let bodyString = lines[bodyStartIndex...].joined(separator: "\r\n")
             body = bodyString.data(using: .utf8) ?? Data()
         }
+
+        // Short-circuit MCP transport notifications that some servers don't implement.
+        // We acknowledge them here to keep remote client initialization noise-free.
+        if let notificationResponse = handleMCPTransportNotification(body: body) {
+            return notificationResponse
+        }
         
         // Create IncomingRequest resource
         let incomingRequest = HTTPIncomingRequest(method: method, path: path, headers: headers, body: body)
@@ -345,5 +351,16 @@ public final class NativeMCPHost: NSObject, ObservableObject, @unchecked Sendabl
         """
         return response.data(using: .utf8)!
     }
-}
 
+    private func handleMCPTransportNotification(body: Data) -> Data? {
+        guard !body.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let method = object["method"] as? String,
+              method.hasPrefix("notifications/") else {
+            return nil
+        }
+
+        let ack = #"{"jsonrpc":"2.0","id":null,"result":{}}"#
+        return formatHTTPResponse(statusCode: 200, body: ack)
+    }
+}

@@ -27,6 +27,10 @@ interface device {
 interface render {
     /// Render a component tree (JSON). Returns the view ID assigned by the host.
     show: func(layout-json: string) -> string;
+    /// Apply incremental patches to the current UI tree.
+    /// Takes a JSON array of patch operations (replace, remove, update, append, prepend).
+    /// Each patch targets a component by key. Returns "ok" or an error description.
+    patch: func(patches-json: string) -> string;
 }
 
 /// Per-script capability grants for protected ios bridge APIs.

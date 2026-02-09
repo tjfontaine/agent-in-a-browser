@@ -550,121 +550,7 @@ public final class DatabaseManager: @unchecked Sendable {
         }
     }
     
-    // MARK: - View Templates
-    
-    /// Save a view template to the database
-    func saveViewTemplate(_ template: ViewTemplate) throws {
-        let dbQueue = try ensureInitialized()
-        
-        let animationJSON: String?
-        if let animation = template.animation {
-            let dict: [String: Any] = [
-                "enter": animation.enter ?? "",
-                "exit": animation.exit ?? "",
-                "duration": animation.duration ?? 0.3
-            ]
-            if let data = try? JSONSerialization.data(withJSONObject: dict) {
-                animationJSON = String(data: data, encoding: .utf8)
-            } else {
-                animationJSON = nil
-            }
-        } else {
-            animationJSON = nil
-        }
-        
-        let dateFormatter = ISO8601DateFormatter()
-        
-        try dbQueue.write { db in
-            try db.execute(
-                sql: """
-                    INSERT OR REPLACE INTO view_templates 
-                    (name, version, template, default_data, animation, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    template.name,
-                    template.version,
-                    template.template,
-                    template.defaultData,
-                    animationJSON,
-                    dateFormatter.string(from: template.createdAt),
-                    dateFormatter.string(from: template.updatedAt)
-                ]
-            )
-        }
-        
-        Log.app.info("DatabaseManager: Saved template '\(template.name)' v\(template.version)")
-    }
-    
-    /// Load all view templates from the database
-    func loadViewTemplates() throws -> [String: ViewTemplate] {
-        let dbQueue = try ensureInitialized()
-        
-        let rows = try dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM view_templates")
-        }
-        
-        var templates: [String: ViewTemplate] = [:]
-        let dateFormatter = ISO8601DateFormatter()
-        
-        for row in rows {
-            let name: String = row["name"]
-            let version: String = row["version"]
-            let template: String = row["template"]
-            let defaultData: String? = row["default_data"]
-            let animationStr: String? = row["animation"]
-            let createdAtStr: String? = row["created_at"]
-            let updatedAtStr: String? = row["updated_at"]
-            
-            var animation: ViewAnimation? = nil
-            if let animationStr = animationStr,
-               let animData = animationStr.data(using: .utf8),
-               let animDict = try? JSONSerialization.jsonObject(with: animData) as? [String: Any] {
-                animation = ViewAnimation(
-                    enter: animDict["enter"] as? String,
-                    exit: animDict["exit"] as? String,
-                    duration: animDict["duration"] as? Double
-                )
-            }
-            
-            let createdAt = createdAtStr.flatMap { dateFormatter.date(from: $0) } ?? Date()
-            let updatedAt = updatedAtStr.flatMap { dateFormatter.date(from: $0) } ?? Date()
-            
-            let viewTemplate = ViewTemplate(
-                name: name,
-                version: version,
-                template: template,
-                defaultData: defaultData,
-                animation: animation,
-                createdAt: createdAt,
-                updatedAt: updatedAt
-            )
-            
-            templates[name] = viewTemplate
-        }
-        
-        Log.app.info("DatabaseManager: Loaded \(templates.count) templates")
-        return templates
-    }
 
-    /// Delete a single view template by name
-    func deleteViewTemplate(name: String) throws {
-        let dbQueue = try ensureInitialized()
-        try dbQueue.write { db in
-            try db.execute(
-                sql: "DELETE FROM view_templates WHERE name = ?",
-                arguments: [name]
-            )
-        }
-    }
-
-    /// Remove all cached view templates
-    func clearViewTemplates() throws {
-        let dbQueue = try ensureInitialized()
-        try dbQueue.write { db in
-            try db.execute(sql: "DELETE FROM view_templates")
-        }
-    }
 
     // MARK: - Super App Projects
 
@@ -697,6 +583,7 @@ public final class DatabaseManager: @unchecked Sendable {
 
     @discardableResult
     func createProject(name: String, summary: String?) throws -> SuperAppProject {
+        let normalizedName = normalizedProjectName(name)
         let dbQueue = try ensureInitialized()
         let now = iso8601Now()
         let id = UUID().uuidString
@@ -707,12 +594,67 @@ public final class DatabaseManager: @unchecked Sendable {
                     (id, name, status, summary, last_prompt, current_revision_id, use_conversation_context, guardrails_enabled, require_plan_approval, created_at, updated_at)
                     VALUES (?, ?, ?, ?, NULL, NULL, 1, 1, 1, ?, ?)
                 """,
-                arguments: [id, name, "active", summary, now, now]
+                arguments: [id, normalizedName, "active", summary, now, now]
             )
         }
         return try getProject(id: id) ?? SuperAppProject(
             id: id,
-            name: name,
+            name: normalizedName,
+            status: "active",
+            summary: summary,
+            lastPrompt: nil,
+            currentRevisionId: nil,
+            useConversationContext: true,
+            guardrailsEnabled: true,
+            requirePlanApproval: true,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+
+    /// Ensure an app project row exists for a specific app id.
+    /// If the row exists and a better preferred name is provided, updates the project name.
+    @discardableResult
+    func ensureProject(id: String, preferredName: String? = nil, summary: String? = nil) throws -> SuperAppProject {
+        if var existing = try getProject(id: id) {
+            var shouldPersist = false
+            if let preferredName {
+                let normalizedPreferred = normalizedProjectName(preferredName)
+                if shouldReplaceProjectName(current: existing.name, with: normalizedPreferred) {
+                    existing.name = normalizedPreferred
+                    shouldPersist = true
+                }
+            }
+            if let summary, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let currentSummary = existing.summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if currentSummary.isEmpty {
+                    existing.summary = summary
+                    shouldPersist = true
+                }
+            }
+            if shouldPersist {
+                try persistProject(existing)
+                return try getProject(id: id) ?? existing
+            }
+            return existing
+        }
+
+        let dbQueue = try ensureInitialized()
+        let now = iso8601Now()
+        let normalizedName = normalizedProjectName(preferredName ?? "Untitled App")
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO apps
+                    (id, name, status, summary, last_prompt, current_revision_id, use_conversation_context, guardrails_enabled, require_plan_approval, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, NULL, NULL, 1, 1, 1, ?, ?)
+                """,
+                arguments: [id, normalizedName, "active", summary, now, now]
+            )
+        }
+        return try getProject(id: id) ?? SuperAppProject(
+            id: id,
+            name: normalizedName,
             status: "active",
             summary: summary,
             lastPrompt: nil,
@@ -734,7 +676,7 @@ public final class DatabaseManager: @unchecked Sendable {
         currentRevisionId: String? = nil
     ) throws {
         guard var project = try getProject(id: id) else { return }
-        if let name { project.name = name }
+        if let name { project.name = normalizedProjectName(name) }
         if let status { project.status = status }
         if let summary { project.summary = summary }
         if let lastPrompt { project.lastPrompt = lastPrompt }
@@ -758,6 +700,7 @@ public final class DatabaseManager: @unchecked Sendable {
     private func persistProject(_ project: SuperAppProject) throws {
         let dbQueue = try ensureInitialized()
         let now = iso8601Now()
+        let normalizedName = normalizedProjectName(project.name)
         try dbQueue.write { db in
             try db.execute(
                 sql: """
@@ -767,7 +710,7 @@ public final class DatabaseManager: @unchecked Sendable {
                     WHERE id = ?
                 """,
                 arguments: [
-                    project.name,
+                    normalizedName,
                     project.status,
                     project.summary,
                     project.lastPrompt,
@@ -780,6 +723,28 @@ public final class DatabaseManager: @unchecked Sendable {
                 ]
             )
         }
+    }
+
+    func deleteProject(id: String) throws {
+        let dbQueue = try ensureInitialized()
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM app_templates WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_scripts WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_bundle_revisions WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_runs WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_repair_attempts WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_bindings WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_permission_audit WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_revisions WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM feedback_items WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM app_tasks WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM conversation_messages WHERE app_id = ?", arguments: [id])
+            // Legacy global script table has optional app_id.
+            try db.execute(sql: "DELETE FROM scripts WHERE app_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM apps WHERE id = ?", arguments: [id])
+        }
+        removeAppSandbox(appId: id)
+        Log.app.info("DatabaseManager: Deleted app project '\(id)'")
     }
 
     // MARK: - Revisions
@@ -1298,6 +1263,7 @@ public final class DatabaseManager: @unchecked Sendable {
         let name: String? = row["name"]
         let status: String? = row["status"]
         guard let id, let name, let status else { return nil }
+        let normalizedName = normalizedProjectName(name)
 
         let summary: String? = row["summary"]
         let lastPrompt: String? = row["last_prompt"]
@@ -1310,7 +1276,7 @@ public final class DatabaseManager: @unchecked Sendable {
 
         return SuperAppProject(
             id: id,
-            name: name,
+            name: normalizedName,
             status: status,
             summary: summary,
             lastPrompt: lastPrompt,
@@ -1585,6 +1551,34 @@ public final class DatabaseManager: @unchecked Sendable {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let filePath = docs.appendingPathComponent("sandbox/apps/\(appId)/scripts/\(name).ts")
         try? FileManager.default.removeItem(at: filePath)
+    }
+
+    /// Remove an entire app sandbox directory from the filesystem.
+    func removeAppSandbox(appId: String) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let appDir = docs.appendingPathComponent("sandbox/apps/\(appId)")
+        try? FileManager.default.removeItem(at: appDir)
+    }
+
+    private func normalizedProjectName(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Untitled App" : trimmed
+    }
+
+    private func isGenericProjectName(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        if trimmed.caseInsensitiveCompare("Untitled App") == .orderedSame { return true }
+        if trimmed.range(of: #"^Untitled App \d+$"#, options: .regularExpression) != nil { return true }
+        if trimmed.caseInsensitiveCompare("Default Workspace") == .orderedSame { return true }
+        return false
+    }
+
+    private func shouldReplaceProjectName(current: String, with candidate: String) -> Bool {
+        let normalizedCandidate = normalizedProjectName(candidate)
+        if normalizedCandidate == current { return false }
+        if normalizedCandidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        return isGenericProjectName(current)
     }
 
     private func script(from row: Row) -> ScriptRecord? {

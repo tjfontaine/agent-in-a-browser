@@ -29,6 +29,9 @@ struct RepairCoordinator {
         guard let run = try repo.getRun(id: runId) else {
             return "run_not_found: \(runId)"
         }
+        if run.appId != appId {
+            return "run_app_mismatch: run \(runId) belongs to app '\(run.appId)', not '\(appId)'"
+        }
         
         let elapsedMs = Int(Date().timeIntervalSince(run.startedAt) * 1000)
         if elapsedMs > policy.timeBudgetMs {
@@ -36,13 +39,13 @@ struct RepairCoordinator {
         }
         
         // Check for repeated failure signature (same error twice in a row = give up)
-        if let lastAttempt = attempts.last,
-           let run = try repo.getRun(id: runId),
-           run.failureSignature != nil,
-           lastAttempt.patchSummary != nil {
-            // If the previous attempt also failed with the same signature, auto-abort
-            let previousRuns = attempts.filter { $0.outcome == .failed }
-            if previousRuns.count >= 2 {
+        let failedSignatures = attempts
+            .filter { $0.outcome == .failed }
+            .compactMap { extractFailureSignature(from: $0.patchSummary) }
+        if failedSignatures.count >= 2 {
+            let last = failedSignatures[failedSignatures.count - 1]
+            let previous = failedSignatures[failedSignatures.count - 2]
+            if last == previous {
                 return "repair_stuck: repeated failure with same signature"
             }
         }
@@ -125,5 +128,15 @@ struct RepairCoordinator {
             return "binding_patch"
         }
         return target
+    }
+    
+    private func extractFailureSignature(from summary: String?) -> String? {
+        guard let summary else { return nil }
+        let marker = "repair failed:"
+        guard let markerRange = summary.range(of: marker, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let signature = summary[markerRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return signature.isEmpty ? nil : signature
     }
 }

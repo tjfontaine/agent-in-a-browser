@@ -18,8 +18,8 @@
 		1A8CCA162F38ED2500BE5444 /* AppCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA152F38ED2500BE5444 /* AppCanvasView.swift */; };
 		1A8CCA182F38ED2500BE5444 /* AgentOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA172F38ED2500BE5444 /* AgentOverlayView.swift */; };
 		1A8CCA1A2F38EEF600BE5444 /* ConversationTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA192F38EEF600BE5444 /* ConversationTimeline.swift */; };
+		1A8CCA1D2F39479000BE5444 /* MCPToolBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8CCA1C2F39479000BE5444 /* MCPToolBridge.swift */; };
 		1AF20D502F358267005FA9DC /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = FA45E1BC6223511421635B5C /* GRDB */; };
-		26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */; };
 		299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */; };
 		51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */; };
 		5207F13AC4EFACA9FC563FB5 /* FoundationModelsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */; };
@@ -42,12 +42,16 @@
 		B2000001201A0001 /* WasmKit in Frameworks */ = {isa = PBXBuildFile; productRef = B2000001101A0001 /* WasmKit */; };
 		B2000002201A0001 /* WASI in Frameworks */ = {isa = PBXBuildFile; productRef = B2000002101A0001 /* WASI */; };
 		B4B63E0F18B169C07EF597D5 /* NativeLoaderImplTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */; };
-		C1000001201A0001 /* NativeAgentHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000001101A0001 /* NativeAgentHost.swift */; };
 		C8388861F46676946FAC5F31 /* FoundationModelsServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E3153B3E13BEFBC60FECB3 /* FoundationModelsServer.swift */; };
+		EA000001201A0001 /* EdgeAgentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA000001101A0001 /* EdgeAgentSession.swift */; };
+		EA000002201A0001 /* AgentInstructions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA000002101A0001 /* AgentInstructions.swift */; };
 		F1000001201A0001 /* MCPSignatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001101A0001 /* MCPSignatures.swift */; };
 		K1000001201A0001 /* WASIP2Harness in Frameworks */ = {isa = PBXBuildFile; productRef = K1000001101A0001 /* WASIP2Harness */; };
 		K2000001201A0001 /* WASIShims in Frameworks */ = {isa = PBXBuildFile; productRef = K2000001101A0001 /* WASIShims */; };
 		K3000001201A0001 /* MCPServerKit in Frameworks */ = {isa = PBXBuildFile; productRef = K3000001101A0001 /* MCPServerKit */; };
+		OF000001201A0001 /* OpenFoundationModels in Frameworks */ = {isa = PBXBuildFile; productRef = OF000001101A0001 /* OpenFoundationModels */; };
+		OF000002201A0001 /* OpenFoundationModelsOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = OF000002101A0001 /* OpenFoundationModelsOpenAI */; };
+		SA000001201A0001 /* SwiftAgent in Frameworks */ = {isa = PBXBuildFile; productRef = SA000001101A0001 /* SwiftAgent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +77,7 @@
 		1A8CCA152F38ED2500BE5444 /* AppCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCanvasView.swift; sourceTree = "<group>"; };
 		1A8CCA172F38ED2500BE5444 /* AgentOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOverlayView.swift; sourceTree = "<group>"; };
 		1A8CCA192F38EEF600BE5444 /* ConversationTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTimeline.swift; sourceTree = "<group>"; };
+		1A8CCA1C2F39479000BE5444 /* MCPToolBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolBridge.swift; sourceTree = "<group>"; };
 		4FFE639729C170C2695401F8 /* EventHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
 		5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoundationModelsTypes.swift; path = EdgeAgent/Services/FoundationModelsTypes.swift; sourceTree = SOURCE_ROOT; };
@@ -90,12 +95,12 @@
 		A2000000101A0001 /* EdgeAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EdgeAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001101A0001 /* ConfigManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManagerTests.swift; sourceTree = "<group>"; };
 		A2000002101A0001 /* AgentEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventTests.swift; sourceTree = "<group>"; };
-		B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ViewRegistry.swift; sourceTree = "<group>"; };
 		BE7DAA46AABB3E61631E6C57 /* NativeLoaderImplTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeLoaderImplTests.swift; sourceTree = "<group>"; };
-		C1000001101A0001 /* NativeAgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentHost.swift; sourceTree = "<group>"; };
 		C3EB72373C65C1096DC1AE15 /* Log.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Utilities/Log.swift; sourceTree = "<group>"; };
 		DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WASIImportRegistry.swift; sourceTree = "<group>"; };
 		E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
+		EA000001101A0001 /* EdgeAgentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeAgentSession.swift; sourceTree = "<group>"; };
+		EA000002101A0001 /* AgentInstructions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentInstructions.swift; sourceTree = "<group>"; };
 		F1000001101A0001 /* MCPSignatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSignatures.swift; sourceTree = "<group>"; };
 		F7E3153B3E13BEFBC60FECB3 /* FoundationModelsServer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoundationModelsServer.swift; path = EdgeAgent/Services/FoundationModelsServer.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -112,6 +117,9 @@
 				K1000001201A0001 /* WASIP2Harness in Frameworks */,
 				K2000001201A0001 /* WASIShims in Frameworks */,
 				K3000001201A0001 /* MCPServerKit in Frameworks */,
+				SA000001201A0001 /* SwiftAgent in Frameworks */,
+				OF000001201A0001 /* OpenFoundationModels in Frameworks */,
+				OF000002201A0001 /* OpenFoundationModelsOpenAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,7 +189,6 @@
 				A1000005101A0001 /* SettingsView.swift */,
 				A1000010101A0001 /* SuperAppView.swift */,
 				A1000011101A0001 /* ComponentLibrary.swift */,
-				B38628645ABF3598D5B84BE6 /* ViewRegistry.swift */,
 				E7795562C45E5BBD0D8F3AB1 /* TemplateRenderer.swift */,
 				4FFE639729C170C2695401F8 /* EventHandler.swift */,
 				5AF8E0F5F0D6A964AB5868FB /* DatabaseManager.swift */,
@@ -209,7 +216,6 @@
 			children = (
 				A1000003101A0001 /* AgentEvent.swift */,
 				A1000012101A0001 /* MCPServer.swift */,
-				C1000001101A0001 /* NativeAgentHost.swift */,
 				F1000001101A0001 /* MCPSignatures.swift */,
 				19D4E21D556772A1657F55EE /* GeneratedWASMImports.swift */,
 				DD0AEA80A1024330968982D6 /* WASIImportRegistry.swift */,
@@ -252,6 +258,9 @@
 			children = (
 				F7E3153B3E13BEFBC60FECB3 /* FoundationModelsServer.swift */,
 				603A4D60954F9BDAE56AC85C /* FoundationModelsTypes.swift */,
+				EA000001101A0001 /* EdgeAgentSession.swift */,
+				EA000002101A0001 /* AgentInstructions.swift */,
+				1A8CCA1C2F39479000BE5444 /* MCPToolBridge.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -280,6 +289,9 @@
 				K2000001101A0001 /* WASIShims */,
 				K3000001101A0001 /* MCPServerKit */,
 				FA45E1BC6223511421635B5C /* GRDB */,
+				SA000001101A0001 /* SwiftAgent */,
+				OF000001101A0001 /* OpenFoundationModels */,
+				OF000002101A0001 /* OpenFoundationModelsOpenAI */,
 			);
 			productName = EdgeAgent;
 			productReference = A1000000101A0001 /* EdgeAgent.app */;
@@ -337,7 +349,10 @@
 				L1000000101A0001 /* XCLocalSwiftPackageReference "WASIP2Harness" */,
 				L2000000101A0001 /* XCLocalSwiftPackageReference "WASIShims" */,
 				L3000000101A0001 /* XCLocalSwiftPackageReference "MCPServerKit" */,
+				L4000000101A0001 /* XCLocalSwiftPackageReference "OpenFoundationModels" */,
 				2BCF4831B0503D704A0CAFE2 /* XCRemoteSwiftPackageReference "GRDB" */,
+				SA000000101A0001 /* XCRemoteSwiftPackageReference "SwiftAgent" */,
+				OA000000101A0001 /* XCRemoteSwiftPackageReference "OpenFoundationModels-OpenAI" */,
 			);
 			productRefGroup = A1000000021A0001 /* Products */;
 			projectDirPath = "";
@@ -384,13 +399,12 @@
 				1A8CCA122F38558500BE5444 /* RepairCoordinator.swift in Sources */,
 				A1000011201A0001 /* ComponentLibrary.swift in Sources */,
 				A1000012201A0001 /* MCPServer.swift in Sources */,
-				C1000001201A0001 /* NativeAgentHost.swift in Sources */,
+				1A8CCA1D2F39479000BE5444 /* MCPToolBridge.swift in Sources */,
 				1A8CCA082F3838B200BE5444 /* AppBundle.swift in Sources */,
 				F1000001201A0001 /* MCPSignatures.swift in Sources */,
 				9DFA1BAC1BE6FBA70A8D19E2 /* Log.swift in Sources */,
 				9FAB91D72CF8887F6D937BBB /* GeneratedWASMImports.swift in Sources */,
 				299551613970FB3C32EDE75C /* WASIImportRegistry.swift in Sources */,
-				26C4594677D0CBEC24C31D80 /* ViewRegistry.swift in Sources */,
 				51E8E586A3E07D611994E298 /* TemplateRenderer.swift in Sources */,
 				67748A744756A00A9DE44D71 /* EventHandler.swift in Sources */,
 				1A8CCA182F38ED2500BE5444 /* AgentOverlayView.swift in Sources */,
@@ -399,6 +413,8 @@
 				1A8CCA1A2F38EEF600BE5444 /* ConversationTimeline.swift in Sources */,
 				1A8CCA162F38ED2500BE5444 /* AppCanvasView.swift in Sources */,
 				5207F13AC4EFACA9FC563FB5 /* FoundationModelsTypes.swift in Sources */,
+				EA000001201A0001 /* EdgeAgentSession.swift in Sources */,
+				EA000002201A0001 /* AgentInstructions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -481,7 +497,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -543,7 +559,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -577,7 +593,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -604,7 +620,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -617,13 +633,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
@@ -637,13 +653,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.webagent.edgeagent.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EdgeAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EdgeAgent";
 			};
@@ -694,6 +710,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = MCPServerKit;
 		};
+		L4000000101A0001 /* XCLocalSwiftPackageReference "OpenFoundationModels" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LocalPackages/OpenFoundationModels;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -710,12 +730,29 @@
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.8.2;
+				minimumVersion = 0.10.2;
 			};
 		};
 		B2000000101A0001 /* XCRemoteSwiftPackageReference "WasmKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/swiftwasm/WasmKit.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		OA000000101A0001 /* XCRemoteSwiftPackageReference "OpenFoundationModels-OpenAI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/1amageek/OpenFoundationModels-OpenAI.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+
+		SA000000101A0001 /* XCRemoteSwiftPackageReference "SwiftAgent" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/1amageek/SwiftAgent.git";
 			requirement = {
 				branch = main;
 				kind = branch;
@@ -755,6 +792,21 @@
 		K3000001101A0001 /* MCPServerKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MCPServerKit;
+		};
+		OF000001101A0001 /* OpenFoundationModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = L4000000101A0001 /* XCLocalSwiftPackageReference "OpenFoundationModels" */;
+			productName = OpenFoundationModels;
+		};
+		OF000002101A0001 /* OpenFoundationModelsOpenAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = OA000000101A0001 /* XCRemoteSwiftPackageReference "OpenFoundationModels-OpenAI" */;
+			productName = OpenFoundationModelsOpenAI;
+		};
+		SA000001101A0001 /* SwiftAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = SA000000101A0001 /* XCRemoteSwiftPackageReference "SwiftAgent" */;
+			productName = SwiftAgent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

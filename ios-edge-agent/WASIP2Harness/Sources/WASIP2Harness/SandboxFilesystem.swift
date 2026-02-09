@@ -595,7 +595,7 @@ public final class SandboxFilesystem: @unchecked Sendable {
         guard fd == preopenedFd else {
             return .failure(.badf)
         }
-        return .success((3, "/")) // PR_TYPE_DIR, path "/"
+        return .success((0, "/")) // PR_TYPE_DIR = 0, path "/"
     }
     
     // MARK: - Sync

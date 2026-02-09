@@ -7,7 +7,194 @@ private func parseNumber(_ value: Any?) -> CGFloat? {
     if let d = value as? Double { return CGFloat(d) }
     if let i = value as? Int { return CGFloat(i) }
     if let n = value as? NSNumber { return CGFloat(n.doubleValue) }
+    if let s = value as? String, let d = Double(s) { return CGFloat(d) }
     return nil
+}
+
+private let componentReservedKeys: Set<String> = ["type", "key", "props"]
+
+private func normalizedComponentType(_ rawType: String) -> String {
+    switch rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case "vstack", "column", "vertical":
+        return "VStack"
+    case "hstack", "row", "horizontal":
+        return "HStack"
+    case "spacer":
+        return "Spacer"
+    case "card":
+        return "Card"
+    case "scroll", "scrollview":
+        return "ScrollView"
+    case "divider":
+        return "Divider"
+    case "text":
+        return "Text"
+    case "image":
+        return "Image"
+    case "icon":
+        return "Icon"
+    case "badge":
+        return "Badge"
+    case "button":
+        return "Button"
+    case "pressable":
+        return "Pressable"
+    case "input", "textinput":
+        return "TextInput"
+    case "loading":
+        return "Loading"
+    case "skeleton":
+        return "Skeleton"
+    case "progress", "progressbar":
+        return "ProgressBar"
+    case "toast":
+        return "Toast"
+    case "foreach":
+        return "ForEach"
+    case "if":
+        return "If"
+    case "list", "grid":
+        // Graceful fallback for prompt-level aliases.
+        return "VStack"
+    default:
+        return rawType
+    }
+}
+
+private func normalizedTextStyle(_ style: String) -> (size: String, weight: String?)? {
+    switch style.lowercased() {
+    case "title":
+        return ("2xl", "semibold")
+    case "headline":
+        return ("xl", "semibold")
+    case "subheadline":
+        return ("lg", "medium")
+    case "body":
+        return ("md", nil)
+    case "caption":
+        return ("sm", nil)
+    case "footnote":
+        return ("xs", nil)
+    default:
+        return nil
+    }
+}
+
+private func normalizeComponentArray(_ rawChildren: Any?) -> [[String: Any]]? {
+    if let children = rawChildren as? [[String: Any]] {
+        return children.map { normalizeComponentPayload($0) }
+    }
+    if let children = rawChildren as? [Any] {
+        return children.compactMap { $0 as? [String: Any] }.map { normalizeComponentPayload($0) }
+    }
+    return nil
+}
+
+private func normalizeProps(_ props: [String: Any], for type: String) -> [String: Any] {
+    var normalized = props
+
+    if let children = normalizeComponentArray(normalized["children"]) {
+        normalized["children"] = children
+    }
+    if let thenComponent = normalized["then"] as? [String: Any] {
+        normalized["then"] = normalizeComponentPayload(thenComponent)
+    }
+    if let elseComponent = normalized["else"] as? [String: Any] {
+        normalized["else"] = normalizeComponentPayload(elseComponent)
+    }
+    if let template = normalized["template"] as? [String: Any] {
+        normalized["template"] = normalizeComponentPayload(template)
+    }
+    if let itemTemplate = normalized["itemTemplate"] as? [String: Any] {
+        normalized["itemTemplate"] = normalizeComponentPayload(itemTemplate)
+    }
+
+    // Accept `onTap` as an alias for action on interactive components.
+    if normalized["action"] == nil {
+        if let onTap = normalized["onTap"] as? [String: Any] {
+            normalized["action"] = onTap
+        } else if let onTap = normalized["onTap"] as? String {
+            normalized["action"] = onTap
+        }
+    }
+
+    switch type {
+    case "Text":
+        if normalized["content"] == nil, let text = normalized["text"] as? String {
+            normalized["content"] = text
+        }
+        if let style = normalized["style"] as? String, let mapped = normalizedTextStyle(style) {
+            if normalized["size"] == nil {
+                normalized["size"] = mapped.size
+            }
+            if normalized["weight"] == nil, let weight = mapped.weight {
+                normalized["weight"] = weight
+            }
+        }
+    case "VStack", "HStack":
+        if normalized["align"] == nil, let alignment = normalized["alignment"] as? String {
+            normalized["align"] = alignment
+        }
+    case "Button":
+        if normalized["label"] == nil, let text = normalized["text"] as? String {
+            normalized["label"] = text
+        }
+    case "Icon":
+        if normalized["name"] == nil, let systemName = normalized["systemName"] as? String {
+            normalized["name"] = systemName
+        }
+    case "ProgressBar":
+        if normalized["progress"] == nil, let value = parseNumber(normalized["value"]) {
+            normalized["progress"] = Double(value)
+        }
+    case "Image":
+        if normalized["url"] == nil, let source = normalized["source"] as? String {
+            normalized["url"] = source
+        }
+    default:
+        break
+    }
+
+    return normalized
+}
+
+private func normalizeComponentPayload(_ raw: [String: Any]) -> [String: Any] {
+    let rawType = raw["type"] as? String ?? ""
+    var type = normalizedComponentType(rawType)
+
+    var props: [String: Any]
+    if let explicitProps = raw["props"] as? [String: Any] {
+        props = explicitProps
+    } else {
+        props = [:]
+        for (key, value) in raw where !componentReservedKeys.contains(key) {
+            props[key] = value
+        }
+    }
+
+    var key: String?
+    if let explicitKey = raw["key"] as? String {
+        key = explicitKey
+    } else if let propsKey = props["key"] as? String {
+        key = propsKey
+        props.removeValue(forKey: "key")
+    }
+
+    if type == "Image",
+       (props["url"] as? String)?.isEmpty != false,
+       let systemName = props["systemName"] as? String,
+       !systemName.isEmpty {
+        type = "Icon"
+        props["name"] = props["name"] ?? systemName
+    }
+
+    props = normalizeProps(props, for: type)
+
+    var normalized: [String: Any] = ["type": type, "props": props]
+    if let key {
+        normalized["key"] = key
+    }
+    return normalized
 }
 
 // MARK: - Component Keys & State
@@ -16,17 +203,17 @@ private func parseNumber(_ value: Any?) -> CGFloat? {
 class ComponentState: ObservableObject {
     @Published var components: [String: Any] = [:]
     @Published var rootComponents: [[String: Any]] = []
-    
+
     func render(_ components: [[String: Any]]) {
-        rootComponents = components
+        rootComponents = components.map { normalizeComponentPayload($0) }
         rebuildKeyIndex()
     }
-    
+
     func applyPatches(_ patches: [[String: Any]]) {
         for patch in patches {
             guard let key = patch["key"] as? String,
                   let op = patch["op"] as? String else { continue }
-            
+
             switch op {
             case "replace":
                 if let component = patch["component"] as? [String: Any] {
@@ -51,14 +238,14 @@ class ComponentState: ObservableObject {
             }
         }
     }
-    
+
     private func rebuildKeyIndex() {
         components.removeAll()
         for component in rootComponents {
             indexComponent(component)
         }
     }
-    
+
     private func indexComponent(_ component: [String: Any]) {
         if let key = component["key"] as? String {
             components[key] = component
@@ -70,12 +257,13 @@ class ComponentState: ObservableObject {
             }
         }
     }
-    
+
     private func replaceComponent(key: String, with newComponent: [String: Any]) {
-        rootComponents = rootComponents.map { replaceInTree($0, key: key, with: newComponent) }
+        let normalized = normalizeComponentPayload(newComponent)
+        rootComponents = rootComponents.map { replaceInTree($0, key: key, with: normalized) }
         rebuildKeyIndex()
     }
-    
+
     private func replaceInTree(_ component: [String: Any], key: String, with newComponent: [String: Any]) -> [String: Any] {
         if component["key"] as? String == key {
             return newComponent
@@ -88,12 +276,12 @@ class ComponentState: ObservableObject {
         }
         return result
     }
-    
+
     private func removeComponent(key: String) {
         rootComponents = rootComponents.compactMap { removeFromTree($0, key: key) }
         rebuildKeyIndex()
     }
-    
+
     private func removeFromTree(_ component: [String: Any], key: String) -> [String: Any]? {
         if component["key"] as? String == key {
             return nil
@@ -106,17 +294,19 @@ class ComponentState: ObservableObject {
         }
         return result
     }
-    
+
     private func updateProps(key: String, props: [String: Any]) {
         rootComponents = rootComponents.map { updateInTree($0, key: key, newProps: props) }
         rebuildKeyIndex()
     }
-    
+
     private func updateInTree(_ component: [String: Any], key: String, newProps: [String: Any]) -> [String: Any] {
         var result = component
         if component["key"] as? String == key {
+            let type = component["type"] as? String ?? ""
+            let normalizedIncomingProps = normalizeProps(newProps, for: type)
             var existingProps = component["props"] as? [String: Any] ?? [:]
-            for (k, v) in newProps {
+            for (k, v) in normalizedIncomingProps {
                 existingProps[k] = v
             }
             result["props"] = existingProps
@@ -128,17 +318,19 @@ class ComponentState: ObservableObject {
         }
         return result
     }
-    
+
     private func appendToContainer(key: String, component: [String: Any]) {
-        rootComponents = rootComponents.map { appendInTree($0, key: key, component: component, prepend: false) }
+        let normalized = normalizeComponentPayload(component)
+        rootComponents = rootComponents.map { appendInTree($0, key: key, component: normalized, prepend: false) }
         rebuildKeyIndex()
     }
-    
+
     private func prependToContainer(key: String, component: [String: Any]) {
-        rootComponents = rootComponents.map { appendInTree($0, key: key, component: component, prepend: true) }
+        let normalized = normalizeComponentPayload(component)
+        rootComponents = rootComponents.map { appendInTree($0, key: key, component: normalized, prepend: true) }
         rebuildKeyIndex()
     }
-    
+
     private func appendInTree(_ container: [String: Any], key: String, component: [String: Any], prepend: Bool) -> [String: Any] {
         var result = container
         if container["key"] as? String == key {
@@ -170,18 +362,19 @@ struct ComponentRouter: View {
     let onAction: (String, Any?) -> Void
     /// Long-press annotation callback: (componentType, key, props)
     var onAnnotate: ((String, String, [String: Any]) -> Void)? = nil
-    
+
     var body: some View {
-        let type = component["type"] as? String ?? ""
-        let props = component["props"] as? [String: Any] ?? [:]
-        let key = component["key"] as? String ?? type
-        
+        let normalized = normalizeComponentPayload(component)
+        let type = normalized["type"] as? String ?? ""
+        let props = normalized["props"] as? [String: Any] ?? [:]
+        let key = normalized["key"] as? String ?? type
+
         routedView(type: type, props: props)
             .onLongPressGesture(minimumDuration: 0.5) {
                 onAnnotate?(type, key, props)
             }
     }
-    
+
     @ViewBuilder
     private func routedView(type: String, props: [String: Any]) -> some View {
         switch type {
@@ -198,7 +391,7 @@ struct ComponentRouter: View {
             ScrollViewComponent(props: props, onAction: onAction)
         case "Divider":
             DividerComponent(props: props)
-            
+
         // Content
         case "Text":
             TextComponent(props: props)
@@ -208,7 +401,7 @@ struct ComponentRouter: View {
             IconComponent(props: props)
         case "Badge":
             BadgeComponent(props: props)
-            
+
         // Interactive
         case "Button":
             ButtonComponent(props: props, onAction: onAction)
@@ -216,7 +409,7 @@ struct ComponentRouter: View {
             PressableComponent(props: props, onAction: onAction)
         case "TextInput":
             TextInputComponent(props: props, onAction: onAction)
-            
+
         // Feedback
         case "Loading":
             LoadingComponent(props: props)
@@ -226,15 +419,14 @@ struct ComponentRouter: View {
             ProgressBarComponent(props: props)
         case "Toast":
             ToastComponent(props: props)
-            
+
         // SDUI Components
         case "ForEach":
             ForEachComponent(props: props, onAction: onAction)
         case "If":
             IfComponent(props: props, onAction: onAction)
-        case "View":
-            ViewRefComponent(props: props, onAction: onAction)
-            
+
+
         default:
             Text("Unknown: \(type)")
                 .foregroundColor(.red)
@@ -248,19 +440,19 @@ struct ComponentRouter: View {
 struct VStackComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
-        let spacing = props["spacing"] as? CGFloat ?? 8
+        let spacing = parseNumber(props["spacing"]) ?? 8
         let align = props["align"] as? String ?? "center"
         let children = props["children"] as? [[String: Any]] ?? []
-        
+
         VStack(alignment: alignment(from: align), spacing: spacing) {
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 ComponentRouter(component: child, onAction: onAction)
             }
         }
     }
-    
+
     private func alignment(from string: String) -> HorizontalAlignment {
         switch string {
         case "leading": return .leading
@@ -273,11 +465,11 @@ struct VStackComponent: View {
 struct HStackComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
-        let spacing = props["spacing"] as? CGFloat ?? 8
+        let spacing = parseNumber(props["spacing"]) ?? 8
         let children = props["children"] as? [[String: Any]] ?? []
-        
+
         HStack(spacing: spacing) {
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 ComponentRouter(component: child, onAction: onAction)
@@ -288,11 +480,11 @@ struct HStackComponent: View {
 
 struct SpacerComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
-        if let height = props["height"] as? CGFloat {
+        if let height = parseNumber(props["height"]) {
             Spacer().frame(height: height)
-        } else if let width = props["width"] as? CGFloat {
+        } else if let width = parseNumber(props["width"]) {
             Spacer().frame(width: width)
         } else {
             Spacer()
@@ -303,13 +495,24 @@ struct SpacerComponent: View {
 struct CardComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
-        let padding = props["padding"] as? CGFloat ?? 12
+        let padding = parseNumber(props["padding"]) ?? 12
         let shadow = props["shadow"] as? Bool ?? true
-        let cornerRadius = props["cornerRadius"] as? CGFloat ?? 12
+        let cornerRadius = parseNumber(props["cornerRadius"]) ?? 12
+        let title = props["title"] as? String
+        let bodyText = props["body"] as? String
         let children = props["children"] as? [[String: Any]] ?? []
         let cardContent = VStack(alignment: .leading, spacing: 8) {
+            if let title, !title.isEmpty {
+                Text(title)
+                    .font(.headline)
+            }
+            if let bodyText, !bodyText.isEmpty {
+                Text(bodyText)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 ComponentRouter(component: child, onAction: onAction)
             }
@@ -318,9 +521,9 @@ struct CardComponent: View {
         .background(Color(.systemBackground))
         .cornerRadius(cornerRadius)
         .shadow(color: shadow ? .black.opacity(0.1) : .clear, radius: 4, x: 0, y: 2)
-        
+
         // Support structured dict actions on onTap (script-first dispatch)
-        if let onTapDict = props["onTap"] as? [String: Any] {
+        if let onTapDict = (props["onTap"] ?? props["action"]) as? [String: Any] {
             Button(action: {
                 let actionName = onTapDict["type"] as? String ?? "event"
                 onAction(actionName, onTapDict)
@@ -328,7 +531,7 @@ struct CardComponent: View {
                 cardContent
             }
             .buttonStyle(.plain)
-        } else if let onTap = props["onTap"] as? String {
+        } else if let onTap = (props["onTap"] as? String) ?? (props["action"] as? String) {
             Button(action: {
                 if onTap.contains(":") {
                     let parts = onTap.split(separator: ":", maxSplits: 1)
@@ -351,11 +554,11 @@ struct CardComponent: View {
 struct ScrollViewComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
         let axis = props["axis"] as? String ?? "vertical"
         let children = props["children"] as? [[String: Any]] ?? []
-        
+
         ScrollView(axis == "horizontal" ? .horizontal : .vertical) {
             if axis == "horizontal" {
                 HStack(spacing: 12) {
@@ -376,7 +579,7 @@ struct ScrollViewComponent: View {
 
 struct DividerComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let colorName = props["color"] as? String
         Divider()
@@ -388,21 +591,21 @@ struct DividerComponent: View {
 
 struct TextComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let content = props["content"] as? String ?? ""
         let size = props["size"] as? String ?? "md"
         let weight = props["weight"] as? String ?? "regular"
         let colorName = props["color"] as? String
         let align = props["align"] as? String
-        
+
         Text(content)
             .font(font(for: size))
             .fontWeight(fontWeight(for: weight))
             .foregroundColor(color(for: colorName))
             .multilineTextAlignment(textAlignment(for: align))
     }
-    
+
     private func font(for size: String) -> Font {
         switch size {
         case "xs": return .caption2
@@ -415,7 +618,7 @@ struct TextComponent: View {
         default: return .body
         }
     }
-    
+
     private func fontWeight(for weight: String) -> Font.Weight {
         switch weight {
         case "medium": return .medium
@@ -424,7 +627,7 @@ struct TextComponent: View {
         default: return .regular
         }
     }
-    
+
     private func color(for name: String?) -> Color? {
         guard let name = name else { return nil }
         switch name {
@@ -438,7 +641,7 @@ struct TextComponent: View {
         default: return nil
         }
     }
-    
+
     private func textAlignment(for align: String?) -> TextAlignment {
         switch align {
         case "center": return .center
@@ -450,14 +653,14 @@ struct TextComponent: View {
 
 struct ImageComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let url = props["url"] as? String ?? ""
         let height = parseNumber(props["height"])
         let width = parseNumber(props["width"])
         let cornerRadius = parseNumber(props["cornerRadius"]) ?? 0
         let aspectRatio = props["aspectRatio"] as? String ?? "fill"
-        
+
         AsyncImage(url: URL(string: url)) { phase in
             switch phase {
             case .empty:
@@ -489,17 +692,17 @@ struct ImageComponent: View {
 
 struct IconComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let name = props["name"] as? String ?? "questionmark"
-        let size = props["size"] as? CGFloat ?? 20
+        let size = parseNumber(props["size"]) ?? 20
         let colorName = props["color"] as? String
-        
+
         Image(systemName: name)
             .font(.system(size: size))
             .foregroundColor(color(for: colorName) ?? .primary)
     }
-    
+
     private func color(for name: String?) -> Color? {
         guard let name = name else { return nil }
         switch name {
@@ -516,11 +719,11 @@ struct IconComponent: View {
 
 struct BadgeComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let text = props["text"] as? String ?? ""
         let colorName = props["color"] as? String ?? "orange"
-        
+
         Text(text)
             .font(.caption)
             .fontWeight(.medium)
@@ -530,7 +733,7 @@ struct BadgeComponent: View {
             .foregroundColor(.white)
             .cornerRadius(4)
     }
-    
+
     private func badgeColor(_ name: String) -> Color {
         switch name {
         case "green": return .green
@@ -547,14 +750,14 @@ struct BadgeComponent: View {
 struct ButtonComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
         let label = props["label"] as? String ?? "Button"
         let style = props["style"] as? String ?? "primary"
         let icon = props["icon"] as? String
         let fullWidth = props["fullWidth"] as? Bool ?? false
         let disabled = props["disabled"] as? Bool ?? false
-        
+
         Button(action: {
             // Support structured action configs (dicts) for script-first dispatch
             if let actionDict = props["action"] as? [String: Any] {
@@ -582,7 +785,7 @@ struct ButtonComponent: View {
         .disabled(disabled)
         .opacity(disabled ? 0.5 : 1)
     }
-    
+
     private func buttonBackground(_ style: String) -> Color {
         switch style {
         case "secondary": return Color.gray.opacity(0.15)
@@ -591,7 +794,7 @@ struct ButtonComponent: View {
         default: return .orange
         }
     }
-    
+
     private func buttonForeground(_ style: String) -> Color {
         switch style {
         case "secondary": return .primary
@@ -604,10 +807,10 @@ struct ButtonComponent: View {
 struct PressableComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
         let children = props["children"] as? [[String: Any]] ?? []
-        
+
         Button(action: {
             // Support structured action configs (dicts) for script-first dispatch
             if let actionDict = props["action"] as? [String: Any] {
@@ -639,20 +842,20 @@ struct PressableComponent: View {
 struct TextInputComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     @State private var text = ""
-    
+
     var body: some View {
         let id = props["id"] as? String ?? "input"
         let placeholder = props["placeholder"] as? String ?? "Enter text..."
         let label = props["label"] as? String
-        
+
         VStack(alignment: .leading, spacing: 8) {
             if let label = label {
                 Text(label)
                     .font(.headline)
             }
-            
+
             HStack {
                 TextField(placeholder, text: $text)
                     .textFieldStyle(.roundedBorder)
@@ -660,7 +863,7 @@ struct TextInputComponent: View {
                         onAction("input_submit", ["id": id, "value": text])
                         text = ""
                     }
-                
+
                 Button(action: {
                     onAction("input_submit", ["id": id, "value": text])
                     text = ""
@@ -679,11 +882,11 @@ struct TextInputComponent: View {
 
 struct LoadingComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let message = props["message"] as? String
         let size = props["size"] as? String ?? "large"
-        
+
         VStack(spacing: 12) {
             ProgressView()
                 .scaleEffect(size == "small" ? 1.0 : 1.5)
@@ -699,14 +902,14 @@ struct LoadingComponent: View {
 
 struct SkeletonComponent: View {
     let props: [String: Any]
-    
+
     @State private var isAnimating = false
-    
+
     var body: some View {
         let lines = props["lines"] as? Int ?? 1
-        let height = props["height"] as? CGFloat ?? 20
-        let width = props["width"] as? CGFloat
-        
+        let height = parseNumber(props["height"]) ?? 20
+        let width = parseNumber(props["width"])
+
         VStack(alignment: .leading, spacing: 8) {
             ForEach(0..<lines, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 4)
@@ -724,11 +927,11 @@ struct SkeletonComponent: View {
 
 struct ProgressBarComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
-        let progress = props["progress"] as? Double ?? 0
+        let progress = Double(parseNumber(props["progress"]) ?? 0)
         let label = props["label"] as? String
-        
+
         VStack(alignment: .leading, spacing: 4) {
             if let label = label {
                 Text(label)
@@ -751,11 +954,11 @@ struct ProgressBarComponent: View {
 
 struct ToastComponent: View {
     let props: [String: Any]
-    
+
     var body: some View {
         let message = props["message"] as? String ?? ""
         let type = props["type"] as? String ?? "info"
-        
+
         HStack(spacing: 8) {
             Image(systemName: icon(for: type))
             Text(message)
@@ -767,7 +970,7 @@ struct ToastComponent: View {
         .foregroundColor(.white)
         .cornerRadius(8)
     }
-    
+
     private func icon(for type: String) -> String {
         switch type {
         case "success": return "checkmark.circle.fill"
@@ -775,7 +978,7 @@ struct ToastComponent: View {
         default: return "info.circle.fill"
         }
     }
-    
+
     private func backgroundColor(for type: String) -> Color {
         switch type {
         case "success": return .green
@@ -791,7 +994,7 @@ struct ToastComponent: View {
 struct ForEachComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
         ForEach(Array(resolvedItems.enumerated()), id: \.offset) { index, item in
             // Render the template with item data available
@@ -807,7 +1010,7 @@ struct ForEachComponent: View {
             })
         }
     }
-    
+
     private var resolvedItems: [[String: Any]] {
         let items = props["items"] as? [[String: Any]] ?? []
         if items.isEmpty {
@@ -815,12 +1018,12 @@ struct ForEachComponent: View {
         }
         return items
     }
-    
+
     private var resolvedTemplate: [String: Any] {
         // Accept both "template" and "itemTemplate" for compatibility
         return (props["template"] ?? props["itemTemplate"]) as? [String: Any] ?? [:]
     }
-    
+
     private func renderWithItem(template: [String: Any], item: [String: Any], index: Int) -> [String: Any] {
         // If template already has resolved bindings, return as-is
         // Otherwise, resolve bindings using TemplateRenderer
@@ -832,12 +1035,12 @@ struct ForEachComponent: View {
 struct IfComponent: View {
     let props: [String: Any]
     let onAction: (String, Any?) -> Void
-    
+
     var body: some View {
         let condition = evaluateCondition()
         let thenContent = props["then"] as? [String: Any]
         let elseContent = props["else"] as? [String: Any]
-        
+
         if condition {
             if let thenContent = thenContent {
                 ComponentRouter(component: thenContent, onAction: onAction)
@@ -848,13 +1051,13 @@ struct IfComponent: View {
             }
         }
     }
-    
+
     private func evaluateCondition() -> Bool {
         // Direct boolean
         if let condition = props["condition"] as? Bool {
             return condition
         }
-        
+
         // String truthy check
         if let condition = props["condition"] as? String {
             // Check for common truthy/falsy values
@@ -868,7 +1071,7 @@ struct IfComponent: View {
             // Non-empty string is truthy
             return !condition.isEmpty
         }
-        
+
         // Number truthy check
         if let condition = props["condition"] as? Int {
             return condition != 0
@@ -876,7 +1079,7 @@ struct IfComponent: View {
         if let condition = props["condition"] as? Double {
             return condition != 0
         }
-        
+
         // Array/dict not empty check
         if let condition = props["condition"] as? [Any] {
             return !condition.isEmpty
@@ -884,64 +1087,13 @@ struct IfComponent: View {
         if let condition = props["condition"] as? [String: Any] {
             return !condition.isEmpty
         }
-        
+
         // NSNull or nil is falsy
         if props["condition"] is NSNull {
             return false
         }
-        
+
         // Default: check if condition key exists
         return props["condition"] != nil
-    }
-}
-
-/// View - Reference to a registered view in ViewRegistry
-struct ViewRefComponent: View {
-    let props: [String: Any]
-    let onAction: (String, Any?) -> Void
-    
-    var body: some View {
-        let viewName = props["name"] as? String ?? ""
-        let data = props["data"] as? [String: Any] ?? [:]
-        
-        // Render inline by fetching from ViewRegistry
-        NestedViewRenderer(viewName: viewName, data: data, onAction: onAction)
-    }
-}
-
-/// Helper view to render nested views from ViewRegistry
-struct NestedViewRenderer: View {
-    let viewName: String
-    let data: [String: Any]
-    let onAction: (String, Any?) -> Void
-    
-    var body: some View {
-        // Get template from registry and render it
-        let components = renderNestedView()
-        
-        ForEach(Array(components.enumerated()), id: \.offset) { _, component in
-            ComponentRouter(component: component, onAction: onAction)
-        }
-    }
-    
-    private func renderNestedView() -> [[String: Any]] {
-        // Access ViewRegistry on main actor
-        // Since we're already on main thread in SwiftUI view, this is safe
-        let registry = ViewRegistry.shared
-        
-        guard let template = registry.templates[viewName],
-              let templateDict = template.parseTemplate() else {
-            return [["type": "Text", "props": ["text": "View not found: \(viewName)"]]]
-        }
-        
-        // Merge default data with provided data
-        var mergedData = template.parseDefaultData() ?? [:]
-        for (key, value) in data {
-            mergedData[key] = value
-        }
-        
-        // Render with data
-        let rendered = TemplateRenderer.render(template: templateDict, data: mergedData)
-        return [rendered]
     }
 }

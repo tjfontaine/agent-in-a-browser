@@ -54,14 +54,32 @@ declare namespace ios {
          * Returns the view ID assigned by the host.
          */
         function show(layout: string | Record<string, any>): string;
+
+        /**
+         * Apply incremental patches to the current UI tree.
+         * Each patch targets a component by its `key` and applies an operation.
+         * Returns "ok" or an error description.
+         */
+        function patch(patches: PatchOp[] | string): string;
+
+        interface PatchOp {
+            /** The `key` of the target component in the current tree. */
+            key: string;
+            /** The operation to apply. */
+            op: 'replace' | 'remove' | 'update' | 'append' | 'prepend';
+            /** New component tree (for replace, append, prepend). */
+            component?: Record<string, any>;
+            /** Property updates (for update op). */
+            props?: Record<string, any>;
+        }
     }
-    
+
     namespace permissions {
         type Capability =
             | 'storage' | 'device' | 'render' | 'clipboard'
             | 'contacts' | 'calendar' | 'notifications'
             | 'location' | 'health' | 'keychain' | 'photos';
-        
+
         /** Grant a capability for the current script context. */
         function request(capability: Capability): boolean;
         /** Revoke a previously granted capability. */

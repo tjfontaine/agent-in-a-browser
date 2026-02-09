@@ -6,20 +6,20 @@ struct MCPServerConfig: Codable {
     let name: String?
 }
 
-/// Provider information from WASM API
+/// Provider information for LLM configuration
 struct ProviderInfo: Codable, Identifiable {
     let id: String
     let name: String
     let defaultBaseUrl: String?
 }
 
-/// Model information from WASM API
+/// Model information for LLM configuration
 struct ModelInfo: Codable, Identifiable {
     let id: String
     let name: String
 }
 
-/// Agent configuration matching the WIT interface
+/// Agent configuration passed to EdgeAgentSession
 struct AgentConfig: Codable {
     let provider: String
     let model: String
@@ -30,8 +30,7 @@ struct AgentConfig: Codable {
     let mcpServers: [MCPServerConfig]?
     let maxTurns: UInt32?
     
-    // Note: WASM interface expects camelCase keys, so we use default encoding
-    // (Swift property names are already camelCase)
+
 }
 
 /// Manages user configuration with persistence

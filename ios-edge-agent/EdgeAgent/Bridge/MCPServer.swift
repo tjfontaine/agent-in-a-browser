@@ -5,137 +5,6 @@ import Network
 import OSLog
 import WASIShims
 
-// MARK: - SDUI Validation
-
-/// Validates SDUI tool inputs to help the agent self-correct
-struct SDUIValidator {
-    
-    /// Validation result containing warnings and/or errors
-    struct ValidationResult {
-        var errors: [String] = []
-        var warnings: [String] = []
-        
-        var isValid: Bool { errors.isEmpty }
-        
-        var errorMessage: String? {
-            guard !errors.isEmpty else { return nil }
-            return "VALIDATION ERROR: " + errors.joined(separator: "; ")
-        }
-        
-        var warningMessage: String? {
-            guard !warnings.isEmpty else { return nil }
-            return "⚠️ " + warnings.joined(separator: "; ")
-        }
-    }
-    
-    /// Validate a register_view template
-    /// Checks that templates use ForEach for list rendering
-    static func validateTemplate(_ component: [String: Any]) -> ValidationResult {
-        var result = ValidationResult()
-        
-        // Check for ForEach in the component tree
-        if !containsForEach(component) {
-            result.warnings.append("Template has no ForEach component. For list rendering, use ForEach with items binding: {type: \"ForEach\", props: {items: \"{{items}}\", itemTemplate: {...}}}")
-        }
-        
-        // Check for common mistakes - static children arrays with component objects
-        if hasPrebuiltCardChildren(component) {
-            result.errors.append("Template contains pre-built Card/Image components as children. Use ForEach with itemTemplate bindings instead of static children.")
-        }
-        
-        return result
-    }
-    
-    /// Validate show_view data
-    /// Checks that data contains raw values, not component objects
-    static func validateShowViewData(_ data: [String: Any]?) -> ValidationResult {
-        var result = ValidationResult()
-        
-        guard let data = data else { return result }
-        
-        // Check each data value for component objects
-        for (key, value) in data {
-            if let array = value as? [[String: Any]] {
-                for item in array {
-                    if isComponentObject(item) {
-                        result.errors.append("Data key '\(key)' contains component objects (found 'type' or 'props'). Pass raw data arrays instead, e.g. [{id: \"...\", title: \"...\"}]. ForEach itemTemplate will render each item.")
-                        return result  // Return early - one error is enough
-                    }
-                }
-            } else if let dict = value as? [String: Any], isComponentObject(dict) {
-                result.errors.append("Data key '\(key)' contains a component object. Pass raw data values, not UI components.")
-                return result
-            }
-        }
-        
-        return result
-    }
-    
-    // MARK: - Helpers
-    
-    /// Recursively check if component tree contains ForEach
-    private static func containsForEach(_ component: [String: Any]) -> Bool {
-        if let type = component["type"] as? String, type == "ForEach" {
-            return true
-        }
-        
-        if let props = component["props"] as? [String: Any] {
-            if let children = props["children"] as? [[String: Any]] {
-                for child in children {
-                    if containsForEach(child) {
-                        return true
-                    }
-                }
-            }
-            // Check itemTemplate
-            if let itemTemplate = props["itemTemplate"] as? [String: Any] {
-                if containsForEach(itemTemplate) {
-                    return true
-                }
-            }
-            if let template = props["template"] as? [String: Any] {
-                if containsForEach(template) {
-                    return true
-                }
-            }
-        }
-        
-        return false
-    }
-    
-    /// Check if component has pre-built Card/Image children (common mistake)
-    private static func hasPrebuiltCardChildren(_ component: [String: Any]) -> Bool {
-        if let props = component["props"] as? [String: Any],
-           let children = props["children"] as? [[String: Any]] {
-            // Look for multiple Card or Image children with static URLs
-            var cardCount = 0
-            for child in children {
-                if let type = child["type"] as? String, type == "Card" || type == "Image" {
-                    if let childProps = child["props"] as? [String: Any] {
-                        // Check if it has static (non-binding) values
-                        if let url = childProps["url"] as? String, !url.contains("{{") {
-                            cardCount += 1
-                        }
-                    }
-                }
-            }
-            // If we have multiple static cards, it's a mistake
-            if cardCount >= 2 {
-                return true
-            }
-        }
-        return false
-    }
-    
-    /// Check if a dictionary looks like a component object
-    private static func isComponentObject(_ dict: [String: Any]) -> Bool {
-        // Components have "type" and usually "props"
-        if dict["type"] is String && dict["props"] is [String: Any] {
-            return true
-        }
-        return false
-    }
-}
 
 // MARK: - iOS MCP Server
 
@@ -145,6 +14,13 @@ struct SDUIValidator {
 /// Usage:
 /// 1. Start server: `await MCPServer.shared.start()`
 /// 2. Pass URL to agent config: `mcpServers: [{url: "http://localhost:9292"}]`
+/// Box for passing mutable values across isolation domains synchronized by semaphores.
+/// All access must be externally synchronized (e.g. via DispatchSemaphore).
+private final class UnsafeBox<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
+}
+
 /// 3. Stop on app background: `MCPServer.shared.stop()`
 @MainActor
 class MCPServer: NSObject {
@@ -162,57 +38,43 @@ class MCPServer: NSObject {
     private let locationManager = CLLocationManager()
     private var lastLocation: CLLocation?
     
-    // Render callback - called when agent invokes render_ui
+    // Render callback - called when script invokes ios.render.show()
     nonisolated(unsafe) var onRenderUI: (([[String: Any]]) -> Void)?
     
-    // Update callback - called when agent invokes update_ui for partial updates
-    nonisolated(unsafe) var onUpdateUI: (([[String: Any]]) -> Void)?
+    // Patch callback - called when script invokes ios.render.patch()
+    nonisolated(unsafe) var onPatchUI: (([[String: Any]]) -> Void)?
     
-    // SDUI: Show view callback - called when agent invokes show_view (navigates to cached view)
-    nonisolated(unsafe) var onShowView: ((String, [String: Any]?) -> Void)?
-    
+
     // Ask user callback - called when agent invokes ask_user.
     // The closure receives (requestId, type, prompt, options) and must eventually call the response closure with the user's answer.
     nonisolated(unsafe) var onAskUser: ((_ requestId: String, _ type: String, _ prompt: String, _ options: [String]?) -> Void)?
     
     // Continuation for pending ask_user requests (keyed by requestId)
-    private var askUserContinuations = [String: CheckedContinuation<String, Never>]()
-    private let askUserLock = NSLock()
+    var askUserContinuations = [String: CheckedContinuation<String, Never>]()
+    let askUserLock = NSLock()
     
-    // Deferred NWConnection responses for ask_user (legacy HTTP path)
-    // Holds the connection open until the user responds, then sends the HTTP response.
-    nonisolated(unsafe) var askUserDeferredConnections = [String: NWConnection]()
+    // Semaphore-based ask_user for legacy HTTP path (blocks httpQueue until user responds)
+    // The semaphore is signaled from MainActor when the user taps a response.
+    nonisolated(unsafe) var askUserSemaphores = [String: DispatchSemaphore]()
+    nonisolated(unsafe) var askUserResponses = [String: String]()
     
     /// Call this from the UI when the user responds to an ask_user request
     func resolveAskUser(requestId: String, response: String) {
         askUserLock.lock()
         let continuation = askUserContinuations.removeValue(forKey: requestId)
-        let deferredConnection = askUserDeferredConnections.removeValue(forKey: requestId)
+        let semaphore = askUserSemaphores.removeValue(forKey: requestId)
+        if semaphore != nil {
+            askUserResponses[requestId] = response
+        }
         askUserLock.unlock()
         
         // Resume async continuation (MCPServerKit path)
         continuation?.resume(returning: response)
         
-        // Send deferred HTTP response (legacy HTTP path)
-        if let connection = deferredConnection {
-            let resultDict: [String: Any] = ["content": [["type": "text", "text": response]], "isError": false]
-            let responseJSON: [String: Any] = [
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": resultDict
-            ]
-            if let responseData = try? JSONSerialization.data(withJSONObject: responseJSON),
-               let responseBody = String(data: responseData, encoding: .utf8) {
-                let httpData = httpResponseSync(status: 200, body: responseBody)
-                connection.send(content: httpData, completion: .contentProcessed { error in
-                    if let error = error {
-                        Log.mcp.error("[ask_user] Deferred send error: \(error)")
-                    } else {
-                        Log.mcp.info("[ask_user] Deferred response sent")
-                    }
-                    connection.cancel()
-                })
-            }
+        // Signal semaphore (legacy HTTP path) — unblocks httpQueue
+        if let semaphore {
+            Log.mcp.info("[ask_user] Signaling semaphore for requestId=\(requestId)")
+            semaphore.signal()
         }
     }
     private override init() {
@@ -278,42 +140,8 @@ class MCPServer: NSObject {
     
     // MARK: - Tool Definitions
     
-    private nonisolated var toolDefinitions: [Tool] {
+    nonisolated var toolDefinitions: [Tool] {
         [
-            Tool(
-                name: "render_ui",
-                description: "Display native iOS UI components. Pass an array of component specs with 'type' and 'props'. Each component can have a 'key' for updates. Supported types: VStack, HStack, Card, Text, Image, Icon, Badge, Button, Pressable, TextInput, Loading, Skeleton, ProgressBar, Toast.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "components": .object([
-                            "type": .string("array"),
-                            "description": .string("Array of {type, props} component specifications"),
-                            "items": .object([
-                                "type": .string("object")
-                            ])
-                        ])
-                    ]),
-                    "required": .array([.string("components")])
-                ])
-            ),
-            Tool(
-                name: "update_ui",
-                description: "Partially update the UI by patching specific components by key. Use for streaming updates.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "patches": .object([
-                            "type": .string("array"),
-                            "description": .string("Array of patches: {key, op: 'replace'|'remove'|'update'|'append'|'prepend', component?, props?}"),
-                            "items": .object([
-                                "type": .string("object")
-                            ])
-                        ])
-                    ]),
-                    "required": .array([.string("patches")])
-                ])
-            ),
             Tool(
                 name: "get_location",
                 description: "Get the device's current GPS location. Returns {status, lat, lon}. If status is 'permission_required' or 'denied', use request_authorization first.",
@@ -338,163 +166,7 @@ class MCPServer: NSObject {
                 ])
             ),
             
-            // MARK: - View Registry Tools (SDUI)
-            
-            Tool(
-                name: "register_view",
-                description: "Register a reusable view template with data bindings. Templates use {{path}} for bindings. Once registered, use show_view to display.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "name": .object([
-                            "type": .string("string"),
-                            "description": .string("Unique name for the view template")
-                        ]),
-                        "version": .object([
-                            "type": .string("string"),
-                            "description": .string("Semver version for cache invalidation (e.g. '1.0.0')")
-                        ]),
-                        "component": .object([
-                            "type": .string("object"),
-                            "description": .string("The component tree with {{bindings}}")
-                        ]),
-                        "defaultData": .object([
-                            "type": .string("object"),
-                            "description": .string("Default data values for bindings")
-                        ]),
-                        "animation": .object([
-                            "type": .string("object"),
-                            "description": .string("Enter/exit animations: {enter, exit, duration}")
-                        ]),
-                        "app_id": .object([
-                            "type": .string("string"),
-                            "description": .string("Optional app/project ID. When provided, also persists to app_templates for bundle tracking.")
-                        ])
-                    ]),
-                    "required": .array([.string("name"), .string("version"), .string("component")])
-                ])
-            ),
-            Tool(
-                name: "show_view",
-                description: "Navigate to a registered view with data. Bindings in the template are resolved with the provided data.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "name": .object([
-                            "type": .string("string"),
-                            "description": .string("Name of the registered view to show")
-                        ]),
-                        "data": .object([
-                            "type": .string("object"),
-                            "description": .string("Data to bind to template placeholders")
-                        ])
-                    ]),
-                    "required": .array([.string("name")])
-                ])
-            ),
-            Tool(
-                name: "update_view_data",
-                description: "Update data for the current view without re-registering the template.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "data": .object([
-                            "type": .string("object"),
-                            "description": .string("New data to merge with current view data")
-                        ])
-                    ]),
-                    "required": .array([.string("data")])
-                ])
-            ),
-            Tool(
-                name: "update_template",
-                description: "Apply patches to a registered template without full re-registration.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "name": .object([
-                            "type": .string("string"),
-                            "description": .string("Name of the view template to patch")
-                        ]),
-                        "patches": .object([
-                            "type": .string("array"),
-                            "description": .string("Array of patches: {path, value, op?}"),
-                            "items": .object([
-                                "type": .string("object")
-                            ])
-                        ]),
-                        "app_id": .object([
-                            "type": .string("string"),
-                            "description": .string("Optional app/project ID. When provided, persist patched template to app_templates.")
-                        ])
-                    ]),
-                    "required": .array([.string("name"), .string("patches")])
-                ])
-            ),
-            Tool(
-                name: "pop_view",
-                description: "Pop the current view from the navigation stack and return to the previous view.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([:])
-                ])
-            ),
-            Tool(
-                name: "invalidate_view",
-                description: "Remove a specific view from the cache, forcing re-registration on next use.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "name": .object([
-                            "type": .string("string"),
-                            "description": .string("Name of the view to invalidate")
-                        ])
-                    ]),
-                    "required": .array([.string("name")])
-                ])
-            ),
-            Tool(
-                name: "invalidate_all_views",
-                description: "Clear the entire view registry cache.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([:])
-                ])
-            ),
-            Tool(
-                name: "query_views",
-                description: "Query registered view templates and navigation stack. Returns: templates (name, version), navigationStack (viewName, dataKeys), currentView. Use this to check if a template is already registered and what data is cached before re-fetching.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "name": .object([
-                            "type": .string("string"),
-                            "description": .string("Optional: query a specific template by name to get its full cached data")
-                        ])
-                    ])
-                ])
-            ),
-            Tool(
-                name: "sqlite_query",
-                description: "Execute a SQL query on the SDUI database. Returns results as JSON array. Use for reading/writing app state, agent memory, and custom data tables.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "sql": .object([
-                            "type": .string("string"),
-                            "description": .string("SQL query to execute (SELECT/INSERT/UPDATE/DELETE)")
-                        ]),
-                        "params": .object([
-                            "type": .string("array"),
-                            "description": .string("Optional array of parameter values for ? placeholders"),
-                            "items": .object([
-                                "type": .string("string")
-                            ])
-                        ])
-                    ]),
-                    "required": .array([.string("sql")])
-                ])
-            ),
+
             
             // MARK: - Script Lifecycle Tools
             
@@ -519,6 +191,14 @@ class MCPServer: NSObject {
                         "description": .object([
                             "type": .string("string"),
                             "description": .string("Human-readable description of what the script does")
+                        ]),
+                        "app_name": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional human-readable app name used to label the launcher project")
+                        ]),
+                        "app_summary": .object([
+                            "type": .string("string"),
+                            "description": .string("Optional app summary used when creating a new launcher project row")
                         ]),
                         "permissions": .object([
                             "type": .string("array"),
@@ -797,12 +477,8 @@ class MCPServer: NSObject {
     
     // MARK: - Tool Execution
     
-    private func handleToolCall(name: String, arguments: Value?) async -> CallTool.Result {
+    func handleToolCall(name: String, arguments: Value?) async -> CallTool.Result {
         switch name {
-        case "render_ui":
-            return await executeRenderUI(arguments: arguments)
-        case "update_ui":
-            return await executeUpdateUI(arguments: arguments)
         case "get_location":
             return executeGetLocation()
         case "request_authorization":
@@ -855,53 +531,7 @@ class MCPServer: NSObject {
         return dictToCallToolResult(resultDict)
     }
     
-    private func executeRenderUI(arguments: Value?) async -> CallTool.Result {
-        guard let arguments = arguments,
-              case .object(let dict) = arguments,
-              let componentsJSON = dict["components"],
-              case .array(let components) = componentsJSON else {
-            return .init(content: [.text("Missing 'components' array")], isError: true)
-        }
-        
-        // Convert JSON to dictionaries for Swift UI
-        let componentDicts: [[String: Any]] = components.compactMap { json in
-            jsonToDictionary(json)
-        }
-        
-        // Dispatch to main thread for UI update
-        await MainActor.run {
-            onRenderUI?(componentDicts)
-        }
-        
-        return .init(
-            content: [.text("{\"rendered\": \(componentDicts.count)}")],
-            isError: false
-        )
-    }
-    
-    private func executeUpdateUI(arguments: Value?) async -> CallTool.Result {
-        guard let arguments = arguments,
-              case .object(let dict) = arguments,
-              let patchesJSON = dict["patches"],
-              case .array(let patches) = patchesJSON else {
-            return .init(content: [.text("Missing 'patches' array")], isError: true)
-        }
-        
-        // Convert JSON to dictionaries for Swift UI
-        let patchDicts: [[String: Any]] = patches.compactMap { json in
-            jsonToDictionary(json)
-        }
-        
-        // Dispatch to main thread for UI update
-        await MainActor.run {
-            onUpdateUI?(patchDicts)
-        }
-        
-        return .init(
-            content: [.text("{\"patched\": \(patchDicts.count)}")],
-            isError: false
-        )
-    }
+
     
     // MARK: - Script Lifecycle Handlers
     
@@ -922,16 +552,12 @@ class MCPServer: NSObject {
         
         let requestId = UUID().uuidString
         
-        // Notify UI to show the ask_user card
-        await MainActor.run {
-            onAskUser?(requestId, askType, prompt, options)
-        }
-        
         // Suspend until the user responds
         let userResponse = await withCheckedContinuation { (continuation: CheckedContinuation<String, Never>) in
             askUserLock.lock()
             askUserContinuations[requestId] = continuation
             askUserLock.unlock()
+            onAskUser?(requestId, askType, prompt, options)
         }
         
         return .init(content: [.text(userResponse)], isError: false)
@@ -952,6 +578,16 @@ class MCPServer: NSObject {
         if let descVal = dict["description"], case .string(let d) = descVal {
             description = d
         }
+
+        var appName: String? = nil
+        if let appNameVal = dict["app_name"], case .string(let providedAppName) = appNameVal {
+            appName = providedAppName
+        }
+
+        var appSummary: String? = nil
+        if let appSummaryVal = dict["app_summary"], case .string(let providedSummary) = appSummaryVal {
+            appSummary = providedSummary
+        }
         
         var capabilities: [String] = []
         if let permsVal = dict["permissions"], case .array(let permsArray) = permsVal {
@@ -964,6 +600,11 @@ class MCPServer: NSObject {
         }
         
         do {
+            _ = try DatabaseManager.shared.ensureProject(
+                id: appId,
+                preferredName: appName,
+                summary: appSummary
+            )
             let repo = AppBundleRepository()
             let record = try repo.saveAppScript(
                 appId: appId,
@@ -1149,6 +790,7 @@ class MCPServer: NSObject {
         }
         
         do {
+            _ = try DatabaseManager.shared.ensureProject(id: appId)
             let repo = AppBundleRepository()
             
             // Validate the bundle JSON is parseable
@@ -1225,6 +867,7 @@ class MCPServer: NSObject {
         }
         
         do {
+            _ = try DatabaseManager.shared.ensureProject(id: appId)
             let repo = AppBundleRepository()
             var applied = 0
             var errors: [String] = []
@@ -1343,6 +986,7 @@ class MCPServer: NSObject {
         }
         
         do {
+            _ = try DatabaseManager.shared.ensureProject(id: appId)
             let repo = AppBundleRepository()
             
             // Verify script exists
@@ -1359,6 +1003,15 @@ class MCPServer: NSObject {
             if let repairRunId = repairRunId {
                 guard UserDefaults.standard.bool(forKey: "bundleRepairMode") else {
                     return .init(content: [.text("{\"error\": \"Repair mode is disabled. Enable 'Bundle Repair Loop' in Settings.\"}")], isError: true)
+                }
+                guard let baseRun = try repo.getRun(id: repairRunId) else {
+                    return .init(content: [.text("{\"error\": \"Repair run '\(repairRunId)' not found\"}")], isError: true)
+                }
+                guard baseRun.appId == appId else {
+                    return .init(content: [.text("{\"error\": \"Repair run '\(repairRunId)' belongs to app '\(baseRun.appId)', not '\(appId)'\"}")], isError: true)
+                }
+                guard baseRun.status == .failed || baseRun.status == .repairing else {
+                    return .init(content: [.text("{\"error\": \"Repair run '\(repairRunId)' has status '\(baseRun.status.rawValue)'. Only failed/repairing runs may be retried.\"}")], isError: true)
                 }
                 
                 let bundle = try AppBundle.build(appId: appId)
@@ -1556,6 +1209,7 @@ class MCPServer: NSObject {
         }
         
         do {
+            _ = try DatabaseManager.shared.ensureProject(id: appId)
             guard let jsonData = bundleJSON.data(using: .utf8) else {
                 return .init(content: [.text("{\"error\": \"Invalid bundle JSON encoding\"}")], isError: true)
             }
@@ -1616,6 +1270,19 @@ class MCPServer: NSObject {
         }
         
         do {
+            if let sourceProject = try DatabaseManager.shared.getProject(id: sourceAppId) {
+                _ = try DatabaseManager.shared.ensureProject(
+                    id: targetAppId,
+                    preferredName: "\(sourceProject.name) Copy",
+                    summary: "Cloned from \(sourceAppId)"
+                )
+            } else {
+                _ = try DatabaseManager.shared.ensureProject(
+                    id: targetAppId,
+                    summary: "Cloned from \(sourceAppId)"
+                )
+            }
+
             // Build snapshot from source
             let sourceBundle = try AppBundle.build(appId: sourceAppId)
             let bundle = sourceBundle.retargeted(to: targetAppId)
@@ -1656,36 +1323,7 @@ class MCPServer: NSObject {
         }
     }
 
-    private func persistViewTemplateToAppScope(name: String, appId: String) throws {
-        guard let template = ViewRegistry.shared.templates[name] else {
-            throw NSError(
-                domain: "MCPServer",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Template '\(name)' not found after patch"]
-            )
-        }
 
-        var animationJSON: String? = nil
-        if let animation = template.animation {
-            let animationDict: [String: Any] = [
-                "enter": animation.enter as Any,
-                "exit": animation.exit as Any,
-                "duration": animation.duration as Any
-            ].compactMapValues { $0 }
-            if let data = try? JSONSerialization.data(withJSONObject: animationDict) {
-                animationJSON = String(data: data, encoding: .utf8)
-            }
-        }
-
-        _ = try AppBundleRepository().saveAppTemplate(
-            appId: appId,
-            name: template.name,
-            version: template.version,
-            template: template.template,
-            defaultData: template.defaultData,
-            animation: animationJSON
-        )
-    }
     
     private func jsonToDictionary(_ json: Value) -> [String: Any]? {
         guard case .object(let dict) = json else { return nil }
@@ -1867,136 +1505,12 @@ class MCPServer: NSObject {
         Log.mcp.debug("[\(connectionId)] New connection accepted")
         
         connection.start(queue: httpQueue)
-        
-        // Buffer to accumulate request data
-        var requestBuffer = Data()
-        
-        func readMore() {
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-                guard let self = self else {
-                    Log.mcp.debug("[\(connectionId)] Server deallocated, cancelling connection")
-                    connection.cancel()
-                    return
-                }
-                
-                if let error = error {
-                    Log.mcp.error("[\(connectionId)] Receive error: \(error)")
-                    connection.cancel()
-                    return
-                }
-                
-                if let data = data {
-                    Log.mcp.debug("[\(connectionId)] Received \(data.count) bytes")
-                    requestBuffer.append(data)
-                }
-                
-                if isComplete {
-                    Log.mcp.debug("[\(connectionId)] Connection closed by peer")
-                    // If we have data, we might need to process it, but usually HTTP 1.1 doesn't close connection for request
-                }
-                
-                // Check if we have a complete HTTP request
-                // Use byte-based parsing to correctly handle Content-Length (which is in bytes, not characters)
-                let headerSeparator = Data("\r\n\r\n".utf8)
-                if let headerEndRange = requestBuffer.range(of: headerSeparator) {
-                    let headerData = requestBuffer[..<headerEndRange.lowerBound]
-                    
-                    // Parse Content-Length from headers (ASCII-safe)
-                    var contentLength = 0
-                    if let headersString = String(data: headerData, encoding: .utf8) {
-                        for line in headersString.split(separator: "\r\n") {
-                            if line.lowercased().hasPrefix("content-length:") {
-                                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
-                                contentLength = Int(value) ?? 0
-                            }
-                        }
-                    }
-                    
-                    // Calculate body length in BYTES (not characters!)
-                    let bodyStartIndex = headerEndRange.upperBound
-                    let currentBodyLength = requestBuffer.count - bodyStartIndex
-                    
-                    Log.mcp.debug("[\(connectionId)] Request check: Body \(currentBodyLength)/\(contentLength) bytes")
-                    
-                    // If we have the full body, process the request
-                    if currentBodyLength >= contentLength {
-                        Log.mcp.debug("[\(connectionId)] Request complete, processing sync")
-                        
-                        // Check if this is an ask_user tool call — needs deferred response
-                        if self.tryDeferAskUser(requestData: requestBuffer, connection: connection, connectionId: String(connectionId)) {
-                            return  // Connection held open; response sent later via resolveAskUser
-                        }
-                        
-                        // Process synchronously on httpQueue to avoid latency
-                        let response = self.handleHTTPRequestSync(requestBuffer)
-                        
-                        Log.mcp.debug("[\(connectionId)] Sending \(response.count) bytes response")
-                        connection.send(content: response, completion: .contentProcessed { error in
-                            if let error = error {
-                                Log.mcp.error("[\(connectionId)] Send error: \(error)")
-                            } else {
-                                Log.mcp.debug("[\(connectionId)] Sent response, closing connection")
-                            }
-                            connection.cancel()
-                        })
-                        return
-                    }
-                }
-                
-                // Need more data or error
-                if error != nil || isComplete {
-                    connection.cancel()
-                } else {
-                    readMore()
-                }
-            }
-        }
-        
-        readMore()
-    }
-    
-    /// Detects ask_user tool calls and defers the HTTP response until the user answers.
-    /// Returns true if this is an ask_user call (connection held open), false otherwise.
-    private nonisolated func tryDeferAskUser(requestData: Data, connection: NWConnection, connectionId: String) -> Bool {
-        guard let requestString = String(data: requestData, encoding: .utf8),
-              let bodyStart = requestString.range(of: "\r\n\r\n")?.upperBound else {
-            return false
-        }
-        
-        let body = String(requestString[bodyStart...])
-        guard let jsonData = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-              let params = json["params"] as? [String: Any],
-              let toolName = params["name"] as? String,
-              toolName == "ask_user" else {
-            return false
-        }
-        
-        let argsData = params["arguments"] as? [String: Any]
-        guard let askType = argsData?["type"] as? String,
-              let prompt = argsData?["prompt"] as? String else {
-            return false
-        }
-        let options = argsData?["options"] as? [String]
-        let requestId = UUID().uuidString
-        
-        Log.mcp.info("[\(connectionId)] ask_user detected — deferring response for requestId=\(requestId)")
-        
-        // Stash the connection for later response
-        askUserLock.lock()
-        askUserDeferredConnections[requestId] = connection
-        askUserLock.unlock()
-        
-        // Notify UI on main thread
-        DispatchQueue.main.async { [weak self] in
-            self?.onAskUser?(requestId, askType, prompt, options)
-        }
-        
-        return true  // Connection held open
+        let handler = MCPConnectionHandler(connection: connection, server: self, queue: httpQueue, connectionId: String(connectionId))
+        handler.readMore()
     }
     
     /// Synchronous HTTP request handler - runs on httpQueue without MainActor hop
-    private nonisolated func handleHTTPRequestSync(_ data: Data) -> Data {
+    fileprivate nonisolated func handleHTTPRequestSync(_ data: Data) -> Data {
         // Parse HTTP request body (skip headers for simplicity)
         guard let requestString = String(data: data, encoding: .utf8) else {
             Log.mcp.info(" Failed to decode request as UTF-8")
@@ -2067,50 +1581,30 @@ class MCPServer: NSObject {
             Log.mcp.debug(" tools/call: name=\(name)")
             
             switch name {
-            case "render_ui":
-                // Extract components and dispatch to main queue (fire-and-forget for UI)
-                if let components = argsData?["components"] as? [[String: Any]] {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onRenderUI?(components)
-                    }
-                    return ["content": [["type": "text", "text": "{\"rendered\": \(components.count)}"]], "isError": false]
-                }
-                return ["content": [["type": "text", "text": "Missing 'components' array"]], "isError": true]
-                
-            case "update_ui":
-                // Extract patches and dispatch to main queue (fire-and-forget for UI)
-                if let patches = argsData?["patches"] as? [[String: Any]] {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onUpdateUI?(patches)
-                    }
-                    return ["content": [["type": "text", "text": "{\"patched\": \(patches.count)}"]], "isError": false]
-                }
-                return ["content": [["type": "text", "text": "Missing 'patches' array"]], "isError": true]
-                
             case "get_location":
                 if Thread.isMainThread {
-                    let result = MainActor.assumeIsolated {
-                        self.executeGetLocation()
+                    nonisolated(unsafe) var locationResult: [String: Any] = [:]
+                    MainActor.assumeIsolated {
+                        let result = self.executeGetLocation()
+                        locationResult = self.resultToDict(result)
                     }
-                    return MainActor.assumeIsolated {
-                        self.resultToDict(result)
-                    }
+                    return locationResult
                 }
 
                 let semaphore = DispatchSemaphore(value: 0)
-                var response: [String: Any] = [
+                let responseBox = UnsafeBox<[String: Any]>([
                     "content": [["type": "text", "text": "{\"error\": \"get_location unavailable\"}"]],
                     "isError": true,
-                ]
+                ])
                 DispatchQueue.main.async {
                     let result = self.executeGetLocation()
-                    response = self.resultToDict(result)
+                    responseBox.value = self.resultToDict(result)
                     semaphore.signal()
                 }
                 if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
                     return ["content": [["type": "text", "text": "{\"error\": \"get_location timed out\"}"]], "isError": true]
                 }
-                return response
+                return responseBox.value
 
             case "request_authorization":
                 guard let capability = argsData?["capability"] as? String else {
@@ -2121,239 +1615,55 @@ class MCPServer: NSObject {
                 }
                 return ["content": [["type": "text", "text": "{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Authorization for \(capability) is not implemented.\"}"]], "isError": false]
                 
-            // MARK: - View Registry Tool Handlers
-                
-            case "register_view":
-                guard let name = argsData?["name"] as? String,
-                      let version = argsData?["version"] as? String,
-                      let component = argsData?["component"] as? [String: Any] else {
-                    return ["content": [["type": "text", "text": "Missing required parameters: name, version, component"]], "isError": true]
-                }
-                
-                // Validate template structure
-                let validation = SDUIValidator.validateTemplate(component)
-                if let errorMsg = validation.errorMessage {
-                    return ["content": [["type": "text", "text": errorMsg]], "isError": true]
-                }
-                
-                let defaultData = argsData?["defaultData"] as? [String: Any]
-                var animation: ViewAnimation? = nil
-                if let animDict = argsData?["animation"] as? [String: Any] {
-                    animation = ViewAnimation(
-                        enter: animDict["enter"] as? String,
-                        exit: animDict["exit"] as? String,
-                        duration: animDict["duration"] as? Double
-                    )
-                }
-                DispatchQueue.main.async {
-                    do {
-                        try ViewRegistry.shared.registerView(
-                            name: name,
-                            version: version,
-                            template: component,
-                            defaultData: defaultData,
-                            animation: animation
-                        )
-                    } catch {
-                        Log.mcp.error("register_view failed: \(error)")
-                    }
-                }
-                
-                // Also persist to app_templates when app_id is provided
-                if let appId = argsData?["app_id"] as? String {
-                    do {
-                        let repo = AppBundleRepository()
-                        let templateJSON = try JSONSerialization.data(withJSONObject: component)
-                        let templateStr = String(data: templateJSON, encoding: .utf8) ?? "{}"
-                        
-                        var defaultDataStr: String? = nil
-                        if let dd = defaultData {
-                            let ddJSON = try JSONSerialization.data(withJSONObject: dd)
-                            defaultDataStr = String(data: ddJSON, encoding: .utf8)
-                        }
-                        
-                        var animationStr: String? = nil
-                        if let anim = animation {
-                            let animDict: [String: Any] = [
-                                "enter": anim.enter as Any,
-                                "exit": anim.exit as Any,
-                                "duration": anim.duration as Any
-                            ].compactMapValues { $0 }
-                            let animJSON = try JSONSerialization.data(withJSONObject: animDict)
-                            animationStr = String(data: animJSON, encoding: .utf8)
-                        }
-                        
-                        _ = try repo.saveAppTemplate(
-                            appId: appId,
-                            name: name,
-                            version: version,
-                            template: templateStr,
-                            defaultData: defaultDataStr,
-                            animation: animationStr
-                        )
-                        Log.mcp.info("register_view: also persisted to app_templates for app \(appId)")
-                    } catch {
-                        Log.mcp.error("register_view: failed to persist to app_templates: \(error)")
-                    }
-                }
-                
-                // Include warning in response if present
-                var responseText = "{\"registered\": \"\(name)\", \"version\": \"\(version)\"}"
-                if let warningMsg = validation.warningMessage {
-                    responseText = "{\"registered\": \"\(name)\", \"version\": \"\(version)\", \"warning\": \"\(warningMsg)\"}"
-                }
-                return ["content": [["type": "text", "text": responseText]], "isError": false]
-                
-            case "show_view":
-                guard let name = argsData?["name"] as? String else {
-                    return ["content": [["type": "text", "text": "Missing required parameter: name"]], "isError": true]
-                }
-                let data = argsData?["data"] as? [String: Any]
-                
-                // Validate data structure - must be raw data, not components
-                let validation = SDUIValidator.validateShowViewData(data)
-                if let errorMsg = validation.errorMessage {
-                    return ["content": [["type": "text", "text": errorMsg]], "isError": true]
-                }
-                
-                DispatchQueue.main.async { [weak self] in
-                    do {
-                        try ViewRegistry.shared.showView(name: name, data: data)
-                        self?.onShowView?(name, data)
-                    } catch {
-                        Log.mcp.error("show_view failed: \(error)")
-                    }
-                }
-                return ["content": [["type": "text", "text": "{\"showing\": \"\(name)\"}"]], "isError": false]
-                
-            case "update_view_data":
-                guard let data = argsData?["data"] as? [String: Any] else {
-                    return ["content": [["type": "text", "text": "Missing required parameter: data"]], "isError": true]
-                }
-                DispatchQueue.main.async {
-                    do {
-                        try ViewRegistry.shared.updateViewData(data: data)
-                    } catch {
-                        Log.mcp.error("update_view_data failed: \(error)")
-                    }
-                }
-                return ["content": [["type": "text", "text": "{\"updated\": true}"]], "isError": false]
-                
-            case "update_template":
-                guard let name = argsData?["name"] as? String,
-                      let patches = argsData?["patches"] as? [[String: Any]] else {
-                    return ["content": [["type": "text", "text": "Missing required parameters: name, patches"]], "isError": true]
-                }
-                let appId = argsData?["app_id"] as? String
 
-                // Avoid deadlock when called from MainActor path
-                if Thread.isMainThread {
-                    do {
-                        try MainActor.assumeIsolated {
-                            try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
-                            if let appId {
-                                try persistViewTemplateToAppScope(name: name, appId: appId)
-                            }
-                        }
-                    } catch {
-                        return ["content": [["type": "text", "text": "Template patch error: \(error.localizedDescription)"]], "isError": true]
-                    }
-                    return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"count\": \(patches.count)}"]], "isError": false]
+                
+            case "ask_user":
+                // Block httpQueue until user responds via MainActor.
+                // Safe because: WASM is single-threaded (no concurrent requests during wait)
+                // and resolution path only needs MainActor (which is free).
+                dispatchPrecondition(condition: .notOnQueue(.main))
+                
+                guard let askType = argsData?["type"] as? String,
+                      let prompt = argsData?["prompt"] as? String else {
+                    return ["content": [["type": "text", "text": "Missing required parameters: type, prompt"]], "isError": true]
                 }
-
+                let options = argsData?["options"] as? [String]
+                let requestId = UUID().uuidString
                 let semaphore = DispatchSemaphore(value: 0)
-                var patchError: String?
-                DispatchQueue.main.async {
-                    do {
-                        try ViewRegistry.shared.updateTemplate(name: name, patches: patches)
-                        if let appId {
-                            try self.persistViewTemplateToAppScope(name: name, appId: appId)
-                        }
-                    } catch {
-                        patchError = error.localizedDescription
-                    }
-                    semaphore.signal()
-                }
-
-                if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
-                    return ["content": [["type": "text", "text": "{\"error\": \"update_template timed out\"}"]], "isError": true]
-                }
-                if let patchError {
-                    return ["content": [["type": "text", "text": "Template patch error: \(patchError)"]], "isError": true]
-                }
-
-                return ["content": [["type": "text", "text": "{\"patched\": \"\(name)\", \"count\": \(patches.count)}"]], "isError": false]
                 
-            case "pop_view":
-                DispatchQueue.main.async {
-                    _ = ViewRegistry.shared.popView()
-                }
-                return ["content": [["type": "text", "text": "{\"popped\": true}"]], "isError": false]
+                // Store semaphore BEFORE dispatching UI (ordering guarantee)
+                askUserLock.lock()
+                askUserSemaphores[requestId] = semaphore
+                askUserLock.unlock()
                 
-            case "invalidate_view":
-                guard let name = argsData?["name"] as? String else {
-                    return ["content": [["type": "text", "text": "Missing required parameter: name"]], "isError": true]
-                }
-                DispatchQueue.main.async {
-                    ViewRegistry.shared.invalidateView(name: name)
-                }
-                return ["content": [["type": "text", "text": "{\"invalidated\": \"\(name)\"}"]], "isError": false]
+                Log.mcp.info("[ask_user] Blocking httpQueue for requestId=\(requestId), prompt=\(prompt.prefix(80))")
                 
-            case "invalidate_all_views":
-                DispatchQueue.main.async {
-                    ViewRegistry.shared.invalidateAllViews()
-                }
-                return ["content": [["type": "text", "text": "{\"invalidated\": \"all\"}"]], "isError": false]
-                
-            case "query_views":
-                // Query view registry state
-                var result: [String: Any] = [:]
-
-                if Thread.isMainThread {
-                    result = MainActor.assumeIsolated {
-                        buildQueryViewsResult(argsData: argsData)
-                    }
-                } else {
-                    let semaphore = DispatchSemaphore(value: 0)
-                    DispatchQueue.main.async {
-                        result = MainActor.assumeIsolated {
-                            self.buildQueryViewsResult(argsData: argsData)
-                        }
-                        semaphore.signal()
-                    }
-
-                    // Wait with timeout to prevent indefinite blocking
-                    let waitResult = semaphore.wait(timeout: .now() + 5.0)
-                    if waitResult == .timedOut {
-                        return ["content": [["type": "text", "text": "{\"error\": \"query_views timed out\"}"]], "isError": true]
-                    }
+                // Show ask_user UI on MainActor
+                DispatchQueue.main.async { [weak self] in
+                    self?.onAskUser?(requestId, askType, prompt, options)
                 }
                 
-                if let jsonData = try? JSONSerialization.data(withJSONObject: result),
-                   let jsonString = String(data: jsonData, encoding: .utf8) {
-                    return ["content": [["type": "text", "text": jsonString]], "isError": false]
-                }
-                return ["content": [["type": "text", "text": "{\"error\": \"serialization failed\"}"]], "isError": true]
+                // Block until user responds (up to 5 minutes)
+                let waitResult = semaphore.wait(timeout: .now() + 300)
                 
-            case "sqlite_query":
-                guard let sql = argsData?["sql"] as? String else {
-                    return ["content": [["type": "text", "text": "Missing required parameter: sql"]], "isError": true]
-                }
-                let params = argsData?["params"] as? [Any] ?? []
+                // Read and clean up response
+                askUserLock.lock()
+                let userResponse = askUserResponses.removeValue(forKey: requestId)
+                askUserSemaphores.removeValue(forKey: requestId)
+                askUserLock.unlock()
                 
-                do {
-                    let results = try DatabaseManager.shared.executeQuery(sql: sql, params: params)
-                    if let jsonData = try? JSONSerialization.data(withJSONObject: results),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        return ["content": [["type": "text", "text": jsonString]], "isError": false]
-                    }
-                    return ["content": [["type": "text", "text": "{\"rows\": \(results.count)}"]], "isError": false]
-                } catch {
-                    Log.mcp.error("sqlite_query failed: \(error)")
-                    return ["content": [["type": "text", "text": "Query error: \(error.localizedDescription)"]], "isError": true]
+                if waitResult == .timedOut || userResponse == nil {
+                    Log.mcp.warning("[ask_user] Timed out waiting for user response (requestId=\(requestId))")
+                    return ["content": [["type": "text", "text": "{\"error\": \"ask_user timed out after 5 minutes\"}"]], "isError": true]
                 }
+                
+                Log.mcp.info("[ask_user] Got response for requestId=\(requestId)")
+                return ["content": [["type": "text", "text": userResponse!]], "isError": false]
                 
             default:
+                if toolDefinitions.contains(where: { $0.name == name }) {
+                    return executeToolCallSyncViaMainActor(name: name, argsData: argsData)
+                }
                 return ["content": [["type": "text", "text": "Unknown tool: \(name)"]], "isError": true]
             }
         default:
@@ -2361,8 +1671,48 @@ class MCPServer: NSObject {
         }
     }
     
+    /// Forward a synchronous legacy HTTP tool call to the primary async tool dispatcher.
+    /// This keeps `tools/list` and `tools/call` behavior aligned for real MCP clients.
+    private nonisolated func executeToolCallSyncViaMainActor(name: String, argsData: [String: Any]?) -> [String: Any] {
+        dispatchPrecondition(condition: .notOnQueue(.main))
+        let argsPayload = argsData.flatMap { args -> Data? in
+            guard JSONSerialization.isValidJSONObject(args) else { return nil }
+            return try? JSONSerialization.data(withJSONObject: args)
+        }
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        let responseBox = UnsafeBox<[String: Any]>([
+            "content": [["type": "text", "text": "{\"error\": \"\(name) unavailable\"}"]],
+            "isError": true,
+        ])
+        
+        Task { @MainActor [weak self, argsPayload] in
+            guard let self else {
+                responseBox.value = ["content": [["type": "text", "text": "{\"error\": \"server unavailable\"}"]], "isError": true]
+                semaphore.signal()
+                return
+            }
+            let argsJSON: Value?
+            if let argsPayload,
+               let parsed = try? JSONSerialization.jsonObject(with: argsPayload) as? [String: Any] {
+                argsJSON = self.dictToJSON(parsed)
+            } else {
+                argsJSON = nil
+            }
+            let result = await self.handleToolCall(name: name, arguments: argsJSON)
+            responseBox.value = self.resultToDict(result)
+            semaphore.signal()
+        }
+        
+        if semaphore.wait(timeout: .now() + 300) == .timedOut {
+            return ["content": [["type": "text", "text": "{\"error\": \"\(name) timed out\"}"]], "isError": true]
+        }
+        
+        return responseBox.value
+    }
+    
     /// Nonisolated version of httpResponse
-    private nonisolated func httpResponseSync(status: Int, body: String) -> Data {
+    fileprivate nonisolated func httpResponseSync(status: Int, body: String) -> Data {
         let response = """
         HTTP/1.1 \(status) \(status == 200 ? "OK" : "Error")\r
         Content-Type: application/json\r
@@ -2578,55 +1928,7 @@ class MCPServer: NSObject {
         }
     }
 
-    @MainActor
-    private func buildQueryViewsResult(argsData: [String: Any]?) -> [String: Any] {
-        let registry = ViewRegistry.shared
 
-        // If querying a specific view by name, return its cached data
-        if let queryName = argsData?["name"] as? String {
-            // Find data in navigation stack
-            if let viewState = registry.navigationStack.first(where: { $0.viewName == queryName }) {
-                let template = registry.templates[queryName]
-                return [
-                    "found": true,
-                    "viewName": queryName,
-                    "version": template?.version ?? "unknown",
-                    "cachedData": viewState.data,
-                    "inStack": true,
-                ] as [String: Any]
-            } else if let template = registry.templates[queryName] {
-                // Template exists but not in stack (no data cached)
-                return [
-                    "found": true,
-                    "viewName": queryName,
-                    "version": template.version,
-                    "inStack": false,
-                    "defaultData": template.parseDefaultData() ?? [:],
-                ] as [String: Any]
-            } else {
-                return ["found": false, "viewName": queryName] as [String: Any]
-            }
-        }
-
-        // General query - list all templates and stack
-        let templates = registry.templates.map { name, template in
-            ["name": name, "version": template.version]
-        }
-
-        let stack = registry.navigationStack.map { state in
-            [
-                "viewName": state.viewName,
-                "dataKeys": Array(state.data.keys),
-            ] as [String: Any]
-        }
-
-        return [
-            "templates": templates,
-            "navigationStack": stack,
-            "currentView": registry.currentView?.viewName ?? NSNull(),
-            "stackDepth": registry.navigationStack.count,
-        ] as [String: Any]
-    }
     
     // MARK: - Location Services
     
@@ -2637,6 +1939,92 @@ class MCPServer: NSObject {
     
     func requestLocationPermission() {
         locationManager.requestWhenInUseAuthorization()
+    }
+}
+
+// MARK: - MCP Connection Handler
+
+/// Encapsulates per-connection state for MCPServer HTTP handling.
+/// All access is serialized on the httpQueue, so the mutable buffer is safe.
+private final class MCPConnectionHandler: @unchecked Sendable {
+    private let connection: NWConnection
+    private let server: MCPServer
+    private let queue: DispatchQueue
+    private let connectionId: String
+    private var requestBuffer = Data()
+    
+    init(connection: NWConnection, server: MCPServer, queue: DispatchQueue, connectionId: String) {
+        self.connection = connection
+        self.server = server
+        self.queue = queue
+        self.connectionId = connectionId
+    }
+    
+    func readMore() {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [self] data, _, isComplete, error in
+            if let error = error {
+                Log.mcp.error("[\(connectionId)] Receive error: \(error)")
+                connection.cancel()
+                return
+            }
+            
+            if let data = data {
+                Log.mcp.debug("[\(connectionId)] Received \(data.count) bytes")
+                requestBuffer.append(data)
+            }
+            
+            if isComplete {
+                Log.mcp.debug("[\(connectionId)] Connection closed by peer")
+            }
+            
+            // Check if we have a complete HTTP request
+            let headerSeparator = Data("\r\n\r\n".utf8)
+            if let headerEndRange = requestBuffer.range(of: headerSeparator) {
+                let headerData = requestBuffer[..<headerEndRange.lowerBound]
+                
+                // Parse Content-Length from headers (ASCII-safe)
+                var contentLength = 0
+                if let headersString = String(data: headerData, encoding: .utf8) {
+                    for line in headersString.split(separator: "\r\n") {
+                        if line.lowercased().hasPrefix("content-length:") {
+                            let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                            contentLength = Int(value) ?? 0
+                        }
+                    }
+                }
+                
+                // Calculate body length in BYTES (not characters!)
+                let bodyStartIndex = headerEndRange.upperBound
+                let currentBodyLength = requestBuffer.count - bodyStartIndex
+                
+                Log.mcp.debug("[\(connectionId)] Request check: Body \(currentBodyLength)/\(contentLength) bytes")
+                
+                // If we have the full body, process the request
+                if currentBodyLength >= contentLength {
+                    Log.mcp.debug("[\(connectionId)] Request complete, processing sync")
+                    
+                    let response = server.handleHTTPRequestSync(requestBuffer)
+                    
+                    Log.mcp.debug("[\(connectionId)] Sending \(response.count) bytes response")
+                    connection.send(content: response, completion: .contentProcessed { error in
+                        if let error = error {
+                            Log.mcp.error("[\(self.connectionId)] Send error: \(error)")
+                        } else {
+                            Log.mcp.debug("[\(self.connectionId)] Sent response, closing connection")
+                        }
+                        self.connection.cancel()
+                    })
+                    return
+                }
+            }
+            
+            // Need more data or error
+            if error != nil || isComplete {
+                connection.cancel()
+            } else {
+                readMore()
+            }
+        }
     }
 }
 

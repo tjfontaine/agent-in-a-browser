@@ -39,9 +39,13 @@
             show: function (layout) {
                 const json = typeof layout === 'string' ? layout : JSON.stringify(layout);
                 return __iosBridge_render_show(json);
+            },
+            patch: function (patches) {
+                const json = typeof patches === 'string' ? patches : JSON.stringify(patches);
+                return __iosBridge_render_patch(json);
             }
         },
-        
+
         permissions: {
             request: function (capability) {
                 return __iosBridge_permissions_request(String(capability));

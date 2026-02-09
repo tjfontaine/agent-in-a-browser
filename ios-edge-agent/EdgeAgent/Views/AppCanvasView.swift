@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// Full-screen SDUI rendering area.
-/// Shows the live app being built — prioritized as: ViewRegistry > ComponentState > Thinking > Empty.
+/// Shows the live app being built — prioritized as: ComponentState > Thinking > Empty.
 struct AppCanvasView: View {
     @ObservedObject var componentState: ComponentState
-    @ObservedObject var viewRegistry: ViewRegistry
+
     let isAgentStreaming: Bool
     let streamText: String
     let loadError: String?
@@ -16,8 +16,7 @@ struct AppCanvasView: View {
         ScrollView {
             if let error = loadError {
                 errorContent(error)
-            } else if !viewRegistry.renderedComponents.isEmpty {
-                viewRegistryContent
+
             } else if !componentState.rootComponents.isEmpty {
                 componentContent
             } else if isAgentStreaming || !streamText.isEmpty {
@@ -30,18 +29,7 @@ struct AppCanvasView: View {
     
     // MARK: - Content Views
     
-    private var viewRegistryContent: some View {
-        VStack(spacing: 16) {
-            ForEach(Array(viewRegistry.renderedComponents.enumerated()), id: \.offset) { _, component in
-                ComponentRouter(component: component, onAction: { action, payload in
-                    onAction(action, payload)
-                }, onAnnotate: onAnnotate)
-                .transition(.opacity.combined(with: .scale))
-            }
-        }
-        .padding()
-        .animation(.spring(response: 0.3), value: viewRegistry.renderedComponents.count)
-    }
+
     
     private var componentContent: some View {
         VStack(spacing: 16) {
