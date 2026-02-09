@@ -74,8 +74,7 @@ impl EvalGuest for TsxEngine {
 
     fn eval_file(path: String, args: Vec<String>) -> Result<String, String> {
         let fs_path = resolver::file_url_to_path(&path).unwrap_or_else(|| path.clone());
-        let code = std::fs::read_to_string(&fs_path)
-            .map_err(|e| format!("{}: {}", path, e))?;
+        let code = std::fs::read_to_string(&fs_path).map_err(|e| format!("{}: {}", path, e))?;
         if code.is_empty() {
             return Err("no code to execute".to_string());
         }
@@ -96,8 +95,8 @@ fn eval_code(ts_code: &str, source_name: &str) -> Result<String, String> {
     }
 
     // Transpile TypeScript to JavaScript
-    let transpile_result = transpiler::transpile(ts_code)
-        .map_err(|e| format!("transpile error: {}", e))?;
+    let transpile_result =
+        transpiler::transpile(ts_code).map_err(|e| format!("transpile error: {}", e))?;
 
     // Execute with QuickJS
     js_modules::console::clear_logs();
