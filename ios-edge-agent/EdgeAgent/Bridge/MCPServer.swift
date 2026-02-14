@@ -24,12 +24,18 @@ private final class UnsafeBox<T>: @unchecked Sendable {
 /// 3. Stop on app background: `MCPServer.shared.stop()`
 @MainActor
 class MCPServer: NSObject {
+    enum WorkspaceToolMode: String {
+        case edit
+        case run
+    }
+
     static let shared = MCPServer()
     
     private let port: UInt16 = 9292
     private var isRunning = false
     private var server: Server?
     private var listener: NWListener?
+    private var workspaceToolMode: WorkspaceToolMode = .edit
     
     // Dedicated queue for HTTP processing to avoid blocking main thread
     private let httpQueue = DispatchQueue(label: "com.edgeagent.mcpserver.http", qos: .userInitiated)
@@ -136,6 +142,11 @@ class MCPServer: NSObject {
     
     var baseURL: String {
         "http://localhost:\(port)"
+    }
+
+    func setWorkspaceToolMode(_ mode: WorkspaceToolMode) {
+        workspaceToolMode = mode
+        Log.mcp.info("Workspace tool mode set to \(mode.rawValue)")
     }
     
     // MARK: - Tool Definitions
@@ -478,6 +489,13 @@ class MCPServer: NSObject {
     // MARK: - Tool Execution
     
     func handleToolCall(name: String, arguments: Value?) async -> CallTool.Result {
+        if workspaceToolMode == .run, isMutatingBuildTool(name) {
+            return .init(
+                content: [.text("{\"error\": \"Tool '\(name)' is unavailable in Run mode. Switch to Edit mode to modify app state.\"}")],
+                isError: true
+            )
+        }
+
         if [
             "bundle_get", "bundle_put", "bundle_patch", "bundle_run",
             "bundle_run_status", "bundle_repair_trace", "bundle_export",
@@ -540,6 +558,15 @@ class MCPServer: NSObject {
 
         let resultDict = handleJSONRPCMethodSync(method: "tools/call", params: params)
         return dictToCallToolResult(resultDict)
+    }
+
+    private func isMutatingBuildTool(_ name: String) -> Bool {
+        switch name {
+        case "save_script", "bundle_put", "bundle_patch", "bundle_import", "bundle_clone":
+            return true
+        default:
+            return false
+        }
     }
 
     private func isBundleModeEnabled() -> Bool {

@@ -24,6 +24,11 @@ private struct PendingTurnState: Equatable {
     let taskId: String
 }
 
+private enum WorkspaceMode: String {
+    case edit
+    case run
+}
+
 /// Main super-app workspace.
 /// Includes project management, build/preview/data/log modes, revision control,
 /// structured feedback, task tracking, and searchable conversation history.
@@ -42,6 +47,7 @@ struct SuperAppView: View {
 
     @State private var showLogs = false
     @State private var showInput = true
+    @State private var workspaceMode: WorkspaceMode = .edit
     @State private var loadError: String?
 
 
@@ -125,7 +131,7 @@ struct SuperAppView: View {
                 // Pre-fill input with component context for targeted feedback
                 let label = (props["content"] as? String) ?? (props["text"] as? String) ?? (props["title"] as? String) ?? (props["label"] as? String) ?? key
                 let context = "[\(componentType) \"\(label)\"] "
-                showInput = true
+                applyWorkspaceMode(.edit)
                 inputText = context
                 addTimelineEntry(.systemNote("Annotating \(componentType): \(label)"))
                 #if !targetEnvironment(simulator)
@@ -148,7 +154,7 @@ struct SuperAppView: View {
                 LauncherView(
                     projects: projects,
                     onRunProject: { project in
-                        showInput = false
+                        applyWorkspaceMode(.run)
                         activeProjectId = project.id
                         Task {
                             await reloadProjectsAndActiveData(context: "opening project", restoreState: true)
@@ -157,7 +163,7 @@ struct SuperAppView: View {
                         }
                     },
                     onEditProject: { project in
-                        showInput = true
+                        applyWorkspaceMode(.edit)
                         activeProjectId = project.id
                         Task {
                             await reloadProjectsAndActiveData(context: "editing project", restoreState: true)
@@ -319,7 +325,10 @@ struct SuperAppView: View {
     private var canvasHeader: some View {
         HStack(spacing: 12) {
             // Back to launcher
-            Button(action: { activeProjectId = nil }) {
+            Button(action: {
+                activeProjectId = nil
+                applyWorkspaceMode(.edit)
+            }) {
                 Image(systemName: "chevron.left")
                     .font(.title3)
             }
@@ -327,6 +336,13 @@ struct SuperAppView: View {
             Text(activeProjectDisplayName)
                 .font(.headline)
                 .lineLimit(1)
+            Text(workspaceMode == .edit ? "EDIT" : "RUN")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(workspaceMode == .edit ? Color.orange.opacity(0.16) : Color.blue.opacity(0.16))
+                .foregroundStyle(workspaceMode == .edit ? Color.orange : Color.blue)
+                .clipShape(Capsule())
 
             Spacer()
 
@@ -336,11 +352,19 @@ struct SuperAppView: View {
 
             Menu {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showInput.toggle()
+                    if workspaceMode == .edit {
+                        applyWorkspaceMode(.run)
+                        Task {
+                            await tryAutoRunMainScript()
+                        }
+                    } else {
+                        applyWorkspaceMode(.edit)
                     }
                 } label: {
-                    Label(showInput ? "Hide Editor" : "Edit App", systemImage: showInput ? "eye.slash" : "pencil")
+                    Label(
+                        workspaceMode == .edit ? "Switch to Run Mode" : "Switch to Edit Mode",
+                        systemImage: workspaceMode == .edit ? "play.circle" : "pencil"
+                    )
                 }
                 Button(action: { showLogs = true }) {
                     Label("Logs", systemImage: "text.alignleft")
@@ -510,6 +534,8 @@ struct SuperAppView: View {
     // MARK: - Agent Integration
 
     private func setupAgent() {
+        syncMCPWorkspaceToolMode()
+
         MCPServer.shared.onRenderUI = { newComponents in
             withAnimation(.easeInOut(duration: 0.25)) {
                 componentState.render(newComponents)
@@ -674,6 +700,11 @@ struct SuperAppView: View {
     // MARK: - Prompt Dispatch / Guardrails
 
     private func sendMessage() {
+        guard workspaceMode == .edit else {
+            appendLog(level: "guardrail", "Editing is disabled in Run mode. Switch to Edit mode to send prompts.")
+            return
+        }
+
         let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
 
@@ -713,6 +744,10 @@ struct SuperAppView: View {
 
     @MainActor
     private func dispatchUserPrompt(_ prompt: String, destructiveApproved: Bool) async {
+        guard workspaceMode == .edit else {
+            appendLog(level: "guardrail", "Ignored prompt in Run mode")
+            return
+        }
         guard let activeProject else { return }
 
         do {
@@ -977,11 +1012,15 @@ struct SuperAppView: View {
 
     private func handleAction(_ action: String, payload: Any?) {
         // 1. Handle input_submit (text input component)
-        if action == "input_submit",
-           let dict = payload as? [String: String],
-           let value = dict["value"] {
-            inputText = value
-            sendMessage()
+        if action == "input_submit" {
+            if workspaceMode == .edit,
+               let dict = payload as? [String: String],
+               let value = dict["value"] {
+                inputText = value
+                sendMessage()
+            } else {
+                appendLog(level: "runtime", "Ignored input_submit in Run mode")
+            }
             return
         }
 
@@ -994,6 +1033,10 @@ struct SuperAppView: View {
                data: [:], // SDUI View Data deprecated
                itemData: nil
            ) {
+            guard shouldExecuteEventInCurrentMode(eventType) else {
+                appendLog(level: "runtime", "Blocked event '\(action)' in Run mode")
+                return
+            }
             let context = EventContext(itemData: nil)
             Task {
                 let _ = await eventHandler.execute(handler: eventType, context: context)
@@ -1009,6 +1052,10 @@ struct SuperAppView: View {
                data: [:], // SDUI View Data deprecated
                itemData: nil
            ) {
+            guard shouldExecuteEventInCurrentMode(eventType) else {
+                appendLog(level: "runtime", "Blocked JSON event in Run mode")
+                return
+            }
             let context = EventContext(itemData: nil)
             Task {
                 let _ = await eventHandler.execute(handler: eventType, context: context)
@@ -1017,6 +1064,10 @@ struct SuperAppView: View {
         }
 
         // 4. Fallback: send to agent (LLM round-trip)
+        guard workspaceMode == .edit else {
+            appendLog(level: "runtime", "Ignored unhandled action '\(action)' in Run mode")
+            return
+        }
         if let payload = payload as? String {
             agent.send("\(action): \(payload)")
         } else {
@@ -1032,7 +1083,7 @@ struct SuperAppView: View {
         let effectiveName = trimmed.isEmpty ? nextUntitledProjectName() : trimmed
         do {
             let project = try DatabaseManager.shared.createProject(name: effectiveName, summary: "Created from super app workspace")
-            showInput = true
+            applyWorkspaceMode(.edit)
             showCreateProjectPrompt = false
             newProjectName = ""
             activeProjectId = project.id
@@ -1312,6 +1363,30 @@ struct SuperAppView: View {
 
     private func appendLog(level: String, _ message: String) {
         activityLog.append(ActivityLogEntry(level: level, message: message))
+    }
+
+    private func applyWorkspaceMode(_ mode: WorkspaceMode) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            workspaceMode = mode
+            showInput = (mode == .edit)
+        }
+        syncMCPWorkspaceToolMode()
+        appendLog(level: "mode", "Workspace mode: \(mode.rawValue)")
+    }
+
+    private func syncMCPWorkspaceToolMode() {
+        let toolMode: MCPServer.WorkspaceToolMode = workspaceMode == .edit ? .edit : .run
+        MCPServer.shared.setWorkspaceToolMode(toolMode)
+    }
+
+    private func shouldExecuteEventInCurrentMode(_ eventType: EventHandlerType) -> Bool {
+        guard workspaceMode == .run else { return true }
+        switch eventType {
+        case .runScript, .scriptEval:
+            return true
+        case .shellEval, .agent:
+            return false
+        }
     }
 
     private func addTimelineEntry(_ kind: TimelineEntry.Kind) {
