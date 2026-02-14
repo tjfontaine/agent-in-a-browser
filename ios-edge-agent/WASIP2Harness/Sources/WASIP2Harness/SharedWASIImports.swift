@@ -179,7 +179,7 @@ public enum SharedWASIImports {
             }
         )
         
-        // fd_write - write to stdout/stderr
+        // fd_write - write to stdout/stderr and file FDs via SandboxFilesystem
         imports.define(module: module, name: "fd_write",
             Function(store: store, parameters: [.i32, .i32, .i32, .i32], results: [.i32]) { caller, args in
                 guard let memory = caller.instance?.exports[memory: "memory"] else {
@@ -211,11 +211,20 @@ public enum SharedWASIImports {
                             }
                         }
                         
-                        if let str = String(bytes: bytes, encoding: .utf8) {
-                            if fd == 1 {
-                                Log.wasi.info("[STDOUT] \(str)")
-                            } else if fd == 2 {
-                                Log.wasi.warning("[STDERR] \(str)")
+                        if fd == 1 || fd == 2 {
+                            // stdout/stderr: log output
+                            if let str = String(bytes: bytes, encoding: .utf8) {
+                                if fd == 1 {
+                                    Log.wasi.info("[STDOUT] \(str)")
+                                } else {
+                                    Log.wasi.warning("[STDERR] \(str)")
+                                }
+                            }
+                        } else {
+                            // File FD: delegate to SandboxFilesystem
+                            let writeResult = fs.fdWrite(Int32(fd), data: Data(bytes))
+                            if case .failure(let error) = writeResult {
+                                return [.i32(UInt32(error.rawValue))]
                             }
                         }
                         totalWritten += len

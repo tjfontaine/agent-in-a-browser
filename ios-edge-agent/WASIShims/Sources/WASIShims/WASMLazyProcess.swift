@@ -283,6 +283,9 @@ public final class WASMLazyProcess: NSObject, LazyProcessProtocol, @unchecked Se
             // Get thread-safe filesystem reference (no longer MainActor-isolated)
             let filesystem = SandboxFilesystem.shared
             
+            // Reset FD table to prevent leaks from previous WASM invocations
+            filesystem.resetForNewInstance()
+            
             // Register WASI imports from type-safe providers (no longer MainActor-isolated)
             let providers: [any WASIProvider] = [
                 Preview1Provider(resources: resources, filesystem: filesystem),
@@ -513,6 +516,12 @@ public final class WASMLazyProcess: NSObject, LazyProcessProtocol, @unchecked Se
                             self.stdoutBuffer.append(contentsOf: bytes)
                         } else if fd == 2 {
                             self.stderrBuffer.append(contentsOf: bytes)
+                        } else {
+                            // File FD: delegate to SandboxFilesystem
+                            let writeResult = SandboxFilesystem.shared.fdWrite(Int32(fd), data: Data(bytes))
+                            if case .failure(let error) = writeResult {
+                                return [.i32(UInt32(error.rawValue))]
+                            }
                         }
                         totalWritten += len
                     }

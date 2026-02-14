@@ -197,6 +197,9 @@ public final class ScriptExecutor: @unchecked Sendable {
         let httpManager = HTTPRequestManager()
         let filesystem = SandboxFilesystem.shared
         
+        // Reset FD table to prevent leaks from previous WASM invocations
+        filesystem.resetForNewInstance()
+        
         let providers: [any WASIProvider] = [
             Preview1Provider(resources: resources, filesystem: filesystem),
             RandomProvider(),

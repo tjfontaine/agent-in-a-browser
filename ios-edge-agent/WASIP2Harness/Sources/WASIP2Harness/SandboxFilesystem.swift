@@ -157,6 +157,29 @@ public final class SandboxFilesystem: @unchecked Sendable {
         Log.wasi.info("SandboxFilesystem initialized at \(self.rootURL.path)")
     }
     
+    /// Reset FD table for a new WASM instance.
+    /// Closes all FDs except the preopened directory (FD 3) to prevent leaks
+    /// from previous WASM invocations sharing this singleton.
+    public func resetForNewInstance() {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        // Close all file handles except preopened FD
+        for (fd, openFile) in fdTable where fd != preopenedFd {
+            try? openFile.handle?.close()
+        }
+        
+        // Reset FD table to only contain the preopen
+        let preopenEntry = fdTable[preopenedFd]
+        fdTable.removeAll()
+        if let entry = preopenEntry {
+            fdTable[preopenedFd] = entry
+        }
+        nextFd = preopenedFd + 1
+        
+        Log.wasi.debug("SandboxFilesystem: reset FD table for new instance")
+    }
+    
     // MARK: - Path Resolution
     
     /// Convert a WASI path to an absolute iOS filesystem path
@@ -294,14 +317,16 @@ public final class SandboxFilesystem: @unchecked Sendable {
         }
         
         // Allocate FD
+        lock.lock()
         let fd = nextFd
         nextFd += 1
         
         let relativePath = self.relativePath(for: url)
         let openFile = OpenFile(path: relativePath, handle: handle, isDirectory: isDir.boolValue)
         fdTable[fd] = openFile
+        lock.unlock()
         
-        Log.wasi.debug("pathOpen: \(path) -> fd=\(fd)")
+        Log.wasi.debug("pathOpen: \(path) -> fd=\(fd), resolved=\(url.path), exists=\(exists), isDir=\(isDir.boolValue)")
         return .success(fd)
     }
     
@@ -340,6 +365,7 @@ public final class SandboxFilesystem: @unchecked Sendable {
         do {
             let data = try handle.read(upToCount: Int(length)) ?? Data()
             openFile.position += UInt64(data.count)
+            Log.wasi.debug("fdRead: fd=\(fd), path=\(openFile.path), requested=\(length), read=\(data.count) bytes, pos=\(openFile.position)")
             return .success(data)
         } catch {
             Log.wasi.error("fdRead error: \(error)")
@@ -348,7 +374,7 @@ public final class SandboxFilesystem: @unchecked Sendable {
     }
     
     /// Write to a file descriptor
-    func fdWrite(_ fd: Int32, data: Data) -> Result<UInt32, WasiError> {
+    public func fdWrite(_ fd: Int32, data: Data) -> Result<UInt32, WasiError> {
         guard let openFile = fdTable[fd] else {
             return .failure(.badf)
         }
