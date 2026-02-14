@@ -273,7 +273,7 @@ class MCPServer: NSObject {
             
             Tool(
                 name: "bundle_get",
-                description: "Get the app bundle JSON. If revision_id is omitted, builds a live bundle from current DB state.",
+                description: "Get the app bundle JSON. If revision_id is omitted, builds a live bundle from current DB state. Do not pass empty strings for optional fields.",
                 inputSchema: .object([
                     "type": .string("object"),
                     "properties": .object([
@@ -283,7 +283,7 @@ class MCPServer: NSObject {
                         ]),
                         "revision_id": .object([
                             "type": .string("string"),
-                            "description": .string("Optional specific revision to retrieve")
+                            "description": .string("Optional specific revision to retrieve. Omit this key when unknown; do not pass empty string.")
                         ])
                     ]),
                     "required": .array([.string("app_id")])
@@ -352,11 +352,11 @@ class MCPServer: NSObject {
                         ]),
                         "revision_id": .object([
                             "type": .string("string"),
-                            "description": .string("Optional revision to associate with the run (defaults to 'HEAD')")
+                            "description": .string("Optional revision to associate with the run (defaults to 'HEAD'). Omit this key when unknown; do not pass empty string.")
                         ]),
                         "repair_for_run_id": .object([
                             "type": .string("string"),
-                            "description": .string("If provided, this run is a repair retry for the specified failed run_id. Subject to repair policy limits.")
+                            "description": .string("If provided, this run is a repair retry for the specified failed run_id. Subject to repair policy limits. Omit this key when not repairing.")
                         ])
                     ]),
                     "required": .array([.string("app_id"), .string("entrypoint")])
@@ -548,6 +548,14 @@ class MCPServer: NSObject {
             return true
         }
         return defaults.bool(forKey: "bundleMode")
+    }
+
+    private func nonEmptyString(_ value: Value?) -> String? {
+        guard let value, case .string(let raw) = value else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
     
 
@@ -773,7 +781,7 @@ class MCPServer: NSObject {
             let repo = AppBundleRepository()
             
             // If revision_id provided, fetch stored bundle JSON
-            if let revIdVal = dict["revision_id"], case .string(let revisionId) = revIdVal {
+            if let revisionId = nonEmptyString(dict["revision_id"]) {
                 guard let revision = try repo.getBundleRevision(id: revisionId, appId: appId) else {
                     return .init(content: [.text("{\"error\": \"Revision '\(revisionId)' not found\"}")], isError: true)
                 }
@@ -984,12 +992,7 @@ class MCPServer: NSObject {
             return .init(content: [.text("Missing required parameters: app_id, entrypoint")], isError: true)
         }
         
-        let revisionId: String
-        if let revIdVal = dict["revision_id"], case .string(let rid) = revIdVal {
-            revisionId = rid
-        } else {
-            revisionId = "HEAD"
-        }
+        let revisionId = nonEmptyString(dict["revision_id"]) ?? "HEAD"
         
         var args: [String] = []
         if let argsVal = dict["args"], case .array(let argsArray) = argsVal {
@@ -997,12 +1000,7 @@ class MCPServer: NSObject {
         }
         
         // Check for repair_for_run_id — repair loop integration
-        let repairRunId: String?
-        if let repairVal = dict["repair_for_run_id"], case .string(let rid) = repairVal {
-            repairRunId = rid
-        } else {
-            repairRunId = nil
-        }
+        let repairRunId = nonEmptyString(dict["repair_for_run_id"])
         
         do {
             _ = try DatabaseManager.shared.ensureProject(id: appId)

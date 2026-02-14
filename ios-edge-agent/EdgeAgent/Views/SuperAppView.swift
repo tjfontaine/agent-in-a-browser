@@ -1579,6 +1579,7 @@ All components accept an optional `key` for targeting with `patch`.
 3. **Wire actions to scripts**: Button actions should use `run_script` event configs.
 4. **Bundle management**: Use `bundle_get`, `bundle_put`, `bundle_patch` to snapshot, restore, and patch app state.
 5. **Track runs**: Use `bundle_run` for tracked execution, `bundle_run_status` to check results.
+6. **Optional args rule**: For optional fields (for example `revision_id` and `repair_for_run_id`), omit the key when unknown. Never send empty strings.
 
 ## Script-First Actions
 
@@ -1656,9 +1657,10 @@ Scripts have direct access to native APIs — no HTTP/MCP overhead:
 Bundles snapshot the complete state of an app (scripts, bindings, policy):
 
 - `bundle_get(app_id)` — get live bundle JSON
+- `bundle_get(app_id, revision_id)` — get a specific saved revision (only when you have a real revision id)
 - `bundle_put(app_id, bundle_json, mode)` — save a revision (`draft` or `promote`)
 - `bundle_patch(app_id, patches)` — apply targeted patches
-- `bundle_run(app_id, entrypoint, args?)` — execute as a tracked run
+- `bundle_run(app_id, entrypoint, args?, revision_id?)` — execute as a tracked run (`revision_id` optional; omit when unknown)
 - `bundle_run_status(run_id)` — check run status
 - `bundle_repair_trace(run_id)` — list repair attempts for debugging
 
