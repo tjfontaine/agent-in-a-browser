@@ -87,4 +87,39 @@ final class RepairCoordinatorTests: XCTestCase {
         let denial = try coordinator.canRepair()
         XCTAssertNil(denial)
     }
+
+    func testValidatePatchSurfacesSkipsWhenPolicyDisabled() {
+        let policy = RepairPolicy(
+            enabled: false,
+            maxAttempts: 0,
+            timeBudgetMs: 0,
+            allowedSurfaces: [],
+            disallowedOps: ["script"]
+        )
+        let denial = RepairCoordinator.validatePatchSurfaces(
+            patches: [["target": "script"]],
+            policy: policy
+        )
+        XCTAssertNil(denial)
+    }
+
+    func testCanRepairSkipsBudgetsWhenPolicyDisabled() throws {
+        let appId = "disabled-\(UUID().uuidString.prefix(8))"
+        let (_, runId) = try makeRun(appId: appId)
+
+        let coordinator = RepairCoordinator(
+            appId: appId,
+            runId: runId,
+            policy: RepairPolicy(
+                enabled: false,
+                maxAttempts: 0,
+                timeBudgetMs: 0,
+                allowedSurfaces: [],
+                disallowedOps: []
+            )
+        )
+
+        let denial = try coordinator.canRepair()
+        XCTAssertNil(denial)
+    }
 }

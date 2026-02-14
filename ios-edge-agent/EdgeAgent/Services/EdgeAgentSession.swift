@@ -242,6 +242,7 @@ final class EdgeAgentSession: NSObject, ObservableObject, @unchecked Sendable {
             for try await partial in stream {
                 // Check cancellation inside the stream loop for responsive cancel
                 guard !isCancelled else {
+                    currentStreamText = ""
                     events.append(.cancelled)
                     return
                 }
@@ -254,12 +255,15 @@ final class EdgeAgentSession: NSObject, ObservableObject, @unchecked Sendable {
             }
 
             // Final complete event
+            currentStreamText = ""
             events.append(.complete(lastText))
             Log.agent.info("EdgeAgentSession: response complete (\(lastText.count) chars)")
 
         } catch is CancellationError {
+            currentStreamText = ""
             events.append(.cancelled)
         } catch {
+            currentStreamText = ""
             Log.agent.error("EdgeAgentSession: error: \(error.localizedDescription)")
             events.append(.error("LLM error: \(error.localizedDescription)"))
         }
@@ -269,53 +273,84 @@ final class EdgeAgentSession: NSObject, ObservableObject, @unchecked Sendable {
         // Scripts can render even before the LLM session is fully initialized.
         ScriptExecutor.shared.onRenderShow = { componentsJSON in
             DispatchQueue.main.async {
-                let parsedComponents: [[String: Any]] = {
-                    guard let data = componentsJSON.data(using: .utf8),
-                          let parsed = try? JSONSerialization.jsonObject(with: data) else {
-                        return []
-                    }
-                    if let components = parsed as? [[String: Any]] {
-                        return components
-                    }
-                    if let root = parsed as? [String: Any] {
-                        if let components = root["components"] as? [[String: Any]] {
-                            return components
-                        }
-                        if root["type"] != nil || root["props"] != nil || root["key"] != nil {
-                            return [root]
-                        }
-                    }
-                    return []
-                }()
-                MCPServer.shared.onRenderUI?(parsedComponents)
+                switch Self.parseRenderComponents(from: componentsJSON) {
+                case .success(let parsedComponents):
+                    MCPServer.shared.onRenderUI?(parsedComponents)
+                case .failure(let reason):
+                    Log.agent.warning("EdgeAgentSession: rejected ios.render.show payload: \(reason)")
+                }
             }
-            return "rendered-from-script"
+            switch Self.parseRenderComponents(from: componentsJSON) {
+            case .success:
+                return "rendered-from-script"
+            case .failure(let reason):
+                return "error: \(reason)"
+            }
         }
 
         ScriptExecutor.shared.onRenderPatch = { patchesJSON in
             DispatchQueue.main.async {
-                let parsedPatches: [[String: Any]] = {
-                    guard let data = patchesJSON.data(using: .utf8),
-                          let parsed = try? JSONSerialization.jsonObject(with: data) else {
-                        return []
-                    }
-                    if let patches = parsed as? [[String: Any]] {
-                        return patches
-                    }
-                    if let root = parsed as? [String: Any] {
-                        if let patches = root["patches"] as? [[String: Any]] {
-                            return patches
-                        }
-                        if root["key"] != nil || root["op"] != nil {
-                            return [root]
-                        }
-                    }
-                    return []
-                }()
-                MCPServer.shared.onPatchUI?(parsedPatches)
+                switch Self.parseRenderPatches(from: patchesJSON) {
+                case .success(let parsedPatches):
+                    MCPServer.shared.onPatchUI?(parsedPatches)
+                case .failure(let reason):
+                    Log.agent.warning("EdgeAgentSession: rejected ios.render.patch payload: \(reason)")
+                }
             }
-            return "ok"
+            switch Self.parseRenderPatches(from: patchesJSON) {
+            case .success:
+                return "ok"
+            case .failure(let reason):
+                return "error: \(reason)"
+            }
         }
+    }
+
+    private enum BridgeParseResult {
+        case success([[String: Any]])
+        case failure(String)
+    }
+
+    private static func parseRenderComponents(from rawJSON: String) -> BridgeParseResult {
+        guard let data = rawJSON.data(using: .utf8) else {
+            return .failure("render.show payload is not valid UTF-8")
+        }
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) else {
+            return .failure("render.show payload is not valid JSON")
+        }
+        if let components = parsed as? [[String: Any]] {
+            return .success(components)
+        }
+        if let root = parsed as? [String: Any] {
+            if let components = root["components"] as? [[String: Any]] {
+                return .success(components)
+            }
+            if root["type"] != nil || root["props"] != nil || root["key"] != nil {
+                return .success([root])
+            }
+        }
+        return .failure("render.show expected a component object/array")
+    }
+
+    private static func parseRenderPatches(from rawJSON: String) -> BridgeParseResult {
+        guard let data = rawJSON.data(using: .utf8) else {
+            return .failure("render.patch payload is not valid UTF-8")
+        }
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) else {
+            return .failure("render.patch payload is not valid JSON")
+        }
+        if let patches = parsed as? [[String: Any]] {
+            return .success(patches)
+        }
+        if let root = parsed as? [String: Any] {
+            if let patches = root["patches"] as? [[String: Any]] {
+                return .success(patches)
+            }
+            if root["key"] != nil || root["op"] != nil {
+                return .success([root])
+            }
+        }
+        return .failure("render.patch expected a patch object/array")
     }
 }
 

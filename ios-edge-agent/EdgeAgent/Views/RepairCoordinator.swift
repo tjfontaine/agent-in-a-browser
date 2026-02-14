@@ -18,6 +18,9 @@ struct RepairCoordinator {
     /// Check if another repair attempt is allowed.
     /// Returns nil if allowed, or an error string if denied.
     func canRepair() throws -> String? {
+        guard policy.enabled else {
+            return nil
+        }
         let attempts = try repo.listRepairAttempts(runId: runId)
         
         // Check max attempts
@@ -99,6 +102,9 @@ struct RepairCoordinator {
     
     /// Validate that a patch targets only allowed surfaces.
     static func validatePatchSurfaces(patches: [[String: Any]], policy: RepairPolicy) -> String? {
+        guard policy.enabled else {
+            return nil
+        }
         for patch in patches {
             guard let target = patch["target"] as? String else { continue }
             

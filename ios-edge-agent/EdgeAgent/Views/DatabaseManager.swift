@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import OSLog
+import WASIShims
 
 // MARK: - Super App Workspace Models
 
@@ -743,6 +744,7 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "DELETE FROM scripts WHERE app_id = ?", arguments: [id])
             try db.execute(sql: "DELETE FROM apps WHERE id = ?", arguments: [id])
         }
+        ScriptPermissions.shared.revokeAll(forApp: id)
         removeAppSandbox(appId: id)
         Log.app.info("DatabaseManager: Deleted app project '\(id)'")
     }

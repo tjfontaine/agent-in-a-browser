@@ -1,5 +1,6 @@
 import XCTest
 @testable import EdgeAgent
+import MCP
 
 @MainActor
 final class MCPServerAskUserTests: XCTestCase {
@@ -46,5 +47,30 @@ final class MCPServerAskUserTests: XCTestCase {
         server.resolveAskUser(requestId: requestId, response: "confirmed")
         let result = await task.value
         XCTAssertEqual(result, "confirmed")
+    }
+
+    func testBundleToolsReturnErrorWhenBundleModeDisabled() async {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "bundleMode")
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: "bundleMode")
+            } else {
+                defaults.removeObject(forKey: "bundleMode")
+            }
+        }
+
+        defaults.set(false, forKey: "bundleMode")
+        let result = await MCPServer.shared.handleToolCall(
+            name: "bundle_get",
+            arguments: .object(["app_id": .string("bundle-mode-test")])
+        )
+
+        XCTAssertEqual(result.isError, true)
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text error content")
+            return
+        }
+        XCTAssertTrue(text.contains("App Bundle Mode is disabled"))
     }
 }

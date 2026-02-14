@@ -478,6 +478,17 @@ class MCPServer: NSObject {
     // MARK: - Tool Execution
     
     func handleToolCall(name: String, arguments: Value?) async -> CallTool.Result {
+        if [
+            "bundle_get", "bundle_put", "bundle_patch", "bundle_run",
+            "bundle_run_status", "bundle_repair_trace", "bundle_export",
+            "bundle_import", "bundle_clone"
+        ].contains(name), !isBundleModeEnabled() {
+            return .init(
+                content: [.text("{\"error\": \"App Bundle Mode is disabled. Enable it in Settings > Developer.\"}")],
+                isError: true
+            )
+        }
+
         switch name {
         case "get_location":
             return executeGetLocation()
@@ -529,6 +540,14 @@ class MCPServer: NSObject {
 
         let resultDict = handleJSONRPCMethodSync(method: "tools/call", params: params)
         return dictToCallToolResult(resultDict)
+    }
+
+    private func isBundleModeEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "bundleMode") == nil {
+            return true
+        }
+        return defaults.bool(forKey: "bundleMode")
     }
     
 

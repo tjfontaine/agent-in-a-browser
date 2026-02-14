@@ -1,5 +1,6 @@
 import XCTest
 @testable import EdgeAgent
+import WASIShims
 
 final class AppBundleRepositoryTests: XCTestCase {
     
@@ -238,5 +239,16 @@ final class AppBundleRepositoryTests: XCTestCase {
     func testAppScriptSandboxPath() {
         let path = DatabaseManager.appScriptSandboxPath(appId: "my-app", name: "weather")
         XCTAssertEqual(path, "/apps/my-app/scripts/weather.ts")
+    }
+
+    func testDeleteProjectRevokesAppScopedPermissions() throws {
+        let appId = "perm-\(UUID().uuidString.prefix(8))"
+        _ = try DatabaseManager.shared.ensureProject(id: appId)
+
+        ScriptPermissions.shared.grant(.contacts, appId: appId, script: "main", actor: "test")
+        XCTAssertTrue(ScriptPermissions.shared.isGranted(.contacts, appId: appId, script: "main"))
+
+        try DatabaseManager.shared.deleteProject(id: appId)
+        XCTAssertFalse(ScriptPermissions.shared.isGranted(.contacts, appId: appId, script: "main"))
     }
 }

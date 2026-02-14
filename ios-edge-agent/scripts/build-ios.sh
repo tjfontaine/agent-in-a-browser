@@ -58,11 +58,16 @@ if [ -d "$PROJECT_ROOT/packages/mcp-wasm-server/mcp-server-sync" ]; then
         # Replace @tjfontaine/wasi-shims/ with ./shims/
         sed -i '' "s|from '@tjfontaine/wasi-shims/|from './shims/|g" "$MCP_JS"
         sed -i '' "s|import '@tjfontaine/wasi-shims/|import './shims/|g" "$MCP_JS"
-        
-        # Remove the module-loader-impl import (not needed for iOS standalone)
-        # Just comment it out since it's a static import
-        sed -i '' "s|import { LazyProcess.*module-loader-impl.js';|// iOS: module-loader-impl not used|g" "$MCP_JS"
-        
+
+        # Remove module-loader-impl import (not needed for iOS standalone).
+        sed -E -i '' "s|^import .*module-loader-impl\\.js';|// iOS: module-loader-impl not used|g" "$MCP_JS"
+        sed -E -i '' "s|^import .*module-loader-impl\\.js\";|// iOS: module-loader-impl not used|g" "$MCP_JS"
+
+        if rg -q "@tjfontaine/wasi-shims/|module-loader-impl\\.js" "$MCP_JS"; then
+            echo "  ✗ Failed to fully patch mcp-server imports for iOS"
+            exit 1
+        fi
+
         echo "  ✓ Patched mcp-server imports for iOS"
     fi
 else
