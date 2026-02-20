@@ -21,20 +21,25 @@ struct AppCanvasView: View {
     
     var body: some View {
         ScrollView {
-            switch errorState {
-            case .failed(let reason):
-                FallbackErrorView(reason: reason, onRetry: onRetry, onShowRepairLogs: onShowRepairLogs)
-            case .recovering(let attempt):
-                recoveringContent(attempt: attempt)
-            case .none:
-                if !componentState.rootComponents.isEmpty {
-                componentContent
-                } else if isAgentStreaming || !streamText.isEmpty {
-                    thinkingContent
-                } else {
-                    emptyContent
-                }
+            content
+        }
+        .overlay(alignment: .top) {
+            if case .recovering = errorState {
+                recoveringContent()
             }
+        }
+    }
+    
+    @ViewBuilder
+    private var content: some View {
+        if case .failed(let reason) = errorState {
+            FallbackErrorView(reason: reason, onRetry: onRetry, onShowRepairLogs: onShowRepairLogs)
+        } else if !componentState.rootComponents.isEmpty {
+            componentContent
+        } else if isAgentStreaming || !streamText.isEmpty {
+            thinkingContent
+        } else {
+            emptyContent
         }
     }
     
@@ -83,18 +88,23 @@ struct AppCanvasView: View {
         .padding(.top, 100)
     }
     
-    private func recoveringContent(attempt: Int) -> some View {
-        VStack(spacing: 16) {
+    private func recoveringContent() -> some View {
+        HStack(spacing: 12) {
             ProgressView()
-                .scaleEffect(1.5)
-            Text("Self-Repairing UI...")
-                .font(.headline)
-            Text("Attempt \(attempt) of 3")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .controlSize(.small)
+            Text("Agent is refining the design...")
+                .font(.subheadline.weight(.medium))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color(.systemBackground).opacity(0.95))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+        )
+        .padding(.top, 16)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.spring(response: 0.3), value: errorState)
     }
 }
 

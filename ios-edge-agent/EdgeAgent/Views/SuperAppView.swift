@@ -195,51 +195,51 @@ struct SuperAppView: View {
                 VStack(spacing: 0) {
                     canvasHeader
 
-                    ZStack(alignment: .bottom) {
-                        // Full-screen canvas
-                        previewRenderArea
+                    // Full-screen canvas with agent overlay inset
+                    previewRenderArea
+                        .safeAreaInset(edge: .bottom) {
+                            // Agent overlay at bottom
+                            VStack(spacing: 0) {
+                                // Conversation timeline (collapsible)
+                                if !timelineEntries.isEmpty {
+                                    Divider()
+                                    ConversationTimeline(entries: timelineEntries)
+                                        .frame(maxHeight: 200)
+                                        .background(Color(.systemBackground).opacity(0.95))
+                                }
 
-                        // Agent overlay at bottom
-                        VStack(spacing: 0) {
-                            // Conversation timeline (collapsible)
-                            if !timelineEntries.isEmpty {
-                                Divider()
-                                ConversationTimeline(entries: timelineEntries)
-                                    .frame(maxHeight: 200)
-                                    .background(Color(.systemBackground).opacity(0.95))
+                                if (showInput || pendingAskUserId != nil) && agent.isReady {
+                                    AgentOverlayView(
+                                        inputText: $inputText,
+                                        isAgentWorking: isAgentWorking,
+                                        currentToolName: currentToolName,
+                                        progressStep: agentProgressStep,
+                                        progressTotal: agentProgressTotal,
+                                        progressDescription: agentProgressDescription,
+                                        pendingAskUserId: pendingAskUserId,
+                                        pendingAskUserType: pendingAskUserType,
+                                        pendingAskUserPrompt: pendingAskUserPrompt,
+                                        pendingAskUserOptions: pendingAskUserOptions,
+                                        askUserTextInput: $askUserTextInput,
+                                        onSend: { sendMessage() },
+                                        onResolveAskUser: { response in
+                                            resolveAskUserResponse(response)
+                                        },
+                                        onStop: {
+                                            agent.cancel()
+                                            isAgentWorking = false
+                                            currentToolName = ""
+                                            agentProgressStep = 0
+                                            agentProgressTotal = 0
+                                            agentProgressDescription = ""
+                                            appendLog(level: "system", "Stop requested by user")
+                                            addTimelineEntry(.systemNote("Agent stopped by user"))
+                                        }
+                                    )
+                                }
                             }
-
-                            if (showInput || pendingAskUserId != nil) && agent.isReady {
-                                AgentOverlayView(
-                                    inputText: $inputText,
-                                    isAgentWorking: isAgentWorking,
-                                    currentToolName: currentToolName,
-                                    progressStep: agentProgressStep,
-                                    progressTotal: agentProgressTotal,
-                                    progressDescription: agentProgressDescription,
-                                    pendingAskUserId: pendingAskUserId,
-                                    pendingAskUserType: pendingAskUserType,
-                                    pendingAskUserPrompt: pendingAskUserPrompt,
-                                    pendingAskUserOptions: pendingAskUserOptions,
-                                    askUserTextInput: $askUserTextInput,
-                                    onSend: { sendMessage() },
-                                    onResolveAskUser: { response in
-                                        resolveAskUserResponse(response)
-                                    },
-                                    onStop: {
-                                        agent.cancel()
-                                        isAgentWorking = false
-                                        currentToolName = ""
-                                        agentProgressStep = 0
-                                        agentProgressTotal = 0
-                                        agentProgressDescription = ""
-                                        appendLog(level: "system", "Stop requested by user")
-                                        addTimelineEntry(.systemNote("Agent stopped by user"))
-                                    }
-                                )
-                            }
+                            .background(Color(.systemBackground).ignoresSafeArea(.all, edges: .bottom))
                         }
-                    }
                 }
             }
         }
@@ -432,47 +432,6 @@ struct SuperAppView: View {
     }
 
     // MARK: - Preview/Rendering Blocks
-
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "app.badge")
-                .font(.system(size: 80))
-                .foregroundColor(.orange)
-            Text("What should we build?")
-                .font(.title2)
-                .foregroundColor(.secondary)
-            Text("Use Build mode to request a new app, then use Preview mode to test and iterate.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 30)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
-    }
-
-    private var thinkingView: some View {
-        VStack(spacing: 12) {
-            ProgressView().scaleEffect(1.2)
-            Text("Designing and building...")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
-    }
-
-    private var componentGrid: some View {
-        VStack(spacing: 16) {
-            ForEach(Array(componentState.rootComponents.enumerated()), id: \.offset) { _, component in
-                ComponentRouter(component: component) { action, payload in
-                    handleAction(action, payload: payload)
-                }
-                .transition(.opacity.combined(with: .scale))
-            }
-        }
-        .padding()
-        .animation(.spring(response: 0.3), value: componentState.rootComponents.count)
-    }
 
 
 

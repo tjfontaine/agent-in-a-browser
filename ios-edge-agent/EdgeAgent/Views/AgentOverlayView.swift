@@ -79,13 +79,12 @@ struct AgentOverlayView: View {
     // MARK: - Ask User Card
     
     private var askUserCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 Image(systemName: "questionmark.circle.fill")
                     .foregroundColor(.orange)
-                Text("Agent needs your input")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                Text("Agent paused for input")
+                    .font(.subheadline.weight(.semibold))
             }
             
             ScrollView {
@@ -93,17 +92,16 @@ struct AgentOverlayView: View {
                     .font(.body)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 300)
+            .frame(maxHeight: 120)
             
             askUserButtons
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.tertiarySystemBackground))
-                .shadow(radius: 2)
-        )
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
         .padding(.horizontal)
+        .padding(.top, 8)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(response: 0.3), value: pendingAskUserId)
     }
