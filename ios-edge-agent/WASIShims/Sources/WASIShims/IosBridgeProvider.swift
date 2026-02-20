@@ -64,14 +64,15 @@ public final class IosBridgeProvider: WASIProvider {
     
     /// Block the current (WASM background) thread while async work completes.
     /// Safe because WASM always runs on Task.detached, never on the main thread.
-    private static func blockingAsync<T>(_ work: @escaping (@escaping (T) -> Void) -> Void) -> T {
-        let semaphore = DispatchSemaphore(value: 0)
+    internal static func blockingAsync<T>(_ work: @escaping (@escaping (T) -> Void) -> Void) -> T {
+        let group = DispatchGroup()
         var result: T!
+        group.enter()
         work { value in
             result = value
-            semaphore.signal()
+            group.leave()
         }
-        semaphore.wait()
+        group.wait()
         return result
     }
     

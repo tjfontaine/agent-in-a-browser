@@ -27,6 +27,13 @@ final class ConfigManagerTests: XCTestCase {
     }
     
     @MainActor
+    func testNoMlxDefaultsPresent() throws {
+        let manager = ConfigManager()
+        // Explicitly verify that MLX is no longer a default provider or configuration
+        XCTAssertNotEqual(manager.provider, "mlx")
+    }
+    
+    @MainActor
     func testPersistence() throws {
         // Set values
         let manager = ConfigManager()

@@ -14,13 +14,6 @@ import WASIShims
 /// Usage:
 /// 1. Start server: `await MCPServer.shared.start()`
 /// 2. Pass URL to agent config: `mcpServers: [{url: "http://localhost:9292"}]`
-/// Box for passing mutable values across isolation domains synchronized by semaphores.
-/// All access must be externally synchronized (e.g. via DispatchSemaphore).
-private final class UnsafeBox<T>: @unchecked Sendable {
-    var value: T
-    init(_ value: T) { self.value = value }
-}
-
 /// 3. Stop on app background: `MCPServer.shared.stop()`
 @MainActor
 class MCPServer: NSObject {
@@ -40,10 +33,6 @@ class MCPServer: NSObject {
     // Dedicated queue for HTTP processing to avoid blocking main thread
     private let httpQueue = DispatchQueue(label: "com.edgeagent.mcpserver.http", qos: .userInitiated)
     
-    // Location services
-    private let locationManager = CLLocationManager()
-    private var lastLocation: CLLocation?
-    
     // Render callback - called when script invokes ios.render.show()
     nonisolated(unsafe) var onRenderUI: (([[String: Any]]) -> Void)?
     
@@ -56,38 +45,16 @@ class MCPServer: NSObject {
     nonisolated(unsafe) var onAskUser: ((_ requestId: String, _ type: String, _ prompt: String, _ options: [String]?) -> Void)?
     
     // Continuation for pending ask_user requests (keyed by requestId)
-    var askUserContinuations = [String: CheckedContinuation<String, Never>]()
-    let askUserLock = NSLock()
-    
-    // Semaphore-based ask_user for legacy HTTP path (blocks httpQueue until user responds)
-    // The semaphore is signaled from MainActor when the user taps a response.
-    nonisolated(unsafe) var askUserSemaphores = [String: DispatchSemaphore]()
-    nonisolated(unsafe) var askUserResponses = [String: String]()
+    private var askUserContinuations = [String: CheckedContinuation<String, Never>]()
     
     /// Call this from the UI when the user responds to an ask_user request
     func resolveAskUser(requestId: String, response: String) {
-        askUserLock.lock()
-        let continuation = askUserContinuations.removeValue(forKey: requestId)
-        let semaphore = askUserSemaphores.removeValue(forKey: requestId)
-        if semaphore != nil {
-            askUserResponses[requestId] = response
-        }
-        askUserLock.unlock()
-        
-        // Resume async continuation (MCPServerKit path)
-        continuation?.resume(returning: response)
-        
-        // Signal semaphore (legacy HTTP path) — unblocks httpQueue
-        if let semaphore {
-            Log.mcp.info("[ask_user] Signaling semaphore for requestId=\(requestId)")
-            semaphore.signal()
+        if let continuation = askUserContinuations.removeValue(forKey: requestId) {
+            continuation.resume(returning: response)
         }
     }
     private override init() {
         super.init()
-        Task { @MainActor in
-            setupLocationManager()
-        }
         // Wire permission audit callback (Phase 4)
         ScriptPermissions.shared.onAudit = { appId, scriptName, capability, action, actor in
             try? AppBundleRepository().logPermissionAudit(
@@ -153,32 +120,6 @@ class MCPServer: NSObject {
     
     nonisolated var toolDefinitions: [Tool] {
         [
-            Tool(
-                name: "get_location",
-                description: "Get the device's current GPS location. Returns {status, lat, lon}. If status is 'permission_required' or 'denied', use request_authorization first.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([:])
-                ])
-            ),
-            Tool(
-                name: "request_authorization",
-                description: "Request iOS system authorization for a capability. Shows native iOS permission dialog. Capabilities: 'location', 'bluetooth', 'camera', 'microphone', 'photos'. Returns {granted: bool, status: string}.",
-                inputSchema: .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "capability": .object([
-                            "type": .string("string"),
-                            "description": .string("The capability to request: location, bluetooth, camera, microphone, photos"),
-                            "enum": .array([.string("location"), .string("bluetooth"), .string("camera"), .string("microphone"), .string("photos")])
-                        ])
-                    ]),
-                    "required": .array([.string("capability")])
-                ])
-            ),
-            
-
-            
             // MARK: - Script Lifecycle Tools
             
             Tool(
@@ -508,10 +449,6 @@ class MCPServer: NSObject {
         }
 
         switch name {
-        case "get_location":
-            return executeGetLocation()
-        case "request_authorization":
-            return await executeRequestAuthorization(arguments: arguments)
         case "ask_user":
             return await executeAskUser(arguments: arguments)
         case "save_script":
@@ -550,14 +487,7 @@ class MCPServer: NSObject {
             break
         }
 
-        var params: [String: Any] = ["name": name]
-        if let arguments,
-           case .object(let dict) = arguments {
-            params["arguments"] = dict.mapValues { jsonToAny($0) }
-        }
-
-        let resultDict = handleJSONRPCMethodSync(method: "tools/call", params: params)
-        return dictToCallToolResult(resultDict)
+        return .init(content: [.text("Unknown tool: \(name)")], isError: true)
     }
 
     private func isMutatingBuildTool(_ name: String) -> Bool {
@@ -608,9 +538,7 @@ class MCPServer: NSObject {
         
         // Suspend until the user responds
         let userResponse = await withCheckedContinuation { (continuation: CheckedContinuation<String, Never>) in
-            askUserLock.lock()
             askUserContinuations[requestId] = continuation
-            askUserLock.unlock()
             onAskUser?(requestId, askType, prompt, options)
         }
         
@@ -1407,119 +1335,6 @@ class MCPServer: NSObject {
         return json
     }
     
-    private func executeGetLocation() -> CallTool.Result {
-        // Check authorization status first
-        let status = locationManager.authorizationStatus
-        
-        switch status {
-        case .notDetermined:
-            // Request permission - iOS will show system dialog
-            locationManager.requestWhenInUseAuthorization()
-            return .init(
-                content: [.text("""
-                {"status": "permission_required", "message": "Location permission is being requested. Please ask the user to allow location access when the system dialog appears, then try again."}
-                """)],
-                isError: false  // Not an error, just a pending state
-            )
-            
-        case .denied, .restricted:
-            return .init(
-                content: [.text("""
-                {"status": "permission_denied", "message": "Location access is not available. The user has denied location permission or it is restricted. Use render_ui to show a message asking them to enable location in Settings."}
-                """)],
-                isError: true
-            )
-            
-        case .authorizedWhenInUse, .authorizedAlways:
-            guard let location = lastLocation else {
-                // Permission granted but no location yet - request one
-                locationManager.requestLocation()
-                return .init(
-                    content: [.text("""
-                    {"status": "acquiring", "message": "Location permission granted. Acquiring GPS coordinates - please try again in a moment."}
-                    """)],
-                    isError: false
-                )
-            }
-            
-            // Success - return coordinates
-            return .init(
-                content: [.text("""
-                {"status": "success", "lat": \(location.coordinate.latitude), "lon": \(location.coordinate.longitude)}
-                """)],
-                isError: false
-            )
-            
-        @unknown default:
-            return .init(
-                content: [.text("{\"status\": \"unknown\", \"message\": \"Unknown authorization status\"}")],
-                isError: true
-            )
-        }
-    }
-    
-    // MARK: - Authorization Request
-    
-    private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
-    
-    private func executeRequestAuthorization(arguments: Value?) async -> CallTool.Result {
-        guard let arguments = arguments,
-              case .object(let dict) = arguments,
-              let capabilityValue = dict["capability"],
-              case .string(let capability) = capabilityValue else {
-            return .init(content: [.text("{\"error\": \"Missing 'capability' parameter\"}")], isError: true)
-        }
-        
-        switch capability {
-        case "location":
-            return await requestLocationAuthorization()
-        case "bluetooth":
-            return .init(content: [.text("{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Bluetooth authorization not yet implemented\"}")], isError: false)
-        case "camera":
-            return .init(content: [.text("{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Camera authorization not yet implemented\"}")], isError: false)
-        case "microphone":
-            return .init(content: [.text("{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Microphone authorization not yet implemented\"}")], isError: false)
-        case "photos":
-            return .init(content: [.text("{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Photos authorization not yet implemented\"}")], isError: false)
-        default:
-            return .init(content: [.text("{\"error\": \"Unknown capability: \(capability)\"}")], isError: true)
-        }
-    }
-    
-    private func requestLocationAuthorization() async -> CallTool.Result {
-        let currentStatus = locationManager.authorizationStatus
-        
-        // Already authorized
-        if currentStatus == .authorizedWhenInUse || currentStatus == .authorizedAlways {
-            return .init(
-                content: [.text("{\"granted\": true, \"status\": \"authorized\"}")],
-                isError: false
-            )
-        }
-        
-        // Already denied
-        if currentStatus == .denied || currentStatus == .restricted {
-            return .init(
-                content: [.text("{\"granted\": false, \"status\": \"denied\", \"message\": \"User has denied location access. They need to enable it in Settings.\"}")],
-                isError: false
-            )
-        }
-        
-        // Not determined - request and wait for result
-        let newStatus = await withCheckedContinuation { continuation in
-            self.authorizationContinuation = continuation
-            self.locationManager.requestWhenInUseAuthorization()
-        }
-        
-        let granted = (newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways)
-        let statusString = granted ? "authorized" : "denied"
-        
-        return .init(
-            content: [.text("{\"granted\": \(granted), \"status\": \"\(statusString)\"}")],
-            isError: false
-        )
-    }
-    
     // MARK: - HTTP Server (Network.framework)
     
     private func startHTTPServer() async throws {
@@ -1553,234 +1368,10 @@ class MCPServer: NSObject {
         handler.readMore()
     }
     
-    /// Synchronous HTTP request handler - runs on httpQueue without MainActor hop
-    fileprivate nonisolated func handleHTTPRequestSync(_ data: Data) -> Data {
-        // Parse HTTP request body (skip headers for simplicity)
-        guard let requestString = String(data: data, encoding: .utf8) else {
-            Log.mcp.info(" Failed to decode request as UTF-8")
-            return httpResponseSync(status: 400, body: "{\"error\": \"Invalid request encoding\"}")
-        }
-        
-        Log.mcp.debug(" Received request (\(data.count) bytes)")
-        
-        guard let bodyStart = requestString.range(of: "\r\n\r\n")?.upperBound else {
-            Log.mcp.info(" No header/body separator found")
-            return httpResponseSync(status: 400, body: "{\"error\": \"Invalid request format\"}")
-        }
-        
-        let body = String(requestString[bodyStart...])
-        Log.mcp.info(" Body: \(body.prefix(200))")
-        
-        guard !body.isEmpty else {
-            Log.mcp.info(" Empty body")
-            return httpResponseSync(status: 400, body: "{\"error\": \"Empty body\"}")
-        }
-        
-        guard let jsonData = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            Log.mcp.info(" JSON parse failed for body: \(body)")
-            return httpResponseSync(status: 400, body: "{\"error\": \"Invalid JSON\"}")
-        }
-        
-        // Handle JSON-RPC request
-        let method = json["method"] as? String ?? ""
-        let id = json["id"]
-        let params = json["params"] as? [String: Any] ?? [:]
-        
-        let result = handleJSONRPCMethodSync(method: method, params: params)
-        
-        let responseJSON: [String: Any] = [
-            "jsonrpc": "2.0",
-            "id": id ?? NSNull(),
-            "result": result
-        ]
-        
-        if let responseData = try? JSONSerialization.data(withJSONObject: responseJSON),
-           let responseBody = String(data: responseData, encoding: .utf8) {
-            Log.mcp.debug(" Sending response: \(responseBody.prefix(200))")
-            return httpResponseSync(status: 200, body: responseBody)
-        }
-        
-        return httpResponseSync(status: 500, body: "{\"error\": \"Serialization failed\"}")
-    }
-    
-    /// Synchronous JSON-RPC method handler for methods that don't need MainActor
-    private nonisolated func handleJSONRPCMethodSync(method: String, params: [String: Any]) -> [String: Any] {
-        switch method {
-        case "initialize":
-            return [
-                "protocolVersion": "2024-11-05",
-                "capabilities": ["tools": [:]],
-                "serverInfo": ["name": "ios-tools", "version": "1.0.0"]
-            ]
-        case "tools/list":
-            // toolDefinitions is nonisolated, so we can access it directly
-            return ["tools": toolDefinitions.map { toolToDictSync($0) }]
-        case "tools/call":
-            // For tool calls that update UI, dispatch to main queue without blocking
-            // IMPORTANT: Do NOT use semaphore.wait() with MainActor - causes deadlock when WASM is running
-            let name = params["name"] as? String ?? ""
-            let argsData = params["arguments"] as? [String: Any]
-            
-            Log.mcp.debug(" tools/call: name=\(name)")
-            
-            switch name {
-            case "get_location":
-                if Thread.isMainThread {
-                    nonisolated(unsafe) var locationResult: [String: Any] = [:]
-                    MainActor.assumeIsolated {
-                        let result = self.executeGetLocation()
-                        locationResult = self.resultToDict(result)
-                    }
-                    return locationResult
-                }
 
-                let semaphore = DispatchSemaphore(value: 0)
-                let responseBox = UnsafeBox<[String: Any]>([
-                    "content": [["type": "text", "text": "{\"error\": \"get_location unavailable\"}"]],
-                    "isError": true,
-                ])
-                DispatchQueue.main.async {
-                    let result = self.executeGetLocation()
-                    responseBox.value = self.resultToDict(result)
-                    semaphore.signal()
-                }
-                if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
-                    return ["content": [["type": "text", "text": "{\"error\": \"get_location timed out\"}"]], "isError": true]
-                }
-                return responseBox.value
-
-            case "request_authorization":
-                guard let capability = argsData?["capability"] as? String else {
-                    return ["content": [["type": "text", "text": "{\"error\": \"Missing 'capability' parameter\"}"]], "isError": true]
-                }
-                if capability == "location" {
-                    return ["content": [["type": "text", "text": "{\"granted\": false, \"status\": \"permission_required\", \"message\": \"Use get_location to trigger iOS permission prompt in the current runtime path.\"}"]], "isError": false]
-                }
-                return ["content": [["type": "text", "text": "{\"granted\": false, \"status\": \"not_implemented\", \"message\": \"Authorization for \(capability) is not implemented.\"}"]], "isError": false]
-                
-
-                
-            case "ask_user":
-                // Block httpQueue until user responds via MainActor.
-                // Safe because: WASM is single-threaded (no concurrent requests during wait)
-                // and resolution path only needs MainActor (which is free).
-                dispatchPrecondition(condition: .notOnQueue(.main))
-                
-                guard let askType = argsData?["type"] as? String,
-                      let prompt = argsData?["prompt"] as? String else {
-                    return ["content": [["type": "text", "text": "Missing required parameters: type, prompt"]], "isError": true]
-                }
-                let options = argsData?["options"] as? [String]
-                let requestId = UUID().uuidString
-                let semaphore = DispatchSemaphore(value: 0)
-                
-                // Store semaphore BEFORE dispatching UI (ordering guarantee)
-                askUserLock.lock()
-                askUserSemaphores[requestId] = semaphore
-                askUserLock.unlock()
-                
-                Log.mcp.info("[ask_user] Blocking httpQueue for requestId=\(requestId), prompt=\(prompt.prefix(80))")
-                
-                // Show ask_user UI on MainActor
-                DispatchQueue.main.async { [weak self] in
-                    self?.onAskUser?(requestId, askType, prompt, options)
-                }
-                
-                // Block until user responds (up to 5 minutes)
-                let waitResult = semaphore.wait(timeout: .now() + 300)
-                
-                // Read and clean up response
-                askUserLock.lock()
-                let userResponse = askUserResponses.removeValue(forKey: requestId)
-                askUserSemaphores.removeValue(forKey: requestId)
-                askUserLock.unlock()
-                
-                if waitResult == .timedOut || userResponse == nil {
-                    Log.mcp.warning("[ask_user] Timed out waiting for user response (requestId=\(requestId))")
-                    return ["content": [["type": "text", "text": "{\"error\": \"ask_user timed out after 5 minutes\"}"]], "isError": true]
-                }
-                
-                Log.mcp.info("[ask_user] Got response for requestId=\(requestId)")
-                return ["content": [["type": "text", "text": userResponse!]], "isError": false]
-                
-            default:
-                if toolDefinitions.contains(where: { $0.name == name }) {
-                    return executeToolCallSyncViaMainActor(name: name, argsData: argsData)
-                }
-                return ["content": [["type": "text", "text": "Unknown tool: \(name)"]], "isError": true]
-            }
-        default:
-            return [:]
-        }
-    }
-    
-    /// Forward a synchronous legacy HTTP tool call to the primary async tool dispatcher.
-    /// This keeps `tools/list` and `tools/call` behavior aligned for real MCP clients.
-    private nonisolated func executeToolCallSyncViaMainActor(name: String, argsData: [String: Any]?) -> [String: Any] {
-        dispatchPrecondition(condition: .notOnQueue(.main))
-        let argsPayload = argsData.flatMap { args -> Data? in
-            guard JSONSerialization.isValidJSONObject(args) else { return nil }
-            return try? JSONSerialization.data(withJSONObject: args)
-        }
-        
-        let semaphore = DispatchSemaphore(value: 0)
-        let responseBox = UnsafeBox<[String: Any]>([
-            "content": [["type": "text", "text": "{\"error\": \"\(name) unavailable\"}"]],
-            "isError": true,
-        ])
-        
-        Task { @MainActor [weak self, argsPayload] in
-            guard let self else {
-                responseBox.value = ["content": [["type": "text", "text": "{\"error\": \"server unavailable\"}"]], "isError": true]
-                semaphore.signal()
-                return
-            }
-            let argsJSON: Value?
-            if let argsPayload,
-               let parsed = try? JSONSerialization.jsonObject(with: argsPayload) as? [String: Any] {
-                argsJSON = self.dictToJSON(parsed)
-            } else {
-                argsJSON = nil
-            }
-            let result = await self.handleToolCall(name: name, arguments: argsJSON)
-            responseBox.value = self.resultToDict(result)
-            semaphore.signal()
-        }
-        
-        if semaphore.wait(timeout: .now() + 300) == .timedOut {
-            return ["content": [["type": "text", "text": "{\"error\": \"\(name) timed out\"}"]], "isError": true]
-        }
-        
-        return responseBox.value
-    }
-    
-    /// Nonisolated version of httpResponse
-    fileprivate nonisolated func httpResponseSync(status: Int, body: String) -> Data {
-        let response = """
-        HTTP/1.1 \(status) \(status == 200 ? "OK" : "Error")\r
-        Content-Type: application/json\r
-        Content-Length: \(body.utf8.count)\r
-        Access-Control-Allow-Origin: *\r
-        \r
-        \(body)
-        """
-        return Data(response.utf8)
-    }
-    
-    /// Nonisolated tool dict conversion
-    private nonisolated func toolToDictSync(_ tool: Tool) -> [String: Any] {
-        var dict: [String: Any] = [
-            "name": tool.name,
-            "description": tool.description ?? ""
-        ]
-        // inputSchema is not optional in MCP SDK
-        dict["inputSchema"] = valueToDictSync(tool.inputSchema)
-        return dict
-    }
     
     /// Nonisolated value conversion
-    private nonisolated func valueToDictSync(_ value: Value) -> Any {
+    private nonisolated func valueToDict(_ value: Value) -> Any {
         switch value {
         case .string(let s): return s
         case .int(let i): return i
@@ -1789,13 +1380,13 @@ class MCPServer: NSObject {
         case .null: return NSNull()
         case .data(mimeType: let mimeType, let data):
             return data.dataURLEncoded(mimeType: mimeType)
-        case .array(let arr): return arr.map { valueToDictSync($0) }
-        case .object(let obj): return obj.mapValues { valueToDictSync($0) }
+        case .array(let arr): return arr.map { valueToDict($0) }
+        case .object(let obj): return obj.mapValues { valueToDict($0) }
         @unknown default: return NSNull()
         }
     }
     
-    private func handleHTTPRequest(_ data: Data) async -> Data {
+    fileprivate func handleHTTPRequest(_ data: Data) async -> Data {
         // Parse HTTP request body (skip headers for simplicity)
         guard let requestString = String(data: data, encoding: .utf8) else {
             Log.mcp.info(" Failed to decode request as UTF-8")
@@ -1881,7 +1472,7 @@ class MCPServer: NSObject {
     }
     
     private func toolToDict(_ tool: Tool) -> [String: Any] {
-        ["name": tool.name, "description": tool.description ?? "", "inputSchema": valueToDictSync(tool.inputSchema)]
+        ["name": tool.name, "description": tool.description ?? "", "inputSchema": valueToDict(tool.inputSchema)]
     }
     
     private func resultToDict(_ result: CallTool.Result) -> [String: Any] {
@@ -1974,16 +1565,7 @@ class MCPServer: NSObject {
 
 
     
-    // MARK: - Location Services
-    
-    private func setupLocationManager() {
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
-    }
-    
-    func requestLocationPermission() {
-        locationManager.requestWhenInUseAuthorization()
-    }
+
 }
 
 // MARK: - MCP Connection Handler
@@ -2045,19 +1627,23 @@ private final class MCPConnectionHandler: @unchecked Sendable {
                 
                 // If we have the full body, process the request
                 if currentBodyLength >= contentLength {
-                    Log.mcp.debug("[\(connectionId)] Request complete, processing sync")
+                    Log.mcp.debug("[\(connectionId)] Request complete, processing async")
                     
-                    let response = server.handleHTTPRequestSync(requestBuffer)
-                    
-                    Log.mcp.debug("[\(connectionId)] Sending \(response.count) bytes response")
-                    connection.send(content: response, completion: .contentProcessed { error in
-                        if let error = error {
-                            Log.mcp.error("[\(self.connectionId)] Send error: \(error)")
-                        } else {
-                            Log.mcp.debug("[\(self.connectionId)] Sent response, closing connection")
-                        }
-                        self.connection.cancel()
-                    })
+                    let dataToProcess = requestBuffer
+                    Task { [weak server, connection, connectionId] in
+                        guard let server = server else { return }
+                        let response = await server.handleHTTPRequest(dataToProcess)
+                        
+                        Log.mcp.debug("[\(connectionId)] Sending \(response.count) bytes response")
+                        connection.send(content: response, completion: .contentProcessed { error in
+                            if let error = error {
+                                Log.mcp.error("[\(connectionId)] Send error: \(error)")
+                            } else {
+                                Log.mcp.debug("[\(connectionId)] Sent response, closing connection")
+                            }
+                            connection.cancel()
+                        })
+                    }
                     return
                 }
             }
@@ -2072,28 +1658,3 @@ private final class MCPConnectionHandler: @unchecked Sendable {
     }
 }
 
-// MARK: - CLLocationManagerDelegate
-
-extension MCPServer: CLLocationManagerDelegate {
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task { @MainActor in
-            lastLocation = locations.last
-        }
-    }
-    
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Log.mcp.info(" Location error: \(error.localizedDescription)")
-    }
-    
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        // Capture status before entering Task to avoid data race
-        let status = manager.authorizationStatus
-        Task { @MainActor in
-            // Resume any waiting authorization request
-            if let continuation = authorizationContinuation {
-                authorizationContinuation = nil
-                continuation.resume(returning: status)
-            }
-        }
-    }
-}

@@ -48,7 +48,7 @@ struct SuperAppView: View {
     @State private var showLogs = false
     @State private var showInput = true
     @State private var workspaceMode: WorkspaceMode = .edit
-    @State private var loadError: String?
+    @State private var uiErrorState: UIErrorState = .none
 
 
     @State private var inputText = ""
@@ -123,7 +123,7 @@ struct SuperAppView: View {
 
             isAgentStreaming: isAgentWorking,
             streamText: agent.currentStreamText,
-            loadError: loadError,
+            errorState: uiErrorState,
             onAction: { action, payload in
                 handleAction(action, payload: payload)
             },
@@ -141,8 +141,20 @@ struct SuperAppView: View {
                 #endif
             },
             onRetry: {
-                loadError = nil
+                uiErrorState = .none
                 setupAgentIfNeeded(force: true)
+            },
+            onShowRepairLogs: {
+                if let runId = UserDefaults.standard.string(forKey: "active_run_id") {
+                    inputText = "/bundle_repair_trace \(runId)"
+                    sendMessage()
+                } else if let turn = pendingTurn {
+                    inputText = "/bundle_repair_trace \(turn.taskId)" // Approximate run id as task id for logs
+                    sendMessage()
+                } else {
+                    inputText = "Show me the repair logs."
+                    sendMessage()
+                }
             }
         )
     }
@@ -346,7 +358,7 @@ struct SuperAppView: View {
 
             Spacer()
 
-            if !agent.isReady && loadError == nil {
+            if !agent.isReady && uiErrorState == .none {
                 ProgressView().controlSize(.small)
             }
 
@@ -420,26 +432,6 @@ struct SuperAppView: View {
     }
 
     // MARK: - Preview/Rendering Blocks
-
-    private func errorView(_ error: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.red)
-            Text("Failed to Load Agent")
-                .font(.title2.weight(.semibold))
-            Text(error)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Retry") {
-                loadError = nil
-                setupAgentIfNeeded(force: true)
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
-    }
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
@@ -519,7 +511,7 @@ struct SuperAppView: View {
                 await loadActiveProjectDataAndRestoreState()
                 setupAgentIfNeeded(force: false)
             } catch {
-                loadError = "Workspace initialization failed: \(error.localizedDescription)"
+                uiErrorState = .failed(reason: "Workspace initialization failed: \(error.localizedDescription)")
             }
         }
     }
@@ -691,7 +683,7 @@ struct SuperAppView: View {
                 await agent.createAgent(config: config)
                 appendLog(level: "system", "Agent initialized with \(mcpServers.count) MCP servers")
             } catch {
-                loadError = error.localizedDescription
+                uiErrorState = .failed(reason: error.localizedDescription)
                 appendLog(level: "error", "Agent setup failed: \(error.localizedDescription)")
             }
         }
@@ -931,6 +923,7 @@ struct SuperAppView: View {
             agentProgressTotal = 0
             agentProgressDescription = ""
             addTimelineEntry(.error(message))
+            uiErrorState = .failed(reason: message)
             Task {
                 await finalizePendingRevisionAndTask(success: false, output: message)
             }
@@ -948,6 +941,11 @@ struct SuperAppView: View {
             appendLog(level: "task", "Task started \(id): \(name)")
         case .taskUpdate(let id, let status, _):
             appendLog(level: "task", "Task updated \(id): \(status)")
+            if status == "repairing" {
+                uiErrorState = .recovering(attempt: 1)
+            } else if status == "failed" {
+                uiErrorState = .failed(reason: "Task \(id) failed")
+            }
         case .taskComplete(let id, let success, _):
             appendLog(level: success ? "task" : "error", "Task completed \(id), success=\(success)")
         case .modelLoading(let text, let progress):

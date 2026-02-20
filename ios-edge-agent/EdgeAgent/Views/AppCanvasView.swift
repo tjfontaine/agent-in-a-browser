@@ -1,5 +1,11 @@
 import SwiftUI
 
+enum UIErrorState: Equatable {
+    case none
+    case recovering(attempt: Int)
+    case failed(reason: String)
+}
+
 /// Full-screen SDUI rendering area.
 /// Shows the live app being built — prioritized as: ComponentState > Thinking > Empty.
 struct AppCanvasView: View {
@@ -7,22 +13,27 @@ struct AppCanvasView: View {
 
     let isAgentStreaming: Bool
     let streamText: String
-    let loadError: String?
+    let errorState: UIErrorState
     let onAction: (String, Any?) -> Void
     let onAnnotate: (String, String, [String: Any]) -> Void
     let onRetry: () -> Void
+    let onShowRepairLogs: (() -> Void)?
     
     var body: some View {
         ScrollView {
-            if let error = loadError {
-                errorContent(error)
-
-            } else if !componentState.rootComponents.isEmpty {
+            switch errorState {
+            case .failed(let reason):
+                FallbackErrorView(reason: reason, onRetry: onRetry, onShowRepairLogs: onShowRepairLogs)
+            case .recovering(let attempt):
+                recoveringContent(attempt: attempt)
+            case .none:
+                if !componentState.rootComponents.isEmpty {
                 componentContent
-            } else if isAgentStreaming || !streamText.isEmpty {
-                thinkingContent
-            } else {
-                emptyContent
+                } else if isAgentStreaming || !streamText.isEmpty {
+                    thinkingContent
+                } else {
+                    emptyContent
+                }
             }
         }
     }
@@ -72,18 +83,52 @@ struct AppCanvasView: View {
         .padding(.top, 100)
     }
     
-    private func errorContent(_ error: String) -> some View {
+    private func recoveringContent(attempt: Int) -> some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Self-Repairing UI...")
+                .font(.headline)
+            Text("Attempt \(attempt) of 3")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+}
+
+struct FallbackErrorView: View {
+    let reason: String
+    let onRetry: () -> Void
+    let onShowRepairLogs: (() -> Void)?
+
+    var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 60))
                 .foregroundColor(.red)
-            Text("Failed to Load Agent")
+            Text("Failed to Load Interface")
                 .font(.title2.weight(.semibold))
-            Text(error)
+            
+            Text(reason)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Retry") { onRetry() }
+                .padding(.horizontal)
+            
+            HStack(spacing: 16) {
+                Button("Retry Generation") { 
+                    onRetry() 
+                }
                 .buttonStyle(.borderedProminent)
+                
+                if let onShowRepairLogs {
+                    Button("Show Repair Logs") {
+                        onShowRepairLogs()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 100)
