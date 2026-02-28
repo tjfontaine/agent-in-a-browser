@@ -128,6 +128,8 @@ const SHIMS = {
     'wasi:http/types': '@tjfontaine/wasi-shims/wasi-http-impl.js',
     'wasi:http/outgoing-handler': '@tjfontaine/wasi-shims/wasi-http-impl.js#outgoingHandler',
     'terminal:info/size': '@tjfontaine/wasi-shims/ghostty-cli-shim.js#size',
+    // iOS bridge stubs — native host APIs not available in the browser
+    'ios:bridge/*': '@tjfontaine/wasi-shims/ios-bridge-stub.js#*',
 };
 
 // SYNC SHIMS: Uses sync opfs-filesystem-sync-impl for Safari/non-JSPI browsers
