@@ -7,7 +7,7 @@ import OSLog
 /// Lightweight executor for direct TypeScript/JavaScript evaluation via WASM.
 ///
 /// Unlike `WASMLazyProcess` (which manages full process lifecycle with streams),
-/// `ScriptExecutor` calls the `shell:unix/script-eval@0.1.0#eval` export directly:
+/// `ScriptExecutor` calls the `shell:unix/script-eval@0.1.0#evaluate` export directly:
 /// code string in → result string out. No stdin/stdout/stderr plumbing.
 ///
 /// Thread-safe: all WASM state is created per-invocation (no shared mutable state).
@@ -51,8 +51,8 @@ public final class ScriptExecutor: @unchecked Sendable {
         do {
             let (instance, store, memory, realloc) = try setupWASM()
             
-            guard let evalFunc = instance.exports[function: "shell:unix/script-eval@0.1.0#eval"] else {
-                throw WasmKitHostError.exportNotFound("shell:unix/script-eval@0.1.0#eval")
+            guard let evalFunc = instance.exports[function: "shell:unix/script-eval@0.1.0#evaluate"] else {
+                throw WasmKitHostError.exportNotFound("shell:unix/script-eval@0.1.0#evaluate")
             }
             
             // Allocate code string
@@ -102,7 +102,7 @@ public final class ScriptExecutor: @unchecked Sendable {
             let (success, output) = try readResultString(at: resultPtr, memory: memory)
             
             // Call post-return cleanup
-            if let postReturn = instance.exports[function: "cabi_post_shell:unix/script-eval@0.1.0#eval"] {
+            if let postReturn = instance.exports[function: "cabi_post_shell:unix/script-eval@0.1.0#evaluate"] {
                 _ = try? postReturn([.i32(resultPtr)])
             }
             
@@ -119,8 +119,8 @@ public final class ScriptExecutor: @unchecked Sendable {
         do {
             let (instance, store, memory, realloc) = try setupWASM(appId: appId, scriptName: scriptName)
             
-            guard let evalFileFunc = instance.exports[function: "shell:unix/script-eval@0.1.0#eval-file"] else {
-                throw WasmKitHostError.exportNotFound("shell:unix/script-eval@0.1.0#eval-file")
+            guard let evalFileFunc = instance.exports[function: "shell:unix/script-eval@0.1.0#evaluate-file"] else {
+                throw WasmKitHostError.exportNotFound("shell:unix/script-eval@0.1.0#evaluate-file")
             }
             
             // Allocate path string
@@ -169,7 +169,7 @@ public final class ScriptExecutor: @unchecked Sendable {
             let (success, output) = try readResultString(at: resultPtr, memory: memory)
             
             // Post-return cleanup
-            if let postReturn = instance.exports[function: "cabi_post_shell:unix/script-eval@0.1.0#eval-file"] {
+            if let postReturn = instance.exports[function: "cabi_post_shell:unix/script-eval@0.1.0#evaluate-file"] {
                 _ = try? postReturn([.i32(resultPtr)])
             }
             

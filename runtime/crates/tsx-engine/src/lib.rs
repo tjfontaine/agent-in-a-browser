@@ -67,12 +67,12 @@ impl Guest for TsxEngine {
 }
 
 impl EvalGuest for TsxEngine {
-    fn eval(code: String, source_name: Option<String>) -> Result<String, String> {
+    fn evaluate(code: String, source_name: Option<String>) -> Result<String, String> {
         let source = source_name.unwrap_or_else(|| "<eval>".to_string());
         eval_code(&code, &source)
     }
 
-    fn eval_file(path: String, args: Vec<String>) -> Result<String, String> {
+    fn evaluate_file(path: String, args: Vec<String>) -> Result<String, String> {
         let fs_path = resolver::file_url_to_path(&path).unwrap_or_else(|| path.clone());
         let code = std::fs::read_to_string(&fs_path).map_err(|e| format!("{}: {}", path, e))?;
         if code.is_empty() {
