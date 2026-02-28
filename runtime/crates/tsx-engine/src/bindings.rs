@@ -18494,8 +18494,10 @@ pub mod exports {
             }
             /// Direct TypeScript evaluation interface.
             /// Bypasses the stream-based command interface for simpler call/return semantics.
+            /// Named "script-eval" to avoid the reserved word "eval" in ESM strict mode
+            /// (JCO transpiles interface names directly into JS function declarations).
             #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
-            pub mod eval {
+            pub mod script_eval {
                 #[used]
                 #[doc(hidden)]
                 static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
@@ -18691,30 +18693,31 @@ pub mod exports {
                     ) -> Result<_rt::String, _rt::String>;
                 }
                 #[doc(hidden)]
-                macro_rules! __export_shell_unix_eval_0_1_0_cabi {
+                macro_rules! __export_shell_unix_script_eval_0_1_0_cabi {
                     ($ty:ident with_types_in $($path_to_types:tt)*) => {
                         const _ : () = { #[unsafe (export_name =
-                        "shell:unix/eval@0.1.0#eval")] unsafe extern "C" fn
+                        "shell:unix/script-eval@0.1.0#eval")] unsafe extern "C" fn
                         export_eval(arg0 : * mut u8, arg1 : usize, arg2 : i32, arg3 : *
                         mut u8, arg4 : usize,) -> * mut u8 { unsafe {
                         $($path_to_types)*:: _export_eval_cabi::<$ty > (arg0, arg1, arg2,
                         arg3, arg4) } } #[unsafe (export_name =
-                        "cabi_post_shell:unix/eval@0.1.0#eval")] unsafe extern "C" fn
-                        _post_return_eval(arg0 : * mut u8,) { unsafe {
+                        "cabi_post_shell:unix/script-eval@0.1.0#eval")] unsafe extern "C"
+                        fn _post_return_eval(arg0 : * mut u8,) { unsafe {
                         $($path_to_types)*:: __post_return_eval::<$ty > (arg0) } }
-                        #[unsafe (export_name = "shell:unix/eval@0.1.0#eval-file")]
-                        unsafe extern "C" fn export_eval_file(arg0 : * mut u8, arg1 :
-                        usize, arg2 : * mut u8, arg3 : usize,) -> * mut u8 { unsafe {
-                        $($path_to_types)*:: _export_eval_file_cabi::<$ty > (arg0, arg1,
-                        arg2, arg3) } } #[unsafe (export_name =
-                        "cabi_post_shell:unix/eval@0.1.0#eval-file")] unsafe extern "C"
-                        fn _post_return_eval_file(arg0 : * mut u8,) { unsafe {
+                        #[unsafe (export_name =
+                        "shell:unix/script-eval@0.1.0#eval-file")] unsafe extern "C" fn
+                        export_eval_file(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8,
+                        arg3 : usize,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_eval_file_cabi::<$ty > (arg0, arg1, arg2, arg3) } }
+                        #[unsafe (export_name =
+                        "cabi_post_shell:unix/script-eval@0.1.0#eval-file")] unsafe
+                        extern "C" fn _post_return_eval_file(arg0 : * mut u8,) { unsafe {
                         $($path_to_types)*:: __post_return_eval_file::<$ty > (arg0) } }
                         };
                     };
                 }
                 #[doc(hidden)]
-                pub(crate) use __export_shell_unix_eval_0_1_0_cabi;
+                pub(crate) use __export_shell_unix_script_eval_0_1_0_cabi;
                 #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
                 #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
                 struct _RetArea(
@@ -18974,8 +18977,8 @@ macro_rules! __export_tsx_engine_impl {
         exports::shell::unix::command::__export_shell_unix_command_0_1_0_cabi!($ty
         with_types_in $($path_to_types_root)*:: exports::shell::unix::command);
         $($path_to_types_root)*::
-        exports::shell::unix::eval::__export_shell_unix_eval_0_1_0_cabi!($ty
-        with_types_in $($path_to_types_root)*:: exports::shell::unix::eval);
+        exports::shell::unix::script_eval::__export_shell_unix_script_eval_0_1_0_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::shell::unix::script_eval);
     };
 }
 #[doc(inline)]
@@ -18984,8 +18987,8 @@ pub(crate) use __export_tsx_engine_impl as export;
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:shell:unix@0.1.0:tsx-engine:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 16886] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xf4\x82\x01\x01A\x02\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 16893] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xfb\x82\x01\x01A\x02\
 \x01Ac\x01B\x04\x04\0\x05error\x03\x01\x01h\0\x01@\x01\x04self\x01\0s\x04\0\x1d[\
 method]error.to-debug-string\x01\x02\x03\0\x13wasi:io/error@0.2.9\x05\0\x01B\x0a\
 \x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\x04\0\x16[method]po\
@@ -19320,9 +19323,9 @@ idge/photos@0.1.0\x058\x01B\x0f\x02\x03\x02\x01\x06\x04\0\x0cinput-stream\x03\0\
 \0\x03run\x01\x0b\x01@\0\0\x08\x04\0\x0dlist-commands\x01\x0c\x04\0\x18shell:uni\
 x/command@0.1.0\x059\x01B\x07\x01ks\x01j\x01s\x01s\x01@\x02\x04codes\x0bsource-n\
 ame\0\0\x01\x04\0\x04eval\x01\x02\x01ps\x01@\x02\x04paths\x04args\x03\0\x01\x04\0\
-\x09eval-file\x01\x04\x04\0\x15shell:unix/eval@0.1.0\x05:\x04\0\x1bshell:unix/ts\
-x-engine@0.1.0\x04\0\x0b\x10\x01\0\x0atsx-engine\x03\0\0\0G\x09producers\x01\x0c\
-processed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
+\x09eval-file\x01\x04\x04\0\x1cshell:unix/script-eval@0.1.0\x05:\x04\0\x1bshell:\
+unix/tsx-engine@0.1.0\x04\0\x0b\x10\x01\0\x0atsx-engine\x03\0\0\0G\x09producers\x01\
+\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

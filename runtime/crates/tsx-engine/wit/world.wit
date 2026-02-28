@@ -26,11 +26,13 @@ interface command {
 
 /// Direct TypeScript evaluation interface.
 /// Bypasses the stream-based command interface for simpler call/return semantics.
-interface eval {
+/// Named "script-eval" to avoid the reserved word "eval" in ESM strict mode
+/// (JCO transpiles interface names directly into JS function declarations).
+interface script-eval {
     /// Transpile and execute TypeScript/JavaScript code inline.
     /// Returns ok(stdout + expression result) or err(error message).
     eval: func(code: string, source-name: option<string>) -> result<string, string>;
-    
+
     /// Execute a TypeScript/JavaScript file by path.
     eval-file: func(path: string, args: list<string>) -> result<string, string>;
 }
@@ -93,5 +95,5 @@ world tsx-engine {
     import ios:bridge/photos@0.1.0;
     
     export command;
-    export eval;
+    export script-eval;
 }

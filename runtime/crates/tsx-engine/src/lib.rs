@@ -13,7 +13,7 @@ mod resolver;
 mod transpiler;
 
 use bindings::exports::shell::unix::command::{ExecEnv, Guest};
-use bindings::exports::shell::unix::eval::Guest as EvalGuest;
+use bindings::exports::shell::unix::script_eval::Guest as EvalGuest;
 use bindings::wasi::io::streams::{InputStream, OutputStream};
 use std::time::{Duration, Instant};
 
