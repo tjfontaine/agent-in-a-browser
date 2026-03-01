@@ -839,11 +839,13 @@ struct SuperAppView: View {
             processedEventCount = events.count
             return
         }
-        let newEvents = events.dropFirst(processedEventCount)
+        let newEvents = Array(events.dropFirst(processedEventCount))
         processedEventCount = events.count
 
-        for event in newEvents {
-            handleAgentEvent(event)
+        Task { @MainActor in
+            for event in newEvents {
+                self.handleAgentEvent(event)
+            }
         }
     }
 
