@@ -1258,9 +1258,7 @@ fn test_assert_falsy_throws() {
 
 #[test]
 fn test_assert_ok_alias() {
-    let result = eval_js(
-        "const assert = require('assert'); assert.ok(true); return 'ok';",
-    );
+    let result = eval_js("const assert = require('assert'); assert.ok(true); return 'ok';");
     assert_eq!(result.unwrap(), "ok");
 }
 
@@ -1350,9 +1348,7 @@ fn test_assert_fail() {
 
 #[test]
 fn test_assert_require_node_prefix() {
-    let result = eval_js(
-        "const assert = require('node:assert'); assert(true); return 'ok';",
-    );
+    let result = eval_js("const assert = require('node:assert'); assert(true); return 'ok';");
     assert_eq!(result.unwrap(), "ok");
 }
 
@@ -1436,6 +1432,800 @@ fn test_process_stdout_write() {
 fn test_stream_require_node_prefix() {
     let result = eval_js(
         "const s = require('node:stream'); if (!s.Readable) throw new Error('no Readable'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Buffer built-in module tests =====
+
+#[test]
+fn test_require_buffer_returns_builtin() {
+    let result = eval_js(
+        "const b = require('buffer'); if (!b.Buffer) throw new Error('missing Buffer'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_buffer_node_prefix() {
+    let result = eval_js(
+        "const b = require('node:buffer'); if (!b.Buffer) throw new Error('missing Buffer'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_buffer_from_works() {
+    let result =
+        eval_js("const { Buffer } = require('buffer'); return Buffer.from('hello').toString();");
+    assert_eq!(result.unwrap(), "hello");
+}
+
+#[test]
+fn test_require_buffer_is_buffer() {
+    let result = eval_js(
+        "const { Buffer } = require('buffer'); return String(Buffer.isBuffer(Buffer.from('x')));",
+    );
+    assert_eq!(result.unwrap(), "true");
+}
+
+// ===== Path built-in module tests =====
+
+#[test]
+fn test_require_path_returns_builtin() {
+    let result = eval_js(
+        "const p = require('path'); if (!p.join) throw new Error('missing join'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_path_node_prefix() {
+    let result = eval_js(
+        "const p = require('node:path'); if (!p.join) throw new Error('missing join'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_path_join() {
+    let result = eval_js("const p = require('path'); return p.join('a', 'b', 'c');");
+    assert_eq!(result.unwrap(), "a/b/c");
+}
+
+#[test]
+fn test_require_path_dirname() {
+    let result = eval_js("const p = require('path'); return p.dirname('/foo/bar/baz.txt');");
+    assert_eq!(result.unwrap(), "/foo/bar");
+}
+
+#[test]
+fn test_require_path_basename() {
+    let result = eval_js("const p = require('path'); return p.basename('/foo/bar/baz.txt');");
+    assert_eq!(result.unwrap(), "baz.txt");
+}
+
+#[test]
+fn test_require_path_extname() {
+    let result = eval_js("const p = require('path'); return p.extname('file.ts');");
+    assert_eq!(result.unwrap(), ".ts");
+}
+
+#[test]
+fn test_require_path_posix_alias() {
+    let result = eval_js(
+        "const p = require('path'); if (p.posix !== p) throw new Error('posix not self'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_path_posix_subpath() {
+    let result = eval_js(
+        "const p = require('path/posix'); if (!p.join) throw new Error('missing join'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== URL built-in module tests =====
+
+#[test]
+fn test_require_url_returns_builtin() {
+    let result = eval_js(
+        "const u = require('url'); if (!u.URL) throw new Error('missing URL'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_url_node_prefix() {
+    let result = eval_js(
+        "const u = require('node:url'); if (!u.URL) throw new Error('missing URL'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_url_constructor() {
+    let result = eval_js(
+        "const { URL } = require('url'); const u = new URL('https://example.com/path'); return u.hostname;",
+    );
+    assert_eq!(result.unwrap(), "example.com");
+}
+
+#[test]
+fn test_require_url_search_params() {
+    let result = eval_js(
+        "const { URLSearchParams } = require('url'); const p = new URLSearchParams('a=1&b=2'); return p.get('b');",
+    );
+    assert_eq!(result.unwrap(), "2");
+}
+
+// ===== string_decoder built-in module tests =====
+
+#[test]
+fn test_require_string_decoder_returns_builtin() {
+    let result = eval_js(
+        "const sd = require('string_decoder'); if (!sd.StringDecoder) throw new Error('missing StringDecoder'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_string_decoder_node_prefix() {
+    let result = eval_js(
+        "const sd = require('node:string_decoder'); if (!sd.StringDecoder) throw new Error('missing StringDecoder'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== fs built-in module tests =====
+
+#[test]
+fn test_require_fs_returns_builtin() {
+    let result = eval_js(
+        "const f = require('fs'); if (!f.readFileSync) throw new Error('missing readFileSync'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_fs_node_prefix() {
+    let result = eval_js(
+        "const f = require('node:fs'); if (!f.readFileSync) throw new Error('missing readFileSync'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_fs_promises_subpath() {
+    let result = eval_js(
+        "const fsp = require('fs/promises'); if (!fsp.readFile) throw new Error('missing readFile'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_fs_promises_node_prefix() {
+    let result = eval_js(
+        "const fsp = require('node:fs/promises'); if (!fsp.readFile) throw new Error('missing readFile'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_require_fs_exists_sync() {
+    let result = eval_js("const fs = require('fs'); return String(fs.existsSync('/'));");
+    assert_eq!(result.unwrap(), "true");
+}
+
+#[test]
+fn test_require_fs_has_constants() {
+    let result = eval_js(
+        "const fs = require('fs'); if (fs.constants.F_OK !== 0) throw new Error('bad F_OK'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== querystring module tests =====
+
+#[test]
+fn test_querystring_stringify_basic() {
+    let result =
+        eval_js(r#"const qs = require('querystring'); return qs.stringify({a: '1', b: '2'});"#);
+    let r = result.unwrap();
+    assert!(r == "a=1&b=2" || r == "b=2&a=1", "got: {}", r);
+}
+
+#[test]
+fn test_querystring_stringify_custom_sep_eq() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); return qs.stringify({a: '1', b: '2'}, ';', ':');"#,
+    );
+    let r = result.unwrap();
+    assert!(r == "a:1;b:2" || r == "b:2;a:1", "got: {}", r);
+}
+
+#[test]
+fn test_querystring_stringify_encodes_special_chars() {
+    let result =
+        eval_js(r#"const qs = require('querystring'); return qs.stringify({msg: 'hello world'});"#);
+    assert_eq!(result.unwrap(), "msg=hello%20world");
+}
+
+#[test]
+fn test_querystring_parse_basic() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); const o = qs.parse('a=1&b=2'); return o.a + ',' + o.b;"#,
+    );
+    assert_eq!(result.unwrap(), "1,2");
+}
+
+#[test]
+fn test_querystring_parse_custom_sep_eq() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); const o = qs.parse('a:1;b:2', ';', ':'); return o.a + ',' + o.b;"#,
+    );
+    assert_eq!(result.unwrap(), "1,2");
+}
+
+#[test]
+fn test_querystring_parse_decodes_special_chars() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); const o = qs.parse('msg=hello%20world'); return o.msg;"#,
+    );
+    assert_eq!(result.unwrap(), "hello world");
+}
+
+#[test]
+fn test_querystring_parse_duplicate_keys_to_array() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); const o = qs.parse('a=1&a=2'); return Array.isArray(o.a) ? o.a.join(',') : 'not array';"#,
+    );
+    assert_eq!(result.unwrap(), "1,2");
+}
+
+#[test]
+fn test_querystring_escape_unescape() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); const e = qs.escape('hello world'); const d = qs.unescape(e); return d;"#,
+    );
+    assert_eq!(result.unwrap(), "hello world");
+}
+
+#[test]
+fn test_querystring_encode_decode_aliases() {
+    let result = eval_js(
+        r#"const qs = require('querystring'); if (qs.encode !== qs.stringify) throw new Error('encode alias'); if (qs.decode !== qs.parse) throw new Error('decode alias'); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_querystring_require_node_prefix() {
+    let result = eval_js(
+        "const qs = require('node:querystring'); if (!qs.stringify) throw new Error('missing stringify'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== timers built-in module tests =====
+
+#[test]
+fn test_timers_module_has_set_timeout() {
+    let result = eval_js(
+        "const t = require('timers'); if (typeof t.setTimeout !== 'function') throw new Error('missing setTimeout'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_module_has_set_interval() {
+    let result = eval_js(
+        "const t = require('timers'); if (typeof t.setInterval !== 'function') throw new Error('missing setInterval'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_module_has_set_immediate() {
+    let result = eval_js(
+        "const t = require('timers'); if (typeof t.setImmediate !== 'function') throw new Error('missing setImmediate'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_module_has_clear_timeout() {
+    let result = eval_js(
+        "const t = require('timers'); if (typeof t.clearTimeout !== 'function') throw new Error('missing clearTimeout'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_module_has_clear_interval() {
+    let result = eval_js(
+        "const t = require('timers'); if (typeof t.clearInterval !== 'function') throw new Error('missing clearInterval'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_module_require_node_prefix() {
+    let result = eval_js(
+        "const t = require('node:timers'); if (!t.setTimeout) throw new Error('missing setTimeout'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_promises_set_timeout() {
+    let result = eval_js(
+        "const tp = require('timers/promises'); if (typeof tp.setTimeout !== 'function') throw new Error('missing setTimeout'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_timers_promises_node_prefix() {
+    let result = eval_js(
+        "const tp = require('node:timers/promises'); if (!tp.setTimeout) throw new Error('missing'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== child_process stub module tests =====
+
+#[test]
+fn test_child_process_require_exists() {
+    let result = eval_js(
+        "const cp = require('child_process'); if (typeof cp !== 'object') throw new Error('not an object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_require_node_prefix() {
+    let result = eval_js(
+        "const cp = require('node:child_process'); if (!cp.exec) throw new Error('missing exec'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try { cp.exec('ls'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_sync_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try { cp.execSync('ls'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try { cp.spawn('ls'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_sync_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try { cp.spawnSync('ls'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_fork_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try { cp.fork('module.js'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_has_all_methods() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const methods = ['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'];
+        for (const m of methods) {
+            if (typeof cp[m] !== 'function') throw new Error('missing ' + m);
+        }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== perf_hooks module tests =====
+
+#[test]
+fn test_perf_hooks_performance_now() {
+    let result = eval_js(
+        "const { performance } = require('perf_hooks'); if (typeof performance.now() !== 'number') throw new Error('not number'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_performance_now_increases() {
+    let result = eval_js(
+        r#"
+        const { performance } = require('perf_hooks');
+        const a = performance.now();
+        let x = 0; for (let i = 0; i < 10000; i++) x += i;
+        const b = performance.now();
+        if (b < a) throw new Error('time went backwards');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_time_origin() {
+    let result = eval_js(
+        "const { performance } = require('perf_hooks'); if (typeof performance.timeOrigin !== 'number' || performance.timeOrigin <= 0) throw new Error('bad timeOrigin'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_mark_and_measure() {
+    let result = eval_js(
+        r#"
+        const { performance } = require('perf_hooks');
+        performance.mark('start');
+        let x = 0; for (let i = 0; i < 1000; i++) x += i;
+        performance.mark('end');
+        performance.measure('test', 'start', 'end');
+        const entries = performance.getEntriesByName('test');
+        if (entries.length !== 1) throw new Error('expected 1 entry, got ' + entries.length);
+        if (entries[0].entryType !== 'measure') throw new Error('wrong type');
+        if (typeof entries[0].duration !== 'number') throw new Error('no duration');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_get_entries_by_type() {
+    let result = eval_js(
+        r#"
+        const { performance } = require('perf_hooks');
+        performance.mark('m1');
+        performance.mark('m2');
+        const marks = performance.getEntriesByType('mark');
+        if (marks.length < 2) throw new Error('expected at least 2 marks');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_clear_marks() {
+    let result = eval_js(
+        r#"
+        const { performance } = require('perf_hooks');
+        performance.mark('x');
+        performance.clearMarks();
+        const entries = performance.getEntriesByType('mark');
+        if (entries.length !== 0) throw new Error('marks not cleared');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_perf_hooks_require_node_prefix() {
+    let result = eval_js(
+        "const ph = require('node:perf_hooks'); if (!ph.performance) throw new Error('missing performance'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== https module tests =====
+
+#[test]
+fn test_https_require_exists() {
+    let result = eval_js(
+        "const https = require('https'); if (typeof https !== 'object') throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_require_node_prefix() {
+    let result = eval_js(
+        "const https = require('node:https'); if (!https.request) throw new Error('missing request'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_has_request_function() {
+    let result = eval_js(
+        "const https = require('https'); if (typeof https.request !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_has_get_function() {
+    let result = eval_js(
+        "const https = require('https'); if (typeof https.get !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_has_create_server() {
+    let result = eval_js(
+        "const https = require('https'); if (typeof https.createServer !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_create_server_listen_throws() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        const server = https.createServer({}, () => {});
+        try { server.listen(3000); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_agent_exists() {
+    let result = eval_js(
+        "const https = require('https'); if (typeof https.Agent !== 'function') throw new Error('not function'); if (!https.globalAgent) throw new Error('no globalAgent'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_client_request_has_methods() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        const req = https.request('https://localhost', () => {});
+        if (typeof req.write !== 'function') throw new Error('no write');
+        if (typeof req.end !== 'function') throw new Error('no end');
+        if (typeof req.setHeader !== 'function') throw new Error('no setHeader');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_request_accepts_options_object() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        const req = https.request({ hostname: 'localhost', port: 443, path: '/api', method: 'POST' }, () => {});
+        if (typeof req.write !== 'function') throw new Error('no write');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_get_auto_ends() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        // Mock __syncFetch__ to avoid actual network calls in test
+        const origFetch = globalThis.__syncFetch__;
+        globalThis.__syncFetch__ = function() {
+            return JSON.stringify({ status: 200, statusText: 'OK', headers: [], body: 'mock' });
+        };
+        try {
+            const req = https.get('https://localhost/test', () => {});
+            // get() should auto-call end, so _ended should be true
+            if (!req._ended) throw new Error('get did not auto-end');
+        } finally {
+            globalThis.__syncFetch__ = origFetch;
+        }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== http module tests =====
+
+#[test]
+fn test_http_require_exists() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http !== 'object') throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_require_node_prefix() {
+    let result = eval_js(
+        "const http = require('node:http'); if (!http.request) throw new Error('missing request'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_has_methods_array() {
+    let result = eval_js(
+        "const http = require('http'); if (!Array.isArray(http.METHODS)) throw new Error('not array'); if (!http.METHODS.includes('GET')) throw new Error('missing GET'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_has_status_codes() {
+    let result = eval_js(
+        "const http = require('http'); if (http.STATUS_CODES[200] !== 'OK') throw new Error('missing 200'); if (http.STATUS_CODES[404] !== 'Not Found') throw new Error('missing 404'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_has_request_function() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.request !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_has_get_function() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.get !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_has_create_server() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.createServer !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_create_server_listen_throws() {
+    let result = eval_js(
+        r#"
+        const http = require('http');
+        const server = http.createServer(() => {});
+        try { server.listen(3000); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_agent_exists() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.Agent !== 'function') throw new Error('not function'); if (!http.globalAgent) throw new Error('no globalAgent'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_incoming_message_exists() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.IncomingMessage !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_server_response_exists() {
+    let result = eval_js(
+        "const http = require('http'); if (typeof http.ServerResponse !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_client_request_is_writable() {
+    let result = eval_js(
+        r#"
+        const http = require('http');
+        const { EventEmitter } = require('events');
+        const req = http.request('http://localhost', () => {});
+        if (typeof req.write !== 'function') throw new Error('no write');
+        if (typeof req.end !== 'function') throw new Error('no end');
+        if (!(req instanceof EventEmitter)) throw new Error('not EventEmitter');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_request_accepts_options_object() {
+    let result = eval_js(
+        r#"
+        const http = require('http');
+        const req = http.request({ hostname: 'localhost', port: 80, path: '/test', method: 'POST' }, () => {});
+        if (typeof req.write !== 'function') throw new Error('no write');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_request_parses_url_string() {
+    let result = eval_js(
+        r#"
+        const http = require('http');
+        const req = http.request('http://example.com:8080/api/data?q=1', () => {});
+        if (typeof req.end !== 'function') throw new Error('no end');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_http_server_response_write_head() {
+    let result = eval_js(
+        r#"
+        const http = require('http');
+        const res = new http.ServerResponse();
+        res.writeHead(200, {'Content-Type': 'text/plain'});
+        if (res.statusCode !== 200) throw new Error('wrong status');
+        return 'ok';
+        "#,
     );
     assert_eq!(result.unwrap(), "ok");
 }

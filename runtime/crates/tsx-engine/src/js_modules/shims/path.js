@@ -115,5 +115,20 @@ globalThis.path = {
         const base = pathObject.base ||
             (pathObject.name || '') + (pathObject.ext || '');
         return dir ? (dir.endsWith('/') ? dir + base : dir + '/' + base) : base;
-    }
+    },
+
+    posix: null // set below
 };
+
+// path.posix === path (we only support POSIX)
+globalThis.path.posix = globalThis.path;
+
+// Register as built-in module
+(function() {
+    var pathModule = globalThis.path;
+    pathModule.default = pathModule;
+    globalThis.__tsxBuiltinModules.set('path', pathModule);
+    globalThis.__tsxBuiltinModules.set('node:path', pathModule);
+    globalThis.__tsxBuiltinModules.set('path/posix', pathModule);
+    globalThis.__tsxBuiltinModules.set('node:path/posix', pathModule);
+})();

@@ -238,3 +238,11 @@ class Buffer extends Uint8Array {
 }
 
 globalThis.Buffer = Buffer;
+
+// Register as built-in module
+(function() {
+    var bufferModule = { Buffer: Buffer };
+    bufferModule.default = Buffer;
+    globalThis.__tsxBuiltinModules.set('buffer', bufferModule);
+    globalThis.__tsxBuiltinModules.set('node:buffer', bufferModule);
+})();

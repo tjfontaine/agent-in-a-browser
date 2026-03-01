@@ -164,3 +164,11 @@ globalThis.atob = function (str) {
 
 globalThis.TextEncoder = TextEncoder;
 globalThis.TextDecoder = TextDecoder;
+
+// Register as built-in module
+(function() {
+    var stringDecoderModule = { StringDecoder: TextDecoder };
+    stringDecoderModule.default = stringDecoderModule;
+    globalThis.__tsxBuiltinModules.set('string_decoder', stringDecoderModule);
+    globalThis.__tsxBuiltinModules.set('node:string_decoder', stringDecoderModule);
+})();

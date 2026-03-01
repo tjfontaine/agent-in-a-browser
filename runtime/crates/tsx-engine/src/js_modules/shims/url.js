@@ -255,3 +255,11 @@ class URL {
 
 globalThis.URL = URL;
 globalThis.URLSearchParams = URLSearchParams;
+
+// Register as built-in module
+(function() {
+    var urlModule = { URL: URL, URLSearchParams: URLSearchParams };
+    urlModule.default = urlModule;
+    globalThis.__tsxBuiltinModules.set('url', urlModule);
+    globalThis.__tsxBuiltinModules.set('node:url', urlModule);
+})();

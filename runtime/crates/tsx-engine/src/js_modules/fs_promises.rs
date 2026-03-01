@@ -407,4 +407,12 @@ fs.promises = {
         });
     }
 };
+
+// Register fs and fs/promises as built-in modules
+(function() {
+    globalThis.__tsxBuiltinModules.set('fs', fs);
+    globalThis.__tsxBuiltinModules.set('node:fs', fs);
+    globalThis.__tsxBuiltinModules.set('fs/promises', fs.promises);
+    globalThis.__tsxBuiltinModules.set('node:fs/promises', fs.promises);
+})();
 "#;
