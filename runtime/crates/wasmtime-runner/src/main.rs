@@ -126,7 +126,6 @@ fn main() -> Result<()> {
 async fn run(_args: Args) -> Result<()> {
     // Configure wasmtime engine with component model
     let mut config = Config::new();
-    config.async_support(true);
     config.wasm_component_model(true);
 
     let engine = Engine::new(&config)?;

@@ -137,7 +137,7 @@ world headless-agent {
     export destroy: func(handle: agent-handle);
     
     // Streaming API
-    export send: func(handle: agent-handle, message: string) -> result<_, string>;
+    export send-message: func(handle: agent-handle, message: string) -> result<_, string>;
     export poll: func(handle: agent-handle) -> option<agent-event>;
     export cancel: func(handle: agent-handle);
     

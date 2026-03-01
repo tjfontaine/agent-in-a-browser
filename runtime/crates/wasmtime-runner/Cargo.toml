@@ -15,9 +15,9 @@ embed-wasm = []
 no-embed = []
 
 [dependencies]
-wasmtime = { version = "41", features = ["component-model"] }
-wasmtime-wasi = "41"
-wasmtime-wasi-http = "41"
+wasmtime = { version = "42", features = ["component-model"] }
+wasmtime-wasi = "42"
+wasmtime-wasi-http = "42"
 terminal_size = "0.4"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

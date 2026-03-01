@@ -8,8 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # QuickJS-NG engine
-# Pinned to specific commit for API stability (Loader trait signature)
-rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "172ef4b4", features = [
+# Pinned to specific commit for API stability (Loader trait signature with ImportAttributes)
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "1fe498e7", features = [
     "futures",
     "loader",
     "classes",
@@ -18,17 +18,16 @@ rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "172ef4b4",
 
 
 # SWC transpiler (individual crates)
-# Versions pinned from Cargo.lock for reproducibility
-swc_common = { version = "18.0", features = ["sourcemap"] }
-swc_ecma_ast = "20.0"
-swc_ecma_parser = { version = "33.0", default-features = false, features = [
+swc_common = { version = "19.0", features = ["sourcemap"] }
+swc_ecma_ast = "21.0"
+swc_ecma_parser = { version = "35.0", default-features = false, features = [
     "typescript",
 ] }
-swc_ecma_codegen = "23.0"
-swc_ecma_transforms_typescript = "40.0"
-swc_ecma_transforms_base = "36.0"
-swc_ecma_visit = "20.0"
-swc_sourcemap = "9.3"
+swc_ecma_codegen = "24.0"
+swc_ecma_transforms_typescript = "42.0"
+swc_ecma_transforms_base = "38.0"
+swc_ecma_visit = "21.0"
+swc_sourcemap = "10.0"
 
 # WASI/WASM bindings
 wasm-bindgen = "0.2"

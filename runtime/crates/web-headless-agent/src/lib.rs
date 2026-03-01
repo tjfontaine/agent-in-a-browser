@@ -636,7 +636,7 @@ impl Guest for HeadlessAgentComponent {
         with_storage(|s| s.remove(handle));
     }
 
-    fn send(handle: AgentHandle, message: String) -> Result<(), String> {
+    fn send_message(handle: AgentHandle, message: String) -> Result<(), String> {
         with_storage(|s| {
             if let Some(agent) = s.get_mut(handle) {
                 agent.send(&message)

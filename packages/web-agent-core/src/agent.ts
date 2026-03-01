@@ -44,7 +44,7 @@ let wasmModule: WasmModule | null = null;
 interface WasmModule {
     create(config: WasmAgentConfig): AgentHandle;
     destroy(handle: AgentHandle): void;
-    send(handle: AgentHandle, message: string): void;
+    sendMessage(handle: AgentHandle, message: string): void;
     poll(handle: AgentHandle): WasmAgentEvent | undefined;
     cancel(handle: AgentHandle): void;
     getHistory(handle: AgentHandle): WasmMessage[];
@@ -166,9 +166,9 @@ export class WebAgent {
             throw new Error('Agent not initialized. Call initialize() first.');
         }
 
-        console.log('[WebAgent] send() called, initiating WASM send...');
-        await this.wasm.send(this.handle, message);
-        console.log('[WebAgent] WASM send() returned, starting poll loop...');
+        console.log('[WebAgent] send() called, initiating WASM sendMessage...');
+        await this.wasm.sendMessage(this.handle, message);
+        console.log('[WebAgent] WASM sendMessage() returned, starting poll loop...');
 
         // Poll for events
         let pollCount = 0;
