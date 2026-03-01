@@ -40,8 +40,7 @@ pub struct TranspileResult {
     pub contains_module_decls: bool,
     /// Generated-line -> original-line mapping (1-based lines)
     pub line_map: Option<Vec<usize>>,
-    /// Source map JSON (for error line mapping) - TODO: implement
-    #[allow(dead_code)]
+    /// Source map JSON used by the runtime for error line/column remapping.
     pub source_map: Option<Vec<u8>>,
 }
 

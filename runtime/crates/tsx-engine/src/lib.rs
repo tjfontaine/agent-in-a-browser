@@ -275,7 +275,6 @@ fn run_tsx(
     js_modules::process::set_argv(script_args);
     js_modules::process::set_runtime_env(env.cwd, env.vars);
 
-    // TODO: Use transpile_result.source_map for error line mapping when implemented
     let exec_result = if transpile_result.contains_module_decls {
         execute_js_module_with_source_map(
             &transpile_result.code,

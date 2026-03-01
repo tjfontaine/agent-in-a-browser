@@ -1,6 +1,9 @@
 // process.js - Additional process functionality
 // Core process object is created in Rust, this adds methods
 
+if (!globalThis.__tsxBuiltinModules) {
+    globalThis.__tsxBuiltinModules = new Map();
+}
 if (!globalThis.__tsxRequireCache) {
     globalThis.__tsxRequireCache = new Map();
 }
@@ -25,6 +28,9 @@ function __tsxDirname(path) {
 
 function __tsxCreateRequire(basePath) {
     return function require(specifier) {
+        const builtin = globalThis.__tsxBuiltinModules.get(specifier);
+        if (builtin !== undefined) return builtin;
+
         const base = basePath || __tsxCurrentRequireBase();
         const resolved = __tsxRequireResolve__(String(base), String(specifier));
         if (globalThis.__tsxRequireCache.has(resolved)) {

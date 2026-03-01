@@ -60,6 +60,14 @@ This matrix tracks what `tsx-engine` supports today and where that support is pr
 | ESM importing CommonJS (`default` and namespace via `default`) | SUPPORTED | `integration_tests::test_integration_module_mode_imports_commonjs_default`, `integration_tests::test_integration_module_mode_imports_commonjs_namespace` |
 | ESM importing CommonJS with top-level `return` | SUPPORTED | `integration_tests::test_integration_module_mode_imports_commonjs_with_top_level_return` |
 | `setTimeout` / `clearTimeout` / `setInterval` / `clearInterval` / `setImmediate` / `nextTick` | SUPPORTED | `integration_tests::test_integration_timers_and_immediate_callbacks` |
+| Built-in module registry (`require('events')` bypasses resolver) | SUPPORTED | `js_modules::tests::test_builtin_module_registry_exists`, `js_modules::tests::test_require_events_returns_builtin` |
+| `events` module — EventEmitter (`on`/`once`/`off`/`emit`/`removeAllListeners`) | SUPPORTED | `js_modules::tests::test_eventemitter_*` (14 tests) |
+| `crypto` module — `randomBytes`, `randomUUID`, `createHash('sha256')` | SUPPORTED | `js_modules::tests::test_crypto_*` (7 tests) |
+| `os` module — `platform`, `arch`, `homedir`, `tmpdir`, `cpus`, `hostname`, `EOL` | SUPPORTED | `js_modules::tests::test_os_*` (9 tests) |
+| `util` module — `format`, `inspect`, `promisify`, `inherits`, `deprecate`, `types` | SUPPORTED | `js_modules::tests::test_util_*` (11 tests) |
+| `assert` module — `ok`, `strictEqual`, `deepStrictEqual`, `throws`, `fail` | SUPPORTED | `js_modules::tests::test_assert_*` (10 tests) |
+| `stream` module — `Readable`, `Writable`, `Transform`, `PassThrough` | SUPPORTED | `js_modules::tests::test_stream_*` (8 tests) |
+| `node:` prefix for all built-in modules | SUPPORTED | `js_modules::tests::test_*_require_node_prefix` |
 | Strict Node parity for full process/runtime API surface | PARTIAL | implemented compatibility subset only |
 
 ## HTTP/Fetch Plumbing
