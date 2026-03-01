@@ -128,6 +128,9 @@ importers:
 
   packages/edge-agent-sdk:
     dependencies:
+      '@tjfontaine/browser-mcp-runtime':
+        specifier: workspace:*
+        version: link:../browser-mcp-runtime
       '@tjfontaine/edge-agent-session':
         specifier: workspace:*
         version: link:../edge-agent-session
@@ -143,22 +146,6 @@ importers:
         version: 5.9.3
 
   packages/mcp-wasm-server:
-    dependencies:
-      '@tjfontaine/wasi-http-handler':
-        specifier: workspace:*
-        version: link:../wasi-http-handler
-      '@tjfontaine/wasi-shims':
-        specifier: workspace:*
-        version: link:../wasi-shims
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.0
-        version: 4.0.17(@types/node@25.0.9)(jsdom@27.4.0)(terser@5.46.0)
-
-  packages/wasi-http-handler:
     dependencies:
       '@tjfontaine/wasi-shims':
         specifier: workspace:*
@@ -194,28 +181,6 @@ importers:
         version: 4.0.17(@types/node@25.0.9)(jsdom@27.4.0)(terser@5.46.0)
 
   packages/wasm-loader:
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/wasm-modules:
-    dependencies:
-      '@tjfontaine/wasm-loader':
-        specifier: workspace:*
-        version: link:../wasm-loader
-      '@tjfontaine/wasm-ratatui':
-        specifier: workspace:*
-        version: link:../wasm-ratatui
-      '@tjfontaine/wasm-sqlite':
-        specifier: workspace:*
-        version: link:../wasm-sqlite
-      '@tjfontaine/wasm-tsx':
-        specifier: workspace:*
-        version: link:../wasm-tsx
-      '@tjfontaine/wasm-vim':
-        specifier: workspace:*
-        version: link:../wasm-vim
     devDependencies:
       typescript:
         specifier: ^5.7.0

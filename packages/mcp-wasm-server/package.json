@@ -26,7 +26,6 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "@tjfontaine/wasi-http-handler": "workspace:*",
         "@tjfontaine/wasi-shims": "workspace:*"
     },
     "peerDependencies": {},

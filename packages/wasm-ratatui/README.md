@@ -86,7 +86,6 @@ This package exports **metadata only**. The WASM binary is loaded by the consumi
 ## Related Packages
 
 - `@tjfontaine/wasm-loader` - Core registry system
-- `@tjfontaine/wasm-modules` - Aggregator for all modules
 - `@tjfontaine/wasm-vim` - Vim editor (also TUI mode)
 
 ## License

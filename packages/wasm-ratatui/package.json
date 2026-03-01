@@ -1,6 +1,7 @@
 {
     "name": "@tjfontaine/wasm-ratatui",
     "version": "0.1.0",
+    "description": "Ratatui TUI demo WASM module for Edge Agent",
     "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",

@@ -1,6 +1,7 @@
 {
     "name": "@tjfontaine/wasm-tsx",
     "version": "0.1.0",
+    "description": "TypeScript/TSX execution engine WASM module for Edge Agent (SWC + QuickJS)",
     "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",

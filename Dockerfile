@@ -17,7 +17,7 @@ RUN cd runtime && \
     cargo component build --release --target wasm32-wasip2
 
 # Stage 2: Build frontend
-FROM node:20-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 
 RUN npm install -g @bytecodealliance/jco
 

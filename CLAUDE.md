@@ -30,14 +30,17 @@ runtime/                      Rust workspace — compiles to WASM components
 
 packages/                     npm packages (pnpm workspace)
   web-agent-core/             Public JS API — WebAgent class wrapping WASM
-  browser-mcp-runtime/        MCP runtime for browser
-  opfs-wasi-fs/               OPFS-backed WASI filesystem
-  wasi-shims/                 WASI Preview 2 browser shims
-  wasm-loader/                WASM module loading
+  browser-mcp-runtime/        Batteries-included MCP runtime for browser
+  mcp-wasm-server/            WASM MCP server loader (JSPI + sync modes)
+  wasi-shims/                 WASI Preview 2 browser shims (filesystem, HTTP, streams, clocks)
+  wasm-loader/                WASM module loading + command registry
   wasm-ratatui/               Ratatui ↔ xterm.js bridge
   wasm-tsx/                   TypeScript engine bindings
   wasm-sqlite/                SQLite bindings
   wasm-vim/                   Vim editor bindings
+  edge-agent-session/         Shared types + cloud relay client
+  edge-agent-sdk/             SDK for embedding sandboxes in third-party sites
+  edge-agent-mcp/             MCP bridge CLI tool (WebSocket relay)
 
 frontend/                     React + Vite web UI
   src/agent/                  Agent integration (sandbox worker, streaming)
@@ -59,9 +62,15 @@ ios-edge-agent/               iOS/macOS app (SwiftUI, Swift 6.2)
   MCPServerKit/               MCP server Swift package
   WasmBindgen/                Rust ↔ Swift bindings
 
-worker/                       Cloudflare Workers (COOP/COEP headers, static assets)
+worker/                       Cloudflare Workers
+  index.ts                    CORS proxy, static assets, COOP/COEP headers
+  session-relay.ts            Durable Object — WebSocket relay between browser and agents
+  default-tools.ts            Default MCP tool definitions for offline fallback
+
 tools/                        MCP bridge utilities
-website/                      Documentation site
+  mcp-bridge/                 Node.js WebSocket↔HTTP bridge (legacy)
+
+website/                      Documentation site (Vite + static HTML)
 ```
 
 ## Architecture
@@ -158,7 +167,7 @@ Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 - Tools defined with `#[mcp_tool(description = "…")]` macro, routed by `#[mcp_tool_router]`
 - Shell commands defined with `#[shell_command(name, usage, description)]`, routed by `#[shell_commands]`
 - All WASM components export WIT interfaces (`runtime/wit/`)
-- `wit-bindgen 0.52` / `wit-bindgen-rt 0.44` for bindings
+- `wit-bindgen 0.53` / `wit-bindgen-rt 0.44` for bindings
 - `rig-core` (custom fork) for LLM agent loop — supports streaming, multi-turn tool calling
 - Keep builds warning-free — CI enforces this
 

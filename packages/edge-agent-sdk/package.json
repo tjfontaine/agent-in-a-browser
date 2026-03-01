@@ -21,6 +21,14 @@
     "dependencies": {
         "@tjfontaine/edge-agent-session": "workspace:*"
     },
+    "peerDependencies": {
+        "@tjfontaine/browser-mcp-runtime": "workspace:*"
+    },
+    "peerDependenciesMeta": {
+        "@tjfontaine/browser-mcp-runtime": {
+            "optional": true
+        }
+    },
     "devDependencies": {
         "typescript": "^5.7.0"
     },

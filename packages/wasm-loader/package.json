@@ -1,6 +1,7 @@
 {
     "name": "@tjfontaine/wasm-loader",
     "version": "0.1.0",
+    "description": "WASM module loader, command registry, and lazy-loading infrastructure for Edge Agent",
     "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
