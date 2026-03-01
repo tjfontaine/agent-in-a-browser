@@ -20,6 +20,9 @@ importers:
 
   frontend:
     dependencies:
+      '@tjfontaine/edge-agent-session':
+        specifier: workspace:*
+        version: link:../packages/edge-agent-session
       '@tjfontaine/mcp-wasm-server':
         specifier: workspace:*
         version: link:../packages/mcp-wasm-server
@@ -104,6 +107,41 @@ importers:
         specifier: ^4.0.0
         version: 4.0.17(@types/node@25.0.9)(jsdom@27.4.0)(terser@5.46.0)
 
+  packages/edge-agent-mcp:
+    dependencies:
+      '@tjfontaine/edge-agent-session':
+        specifier: workspace:*
+        version: link:../edge-agent-session
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.13
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/edge-agent-sdk:
+    dependencies:
+      '@tjfontaine/edge-agent-session':
+        specifier: workspace:*
+        version: link:../edge-agent-session
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/edge-agent-session:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/mcp-wasm-server:
     dependencies:
       '@tjfontaine/wasi-http-handler':
@@ -158,7 +196,7 @@ importers:
   packages/wasm-loader:
     devDependencies:
       typescript:
-        specifier: ^5.3.3
+        specifier: ^5.7.0
         version: 5.9.3
 
   packages/wasm-modules:
@@ -178,30 +216,50 @@ importers:
       '@tjfontaine/wasm-vim':
         specifier: workspace:*
         version: link:../wasm-vim
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/wasm-ratatui:
     dependencies:
       '@tjfontaine/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/wasm-sqlite:
     dependencies:
       '@tjfontaine/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/wasm-tsx:
     dependencies:
       '@tjfontaine/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/wasm-vim:
     dependencies:
       '@tjfontaine/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/web-agent-core:
     dependencies:
@@ -213,7 +271,7 @@ importers:
         specifier: ^1.8.0
         version: 1.15.4
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.7.0
         version: 5.9.3
 
 packages:
@@ -978,11 +1036,17 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
+  '@types/node@22.19.13':
+    resolution: {integrity: sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw==}
+
   '@types/node@25.0.9':
     resolution: {integrity: sha512-/rpCXHlCWeqClNBwUhDcusJxXYDjZTyE8v5oTO7WbL8eij2nKhUeU89/6xgjU7N4/Vh3He0BtyhJdQbDyhiXAw==}
 
   '@types/wicg-file-system-access@2023.10.7':
     resolution: {integrity: sha512-g49ijasEJvCd7ifmAY2D0wdEtt1xRjBbA33PJTiv8mKBr7DoMsPeISoJ8oQOTopSRi+FBWPpPW5ouDj2QPKtGA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript-eslint/eslint-plugin@8.53.0':
     resolution: {integrity: sha512-eEXsVvLPu8Z4PkFibtuFJLJOTAV/nPdgtSjkGoPpddpFk3/ym2oy97jynY6ic2m6+nc5M8SE1e9v/mHKsulcJg==}
@@ -2281,6 +2345,9 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
@@ -2974,11 +3041,19 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node@22.19.13':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@25.0.9':
     dependencies:
       undici-types: 7.16.0
 
   '@types/wicg-file-system-access@2023.10.7': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 22.19.13
 
   '@typescript-eslint/eslint-plugin@8.53.0(@typescript-eslint/parser@8.53.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3)':
     dependencies:
@@ -4517,6 +4592,8 @@ snapshots:
       - supports-color
 
   typescript@5.9.3: {}
+
+  undici-types@6.21.0: {}
 
   undici-types@7.16.0: {}
 

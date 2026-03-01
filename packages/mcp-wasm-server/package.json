@@ -3,13 +3,16 @@
     "version": "0.1.0",
     "type": "module",
     "description": "MCP (Model Context Protocol) server with prebuilt WASM runtime",
+    "main": "dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
-        ".": "./dist/index.js",
-        "./src/*": "./src/*",
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
         "./mcp-server-jspi/*": "./mcp-server-jspi/*",
         "./mcp-server-sync/*": "./mcp-server-sync/*"
     },
-    "types": "./dist/index.d.ts",
     "files": [
         "dist",
         "wasm",

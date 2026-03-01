@@ -24,7 +24,6 @@ export default defineConfig(({ mode }) => ({
             // Note: Specific path must come before general path for proper resolution
             '@tjfontaine/mcp-wasm-server/mcp-server-jspi': path.resolve(__dirname, '../packages/mcp-wasm-server/mcp-server-jspi'),
             '@tjfontaine/mcp-wasm-server/mcp-server-sync': path.resolve(__dirname, '../packages/mcp-wasm-server/mcp-server-sync'),
-            '@tjfontaine/mcp-wasm-server/src': path.resolve(__dirname, '../packages/mcp-wasm-server/src'),
             '@tjfontaine/mcp-wasm-server': path.resolve(__dirname, '../packages/mcp-wasm-server/src/index.ts'),
 
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),

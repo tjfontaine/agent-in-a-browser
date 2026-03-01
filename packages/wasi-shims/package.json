@@ -3,8 +3,12 @@
     "version": "0.1.0",
     "type": "module",
     "description": "WASI clocks and streams shims for browser environments",
+    "main": "dist/index.js",
     "exports": {
-        ".": "./dist/index.js",
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
         "./clocks": "./dist/clocks.js",
         "./streams": "./dist/streams.js",
         "./streams.js": "./dist/streams.js",

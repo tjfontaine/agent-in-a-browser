@@ -2,18 +2,27 @@
     "name": "@tjfontaine/wasm-ratatui",
     "version": "0.1.0",
     "type": "module",
-    "main": "./src/index.ts",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
-        ".": "./src/index.ts",
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
         "./wasm/*": "./wasm/*",
         "./wasm-sync/*": "./wasm-sync/*"
     },
+    "files": ["dist", "wasm", "wasm-sync"],
     "scripts": {
+        "build": "tsc",
         "transpile": "node ../../scripts/transpile.mjs ratatui-demo",
         "transpile:sync": "node ../../scripts/transpile.mjs ratatui-demo --sync",
-        "clean": "rm -rf wasm wasm-sync"
+        "clean": "rm -rf dist wasm wasm-sync"
     },
     "dependencies": {
         "@tjfontaine/wasm-loader": "workspace:*"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0"
     }
 }
