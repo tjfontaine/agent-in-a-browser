@@ -2229,3 +2229,905 @@ fn test_http_server_response_write_head() {
     );
     assert_eq!(result.unwrap(), "ok");
 }
+
+// ========================================================================
+// Net Tests
+// ========================================================================
+
+#[test]
+fn test_net_require() {
+    let result = eval_js("var net = require('net'); return typeof net").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_net_require_node_prefix() {
+    let result = eval_js("var net = require('node:net'); return typeof net").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_net_isip_ipv4() {
+    let result = eval_js("var net = require('net'); return '' + net.isIP('127.0.0.1')").unwrap();
+    assert_eq!(result, "4");
+}
+
+#[test]
+fn test_net_isip_ipv6() {
+    let result = eval_js("var net = require('net'); return '' + net.isIP('::1')").unwrap();
+    assert_eq!(result, "6");
+}
+
+#[test]
+fn test_net_isip_invalid() {
+    let result = eval_js("var net = require('net'); return '' + net.isIP('abc')").unwrap();
+    assert_eq!(result, "0");
+}
+
+#[test]
+fn test_net_isipv4_returns_boolean() {
+    let result = eval_js(
+        "var net = require('net'); return typeof net.isIPv4('127.0.0.1') === 'boolean' ? 'ok' : 'fail'",
+    )
+    .unwrap();
+    assert_eq!(result, "ok");
+}
+
+#[test]
+fn test_net_isipv6_returns_boolean() {
+    let result = eval_js(
+        "var net = require('net'); return typeof net.isIPv6('::1') === 'boolean' ? 'ok' : 'fail'",
+    )
+    .unwrap();
+    assert_eq!(result, "ok");
+}
+
+#[test]
+fn test_net_create_server_throws() {
+    let result = eval_js(
+        r#"
+        var net = require('net');
+        try { net.createServer(); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_net_create_connection_throws() {
+    let result = eval_js(
+        r#"
+        var net = require('net');
+        try { net.createConnection(); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_net_socket_constructor_exists() {
+    let result = eval_js(
+        "var net = require('net'); if (typeof net.Socket !== 'function') throw new Error('not function'); return 'ok'",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_net_server_constructor_exists() {
+    let result = eval_js(
+        "var net = require('net'); if (typeof net.Server !== 'function') throw new Error('not function'); return 'ok'",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// TLS Tests
+// ========================================================================
+
+#[test]
+fn test_tls_require() {
+    let result = eval_js("var tls = require('tls'); return typeof tls").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_tls_require_node_prefix() {
+    let result = eval_js(
+        "var tls = require('node:tls'); if (!tls.createServer) throw new Error('missing createServer'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_tls_create_server_throws() {
+    let result = eval_js(
+        r#"
+        var tls = require('tls');
+        try { tls.createServer(); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_tls_connect_throws() {
+    let result = eval_js(
+        r#"
+        var tls = require('tls');
+        try { tls.connect(); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_tls_default_min_version() {
+    let result = eval_js("var tls = require('tls'); return tls.DEFAULT_MIN_VERSION;").unwrap();
+    assert_eq!(result, "TLSv1.2");
+}
+
+#[test]
+fn test_tls_default_max_version() {
+    let result = eval_js("var tls = require('tls'); return tls.DEFAULT_MAX_VERSION;").unwrap();
+    assert_eq!(result, "TLSv1.3");
+}
+
+#[test]
+fn test_tls_socket_constructor_exists() {
+    let result = eval_js(
+        "var tls = require('tls'); if (typeof tls.TLSSocket !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_tls_server_constructor_exists() {
+    let result = eval_js(
+        "var tls = require('tls'); if (typeof tls.Server !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Worker Threads Tests
+// ========================================================================
+
+#[test]
+fn test_worker_threads_require() {
+    let result = eval_js("var wt = require('worker_threads'); return typeof wt").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_worker_threads_require_node_prefix() {
+    let result = eval_js("var wt = require('node:worker_threads'); return typeof wt").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_worker_threads_is_main_thread() {
+    let result =
+        eval_js("var wt = require('worker_threads'); return String(wt.isMainThread)").unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_worker_threads_parent_port_is_null() {
+    let result =
+        eval_js("var wt = require('worker_threads'); return String(wt.parentPort === null)")
+            .unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_worker_threads_worker_data_is_null() {
+    let result =
+        eval_js("var wt = require('worker_threads'); return String(wt.workerData === null)")
+            .unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_worker_threads_thread_id_is_zero() {
+    let result = eval_js("var wt = require('worker_threads'); return String(wt.threadId)").unwrap();
+    assert_eq!(result, "0");
+}
+
+#[test]
+fn test_worker_threads_worker_constructor_throws() {
+    let result = eval_js(
+        r#"
+        var wt = require('worker_threads');
+        try { new wt.Worker('test.js'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Dgram Tests
+// ========================================================================
+
+#[test]
+fn test_dgram_require() {
+    let result = eval_js("var dgram = require('dgram'); return typeof dgram").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_dgram_require_node_prefix() {
+    let result = eval_js("var dgram = require('node:dgram'); return typeof dgram").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_dgram_create_socket_throws() {
+    let result = eval_js(
+        r#"
+        var dgram = require('dgram');
+        try { dgram.createSocket('udp4'); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_dgram_socket_constructor_exists() {
+    let result = eval_js("var dgram = require('dgram'); return typeof dgram.Socket").unwrap();
+    assert_eq!(result, "function");
+}
+
+// ========================================================================
+// Zlib Tests
+// ========================================================================
+
+#[test]
+fn test_zlib_require() {
+    let result = eval_js("var zlib = require('zlib'); return typeof zlib").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_zlib_require_node_prefix() {
+    let result = eval_js("var zlib = require('node:zlib'); return typeof zlib").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_zlib_constants_z_no_compression() {
+    let result = eval_js(
+        "var zlib = require('zlib'); if (zlib.Z_NO_COMPRESSION !== 0) throw new Error('expected 0'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_constants_z_best_compression() {
+    let result = eval_js(
+        "var zlib = require('zlib'); if (zlib.Z_BEST_COMPRESSION !== 9) throw new Error('expected 9'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_create_gzip_returns_object() {
+    let result = eval_js(
+        "var zlib = require('zlib'); var g = zlib.createGzip(); if (typeof g !== 'object' || g === null) throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_create_gunzip_returns_object() {
+    let result = eval_js(
+        "var zlib = require('zlib'); var g = zlib.createGunzip(); if (typeof g !== 'object' || g === null) throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_gzip_sync_passthrough() {
+    let result = eval_js(
+        "var zlib = require('zlib'); var out = zlib.gzipSync('hello'); if (out !== 'hello') throw new Error('not passthrough'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_deflate_sync_passthrough() {
+    let result = eval_js(
+        "var zlib = require('zlib'); var out = zlib.deflateSync('data'); if (out !== 'data') throw new Error('not passthrough'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_zlib_factory_functions_exist() {
+    let result = eval_js(
+        r#"
+        var zlib = require('zlib');
+        var fns = ['createGzip', 'createGunzip', 'createDeflate', 'createInflate',
+                    'createDeflateRaw', 'createInflateRaw', 'createBrotliCompress', 'createBrotliDecompress'];
+        for (var i = 0; i < fns.length; i++) {
+            if (typeof zlib[fns[i]] !== 'function') throw new Error('missing ' + fns[i]);
+        }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Module Tests
+// ========================================================================
+
+#[test]
+fn test_module_require() {
+    let result = eval_js("var m = require('module'); return typeof m").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_module_require_node_prefix() {
+    let result = eval_js("var m = require('node:module'); return typeof m").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_module_create_require_returns_function() {
+    let result = eval_js(
+        "var Module = require('module'); var r = Module.createRequire('/tmp/test.js'); return typeof r",
+    )
+    .unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_module_builtin_modules_is_array() {
+    let result = eval_js(
+        "var Module = require('module'); if (!Array.isArray(Module.builtinModules)) throw new Error('not array'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_module_builtin_modules_has_entries() {
+    let result = eval_js(
+        "var Module = require('module'); if (Module.builtinModules.length <= 0) throw new Error('empty'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_module_is_builtin_fs() {
+    let result =
+        eval_js("var Module = require('module'); return String(Module.isBuiltin('fs'))").unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_module_is_builtin_nonexistent() {
+    let result =
+        eval_js("var Module = require('module'); return String(Module.isBuiltin('nonexistent'))")
+            .unwrap();
+    assert_eq!(result, "false");
+}
+
+#[test]
+fn test_module_cache_is_object() {
+    let result = eval_js(
+        "var Module = require('module'); if (typeof Module._cache !== 'object' || Module._cache === null) throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_module_extensions_is_object() {
+    let result = eval_js(
+        "var Module = require('module'); if (typeof Module._extensions !== 'object' || Module._extensions === null) throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Punycode Tests
+// ========================================================================
+
+#[test]
+fn test_punycode_require() {
+    let result = eval_js("var punycode = require('punycode'); return typeof punycode").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_punycode_require_node_prefix() {
+    let result = eval_js(
+        "var punycode = require('node:punycode'); if (!punycode.encode) throw new Error('missing encode'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_punycode_version_is_string() {
+    let result =
+        eval_js("var punycode = require('punycode'); return typeof punycode.version").unwrap();
+    assert_eq!(result, "string");
+}
+
+#[test]
+fn test_punycode_to_ascii_pure_ascii() {
+    let result =
+        eval_js("var punycode = require('punycode'); return punycode.toASCII('example.com')")
+            .unwrap();
+    assert_eq!(result, "example.com");
+}
+
+#[test]
+fn test_punycode_to_unicode_ascii() {
+    let result =
+        eval_js("var punycode = require('punycode'); return punycode.toUnicode('example.com')")
+            .unwrap();
+    assert_eq!(result, "example.com");
+}
+
+#[test]
+fn test_punycode_encode_ascii_string() {
+    let result =
+        eval_js("var punycode = require('punycode'); return punycode.encode('abc')").unwrap();
+    assert_eq!(result, "abc");
+}
+
+#[test]
+fn test_punycode_decode_ascii_string() {
+    let result =
+        eval_js("var punycode = require('punycode'); return punycode.decode('abc')").unwrap();
+    assert_eq!(result, "abc");
+}
+
+#[test]
+fn test_punycode_ucs2_decode_returns_array() {
+    let result = eval_js(
+        r#"
+        var punycode = require('punycode');
+        var result = punycode.ucs2.decode('abc');
+        if (!Array.isArray(result)) throw new Error('not array');
+        if (result.length !== 3) throw new Error('wrong length: ' + result.length);
+        if (result[0] !== 97) throw new Error('wrong value');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// DNS Tests
+// ========================================================================
+
+#[test]
+fn test_dns_require() {
+    let result = eval_js("var dns = require('dns'); return typeof dns").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_dns_require_node_prefix() {
+    let result = eval_js("var dns = require('node:dns'); return typeof dns").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_dns_promises_submodule() {
+    let result = eval_js(
+        "var p = require('dns/promises'); if (typeof p.lookup !== 'function') throw new Error('missing lookup'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_dns_nodata_constant() {
+    let result = eval_js("var dns = require('dns'); return dns.NODATA").unwrap();
+    assert_eq!(result, "ENODATA");
+}
+
+#[test]
+fn test_dns_resolver_is_function() {
+    let result = eval_js("var dns = require('dns'); return typeof dns.Resolver").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_dns_lookup_is_function() {
+    let result = eval_js("var dns = require('dns'); return typeof dns.lookup").unwrap();
+    assert_eq!(result, "function");
+}
+
+// ========================================================================
+// Cluster Tests
+// ========================================================================
+
+#[test]
+fn test_cluster_require() {
+    let result = eval_js("var cluster = require('cluster'); return typeof cluster").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_cluster_require_node_prefix() {
+    let result = eval_js("var cluster = require('node:cluster'); return typeof cluster").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_cluster_is_master() {
+    let result =
+        eval_js("var cluster = require('cluster'); return String(cluster.isMaster)").unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_cluster_is_primary() {
+    let result =
+        eval_js("var cluster = require('cluster'); return String(cluster.isPrimary)").unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_cluster_is_worker() {
+    let result =
+        eval_js("var cluster = require('cluster'); return String(cluster.isWorker)").unwrap();
+    assert_eq!(result, "false");
+}
+
+#[test]
+fn test_cluster_fork_throws() {
+    let result = eval_js(
+        r#"
+        var cluster = require('cluster');
+        try { cluster.fork(); throw new Error('should throw'); }
+        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_cluster_sched_rr() {
+    let result =
+        eval_js("var cluster = require('cluster'); return String(cluster.SCHED_RR)").unwrap();
+    assert_eq!(result, "2");
+}
+
+// ========================================================================
+// V8 Tests
+// ========================================================================
+
+#[test]
+fn test_v8_require() {
+    let result = eval_js("var v8 = require('v8'); return typeof v8").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_v8_require_node_prefix() {
+    let result = eval_js("var v8 = require('node:v8'); return typeof v8").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_v8_get_heap_statistics_returns_object_with_total_heap_size() {
+    let result = eval_js(
+        r#"
+        var v8 = require('v8');
+        var stats = v8.getHeapStatistics();
+        if (typeof stats !== 'object' || stats === null) throw new Error('not object');
+        if (typeof stats.total_heap_size !== 'number') throw new Error('missing total_heap_size');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_v8_get_heap_code_statistics_returns_object() {
+    let result = eval_js(
+        r#"
+        var v8 = require('v8');
+        var stats = v8.getHeapCodeStatistics();
+        if (typeof stats !== 'object' || stats === null) throw new Error('not object');
+        if (typeof stats.code_and_metadata_size !== 'number') throw new Error('missing code_and_metadata_size');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_v8_serialize_deserialize_roundtrip() {
+    let result = eval_js(
+        r#"
+        var v8 = require('v8');
+        var obj = { hello: 'world', num: 42 };
+        var serialized = v8.serialize(obj);
+        var deserialized = v8.deserialize(serialized);
+        if (deserialized.hello !== 'world') throw new Error('wrong hello: ' + deserialized.hello);
+        if (deserialized.num !== 42) throw new Error('wrong num: ' + deserialized.num);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_v8_cached_data_version_tag_returns_number() {
+    let result = eval_js(
+        r#"
+        var v8 = require('v8');
+        var tag = v8.cachedDataVersionTag();
+        if (typeof tag !== 'number') throw new Error('not number');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_v8_set_flags_from_string_does_not_throw() {
+    let result = eval_js(
+        r#"
+        var v8 = require('v8');
+        v8.setFlagsFromString('--harmony');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Readline Tests
+// ========================================================================
+
+#[test]
+fn test_readline_require() {
+    let result = eval_js("var rl = require('readline'); return typeof rl").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_readline_require_node_prefix() {
+    let result = eval_js(
+        "var rl = require('node:readline'); if (!rl.createInterface) throw new Error('missing createInterface'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_create_interface_returns_object() {
+    let result = eval_js(
+        "var rl = require('readline'); var iface = rl.createInterface({}); if (typeof iface !== 'object' || iface === null) throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_interface_is_function() {
+    let result = eval_js(
+        "var rl = require('readline'); if (typeof rl.Interface !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_close_method_exists() {
+    let result = eval_js(
+        "var rl = require('readline'); var iface = rl.createInterface({}); if (typeof iface.close !== 'function') throw new Error('no close'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_clear_line_is_function() {
+    let result = eval_js(
+        "var rl = require('readline'); if (typeof rl.clearLine !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_promises_submodule() {
+    let result = eval_js(
+        "var rlp = require('readline/promises'); if (typeof rlp.createInterface !== 'function') throw new Error('missing createInterface'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_readline_promises_node_prefix() {
+    let result = eval_js(
+        "var rlp = require('node:readline/promises'); if (!rlp.createInterface) throw new Error('missing'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// TTY Tests
+// ========================================================================
+
+#[test]
+fn test_tty_require() {
+    let result = eval_js("var tty = require('tty'); return typeof tty").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_tty_require_node_prefix() {
+    let result = eval_js("var tty = require('node:tty'); return typeof tty").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_tty_isatty_returns_false() {
+    let result = eval_js("var tty = require('tty'); return String(tty.isatty(0))").unwrap();
+    assert_eq!(result, "false");
+}
+
+#[test]
+fn test_tty_readstream_is_function() {
+    let result = eval_js("var tty = require('tty'); return typeof tty.ReadStream").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_tty_writestream_is_function() {
+    let result = eval_js("var tty = require('tty'); return typeof tty.WriteStream").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_tty_writestream_columns_80() {
+    let result = eval_js(
+        "var tty = require('tty'); var ws = new tty.WriteStream(1); return String(ws.columns)",
+    )
+    .unwrap();
+    assert_eq!(result, "80");
+}
+
+#[test]
+fn test_tty_writestream_rows_24() {
+    let result = eval_js(
+        "var tty = require('tty'); var ws = new tty.WriteStream(1); return String(ws.rows)",
+    )
+    .unwrap();
+    assert_eq!(result, "24");
+}
+
+// ========================================================================
+// VM Tests
+// ========================================================================
+
+#[test]
+fn test_vm_require() {
+    let result = eval_js("var vm = require('vm'); return typeof vm").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_vm_require_node_prefix() {
+    let result = eval_js("var vm = require('node:vm'); return typeof vm").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_vm_script_constructor_exists() {
+    let result = eval_js(
+        "var vm = require('vm'); if (typeof vm.Script !== 'function') throw new Error('not function'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_vm_run_in_this_context_evaluates_code() {
+    let result = eval_js(
+        "var vm = require('vm'); var s = new vm.Script('return 1+1'); return '' + s.runInThisContext();",
+    );
+    assert_eq!(result.unwrap(), "2");
+}
+
+#[test]
+fn test_vm_run_in_new_context_with_sandbox() {
+    let result = eval_js(
+        r#"
+        var vm = require('vm');
+        var s = new vm.Script('return x + y');
+        var result = s.runInNewContext({ x: 10, y: 20 });
+        return '' + result;
+        "#,
+    );
+    assert_eq!(result.unwrap(), "30");
+}
+
+#[test]
+fn test_vm_create_context_returns_object() {
+    let result = eval_js(
+        "var vm = require('vm'); var ctx = vm.createContext({ a: 1 }); if (typeof ctx !== 'object') throw new Error('not object'); return 'ok';",
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_vm_is_context_returns_true_for_object() {
+    let result = eval_js("var vm = require('vm'); return String(vm.isContext({}));");
+    assert_eq!(result.unwrap(), "true");
+}
+
+#[test]
+fn test_vm_compile_function_returns_function() {
+    let result = eval_js(
+        "var vm = require('vm'); var fn = vm.compileFunction('return a + b', ['a', 'b']); return '' + fn(3, 4);",
+    );
+    assert_eq!(result.unwrap(), "7");
+}
+
+// ========================================================================
+// Domain Tests
+// ========================================================================
+
+#[test]
+fn test_domain_require() {
+    let result = eval_js("var domain = require('domain'); return typeof domain").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_domain_require_node_prefix() {
+    let result = eval_js("var domain = require('node:domain'); return typeof domain").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_domain_create_returns_object() {
+    let result = eval_js("var domain = require('domain'); return typeof domain.create()").unwrap();
+    assert_eq!(result, "object");
+}
+
+#[test]
+fn test_domain_constructor_is_function() {
+    let result = eval_js("var domain = require('domain'); return typeof domain.Domain").unwrap();
+    assert_eq!(result, "function");
+}
+
+#[test]
+fn test_domain_active_is_null() {
+    let result =
+        eval_js("var domain = require('domain'); return String(domain.active === null)").unwrap();
+    assert_eq!(result, "true");
+}
+
+#[test]
+fn test_domain_has_add_remove() {
+    let result =
+        eval_js("var d = require('domain').create(); return typeof d.add + '|' + typeof d.remove")
+            .unwrap();
+    assert_eq!(result, "function|function");
+}
+
+#[test]
+fn test_domain_run_executes_function() {
+    let result = eval_js(
+        "var d = require('domain').create(); var x = 0; d.run(function() { x = 42; }); return String(x)",
+    )
+    .unwrap();
+    assert_eq!(result, "42");
+}

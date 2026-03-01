@@ -6,8 +6,12 @@
 pub mod assert;
 pub mod buffer;
 pub mod child_process;
+pub mod cluster;
 pub mod console;
 pub mod crypto;
+pub mod dgram;
+pub mod dns;
+pub mod domain;
 pub mod encoding;
 pub mod events;
 pub mod fetch;
@@ -15,15 +19,26 @@ pub mod fs_promises;
 pub mod http;
 pub mod https;
 pub mod ios_bridge;
+#[path = "module_mod.rs"]
+pub mod module_mod;
+pub mod net;
 pub mod os;
 pub mod path;
 pub mod perf_hooks;
 pub mod process;
+pub mod punycode;
 pub mod querystring;
+pub mod readline;
 pub mod stream;
 pub mod timers;
+pub mod tls;
+pub mod tty;
 pub mod url;
 pub mod util;
+pub mod v8;
+pub mod vm;
+pub mod worker_threads;
+pub mod zlib;
 
 // Re-export console log functions for use by the runtime
 #[allow(unused_imports)]
@@ -53,6 +68,20 @@ pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
     perf_hooks::install(ctx)?;
     http::install(ctx)?;
     https::install(ctx)?;
+    net::install(ctx)?;
+    tls::install(ctx)?;
+    dgram::install(ctx)?;
+    zlib::install(ctx)?; // After stream (depends on Transform)
+    worker_threads::install(ctx)?;
+    punycode::install(ctx)?;
+    module_mod::install(ctx)?;
+    cluster::install(ctx)?;
+    dns::install(ctx)?;
+    readline::install(ctx)?;
+    tty::install(ctx)?;
+    vm::install(ctx)?;
+    v8::install(ctx)?;
+    domain::install(ctx)?;
     ios_bridge::install(ctx)?;
     Ok(())
 }
