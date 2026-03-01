@@ -1,0 +1,5 @@
+pre-push:
+  commands:
+    rust-fmt:
+      run: cargo fmt --all --check
+      fail_text: "Rust formatting check failed. Run 'cargo fmt --all' to fix."
