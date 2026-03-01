@@ -1,6 +1,6 @@
 # Edge Agent
 
-*✨ Vibed with [Antigravity](https://antigravity.google) ✨*
+*✨ Vibed with [Antigravity](https://antigravity.google) & [Claude Code](https://claude.ai/code) ✨*
 
 **[→ Try it now](https://agent.edge-agent.dev)** | [Docs](https://edge-agent.dev/docs.html)
 

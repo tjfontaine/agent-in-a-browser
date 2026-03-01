@@ -103,3 +103,7 @@ Destroy the agent and release resources.
 ## License
 
 MIT
+
+---
+
+Vibed with [Antigravity](https://antigravity.google) & [Claude Code](https://claude.ai/code)
