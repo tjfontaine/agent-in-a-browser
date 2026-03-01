@@ -88,11 +88,6 @@ packages/web-agent-core/node_modules/
 # Generated WASM for headless agent (jco transpile)
 frontend/src/wasm/web-headless-agent/
 
-# Generated WIT bindings
-runtime/crates/*/src/bindings.rs
-!runtime/crates/wasmtime-runner/src/bindings.rs
-!runtime/crates/web-headless-agent/src/bindings.rs
-
 # Website build outputs
 website/dist/
 website/node_modules/
