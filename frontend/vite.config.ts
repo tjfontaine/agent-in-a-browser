@@ -224,6 +224,8 @@ export default defineConfig(({ mode }) => ({
                     // New shims replacing @bytecodealliance/preview2-shim
                     '@tjfontaine/wasi-shims/error.js': '/wasi-shims/error.js',
                     '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
+                    // iOS bridge stubs (native host APIs not available in browser)
+                    '@tjfontaine/wasi-shims/ios-bridge-stub.js': '/wasi-shims/ios-bridge-stub.js',
                     '@tjfontaine/wasm-loader': '/wasm-loader/index.js',
                 },
             },
@@ -303,6 +305,8 @@ export default defineConfig(({ mode }) => ({
                     // New shims replacing @bytecodealliance/preview2-shim
                     '@tjfontaine/wasi-shims/error.js': '/wasi-shims/error.js',
                     '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
+                    // iOS bridge stubs (native host APIs not available in browser)
+                    '@tjfontaine/wasi-shims/ios-bridge-stub.js': '/wasi-shims/ios-bridge-stub.js',
                 },
             },
         },
