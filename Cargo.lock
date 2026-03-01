@@ -5528,10 +5528,15 @@ name = "wasmtime-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "expectrl",
+ "http-body-util",
+ "hyper",
  "insta",
  "libc",
+ "serde",
+ "serde_json",
  "terminal_size",
  "tokio",
  "wasmtime",

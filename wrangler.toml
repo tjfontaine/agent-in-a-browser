@@ -1,11 +1,15 @@
 name = "agent-in-a-browser"
-main = "worker/index.js"
+main = "worker/src/index.ts"
 compatibility_date = "2025-12-22"
 workers_dev = false
 account_id = "687f8b8c824af34922f7bb4d1776f1a7"
 
 # Custom Domain - Cloudflare automatically manages DNS and certificates
-routes = [{ pattern = "agent.edge-agent.dev", custom_domain = true }]
+# Session subdomains ({sid}.{tenantId}.sessions.edge-agent.dev) are routed
+# via CF for SaaS Custom Hostnames — no extra route entries needed here.
+routes = [
+    { pattern = "agent.edge-agent.dev", custom_domain = true },
+]
 
 # Static assets configuration - serve from frontend/dist
 # run_worker_first = true ensures Worker code runs for ALL requests
@@ -15,6 +19,24 @@ directory = "frontend/dist"
 binding = "ASSETS"
 html_handling = "auto-trailing-slash"
 run_worker_first = true
+
+# SessionRelay Durable Object — one instance per session
+[durable_objects]
+bindings = [
+    { name = "SESSION_RELAY", class_name = "SessionRelay" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionRelay"]
+
+# KV namespace for API key storage (deployer auth)
+# Create with: wrangler kv:namespace create API_KEYS
+# Then update the id below
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "placeholder-create-with-wrangler"
+preview_id = "placeholder-create-with-wrangler"
 
 # Observability configuration for better logging
 [observability]

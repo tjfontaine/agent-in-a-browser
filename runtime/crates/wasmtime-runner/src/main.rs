@@ -2,6 +2,11 @@
 //!
 //! Provides native execution of the TUI WASM component with full MCP parity.
 //!
+//! ## Modes
+//!
+//! **TUI mode** (default): Run the interactive terminal UI.
+//! **MCP stdio mode** (`--mcp-stdio`): Run as a headless MCP server over stdin/stdout.
+//!
 //! ## Build Modes
 //!
 //! **Default (embed-wasm):** Bundles all WASM into a single binary.
@@ -19,9 +24,10 @@
 mod bindings;
 mod host_traits;
 mod http_router;
+mod mcp_stdio;
 mod module_loader;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use wasmtime::component::{Component, Linker, ResourceTable};
@@ -41,7 +47,7 @@ mod embedded {
         "/../../../target/wasm32-wasip2/release/web_agent_tui.wasm"
     ));
 
-    /// MCP server WASM component  
+    /// MCP server WASM component
     pub static MCP_WASM: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
@@ -66,11 +72,19 @@ mod embedded {
     ));
 }
 
-/// Native wasmtime runner for the TUI WASM component
+/// Native wasmtime runner for Edge Agent
 #[derive(Parser, Debug)]
 #[command(name = "wasm-tui")]
-#[command(about = "Run the TUI WASM component natively with full MCP parity")]
+#[command(about = "Run the TUI WASM component natively, or serve MCP over stdio")]
 struct Args {
+    /// Run as a headless MCP server (JSON-RPC over stdin/stdout)
+    #[arg(long)]
+    mcp_stdio: bool,
+
+    /// Working directory for MCP stdio mode (default: ~/.edge-agent/sandbox)
+    #[arg(long)]
+    work_dir: Option<PathBuf>,
+
     /// Path to the TUI WASM component (only in no-embed mode)
     #[arg(value_name = "TUI_WASM")]
     #[cfg(feature = "no-embed")]
@@ -123,31 +137,52 @@ fn main() -> Result<()> {
         .block_on(run(args))
 }
 
-async fn run(_args: Args) -> Result<()> {
+async fn run(args: Args) -> Result<()> {
     // Configure wasmtime engine with component model
     let mut config = Config::new();
     config.wasm_component_model(true);
 
     let engine = Engine::new(&config)?;
 
-    // Load WASM components
+    // MCP stdio mode — headless server
+    if args.mcp_stdio {
+        // Resolve work directory
+        let work_dir = args.work_dir.unwrap_or_else(|| {
+            dirs_or_default("~/.edge-agent/sandbox")
+        });
+
+        // Ensure work directory exists
+        std::fs::create_dir_all(&work_dir)
+            .with_context(|| format!("Failed to create work directory: {:?}", work_dir))?;
+
+        // Load only the MCP WASM component
+        #[cfg(feature = "embed-wasm")]
+        let mcp_bytes = embedded::MCP_WASM;
+
+        #[cfg(feature = "no-embed")]
+        let mcp_bytes = &std::fs::read(&args.mcp_wasm)
+            .with_context(|| format!("Failed to read MCP WASM: {:?}", args.mcp_wasm))?;
+
+        return mcp_stdio::run_mcp_stdio(&engine, mcp_bytes, work_dir).await;
+    }
+
+    // TUI mode — interactive terminal
     #[cfg(feature = "embed-wasm")]
-    let (tui_bytes, mcp_bytes) = {
+    let (tui_bytes, _mcp_bytes) = {
         eprintln!("Using embedded WASM components");
         (embedded::TUI_WASM.to_vec(), embedded::MCP_WASM.to_vec())
     };
 
     #[cfg(feature = "no-embed")]
-    let (tui_bytes, mcp_bytes) = {
-        let tui = std::fs::read(&_args.tui_wasm)
-            .with_context(|| format!("Failed to read TUI WASM: {:?}", _args.tui_wasm))?;
-        let mcp = std::fs::read(&_args.mcp_wasm)
-            .with_context(|| format!("Failed to read MCP WASM: {:?}", _args.mcp_wasm))?;
+    let (tui_bytes, _mcp_bytes) = {
+        let tui = std::fs::read(&args.tui_wasm)
+            .with_context(|| format!("Failed to read TUI WASM: {:?}", args.tui_wasm))?;
+        let mcp = std::fs::read(&args.mcp_wasm)
+            .with_context(|| format!("Failed to read MCP WASM: {:?}", args.mcp_wasm))?;
         (tui, mcp)
     };
 
     let tui_component = Component::new(&engine, &tui_bytes)?;
-    let _mcp_component = Component::new(&engine, &mcp_bytes)?;
 
     // Create linker and add WASI bindings
     let mut linker: Linker<HostState> = Linker::new(&engine);
@@ -169,7 +204,7 @@ async fn run(_args: Args) -> Result<()> {
     #[cfg(feature = "embed-wasm")]
     let modules_dir = PathBuf::from(".");
     #[cfg(feature = "no-embed")]
-    let modules_dir = _args.modules_dir;
+    let modules_dir = args.modules_dir;
 
     let state = HostState {
         wasi,
@@ -189,4 +224,14 @@ async fn run(_args: Args) -> Result<()> {
     let (exit_code,) = run_func.call_async(&mut store, ()).await?;
 
     std::process::exit(exit_code);
+}
+
+/// Resolve `~/.edge-agent/sandbox` to an absolute path
+fn dirs_or_default(path: &str) -> PathBuf {
+    if path.starts_with("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(&path[2..]);
+        }
+    }
+    PathBuf::from(path)
 }

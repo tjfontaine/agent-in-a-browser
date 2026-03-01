@@ -1,0 +1,9 @@
+{
+    "name": "edge-agent-worker",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Cloudflare Worker: static assets, CORS proxy, and SessionRelay Durable Object",
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250214.0"
+    }
+}

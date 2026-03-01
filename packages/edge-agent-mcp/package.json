@@ -1,0 +1,39 @@
+{
+    "name": "@tjfontaine/edge-agent-mcp",
+    "version": "0.1.0",
+    "description": "MCP bridge for Edge Agent — connects Claude Code, headless agents, and CI to a browser WASM sandbox",
+    "type": "module",
+    "bin": {
+        "edge-agent-mcp": "./dist/cli.js"
+    },
+    "main": "dist/cli.js",
+    "exports": {
+        ".": "./dist/cli.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist"
+    },
+    "files": [
+        "dist"
+    ],
+    "keywords": [
+        "mcp",
+        "ai",
+        "agent",
+        "sandbox",
+        "edge-agent",
+        "claude"
+    ],
+    "author": "Web Agent Contributors",
+    "license": "MIT",
+    "dependencies": {
+        "@tjfontaine/edge-agent-session": "workspace:*",
+        "ws": "^8.18.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "@types/ws": "^8.5.13",
+        "typescript": "^5.7.0"
+    }
+}

@@ -1,0 +1,29 @@
+{
+    "name": "@tjfontaine/edge-agent-session",
+    "version": "0.1.0",
+    "description": "Shared session types, URL builders, protocol types, and relay client for Edge Agent",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./relay-client": {
+            "types": "./dist/relay-client.d.ts",
+            "import": "./dist/relay-client.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0"
+    },
+    "license": "MIT"
+}

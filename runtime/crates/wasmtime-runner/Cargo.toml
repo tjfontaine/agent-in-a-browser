@@ -22,6 +22,11 @@ terminal_size = "0.4"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+http-body-util = "0.1"
+hyper = "1"
+bytes = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

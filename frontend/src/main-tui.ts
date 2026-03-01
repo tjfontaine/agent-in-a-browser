@@ -36,6 +36,8 @@ const terminalEl = document.getElementById('terminal')!;
         console.log(`[Main] JSPI support: ${hasJSPI ? 'YES' : 'NO'}`);
 
         let terminalInstance;
+        // Shared reference for relay setup (set in whichever code path runs)
+        let sandboxFetchForRelay: ((input: string, init?: RequestInit) => Promise<Response>) | null = null;
 
         if (!hasJSPI) {
             console.log('[Main] Non-JSPI browser detected (Safari?), launching WorkerBridge...');
@@ -47,6 +49,9 @@ const terminalEl = document.getElementById('terminal')!;
             console.log('[Main] Initializing sandbox for MCP...');
             await initializeSandbox();
             console.log('[Main] Sandbox ready');
+
+            // Store for relay setup
+            sandboxFetchForRelay = fetchFromSandboxSimple;
 
             // Initialize ghostty-web and create terminal
             const ghostty = await import('ghostty-web');
@@ -134,11 +139,52 @@ const terminalEl = document.getElementById('terminal')!;
 
             // Expose terminal for E2E tests
             (window as unknown as { tuiTerminal: unknown }).tuiTerminal = terminal;
+
+            // JSPI path: sandbox is initialized inside launchTui, grab fetchFromSandbox for relay
+            const { fetchFromSandbox } = await import('./agent/sandbox.js');
+            sandboxFetchForRelay = fetchFromSandbox;
         }
 
         // Focus the terminal
         if (terminalInstance) {
             terminalInstance.focus();
+        }
+
+        // ---- Cloud Relay Setup ----
+        // If running on a session subdomain, connect the relay so external
+        // MCP clients (Claude Code, etc.) can reach the sandbox.
+        if (sandboxFetchForRelay) {
+            try {
+                const { RelayClient, getCurrentSession } = await import('@tjfontaine/edge-agent-session');
+                const session = getCurrentSession();
+
+                if (session) {
+                    const { mountRelayOverlay } = await import('./relay/RelayStatusOverlay.js');
+
+                    const relay = new RelayClient({
+                        sessionId: session.sid,
+                        tenantId: session.tenantId,
+                        sandboxFetch: sandboxFetchForRelay,
+                        onStateChange: (state) => {
+                            console.log('[Main] Relay state:', state);
+                            overlay.updateState(state);
+                        },
+                    });
+
+                    const overlay = mountRelayOverlay(relay, session);
+
+                    if (relay.connect()) {
+                        // Once connected, tell the relay we're ready
+                        relay.sendStatus(true);
+                        console.log('[Main] Relay connected for session:', session.sid);
+                    }
+                } else {
+                    console.log('[Main] Not on a session subdomain, relay not started');
+                }
+            } catch (err) {
+                // Relay is non-critical — don't break the TUI if it fails
+                console.warn('[Main] Relay setup failed (non-fatal):', err);
+            }
         }
 
         console.log('[Main] TUI running');
