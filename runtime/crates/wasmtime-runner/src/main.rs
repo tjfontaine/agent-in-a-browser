@@ -21,11 +21,10 @@
 //! cargo build -p wasmtime-runner --no-default-features --features no-embed
 //! ```
 
-mod bindings;
 mod host_traits;
 mod http_router;
-mod mcp_stdio;
-mod module_loader;
+
+use wasmtime_runner::{bindings, mcp_stdio, module_loader};
 
 use anyhow::{Context, Result};
 use clap::Parser;

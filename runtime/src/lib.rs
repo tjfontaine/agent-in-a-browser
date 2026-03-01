@@ -138,8 +138,9 @@ impl ShellMcpServer {
                     if let Ok(content) = fs::read_to_string(&path) {
                         for (line_num, line) in content.lines().enumerate() {
                             if line.to_lowercase().contains(&pattern.to_lowercase()) {
-                                let trimmed = if line.len() > 100 {
-                                    format!("{}...", &line[..100])
+                                let trimmed = if line.chars().count() > 100 {
+                                    let end: String = line.chars().take(100).collect();
+                                    format!("{}...", end)
                                 } else {
                                     line.to_string()
                                 };
@@ -237,8 +238,9 @@ impl ShellMcpServer {
                     match_lines.push(format!(
                         "  Line {}: {}",
                         line_num + 1,
-                        if line.len() > 60 {
-                            format!("{}...", &line[..60])
+                        if line.chars().count() > 60 {
+                            let end: String = line.chars().take(60).collect();
+                            format!("{}...", end)
                         } else {
                             line.to_string()
                         }
@@ -360,8 +362,15 @@ impl HttpGuest for Component {
         ResponseOutparam::set(outparam, Ok(resp));
 
         let out = body.write().expect("write stream");
-        out.blocking_write_and_flush(response_body.as_bytes())
-            .expect("write");
+        // Write in chunks — blocking_write_and_flush is limited to 4096 bytes per WASI spec
+        let response_bytes = response_body.as_bytes();
+        let mut offset = 0;
+        while offset < response_bytes.len() {
+            let end = (offset + 4096).min(response_bytes.len());
+            out.blocking_write_and_flush(&response_bytes[offset..end])
+                .expect("write");
+            offset = end;
+        }
         drop(out);
         OutgoingBody::finish(body, None).unwrap();
     }

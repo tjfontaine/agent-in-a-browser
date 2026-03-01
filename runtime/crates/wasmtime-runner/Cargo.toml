@@ -3,6 +3,10 @@ name = "wasmtime-runner"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "wasmtime_runner"
+path = "src/lib.rs"
+
 [[bin]]
 name = "wasm-tui"
 path = "src/main.rs"
@@ -37,3 +41,5 @@ libc = "0.2"
 expectrl = "0.8"
 # insta: snapshot testing for visual regression
 insta = "1.46"
+# tempfile: temporary directories for sandboxed MCP tests
+tempfile = "3"

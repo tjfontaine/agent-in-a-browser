@@ -188,25 +188,31 @@ impl crate::bindings::HostLazyProcess for McpHostState {
     }
 }
 
+/// Create the Linker and ProxyPre for MCP component invocation.
+///
+/// This is the expensive setup step. The returned `ProxyPre` can be
+/// reused across many `call_mcp_component` invocations.
+pub fn setup_mcp_proxy(engine: &Engine, mcp_bytes: &[u8]) -> Result<ProxyPre<McpHostState>> {
+    let mcp_component = Component::new(engine, mcp_bytes)?;
+
+    let mut linker: Linker<McpHostState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
+
+    use wasmtime::component::HasSelf;
+    crate::bindings::add_module_loader_to_linker::<_, HasSelf<_>>(&mut linker, |s| s)?;
+
+    let instance_pre = linker.instantiate_pre(&mcp_component)?;
+    let proxy_pre = ProxyPre::new(instance_pre)?;
+    Ok(proxy_pre)
+}
+
 /// Run the MCP stdio server loop.
 ///
 /// Instantiates the MCP WASM component and processes JSON-RPC requests
 /// from stdin, routing them through the component's `wasi:http/incoming-handler`.
 pub async fn run_mcp_stdio(engine: &Engine, mcp_bytes: &[u8], work_dir: PathBuf) -> Result<()> {
-    let mcp_component = Component::new(engine, mcp_bytes)?;
-
-    // Build a linker with all WASI + HTTP + custom imports
-    let mut linker: Linker<McpHostState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
-
-    // Add module-loader host implementation
-    use wasmtime::component::HasSelf;
-    crate::bindings::add_module_loader_to_linker::<_, HasSelf<_>>(&mut linker, |s| s)?;
-
-    // Pre-instantiate for efficient per-request instantiation
-    let instance_pre = linker.instantiate_pre(&mcp_component)?;
-    let proxy_pre = ProxyPre::new(instance_pre)?;
+    let proxy_pre = setup_mcp_proxy(engine, mcp_bytes)?;
 
     log("MCP stdio server ready");
 
@@ -301,7 +307,7 @@ pub async fn run_mcp_stdio(engine: &Engine, mcp_bytes: &[u8], work_dir: PathBuf)
 /// Creates a fresh Store + instance for each request (clean state),
 /// wraps the JSON body in an HTTP POST request, calls incoming-handler,
 /// and reads the response body.
-async fn call_mcp_component(
+pub async fn call_mcp_component(
     engine: &Engine,
     proxy_pre: &ProxyPre<McpHostState>,
     json_body: &str,
@@ -378,14 +384,20 @@ async fn call_mcp_component(
         }
     };
 
-    // Also await the task to ensure cleanup
-    let _ = task.await;
-
-    // Read the response body
+    // Collect the response body CONCURRENTLY with the WASM task.
+    // The WASM component writes body chunks via blocking_write_and_flush,
+    // which blocks until the host drains the output buffer. If we await
+    // the task first, we deadlock — the task can't finish writing because
+    // nobody is reading, and we can't read because we're waiting for the task.
     let (_parts, body) = resp.into_parts();
-    let body_bytes = body
-        .collect()
-        .await
+    let (body_result, task_result) = tokio::join!(body.collect(), task);
+
+    // Check for errors
+    if let Err(e) = task_result {
+        anyhow::bail!("WASM task error: {e}");
+    }
+
+    let body_bytes = body_result
         .map_err(|e| anyhow::anyhow!("Failed to read response body: {e}"))?
         .to_bytes();
     let body_str = String::from_utf8(body_bytes.to_vec())
