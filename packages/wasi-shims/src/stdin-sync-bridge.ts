@@ -27,17 +27,24 @@ const STDIN_BRIDGE_STATE_KEY = Symbol.for('wasi-shims:stdin-sync-bridge-state');
 interface StdinSyncBridgeState {
     controlArray: Int32Array | null;
     dataArray: Uint8Array | null;
+    /** Residual bytes from a previous read where more data arrived than maxLen requested. */
+    residualBuffer: Uint8Array | null;
+    /** Tracks whether data was already delivered in the current input batch (mirrors JSPI hasDataBeenDelivered). */
+    hasDataBeenDelivered: boolean;
 }
 
 // Get or create the shared state on globalThis
 function getSharedState(): StdinSyncBridgeState {
-    if (!(globalThis as any)[STDIN_BRIDGE_STATE_KEY]) {
-        (globalThis as any)[STDIN_BRIDGE_STATE_KEY] = {
+    const g = globalThis as unknown as Record<symbol, StdinSyncBridgeState | undefined>;
+    if (!g[STDIN_BRIDGE_STATE_KEY]) {
+        g[STDIN_BRIDGE_STATE_KEY] = {
             controlArray: null,
             dataArray: null,
+            residualBuffer: null,
+            hasDataBeenDelivered: false,
         };
     }
-    return (globalThis as any)[STDIN_BRIDGE_STATE_KEY];
+    return g[STDIN_BRIDGE_STATE_KEY]!;
 }
 
 // ============================================================
@@ -87,6 +94,29 @@ export function blockingReadStdin(maxLen: number): Uint8Array {
         throw new Error('StdinSyncBridge not initialized');
     }
 
+    // Check residual buffer first (leftover bytes from a previous partial read).
+    // This is critical for escape sequences: the terminal delivers e.g. "\x1b[B"
+    // (3 bytes) as one chunk, but WASM reads 1 byte at a time via blocking_read(1).
+    // Without this, the remaining bytes would be discarded.
+    if (state.residualBuffer && state.residualBuffer.length > 0) {
+        const residual = state.residualBuffer;
+        if (residual.length <= maxLen) {
+            state.residualBuffer = null;
+            state.hasDataBeenDelivered = true;
+            return residual;
+        }
+        state.residualBuffer = residual.slice(maxLen);
+        state.hasDataBeenDelivered = true;
+        return residual.slice(0, maxLen);
+    }
+
+    // No residual data — if we already delivered data this batch, return empty
+    // to let the render loop cycle (mirrors JSPI mode's hasDataBeenDelivered)
+    if (state.hasDataBeenDelivered) {
+        state.hasDataBeenDelivered = false;
+        return new Uint8Array(0);
+    }
+
     // Check for EOF
     if (Atomics.load(controlArray, STDIN_CONTROL.EOF) === 1) {
         return new Uint8Array(0);
@@ -112,30 +142,35 @@ export function blockingReadStdin(maxLen: number): Uint8Array {
 
     // Read the data length
     const dataLen = Atomics.load(controlArray, STDIN_CONTROL.DATA_LENGTH);
-    console.log(`[StdinSyncBridge] Read dataLen=${dataLen}`);
 
-    // Copy data from shared buffer (don't just slice - need a copy)
-    const result = dataArray.slice(0, Math.min(dataLen, maxLen));
-    console.log(`[StdinSyncBridge] Returning ${result.length} bytes: ${new TextDecoder().decode(result)}`);
-
-    // Check for resize sequence: ESC [ 8 ; rows ; cols t
-    // If found, update terminal size globals before returning
-    if (result.length >= 7 && result[0] === 0x1b && result[1] === 0x5b && result[2] === 0x38 && result[3] === 0x3b) {
-        const text = new TextDecoder().decode(result);
-        const match = text.match(/\x1b\[8;(\d+);(\d+)t/);
-        if (match) {
-            const rows = parseInt(match[1], 10);
-            const cols = parseInt(match[2], 10);
-            console.log(`[StdinSyncBridge] Detected resize sequence, updating terminal size: ${cols}x${rows}`);
-            setTerminalSize(cols, rows);
-        }
-    }
+    // Copy all received data from shared buffer
+    const fullData = dataArray.slice(0, dataLen);
 
     // Reset flags for next read
     Atomics.store(controlArray, STDIN_CONTROL.RESPONSE_READY, 0);
     Atomics.store(controlArray, STDIN_CONTROL.REQUEST_READY, 0);
 
-    return result;
+    // Check for resize sequence: ESC [ 8 ; rows ; cols t
+    // If found, update terminal size globals before returning
+    if (fullData.length >= 7 && fullData[0] === 0x1b && fullData[1] === 0x5b && fullData[2] === 0x38 && fullData[3] === 0x3b) {
+        const text = new TextDecoder().decode(fullData);
+        const match = text.match(/\x1b\[8;(\d+);(\d+)t/);
+        if (match) {
+            const rows = parseInt(match[1], 10);
+            const cols = parseInt(match[2], 10);
+            setTerminalSize(cols, rows);
+        }
+    }
+
+    // If more data arrived than requested, save the rest for subsequent reads
+    if (dataLen > maxLen) {
+        state.residualBuffer = fullData.slice(maxLen);
+        state.hasDataBeenDelivered = true;
+        return fullData.slice(0, maxLen);
+    }
+
+    state.hasDataBeenDelivered = true;
+    return fullData;
 }
 
 /**
@@ -146,6 +181,17 @@ export function nonBlockingReadStdin(maxLen: number): Uint8Array {
     const state = getSharedState();
     const { controlArray, dataArray } = state;
 
+    // Check residual buffer first
+    if (state.residualBuffer && state.residualBuffer.length > 0) {
+        const residual = state.residualBuffer;
+        if (residual.length <= maxLen) {
+            state.residualBuffer = null;
+            return residual;
+        }
+        state.residualBuffer = residual.slice(maxLen);
+        return residual.slice(0, maxLen);
+    }
+
     if (!controlArray || !dataArray) {
         return new Uint8Array(0);
     }
@@ -155,11 +201,17 @@ export function nonBlockingReadStdin(maxLen: number): Uint8Array {
 
     if (responseReady === 1) {
         const dataLen = Atomics.load(controlArray, STDIN_CONTROL.DATA_LENGTH);
-        const result = dataArray.slice(0, Math.min(dataLen, maxLen));
+        const fullData = dataArray.slice(0, dataLen);
 
         // Reset for next read
         Atomics.store(controlArray, STDIN_CONTROL.RESPONSE_READY, 0);
-        return result;
+
+        // Preserve leftover bytes
+        if (dataLen > maxLen) {
+            state.residualBuffer = fullData.slice(maxLen);
+            return fullData.slice(0, maxLen);
+        }
+        return fullData;
     }
 
     return new Uint8Array(0);

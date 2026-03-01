@@ -22,9 +22,8 @@ console.log('JSPI:', supportsJSPI());
 
 ## Included Packages
 
-- `@tjfontaine/opfs-wasi-fs` - OPFS filesystem
 - `@tjfontaine/wasi-http-handler` - Fetch-based HTTP
-- `@tjfontaine/wasi-shims` - Clocks and streams
+- `@tjfontaine/wasi-shims` - WASI shims (OPFS filesystem, clocks, streams)
 - `@tjfontaine/mcp-wasm-server` - MCP runtime
 
 ## License

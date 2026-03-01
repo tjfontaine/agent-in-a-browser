@@ -35,43 +35,6 @@ const dataView = mem => dv.buffer === mem.buffer ? dv : dv = new DataView(mem.bu
 
 const toUint64 = val => BigInt.asUintN(64, BigInt(val));
 
-
-
-function _lazyProcessDiag(obj) {
-  try {
-    const symKey = Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess');
-    const info = {
-      type: typeof obj,
-      isNull: obj === null,
-      isUndefined: obj === undefined,
-      ctor: obj?.constructor?.name,
-      hasSymbolIn: obj ? (symKey in obj) : false,
-      hasSymbolOwn: obj ? Object.prototype.hasOwnProperty.call(obj, symKey) : false,
-      prototypeHasSymbol: obj ? (symKey in Object.getPrototypeOf(obj) ?? {}) : false,
-      prototypeConstructor: obj ? Object.getPrototypeOf(obj)?.constructor?.name : null,
-      symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
-      protoSymbols: obj ? Object.getOwnPropertySymbols(Object.getPrototypeOf(obj) ?? {}).map(s => s.toString()).slice(0,3) : [],
-      keys: obj ? Object.keys(obj).slice(0,5) : []
-    };
-    return 'Resource error: Not a valid "LazyProcess" resource. DIAG: ' + JSON.stringify(info);
-  } catch (e) {
-    return 'Resource error: Not a valid "LazyProcess" resource. DIAG_ERROR: ' + e.message;
-  }
-}
-function _descriptorDiag(obj) {
-  try {
-    const info = {
-      type: typeof obj,
-      ctor: obj?.constructor?.name,
-      hasSymbol: obj ? !!obj[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')] : false,
-      symbols: obj ? Object.getOwnPropertySymbols(obj).map(s => s.toString()).slice(0,3) : [],
-      keys: obj ? Object.keys(obj).slice(0,5) : []
-    };
-    return 'Resource error: Not a valid "Descriptor" resource. DIAG: ' + JSON.stringify(info);
-  } catch (e) {
-    return 'Resource error: Not a valid "Descriptor" resource. DIAG_ERROR: ' + e.message;
-  }
-}
 function toInt32(val) {
   return val >> 0;
 }
@@ -1650,7 +1613,8 @@ const trampoline46 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   });
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-lazy-command"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret && (Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess') in ret))) { throw new TypeError(_lazyProcessDiag(ret));
+  if (!(ret && (Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess') in ret))) {
+    throw new TypeError('Resource error: Not a valid "LazyProcess" resource.');
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
@@ -1712,7 +1676,8 @@ const trampoline47 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
   });
   _debugLog('[iface="mcp:module-loader/loader@0.1.0", function="spawn-interactive"] [Instruction::CallInterface] (sync, @ post-call)');
   endCurrentTask(0);
-  if (!(ret && (Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess') in ret))) { throw new TypeError(_lazyProcessDiag(ret));
+  if (!(ret && (Symbol.for('mcp:module-loader/loader@0.1.0#LazyProcess') in ret))) {
+    throw new TypeError('Resource error: Not a valid "LazyProcess" resource.');
   }
   var handle8 = ret[symbolRscHandle];
   if (!handle8) {
@@ -6779,7 +6744,8 @@ const trampoline87 = new WebAssembly.Suspending(async function(arg0, arg1, arg2,
     case 'ok': {
       const e = variant9.val;
       dataView(memory0).setInt8(arg6 + 0, 0, true);
-      if (!(e ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) { throw new TypeError(_descriptorDiag(e));
+      if (!(e ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) {
+        throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
       }
       var handle7 = e[symbolRscHandle];
       if (!handle7) {
@@ -9739,7 +9705,8 @@ function trampoline103(arg0) {
   for (let i = 0; i < vec3.length; i++) {
     const e = vec3[i];
     const base = result3 + i * 12;var [tuple0_0, tuple0_1] = e;
-    if (!(tuple0_0 ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) { throw new TypeError(_descriptorDiag(tuple0_0));
+    if (!(tuple0_0 ?.[Symbol.for('wasi:filesystem/types@0.2.9#Descriptor')])) {
+      throw new TypeError('Resource error: Not a valid "Descriptor" resource.');
     }
     var handle1 = tuple0_0[symbolRscHandle];
     if (!handle1) {

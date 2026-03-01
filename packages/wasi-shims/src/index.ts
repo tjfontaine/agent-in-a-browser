@@ -37,3 +37,16 @@ export * from './execution-mode.js';
 // Export error and random shims (replaces @bytecodealliance/preview2-shim)
 export * from './error.js';
 export * from './random.js';
+
+// Export WASI filesystem type interfaces
+export type {
+    WasiFilesystem,
+    WasiDatetime,
+    WasiStat,
+    DirectoryEntry,
+    OpenFlags,
+    IDescriptor,
+    IDirectoryEntryStream,
+    IPreopens,
+    IFilesystemTypes,
+} from './wasi-filesystem-types.js';

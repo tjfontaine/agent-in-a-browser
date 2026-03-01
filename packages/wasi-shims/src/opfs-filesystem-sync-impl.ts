@@ -309,17 +309,9 @@ class _DescriptorSync {
         this.isRoot = path === '' || path === '/';
         // Symbol marker for patched instanceof checks (cross-bundle validation)
         Object.defineProperty(this, DESCRIPTOR_SYNC_MARKER, { value: true, enumerable: false });
-        // DIAGNOSTIC: Verify marker was set in constructor
-        console.log('[opfs-fs-sync DIAG] _DescriptorSync constructor:', {
-            path,
-            markerSet: !!(this as any)[DESCRIPTOR_SYNC_MARKER],
-            markerSymbol: DESCRIPTOR_SYNC_MARKER.toString(),
-            thisConstructorName: this.constructor.name,
-            instanceSymbols: Object.getOwnPropertySymbols(this).map(s => s.toString())
-        });
     }
 
-    getType(): string {
+    getType(): 'directory' | 'regular-file' {
         if (this.treeEntry.dir !== undefined) return 'directory';
         return 'regular-file';
     }
@@ -465,7 +457,7 @@ class _DescriptorSync {
     }
 
     // SYNC: read via stream
-    readViaStream(_offset: bigint): unknown {
+    readViaStream(_offset: bigint): InputStream {
         if (!controlArray || !dataArray) throw 'io';
 
         const response = makeRequest({ type: 'readFileBinary', path: this.path });
@@ -537,7 +529,7 @@ class _DescriptorSync {
     }
 
     // SYNC: write via stream
-    writeViaStream(_offset: bigint): unknown {
+    writeViaStream(_offset: bigint): OutputStream {
         const path = this.path;
         const entry = this.treeEntry;
         let buffer = new Uint8Array(0);

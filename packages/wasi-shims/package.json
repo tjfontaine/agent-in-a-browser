@@ -21,7 +21,8 @@
         "./stdin-sync-bridge.js": "./dist/stdin-sync-bridge.js",
         "./worker-constants.js": "./dist/worker-constants.js",
         "./worker-bridge.js": "./dist/worker-bridge.js",
-        "./ios-bridge-stub.js": "./dist/ios-bridge-stub.js"
+        "./ios-bridge-stub.js": "./dist/ios-bridge-stub.js",
+        "./wasi-filesystem-types.js": "./dist/wasi-filesystem-types.js"
     },
     "types": "./dist/index.d.ts",
     "files": [

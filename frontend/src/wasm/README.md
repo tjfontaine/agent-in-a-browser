@@ -93,8 +93,7 @@ This code has been extracted into standalone npm packages under `packages/`:
 | `@tjfontaine/wasm-sqlite` | SQLite module metadata |
 | `@tjfontaine/wasm-ratatui` | Ratatui demo metadata |
 | `@tjfontaine/wasm-vim` | Vim editor metadata |
-| `@tjfontaine/wasi-shims` | Shared WASI shims (clocks, streams, terminal) |
-| `@tjfontaine/opfs-wasi-fs` | OPFS filesystem implementation |
+| `@tjfontaine/wasi-shims` | Shared WASI shims (OPFS filesystem, clocks, streams, terminal) |
 | `@tjfontaine/wasi-http-handler` | HTTP handler implementation |
 | `@tjfontaine/mcp-wasm-server` | MCP runtime with lazy loading |
 | `@tjfontaine/browser-mcp-runtime` | Meta-package for one-line setup |

@@ -93,12 +93,6 @@ importers:
       '@tjfontaine/mcp-wasm-server':
         specifier: workspace:*
         version: link:../mcp-wasm-server
-      '@tjfontaine/opfs-wasi-fs':
-        specifier: workspace:*
-        version: link:../opfs-wasi-fs
-      '@tjfontaine/wasi-http-handler':
-        specifier: workspace:*
-        version: link:../wasi-http-handler
       '@tjfontaine/wasi-shims':
         specifier: workspace:*
         version: link:../wasi-shims
@@ -112,25 +106,9 @@ importers:
 
   packages/mcp-wasm-server:
     dependencies:
-      '@tjfontaine/opfs-wasi-fs':
-        specifier: workspace:*
-        version: link:../opfs-wasi-fs
       '@tjfontaine/wasi-http-handler':
         specifier: workspace:*
         version: link:../wasi-http-handler
-      '@tjfontaine/wasi-shims':
-        specifier: workspace:*
-        version: link:../wasi-shims
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.0
-        version: 4.0.17(@types/node@25.0.9)(jsdom@27.4.0)(terser@5.46.0)
-
-  packages/opfs-wasi-fs:
-    dependencies:
       '@tjfontaine/wasi-shims':
         specifier: workspace:*
         version: link:../wasi-shims

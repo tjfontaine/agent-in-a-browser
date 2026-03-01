@@ -1,5 +1,6 @@
 ---
 source: runtime/crates/web-agent-tui/src/ui/mod.rs
+assertion_line: 472
 expression: output
 ---
 "╭ Messages ──────────────────────────────────────────────────────────╮┌MCP Servers─────────────────┐"
@@ -16,8 +17,8 @@ expression: output
 "│                        │▶ Anthropic (Claude) (anthropic) (enter URL)    │                        │"
 "│                        │  OpenAI (GPT) (openai) (enter URL)             │                        │"
 "│                        │  Google (Gemini) (gemini) (enter URL)          │                        │"
-"│                        │  WebLLM (Local Browser) (webllm)               │                        │"
 "│                        │  Custom (OpenAI-compatible) (custom) (enter URL│                        │"
+"│                        │                                                │                        │"
 "│                        │                                                │                        │"
 "│                        │                                                │                        │"
 "│                        │                                                │                        │"

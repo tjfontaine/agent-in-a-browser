@@ -506,6 +506,11 @@ test.describe('Vim File Operations', () => {
     });
 
     test(':w saves file and :wq saves and quits', async ({ page }) => {
+        // Clean up stale file from any previous failed run
+        await typeInTerminal(page, 'rm -f e2e_test_file.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
         await typeInTerminal(page, 'vim e2e_test_file.txt');
         await pressKey(page, 'Enter');
         await waitForTerminalOutput(page, 'NORMAL', 5000);
@@ -532,6 +537,11 @@ test.describe('Vim File Operations', () => {
     });
 
     test('ArrowDown escape sequence navigates lines in NORMAL mode', async ({ page }) => {
+        // Clean up stale file from any previous failed run
+        await typeInTerminal(page, 'rm -f arrow_nav_test.txt');
+        await pressKey(page, 'Enter');
+        await waitForTerminalOutput(page, '$', 5000);
+
         await typeInTerminal(page, 'vim arrow_nav_test.txt');
         await pressKey(page, 'Enter');
         await waitForTerminalOutput(page, 'NORMAL', 5000);

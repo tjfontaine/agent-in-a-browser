@@ -109,24 +109,13 @@ const DESCRIPTOR_MARKER = Symbol.for('wasi:filesystem/types@0.2.9#Descriptor');
 
 // Descriptor - defined as internal class, exported via Symbol.for singleton
 class OpfsDescriptor {
-    // Factory method to ensure we always use the singleton class for instantiation
-    // This robustness works even if the module is loaded multiple times (e.g. via @fs bypass)
+    // Factory method to ensure we always use the singleton class for instantiation.
+    // Works even if the module is loaded multiple times (e.g. via @fs bypass).
     static create(path: string, entry: TreeEntry): OpfsDescriptor {
         const KEY = Symbol.for('wasi:Descriptor');
-        // Use registered singleton if available, otherwise fallback to local class (this)
-        const Ctor = (globalThis as any)[KEY] as typeof OpfsDescriptor || OpfsDescriptor;
-        const instance = new Ctor(path, entry);
-        // DIAGNOSTIC: Trace Symbol marker assignment
-        const hasMarker = !!(instance as any)[DESCRIPTOR_MARKER];
-        console.log('[opfs-fs DIAG] OpfsDescriptor.create:', {
-            path,
-            hasMarker,
-            markerSymbol: DESCRIPTOR_MARKER.toString(),
-            ctorName: Ctor.name,
-            usingGlobalSingleton: !!((globalThis as any)[KEY]),
-            instanceKeys: Object.getOwnPropertySymbols(instance).map(s => s.toString())
-        });
-        return instance;
+        const singletons = globalThis as unknown as Record<symbol, typeof OpfsDescriptor | undefined>;
+        const Ctor = singletons[KEY] ?? OpfsDescriptor;
+        return new Ctor(path, entry);
     }
 
     private path: string;
@@ -139,15 +128,9 @@ class OpfsDescriptor {
         this.isRoot = path === '' || path === '/';
         // Symbol marker for patched instanceof checks (cross-bundle validation)
         Object.defineProperty(this, DESCRIPTOR_MARKER, { value: true, enumerable: false });
-        // DIAGNOSTIC: Verify marker was set in constructor
-        console.log('[opfs-fs DIAG] OpfsDescriptor constructor:', {
-            path,
-            markerSet: !!(this as any)[DESCRIPTOR_MARKER],
-            thisConstructorName: this.constructor.name
-        });
     }
 
-    getType(): string {
+    getType(): 'directory' | 'regular-file' {
         if (this.treeEntry.dir !== undefined) {
             return 'directory';
         }
@@ -337,7 +320,7 @@ class OpfsDescriptor {
      * Read via stream - returns proper WASI InputStream resource
      * Falls back to syncFileOperation when no handle is cached
      */
-    readViaStream(_offset: bigint): unknown {
+    readViaStream(_offset: bigint): InputStream {
         const path = this.path;
         const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
@@ -346,7 +329,6 @@ class OpfsDescriptor {
         if (handle) {
             const size = handle.getSize();
 
-            // Return a proper InputStream instance (required by WASI)
             return new InputStream({
                 read(len: bigint): Uint8Array {
                     if (offset >= size) {
@@ -461,7 +443,7 @@ class OpfsDescriptor {
      * Write via stream - returns proper WASI OutputStream resource
      * Falls back to syncFileOperation when no handle is cached
      */
-    writeViaStream(_offset: bigint): unknown {
+    writeViaStream(_offset: bigint): OutputStream {
         const path = this.path;
         const normalizedPath = normalizePath(path);
         let offset = Number(_offset);
@@ -612,7 +594,7 @@ class OpfsDescriptor {
     /**
      * Append via stream - returns OutputStream positioned at end of file
      */
-    appendViaStream(): unknown {
+    appendViaStream(): OutputStream {
         const path = this.path;
         const normalizedPath = normalizePath(path);
         const entry = this.treeEntry;
@@ -1027,9 +1009,6 @@ function filesystemErrorCode(): string | undefined {
     return undefined;
 }
 
-// DIAGNOSTIC: Verify types.Descriptor is the same as globalThis singleton
-
-
 export const types = {
     Descriptor,
     DirectoryEntryStream,
@@ -1058,23 +1037,16 @@ export async function initFilesystem(): Promise<void> {
     try {
         const root = await navigator.storage.getDirectory();
         setOpfsRoot(root);
-        console.log('[opfs-fs] OPFS root acquired');
 
         // JSPI mode uses async OPFS operations directly - no need for SharedArrayBuffer sync bridge
         if (!hasJSPI) {
-            // Initialize sync bridge for non-JSPI environments (Safari/Firefox)
             await initHelperWorker();
-            console.log('[opfs-fs] Helper worker ready, loading symlinks...');
-        } else {
-            console.log('[opfs-fs] JSPI mode - using async OPFS operations directly');
         }
 
         // Load symlinks from IndexedDB into cache
         await loadSymlinksIntoCache();
-        console.log('[opfs-fs] Symlinks loaded into cache');
 
         setInitialized(true);
-        console.log('[opfs-fs] Filesystem initialized with lazy loading');
     } catch (e) {
         console.error('[opfs-fs] Failed to initialize OPFS:', e);
         // Fall back to initialized but empty tree
