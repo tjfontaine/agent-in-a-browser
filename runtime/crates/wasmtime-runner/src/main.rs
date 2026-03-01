@@ -147,9 +147,9 @@ async fn run(args: Args) -> Result<()> {
     // MCP stdio mode — headless server
     if args.mcp_stdio {
         // Resolve work directory
-        let work_dir = args.work_dir.unwrap_or_else(|| {
-            dirs_or_default("~/.edge-agent/sandbox")
-        });
+        let work_dir = args
+            .work_dir
+            .unwrap_or_else(|| dirs_or_default("~/.edge-agent/sandbox"));
 
         // Ensure work directory exists
         std::fs::create_dir_all(&work_dir)

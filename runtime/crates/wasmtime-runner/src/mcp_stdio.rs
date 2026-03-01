@@ -64,9 +64,9 @@ impl crate::bindings::ModuleLoaderHost for McpHostState {
         args: Vec<String>,
         env: crate::bindings::LoaderExecEnv,
     ) -> wasmtime::component::Resource<crate::bindings::LazyProcess> {
-        let _id =
-            self.module_loader
-                .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
+        let _id = self
+            .module_loader
+            .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
         wasmtime::component::Resource::new_own(0)
     }
 
@@ -78,9 +78,9 @@ impl crate::bindings::ModuleLoaderHost for McpHostState {
         env: crate::bindings::LoaderExecEnv,
         _size: crate::bindings::TerminalSize,
     ) -> wasmtime::component::Resource<crate::bindings::LazyProcess> {
-        let _id =
-            self.module_loader
-                .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
+        let _id = self
+            .module_loader
+            .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
         wasmtime::component::Resource::new_own(0)
     }
 
@@ -99,9 +99,9 @@ impl crate::bindings::ModuleLoaderHost for McpHostState {
         env: crate::bindings::LoaderExecEnv,
     ) -> wasmtime::component::Resource<crate::bindings::LazyProcess> {
         if let Some(module) = self.module_loader.get_lazy_module(&command) {
-            let _id =
-                self.module_loader
-                    .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
+            let _id = self
+                .module_loader
+                .spawn_lazy_command(&module, &command, args, env.cwd, env.vars);
         }
         wasmtime::component::Resource::new_own(0)
     }
@@ -128,10 +128,7 @@ impl crate::bindings::HostLazyProcess for McpHostState {
     ) -> u64 {
         0
     }
-    fn close_stdin(
-        &mut self,
-        _self_: wasmtime::component::Resource<crate::bindings::LazyProcess>,
-    ) {
+    fn close_stdin(&mut self, _self_: wasmtime::component::Resource<crate::bindings::LazyProcess>) {
     }
     fn read_stdout(
         &mut self,
