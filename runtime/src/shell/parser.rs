@@ -436,9 +436,7 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
             }
         }
         // ${var@op} — transformation (fallback to debug for op)
-        ParameterExpr::Transform {
-            parameter, op, ..
-        } => {
+        ParameterExpr::Transform { parameter, op, .. } => {
             let param = format_parameter(parameter);
             format!("${{{}@{:?}}}", param, op)
         }

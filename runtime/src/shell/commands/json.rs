@@ -207,8 +207,7 @@ impl JsonCommands {
                         .iter()
                         .map(|arg| arg.replace(repl, item))
                         .collect();
-                    let code =
-                        execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
+                    let code = execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
                     if code != 0 {
                         return code;
                     }
@@ -218,8 +217,7 @@ impl JsonCommands {
                 for chunk in items.chunks(n) {
                     let mut cmd_line = command_args.clone();
                     cmd_line.extend(chunk.iter().cloned());
-                    let code =
-                        execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
+                    let code = execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
                     if code != 0 {
                         return code;
                     }
@@ -510,7 +508,10 @@ fn evaluate_jq_condition(json: &serde_json::Value, condition: &str) -> Result<bo
 
             // Evaluate left side
             let left_vals = apply_jq_filter(json, left_expr)?;
-            let left_val = left_vals.first().cloned().unwrap_or(serde_json::Value::Null);
+            let left_val = left_vals
+                .first()
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
 
             // Parse right side as a value
             let right_val = parse_jq_literal(right_expr);
@@ -536,7 +537,10 @@ fn parse_jq_literal(s: &str) -> serde_json::Value {
     let s = s.trim();
     // Try string (quoted)
     if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\\') && s.contains('"')) {
-        let unquoted = s.trim_matches('"').trim_start_matches("\\\"").trim_end_matches("\\\"");
+        let unquoted = s
+            .trim_matches('"')
+            .trim_start_matches("\\\"")
+            .trim_end_matches("\\\"");
         // Also handle escaped quotes within
         let clean = s.trim_matches(|c| c == '"' || c == '\\');
         if !clean.is_empty() {
@@ -615,10 +619,7 @@ fn compare_jq_values(left: &serde_json::Value, op: &str, right: &serde_json::Val
 }
 
 /// Apply a simple map expression (. * N, . + N, etc.)
-fn apply_jq_map_expr(
-    item: &serde_json::Value,
-    expr: &str,
-) -> Result<serde_json::Value, String> {
+fn apply_jq_map_expr(item: &serde_json::Value, expr: &str) -> Result<serde_json::Value, String> {
     let expr = expr.trim();
 
     // Handle ". * N" or ". + N"

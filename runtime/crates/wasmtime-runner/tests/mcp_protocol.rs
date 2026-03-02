@@ -4311,10 +4311,7 @@ mod sort_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("data.csv", "bob,30\nalice,25\ncharlie,35\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "sort -t, -k2 -n data.csv"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "sort -t, -k2 -n data.csv"}))
             .await;
         let lines: Vec<&str> = text.trim().lines().collect();
         assert_eq!(lines, vec!["alice,25", "bob,30", "charlie,35"]);
@@ -4349,16 +4346,9 @@ mod grep_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("code.rs", "fn main() {\n    println!(\"hello\");\n}\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "grep -n println code.rs"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "grep -n println code.rs"}))
             .await;
-        assert!(
-            text.contains("2:"),
-            "Should show line number 2: {}",
-            text
-        );
+        assert!(text.contains("2:"), "Should show line number 2: {}", text);
         assert!(
             text.contains("println"),
             "Should show matching line: {}",
@@ -4369,12 +4359,12 @@ mod grep_improvements {
     #[tokio::test]
     async fn grep_count() {
         let mut h = McpTestHarness::new();
-        h.write_fixture("log.txt", "ERROR foo\nINFO bar\nERROR baz\nINFO qux\nERROR end\n");
+        h.write_fixture(
+            "log.txt",
+            "ERROR foo\nINFO bar\nERROR baz\nINFO qux\nERROR end\n",
+        );
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "grep -c ERROR log.txt"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "grep -c ERROR log.txt"}))
             .await;
         assert_eq!(text.trim(), "3");
     }
@@ -4403,16 +4393,9 @@ mod grep_improvements {
         h.write_fixture("src/lib.rs", "pub fn hello() {}\n");
         h.write_fixture("src/util/helper.rs", "fn todo_helper() { todo!() }\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "grep -r todo src"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "grep -r todo src"}))
             .await;
-        assert!(
-            text.contains("main.rs"),
-            "Should find in main.rs: {}",
-            text
-        );
+        assert!(text.contains("main.rs"), "Should find in main.rs: {}", text);
         assert!(
             text.contains("helper.rs"),
             "Should find in helper.rs: {}",
@@ -4427,10 +4410,7 @@ mod grep_improvements {
         h.write_fixture("src/main.rs", "line1\nTODO: fix\nline3\n");
         h.write_fixture("src/lib.rs", "TODO: refactor\nline2\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "grep -rn TODO src"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "grep -rn TODO src"}))
             .await;
         assert!(
             text.contains("main.rs") && text.contains("2:"),
@@ -4482,16 +4462,10 @@ mod redirect_patterns {
     #[tokio::test]
     async fn append_redirect() {
         let mut h = McpTestHarness::new();
-        h.call_tool_text(
-            "shell_eval",
-            json!({"command": "echo 'first' > out.txt"}),
-        )
-        .await;
-        h.call_tool_text(
-            "shell_eval",
-            json!({"command": "echo 'second' >> out.txt"}),
-        )
-        .await;
+        h.call_tool_text("shell_eval", json!({"command": "echo 'first' > out.txt"}))
+            .await;
+        h.call_tool_text("shell_eval", json!({"command": "echo 'second' >> out.txt"}))
+            .await;
         let text = h
             .call_tool_text("read_file", json!({"path": "out.txt"}))
             .await;
@@ -4508,16 +4482,8 @@ mod redirect_patterns {
                 json!({"command": "echo 'visible'; echo 'hidden' > /dev/null"}),
             )
             .await;
-        assert!(
-            text.contains("visible"),
-            "Should see visible: {}",
-            text
-        );
-        assert!(
-            !text.contains("hidden"),
-            "Should not see hidden: {}",
-            text
-        );
+        assert!(text.contains("visible"), "Should see visible: {}", text);
+        assert!(!text.contains("hidden"), "Should not see hidden: {}", text);
     }
 
     #[tokio::test]
@@ -4525,10 +4491,7 @@ mod redirect_patterns {
         // 2>&1 is probably the most common redirect LLMs generate
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "ls /nonexistent 2>&1"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "ls /nonexistent 2>&1"}))
             .await;
         // The error message about nonexistent should appear in stdout
         assert!(
@@ -4543,10 +4506,7 @@ mod redirect_patterns {
         let mut h = McpTestHarness::new();
         h.write_fixture("input.txt", "hello from file\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "cat < input.txt"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "cat < input.txt"}))
             .await;
         assert!(
             text.contains("hello from file"),
@@ -4568,10 +4528,7 @@ mod exit_code_handling {
     async fn exit_code_variable() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "true; echo $?"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "true; echo $?"}))
             .await;
         assert!(text.contains("0"), "true should have exit code 0: {}", text);
     }
@@ -4580,12 +4537,13 @@ mod exit_code_handling {
     async fn exit_code_failure() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "false; echo $?"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "false; echo $?"}))
             .await;
-        assert!(text.contains("1"), "false should have exit code 1: {}", text);
+        assert!(
+            text.contains("1"),
+            "false should have exit code 1: {}",
+            text
+        );
     }
 
     #[tokio::test]
@@ -4598,11 +4556,7 @@ mod exit_code_handling {
                 json!({"command": "echo hello > test.txt && echo 'write succeeded'"}),
             )
             .await;
-        assert!(
-            text.contains("write succeeded"),
-            "Should succeed: {}",
-            text
-        );
+        assert!(text.contains("write succeeded"), "Should succeed: {}", text);
     }
 
     #[tokio::test]
@@ -4614,11 +4568,7 @@ mod exit_code_handling {
                 json!({"command": "cat nonexistent.txt 2>/dev/null || echo 'fallback'"}),
             )
             .await;
-        assert!(
-            text.contains("fallback"),
-            "Should fall back: {}",
-            text
-        );
+        assert!(text.contains("fallback"), "Should fall back: {}", text);
     }
 }
 
@@ -4688,10 +4638,7 @@ mod jq_improvements {
     #[tokio::test]
     async fn jq_raw_output_with_pipe() {
         let mut h = McpTestHarness::new();
-        h.write_fixture(
-            "data.json",
-            r#"[{"name":"alice"},{"name":"bob"}]"#,
-        );
+        h.write_fixture("data.json", r#"[{"name":"alice"},{"name":"bob"}]"#);
         let text = h
             .call_tool_text(
                 "shell_eval",
@@ -4735,10 +4682,7 @@ mod jq_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("obj.json", r#"{"name":"test","count":5}"#);
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "cat obj.json | jq 'type'"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "cat obj.json | jq 'type'"}))
             .await;
         assert!(
             text.contains("object"),
@@ -4762,10 +4706,7 @@ mod sed_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("data.csv", "header\nrow1\nrow2\nrow3\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "sed '1d' data.csv"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "sed '1d' data.csv"}))
             .await;
         assert!(
             !text.contains("header"),
@@ -4780,10 +4721,7 @@ mod sed_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("data.txt", "a\nb\nc\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "sed '$d' data.txt"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "sed '$d' data.txt"}))
             .await;
         assert!(text.contains("a"), "Should keep a: {}", text);
         assert!(text.contains("b"), "Should keep b: {}", text);
@@ -4814,10 +4752,7 @@ mod sed_improvements {
         let mut h = McpTestHarness::new();
         h.write_fixture("lines.txt", "a\nb\nc\nd\ne\n");
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "sed -n '2,4p' lines.txt"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "sed -n '2,4p' lines.txt"}))
             .await;
         let lines: Vec<&str> = text.trim().lines().collect();
         assert_eq!(lines, vec!["b", "c", "d"]);
@@ -4941,11 +4876,7 @@ mod find_improvements {
             "Should find shallow: {}",
             text
         );
-        assert!(
-            !text.contains("deep.txt"),
-            "Should not find deep: {}",
-            text
-        );
+        assert!(!text.contains("deep.txt"), "Should not find deep: {}", text);
     }
 
     #[tokio::test]
@@ -5047,10 +4978,7 @@ mod variable_expansion {
     async fn var_string_length() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "X=hello; echo ${#X}"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "X=hello; echo ${#X}"}))
             .await;
         assert_eq!(text.trim(), "5");
     }
@@ -5097,10 +5025,7 @@ mod variable_expansion {
     async fn arithmetic_expansion() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "echo $(( 10 + 20 * 3 ))"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "echo $(( 10 + 20 * 3 ))"}))
             .await;
         assert_eq!(text.trim(), "70");
     }
@@ -5161,11 +5086,7 @@ mod tr_improvements {
                 json!({"command": "echo 'a\nb\nc' | tr '\\n' ' '"}),
             )
             .await;
-        assert!(
-            text.contains("a b c"),
-            "Should join with spaces: {}",
-            text
-        );
+        assert!(text.contains("a b c"), "Should join with spaces: {}", text);
     }
 }
 
@@ -5303,11 +5224,7 @@ mod llm_pipeline_patterns {
                 json!({"command": "echo \"Today is $(date +%Y)\""}),
             )
             .await;
-        assert!(
-            text.contains("Today is 20"),
-            "Should have year: {}",
-            text
-        );
+        assert!(text.contains("Today is 20"), "Should have year: {}", text);
     }
 }
 
@@ -5367,10 +5284,7 @@ mod quoting_edge_cases {
     async fn escaped_dollar_in_double_quotes() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "echo \"Price is \\$5\""}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "echo \"Price is \\$5\""}))
             .await;
         assert!(text.contains("$5"), "Should have literal $5: {}", text);
     }
@@ -5379,10 +5293,7 @@ mod quoting_edge_cases {
     async fn backtick_command_substitution() {
         let mut h = McpTestHarness::new();
         let text = h
-            .call_tool_text(
-                "shell_eval",
-                json!({"command": "echo `echo hello`"}),
-            )
+            .call_tool_text("shell_eval", json!({"command": "echo `echo hello`"}))
             .await;
         assert_eq!(text.trim(), "hello");
     }

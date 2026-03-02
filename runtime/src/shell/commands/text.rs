@@ -300,7 +300,11 @@ impl TextCommands {
                     let pat = if ignore_case { &pattern_lower } else { pattern };
                     line_check.contains(pat)
                 };
-                if invert { !matched } else { matched }
+                if invert {
+                    !matched
+                } else {
+                    matched
+                }
             };
 
             // Collect files to search (handle -r recursive)
@@ -337,9 +341,7 @@ impl TextCommands {
                         match_count += 1;
                         if !count_only {
                             if show_line_numbers {
-                                let _ = stdout
-                                    .write_all(format!("{}:", line_num).as_bytes())
-                                    .await;
+                                let _ = stdout.write_all(format!("{}:", line_num).as_bytes()).await;
                             }
                             let _ = stdout.write_all(line.as_bytes()).await;
                             let _ = stdout.write_all(b"\n").await;
@@ -378,9 +380,7 @@ impl TextCommands {
                                         }
                                         if show_line_numbers {
                                             let _ = stdout
-                                                .write_all(
-                                                    format!("{}:", line_num + 1).as_bytes(),
-                                                )
+                                                .write_all(format!("{}:", line_num + 1).as_bytes())
                                                 .await;
                                         }
                                         let _ = stdout.write_all(line.as_bytes()).await;
@@ -389,8 +389,7 @@ impl TextCommands {
                                 }
                             }
                             if files_only && file_matched {
-                                let _ =
-                                    stdout.write_all(format!("{}\n", display).as_bytes()).await;
+                                let _ = stdout.write_all(format!("{}\n", display).as_bytes()).await;
                             }
                             if count_only {
                                 if show_filename {
@@ -417,7 +416,11 @@ impl TextCommands {
                 }
             }
 
-            if found { 0 } else { 1 }
+            if found {
+                0
+            } else {
+                1
+            }
         })
     }
 
@@ -669,10 +672,7 @@ impl TextCommands {
                     } else {
                         line.split_whitespace().collect()
                     };
-                    parts
-                        .get(k.saturating_sub(1))
-                        .unwrap_or(&"")
-                        .to_string()
+                    parts.get(k.saturating_sub(1)).unwrap_or(&"").to_string()
                 } else {
                     line.to_string()
                 }
@@ -943,7 +943,9 @@ impl TextCommands {
                 }
             }
 
-            if script_idx >= remaining.len() || (remaining[script_idx] == "-n" && remaining.len() <= script_idx + 1) {
+            if script_idx >= remaining.len()
+                || (remaining[script_idx] == "-n" && remaining.len() <= script_idx + 1)
+            {
                 let _ = stderr.write_all(b"sed: missing script\n").await;
                 return 1;
             }
@@ -1235,7 +1237,11 @@ impl TextCommands {
 
             let in_set = |c: char| -> bool {
                 let found = set1.contains(&c);
-                if complement_mode { !found } else { found }
+                if complement_mode {
+                    !found
+                } else {
+                    found
+                }
             };
 
             let mut result = String::new();

@@ -976,7 +976,7 @@ enum AwkFieldRef {
 #[derive(Clone, Debug)]
 enum AwkAction {
     PrintFields(Vec<AwkFieldRef>),
-    PrintNF,        // print NF (field count, not $NF)
+    PrintNF, // print NF (field count, not $NF)
     PrintLiteral(String),
     Accumulate(String, AwkFieldRef), // var += $field
     Nothing,
@@ -986,8 +986,9 @@ enum AwkAction {
 #[derive(Clone, Debug)]
 enum AwkCondition {
     Always,
-    Pattern(String),          // /regex/
-    FieldCompare {            // $N op value
+    Pattern(String), // /regex/
+    FieldCompare {
+        // $N op value
         field: AwkFieldRef,
         op: String,
         value: f64,
@@ -1213,9 +1214,7 @@ fn parse_awk_field_ref(s: &str) -> AwkFieldRef {
 fn resolve_field<'a>(field: &AwkFieldRef, line: &'a str, fields: &[&'a str]) -> &'a str {
     match field {
         AwkFieldRef::Fixed(0) => line,
-        AwkFieldRef::Fixed(n) if *n > 0 => {
-            fields.get((*n - 1) as usize).copied().unwrap_or("")
-        }
+        AwkFieldRef::Fixed(n) if *n > 0 => fields.get((*n - 1) as usize).copied().unwrap_or(""),
         AwkFieldRef::NF => fields.last().copied().unwrap_or(""),
         _ => "",
     }
@@ -1661,8 +1660,7 @@ mod tests {
         let result = execute_awk_action(&prog, "hello world", &fields, 1, &mut acc);
         assert_eq!(result, "hello");
 
-        let result =
-            execute_awk_action(&prog, "goodbye world", &["goodbye", "world"], 1, &mut acc);
+        let result = execute_awk_action(&prog, "goodbye world", &["goodbye", "world"], 1, &mut acc);
         assert_eq!(result, "");
     }
 
