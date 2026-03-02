@@ -673,10 +673,12 @@ impl FileCommands {
             let mut search_path = "/".to_string();
             let mut name_pattern: Option<String> = None;
             let mut type_filter: Option<char> = None;
+            let mut max_depth: Option<usize> = None;
 
             // Parse manually because find uses POSIX primary expressions
             // (-name, -type) not GNU-style flags that lexopt handles.
             let mut i = 0;
+            let mut path_set = false;
             while i < remaining.len() {
                 match remaining[i].as_str() {
                     "-name" | "--name" => {
@@ -695,7 +697,15 @@ impl FileCommands {
                             i += 1;
                         }
                     }
-                    arg => {
+                    "-maxdepth" => {
+                        if i + 1 < remaining.len() {
+                            max_depth = remaining[i + 1].parse().ok();
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    arg if !arg.starts_with('-') && !path_set => {
                         // First non-option arg is the search path
                         let path = arg.to_string();
                         search_path = if path.starts_with('/') {
@@ -703,6 +713,10 @@ impl FileCommands {
                         } else {
                             format!("{}/{}", cwd, path)
                         };
+                        path_set = true;
+                        i += 1;
+                    }
+                    _ => {
                         i += 1;
                     }
                 }
@@ -712,8 +726,15 @@ impl FileCommands {
                 dir: &str,
                 pattern: &Option<String>,
                 type_filter: Option<char>,
+                max_depth: Option<usize>,
+                current_depth: usize,
                 results: &mut Vec<String>,
             ) {
+                if let Some(max) = max_depth {
+                    if current_depth > max {
+                        return;
+                    }
+                }
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let path = entry.path();
@@ -739,14 +760,28 @@ impl FileCommands {
                         }
 
                         if is_dir {
-                            find_recursive(&path_str, pattern, type_filter, results);
+                            find_recursive(
+                                &path_str,
+                                pattern,
+                                type_filter,
+                                max_depth,
+                                current_depth + 1,
+                                results,
+                            );
                         }
                     }
                 }
             }
 
             let mut results = Vec::new();
-            find_recursive(&search_path, &name_pattern, type_filter, &mut results);
+            find_recursive(
+                &search_path,
+                &name_pattern,
+                type_filter,
+                max_depth,
+                1,
+                &mut results,
+            );
             results.sort();
 
             for path in results {

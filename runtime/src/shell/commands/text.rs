@@ -210,7 +210,7 @@ impl TextCommands {
     /// grep - search for patterns
     #[shell_command(
         name = "grep",
-        usage = "grep [-iv] PATTERN [FILE]...",
+        usage = "grep [-ivnclrE] PATTERN [FILE]...",
         description = "Search for patterns in files"
     )]
     fn cmd_grep(
@@ -232,15 +232,30 @@ impl TextCommands {
 
             let mut ignore_case = false;
             let mut invert = false;
+            let mut show_line_numbers = false;
+            let mut count_only = false;
+            let mut files_only = false;
+            let mut recursive = false;
+            let mut use_regex = false;
             let mut positional: Vec<String> = Vec::new();
-            let mut parser = make_parser(remaining);
 
-            while let Some(arg) = parser.next().ok().flatten() {
-                match arg {
-                    Short('i') => ignore_case = true,
-                    Short('v') => invert = true,
-                    Value(val) => positional.push(val.string().unwrap_or_default()),
-                    _ => {}
+            // Manual parsing to handle combined flags like -rn
+            for arg in &remaining {
+                if arg.starts_with('-') && arg.len() > 1 && !arg.starts_with("--") {
+                    for c in arg[1..].chars() {
+                        match c {
+                            'i' => ignore_case = true,
+                            'v' => invert = true,
+                            'n' => show_line_numbers = true,
+                            'c' => count_only = true,
+                            'l' => files_only = true,
+                            'r' | 'R' => recursive = true,
+                            'E' => use_regex = true,
+                            _ => {}
+                        }
+                    }
+                } else {
+                    positional.push(arg.clone());
                 }
             }
 
@@ -254,67 +269,155 @@ impl TextCommands {
             let files: Vec<_> = positional[1..].to_vec();
             let mut found = false;
 
-            let matches = |line: &str| -> bool {
-                let line_check = if ignore_case {
-                    line.to_lowercase()
+            // Build regex if -E flag
+            let regex = if use_regex {
+                let pat = if ignore_case {
+                    format!("(?i){}", pattern)
                 } else {
-                    line.to_string()
+                    pattern.clone()
                 };
-                let pat = if ignore_case { &pattern_lower } else { pattern };
-                let contains = line_check.contains(pat);
-                if invert {
-                    !contains
-                } else {
-                    contains
-                }
-            };
-
-            if files.is_empty() {
-                let reader = BufReader::new(stdin);
-                let mut lines = reader.lines();
-                while let Some(Ok(line)) = lines.next().await {
-                    if matches(&line) {
-                        let _ = stdout.write_all(line.as_bytes()).await;
-                        let _ = stdout.write_all(b"\n").await;
-                        found = true;
+                match regex::Regex::new(&pat) {
+                    Ok(re) => Some(re),
+                    Err(e) => {
+                        let msg = format!("grep: invalid regex: {}\n", e);
+                        let _ = stderr.write_all(msg.as_bytes()).await;
+                        return 2;
                     }
                 }
             } else {
-                let show_filename = files.len() > 1;
-                for file in files {
+                None
+            };
+
+            let matches = |line: &str| -> bool {
+                let matched = if let Some(ref re) = regex {
+                    re.is_match(line)
+                } else {
+                    let line_check = if ignore_case {
+                        line.to_lowercase()
+                    } else {
+                        line.to_string()
+                    };
+                    let pat = if ignore_case { &pattern_lower } else { pattern };
+                    line_check.contains(pat)
+                };
+                if invert { !matched } else { matched }
+            };
+
+            // Collect files to search (handle -r recursive)
+            let mut search_files: Vec<(String, String)> = Vec::new(); // (display_name, path)
+            if recursive && !files.is_empty() {
+                for file in &files {
                     let path = if file.starts_with('/') {
                         file.clone()
                     } else {
                         format!("{}/{}", cwd, file)
                     };
+                    collect_files_recursive(&path, file, &mut search_files);
+                }
+            } else {
+                for file in &files {
+                    let path = if file.starts_with('/') {
+                        file.clone()
+                    } else {
+                        format!("{}/{}", cwd, file)
+                    };
+                    search_files.push((file.clone(), path));
+                }
+            }
 
-                    match std::fs::read_to_string(&path) {
+            if search_files.is_empty() && files.is_empty() {
+                // Read from stdin
+                let reader = BufReader::new(stdin);
+                let mut lines_stream = reader.lines();
+                let mut match_count = 0usize;
+                let mut line_num = 0usize;
+                while let Some(Ok(line)) = lines_stream.next().await {
+                    line_num += 1;
+                    if matches(&line) {
+                        match_count += 1;
+                        if !count_only {
+                            if show_line_numbers {
+                                let _ = stdout
+                                    .write_all(format!("{}:", line_num).as_bytes())
+                                    .await;
+                            }
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                        found = true;
+                    }
+                }
+                if count_only {
+                    let _ = stdout
+                        .write_all(format!("{}\n", match_count).as_bytes())
+                        .await;
+                    if match_count > 0 {
+                        found = true;
+                    }
+                }
+            } else {
+                let show_filename = search_files.len() > 1 || recursive;
+                for (display, path) in &search_files {
+                    match std::fs::read_to_string(path) {
                         Ok(content) => {
-                            for line in content.lines() {
+                            let mut match_count = 0usize;
+                            let mut file_matched = false;
+                            for (line_num, line) in content.lines().enumerate() {
                                 if matches(line) {
-                                    if show_filename {
-                                        let _ =
-                                            stdout.write_all(format!("{}:", file).as_bytes()).await;
+                                    match_count += 1;
+                                    file_matched = true;
+                                    found = true;
+                                    if files_only {
+                                        break;
                                     }
-                                    let _ = stdout.write_all(line.as_bytes()).await;
-                                    let _ = stdout.write_all(b"\n").await;
+                                    if !count_only {
+                                        if show_filename {
+                                            let _ = stdout
+                                                .write_all(format!("{}:", display).as_bytes())
+                                                .await;
+                                        }
+                                        if show_line_numbers {
+                                            let _ = stdout
+                                                .write_all(
+                                                    format!("{}:", line_num + 1).as_bytes(),
+                                                )
+                                                .await;
+                                        }
+                                        let _ = stdout.write_all(line.as_bytes()).await;
+                                        let _ = stdout.write_all(b"\n").await;
+                                    }
+                                }
+                            }
+                            if files_only && file_matched {
+                                let _ =
+                                    stdout.write_all(format!("{}\n", display).as_bytes()).await;
+                            }
+                            if count_only {
+                                if show_filename {
+                                    let _ = stdout
+                                        .write_all(
+                                            format!("{}:{}\n", display, match_count).as_bytes(),
+                                        )
+                                        .await;
+                                } else {
+                                    let _ = stdout
+                                        .write_all(format!("{}\n", match_count).as_bytes())
+                                        .await;
+                                }
+                                if match_count > 0 {
                                     found = true;
                                 }
                             }
                         }
                         Err(e) => {
-                            let msg = format!("grep: {}: {}\n", file, e);
+                            let msg = format!("grep: {}: {}\n", display, e);
                             let _ = stderr.write_all(msg.as_bytes()).await;
                         }
                     }
                 }
             }
 
-            if found {
-                0
-            } else {
-                1
-            }
+            if found { 0 } else { 1 }
         })
     }
 
@@ -371,16 +474,31 @@ impl TextCommands {
                 )
             };
 
+            let num_flags = show_lines as usize + show_words as usize + show_chars as usize;
             let format_counts = |l: usize, w: usize, c: usize, name: Option<&str>| -> String {
                 let mut parts = Vec::new();
+                // Use padding only when showing multiple stats or a filename
+                let pad = name.is_some() || num_flags > 1;
                 if show_lines {
-                    parts.push(format!("{:8}", l));
+                    if pad {
+                        parts.push(format!("{:8}", l));
+                    } else {
+                        parts.push(l.to_string());
+                    }
                 }
                 if show_words {
-                    parts.push(format!("{:8}", w));
+                    if pad {
+                        parts.push(format!("{:8}", w));
+                    } else {
+                        parts.push(w.to_string());
+                    }
                 }
                 if show_chars {
-                    parts.push(format!("{:8}", c));
+                    if pad {
+                        parts.push(format!("{:8}", c));
+                    } else {
+                        parts.push(c.to_string());
+                    }
                 }
                 let mut result = parts.join("");
                 if let Some(n) = name {
@@ -443,7 +561,7 @@ impl TextCommands {
     /// sort - sort lines
     #[shell_command(
         name = "sort",
-        usage = "sort [-r] [FILE]",
+        usage = "sort [-rnuk] [-t SEP] [FILE]",
         description = "Sort lines of text"
     )]
     fn cmd_sort(
@@ -464,14 +582,50 @@ impl TextCommands {
             }
 
             let mut reverse = false;
+            let mut numeric = false;
+            let mut unique = false;
+            let mut key_field: Option<usize> = None;
+            let mut separator: Option<String> = None;
             let mut files: Vec<String> = Vec::new();
-            let mut parser = make_parser(remaining);
 
-            while let Some(arg) = parser.next().ok().flatten() {
-                match arg {
-                    Short('r') => reverse = true,
-                    Value(val) => files.push(val.string().unwrap_or_default()),
-                    _ => {}
+            // Manual parsing because we need to handle -t, -k, and combined flags like -nr
+            let mut i = 0;
+            while i < remaining.len() {
+                let arg = &remaining[i];
+                if arg == "-t" && i + 1 < remaining.len() {
+                    separator = Some(remaining[i + 1].clone());
+                    i += 2;
+                } else if arg.starts_with("-t") && arg.len() > 2 {
+                    separator = Some(arg[2..].to_string());
+                    i += 1;
+                } else if arg == "-k" && i + 1 < remaining.len() {
+                    // Parse key spec: just take the first number
+                    let spec = &remaining[i + 1];
+                    key_field = spec
+                        .split(|c: char| !c.is_ascii_digit())
+                        .next()
+                        .and_then(|s| s.parse::<usize>().ok());
+                    i += 2;
+                } else if arg.starts_with("-k") && arg.len() > 2 {
+                    let spec = &arg[2..];
+                    key_field = spec
+                        .split(|c: char| !c.is_ascii_digit())
+                        .next()
+                        .and_then(|s| s.parse::<usize>().ok());
+                    i += 1;
+                } else if arg.starts_with('-') && !arg.starts_with("--") {
+                    for c in arg[1..].chars() {
+                        match c {
+                            'r' => reverse = true,
+                            'n' => numeric = true,
+                            'u' => unique = true,
+                            _ => {}
+                        }
+                    }
+                    i += 1;
+                } else {
+                    files.push(arg.clone());
+                    i += 1;
                 }
             }
 
@@ -506,10 +660,71 @@ impl TextCommands {
                 }
             }
 
-            if reverse {
-                lines.sort_by(|a, b| b.cmp(a));
-            } else {
-                lines.sort();
+            // Extract sort key from a line
+            let extract_key = |line: &str| -> String {
+                if let Some(k) = key_field {
+                    let sep = separator.as_deref();
+                    let parts: Vec<&str> = if let Some(s) = sep {
+                        line.split(s).collect()
+                    } else {
+                        line.split_whitespace().collect()
+                    };
+                    parts
+                        .get(k.saturating_sub(1))
+                        .unwrap_or(&"")
+                        .to_string()
+                } else {
+                    line.to_string()
+                }
+            };
+
+            // Extract leading numeric value from a string (like sort -n does)
+            let parse_leading_number = |s: &str| -> f64 {
+                let s = s.trim_start();
+                let mut end = 0;
+                let chars: Vec<char> = s.chars().collect();
+                // Optional sign
+                if end < chars.len() && (chars[end] == '-' || chars[end] == '+') {
+                    end += 1;
+                }
+                let mut has_dot = false;
+                while end < chars.len() {
+                    if chars[end].is_ascii_digit() {
+                        end += 1;
+                    } else if chars[end] == '.' && !has_dot {
+                        has_dot = true;
+                        end += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if end == 0 || (end == 1 && (chars[0] == '-' || chars[0] == '+')) {
+                    return 0.0;
+                }
+                s[..end].parse().unwrap_or(0.0)
+            };
+
+            // Sort using extracted keys
+            lines.sort_by(|a, b| {
+                let ka = extract_key(a);
+                let kb = extract_key(b);
+                let cmp = if numeric {
+                    let na = parse_leading_number(&ka);
+                    let nb = parse_leading_number(&kb);
+                    na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    ka.cmp(&kb)
+                };
+                if reverse {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+
+            // Deduplicate if -u
+            if unique {
+                lines.dedup();
             }
 
             for line in lines {
@@ -693,11 +908,11 @@ impl TextCommands {
         })
     }
 
-    /// sed - stream editor (basic s/// substitution)
+    /// sed - stream editor
     #[shell_command(
         name = "sed",
-        usage = "sed 's/PATTERN/REPLACEMENT/[g]' [FILE]...",
-        description = "Stream editor for text substitution"
+        usage = "sed [-n] SCRIPT [FILE]...",
+        description = "Stream editor for text transformation"
     )]
     fn cmd_sed(
         args: Vec<String>,
@@ -716,43 +931,49 @@ impl TextCommands {
                 }
             }
 
-            if remaining.is_empty() {
+            // Parse -n flag and script
+            let mut quiet = false;
+            let mut script_idx = 0;
+            for (i, arg) in remaining.iter().enumerate() {
+                if arg == "-n" {
+                    quiet = true;
+                } else {
+                    script_idx = i;
+                    break;
+                }
+            }
+
+            if script_idx >= remaining.len() || (remaining[script_idx] == "-n" && remaining.len() <= script_idx + 1) {
                 let _ = stderr.write_all(b"sed: missing script\n").await;
                 return 1;
             }
 
-            // Parse s/pattern/replacement/flags
-            let script = &remaining[0];
-            let (pattern, replacement, global) = match parse_sed_script(script) {
-                Some(parsed) => parsed,
-                None => {
-                    let _ = stderr
-                        .write_all(b"sed: invalid script (use s/pattern/replacement/[g])\n")
-                        .await;
-                    return 1;
+            // Skip -n flags to find the script
+            let mut actual_script_idx = 0;
+            for (i, arg) in remaining.iter().enumerate() {
+                if arg != "-n" {
+                    actual_script_idx = i;
+                    break;
                 }
-            };
+            }
 
-            let files: Vec<_> = remaining[1..].to_vec();
+            let script = &remaining[actual_script_idx];
+            let files: Vec<_> = remaining[actual_script_idx + 1..].to_vec();
 
-            let process_line = |line: &str| -> String {
-                if global {
-                    line.replace(&pattern, &replacement)
-                } else {
-                    line.replacen(&pattern, &replacement, 1)
-                }
-            };
+            // Parse the sed command
+            let sed_cmd = parse_sed_command(script);
+
+            // Collect all lines
+            let mut all_lines: Vec<String> = Vec::new();
 
             if files.is_empty() {
                 let reader = BufReader::new(stdin);
-                let mut lines = reader.lines();
-                while let Some(Ok(line)) = lines.next().await {
-                    let result = process_line(&line);
-                    let _ = stdout.write_all(result.as_bytes()).await;
-                    let _ = stdout.write_all(b"\n").await;
+                let mut lines_iter = reader.lines();
+                while let Some(Ok(line)) = lines_iter.next().await {
+                    all_lines.push(line);
                 }
             } else {
-                for file in files {
+                for file in &files {
                     let path = if file.starts_with('/') {
                         file.clone()
                     } else {
@@ -762,15 +983,76 @@ impl TextCommands {
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
                             for line in content.lines() {
-                                let result = process_line(line);
-                                let _ = stdout.write_all(result.as_bytes()).await;
-                                let _ = stdout.write_all(b"\n").await;
+                                all_lines.push(line.to_string());
                             }
                         }
                         Err(e) => {
                             let msg = format!("sed: {}: {}\n", path, e);
                             let _ = stderr.write_all(msg.as_bytes()).await;
                             return 1;
+                        }
+                    }
+                }
+            }
+
+            let total = all_lines.len();
+
+            for (idx, line) in all_lines.iter().enumerate() {
+                let line_num = idx + 1; // 1-based
+                match &sed_cmd {
+                    SedCommand::Substitute {
+                        pattern,
+                        replacement,
+                        global,
+                        use_regex,
+                    } => {
+                        let result = if *use_regex {
+                            if let Ok(re) = regex::Regex::new(pattern) {
+                                if *global {
+                                    re.replace_all(line, replacement.as_str()).to_string()
+                                } else {
+                                    re.replace(line, replacement.as_str()).to_string()
+                                }
+                            } else if *global {
+                                line.replace(pattern, replacement)
+                            } else {
+                                line.replacen(pattern, replacement, 1)
+                            }
+                        } else if *global {
+                            line.replace(pattern, replacement)
+                        } else {
+                            line.replacen(pattern, replacement, 1)
+                        };
+                        if !quiet {
+                            let _ = stdout.write_all(result.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                    }
+                    SedCommand::Delete { addr } => {
+                        let should_delete = match addr {
+                            SedAddr::Line(n) => line_num == *n,
+                            SedAddr::Last => line_num == total,
+                            SedAddr::None => true,
+                        };
+                        if !should_delete && !quiet {
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                    }
+                    SedCommand::Print { start, end } => {
+                        // -n mode: only print lines in range
+                        if line_num >= *start && line_num <= *end {
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
+                        } else if !quiet {
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
+                        }
+                    }
+                    SedCommand::Unknown => {
+                        if !quiet {
+                            let _ = stdout.write_all(line.as_bytes()).await;
+                            let _ = stdout.write_all(b"\n").await;
                         }
                     }
                 }
@@ -882,7 +1164,7 @@ impl TextCommands {
     /// tr - translate or delete characters
     #[shell_command(
         name = "tr",
-        usage = "tr [-d] SET1 [SET2]",
+        usage = "tr [-dsc] SET1 [SET2]",
         description = "Translate or delete characters"
     )]
     fn cmd_tr(
@@ -902,14 +1184,23 @@ impl TextCommands {
             }
 
             let mut delete_mode = false;
+            let mut squeeze_mode = false;
+            let mut complement_mode = false;
             let mut positional: Vec<String> = Vec::new();
-            let mut parser = make_parser(remaining);
 
-            while let Some(arg) = parser.next().ok().flatten() {
-                match arg {
-                    Short('d') => delete_mode = true,
-                    Value(val) => positional.push(val.string().unwrap_or_default()),
-                    _ => {}
+            // Manual parsing to handle combined flags like -cd, -cs
+            for arg in &remaining {
+                if arg.starts_with('-') && arg.len() > 1 && !arg.starts_with("--") {
+                    for c in arg[1..].chars() {
+                        match c {
+                            'd' => delete_mode = true,
+                            's' => squeeze_mode = true,
+                            'c' => complement_mode = true,
+                            _ => {}
+                        }
+                    }
+                } else {
+                    positional.push(arg.clone());
                 }
             }
 
@@ -925,37 +1216,227 @@ impl TextCommands {
                 Vec::new()
             };
 
+            // Read ALL input as bytes (tr operates on characters, not lines)
+            let mut content = String::new();
             let reader = BufReader::new(stdin);
             let mut lines = reader.lines();
-
+            let mut first = true;
             while let Some(Ok(line)) = lines.next().await {
-                let result: String = line
-                    .chars()
-                    .filter_map(|c| {
-                        if let Some(pos) = set1.iter().position(|&x| x == c) {
-                            if delete_mode {
-                                None
-                            } else if pos < set2.len() {
-                                Some(set2[pos])
-                            } else if !set2.is_empty() {
-                                Some(*set2.last().unwrap())
-                            } else {
-                                Some(c)
-                            }
-                        } else {
-                            Some(c)
-                        }
-                    })
-                    .collect();
-                let _ = stdout.write_all(result.as_bytes()).await;
-                let _ = stdout.write_all(b"\n").await;
+                if !first {
+                    content.push('\n');
+                }
+                content.push_str(&line);
+                first = false;
             }
+            // The input from echo has a trailing newline
+            if !first {
+                content.push('\n');
+            }
+
+            let in_set = |c: char| -> bool {
+                let found = set1.contains(&c);
+                if complement_mode { !found } else { found }
+            };
+
+            let mut result = String::new();
+            let mut last_char: Option<char> = None;
+
+            for c in content.chars() {
+                if in_set(c) {
+                    if delete_mode {
+                        // Delete this character
+                        continue;
+                    }
+                    // Translate: find position in set1, map to set2
+                    let translated = if complement_mode {
+                        // For complement mode, all non-set1 chars map to last char of set2
+                        set2.last().copied().unwrap_or(c)
+                    } else if let Some(pos) = set1.iter().position(|&x| x == c) {
+                        if pos < set2.len() {
+                            set2[pos]
+                        } else if !set2.is_empty() {
+                            *set2.last().unwrap()
+                        } else {
+                            c
+                        }
+                    } else {
+                        c
+                    };
+                    if squeeze_mode {
+                        if last_char == Some(translated) {
+                            continue;
+                        }
+                    }
+                    result.push(translated);
+                    last_char = Some(translated);
+                } else {
+                    if squeeze_mode && !delete_mode {
+                        last_char = Some(c);
+                    }
+                    result.push(c);
+                }
+            }
+
+            let _ = stdout.write_all(result.as_bytes()).await;
             0
         })
     }
 }
 
-/// Parse a sed s/pattern/replacement/flags script
+/// Recursively collect files for grep -r
+fn collect_files_recursive(dir: &str, display_base: &str, results: &mut Vec<(String, String)>) {
+    let meta = match std::fs::metadata(dir) {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    if meta.is_file() {
+        results.push((display_base.to_string(), dir.to_string()));
+        return;
+    }
+    if !meta.is_dir() {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+        sorted.sort_by_key(|e| e.file_name());
+        for entry in sorted {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let child_path = entry.path().to_string_lossy().to_string();
+            let child_display = format!("{}/{}", display_base, name);
+            if entry.path().is_dir() {
+                collect_files_recursive(&child_path, &child_display, results);
+            } else {
+                results.push((child_display, child_path));
+            }
+        }
+    }
+}
+
+/// Sed address types
+enum SedAddr {
+    Line(usize),
+    Last,
+    None,
+}
+
+/// Parsed sed command
+enum SedCommand {
+    Substitute {
+        pattern: String,
+        replacement: String,
+        global: bool,
+        use_regex: bool,
+    },
+    Delete {
+        addr: SedAddr,
+    },
+    Print {
+        start: usize,
+        end: usize,
+    },
+    Unknown,
+}
+
+/// Parse a sed command (supports s///, Nd, $d, N,Mp)
+fn parse_sed_command(script: &str) -> SedCommand {
+    let trimmed = script.trim();
+
+    // Handle address + command: "1d", "$d", "2,4p"
+    // Range print: N,Mp
+    if let Some(comma_pos) = trimmed.find(',') {
+        let before = &trimmed[..comma_pos];
+        let after = &trimmed[comma_pos + 1..];
+        if after.ends_with('p') {
+            let start: usize = before.parse().unwrap_or(1);
+            let end_str = &after[..after.len() - 1];
+            let end: usize = end_str.parse().unwrap_or(usize::MAX);
+            return SedCommand::Print { start, end };
+        }
+    }
+
+    // Delete command: Nd or $d
+    if trimmed.ends_with('d') {
+        let addr_str = &trimmed[..trimmed.len() - 1];
+        let addr = if addr_str == "$" {
+            SedAddr::Last
+        } else if let Ok(n) = addr_str.parse::<usize>() {
+            SedAddr::Line(n)
+        } else {
+            SedAddr::None
+        };
+        return SedCommand::Delete { addr };
+    }
+
+    // Substitution: s/pattern/replacement/flags
+    if trimmed.starts_with('s') && trimmed.len() >= 4 {
+        let delim = trimmed.chars().nth(1).unwrap();
+        let rest = &trimmed[2..];
+        // Split by delimiter, handling escaped delimiters
+        let parts = split_sed_parts(rest, delim);
+        if parts.len() >= 2 {
+            let raw_pattern = parts[0].clone();
+            let replacement = parts[1].clone();
+            let flags = parts.get(2).map(|s| s.as_str()).unwrap_or("");
+            let global = flags.contains('g');
+            // Check if pattern contains regex metacharacters
+            let use_regex = raw_pattern.contains('[')
+                || raw_pattern.contains('\\')
+                || raw_pattern.contains('+')
+                || raw_pattern.contains('*')
+                || raw_pattern.contains('(')
+                || raw_pattern.contains('.')
+                || raw_pattern.contains('^')
+                || raw_pattern.contains('$');
+            // Convert BRE (Basic Regular Expression) to ERE for regex crate:
+            // BRE uses \+, \?, \{, \}, \(, \) while ERE uses +, ?, {, }, (, )
+            let pattern = if use_regex {
+                raw_pattern
+                    .replace("\\+", "+")
+                    .replace("\\?", "?")
+                    .replace("\\(", "(")
+                    .replace("\\)", ")")
+                    .replace("\\{", "{")
+                    .replace("\\}", "}")
+            } else {
+                raw_pattern
+            };
+            return SedCommand::Substitute {
+                pattern,
+                replacement,
+                global,
+                use_regex,
+            };
+        }
+    }
+
+    SedCommand::Unknown
+}
+
+/// Split sed s command parts by delimiter, handling escapes
+fn split_sed_parts(s: &str, delim: char) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut escaped = false;
+    for c in s.chars() {
+        if escaped {
+            current.push(c);
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+            current.push(c);
+        } else if c == delim {
+            parts.push(current.clone());
+            current.clear();
+        } else {
+            current.push(c);
+        }
+    }
+    parts.push(current);
+    parts
+}
+
+/// Legacy parse for unit tests
+#[cfg(test)]
 fn parse_sed_script(script: &str) -> Option<(String, String, bool)> {
     if !script.starts_with("s") || script.len() < 4 {
         return None;
@@ -998,13 +1479,29 @@ fn parse_field_spec(spec: &str) -> Vec<usize> {
 }
 
 /// Expand character set notation (e.g., "a-z" -> all lowercase letters)
+/// Also handles escape sequences: \n, \t, \r, \\
 fn expand_char_set(s: &str) -> Vec<char> {
     let mut result = Vec::new();
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
 
     while i < chars.len() {
-        if i + 2 < chars.len() && chars[i + 1] == '-' {
+        // Handle escape sequences
+        if chars[i] == '\\' && i + 1 < chars.len() {
+            let escaped = match chars[i + 1] {
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                '\\' => '\\',
+                'a' => '\x07', // bell
+                'b' => '\x08', // backspace
+                'f' => '\x0C', // form feed
+                'v' => '\x0B', // vertical tab
+                other => other,
+            };
+            result.push(escaped);
+            i += 2;
+        } else if i + 2 < chars.len() && chars[i + 1] == '-' {
             // Range like a-z
             let start = chars[i] as u32;
             let end = chars[i + 2] as u32;

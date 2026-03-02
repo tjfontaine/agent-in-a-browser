@@ -4258,3 +4258,1132 @@ mod complex_pipelines {
         assert!(text.contains("150"), "SUM should be 150: {}", text);
     }
 }
+
+// ============================================================
+// TDD: sort improvements — numeric, unique, key-based sorting
+// ============================================================
+
+mod sort_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn sort_numeric() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo '9\n100\n2\n33' | sort -n"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["2", "9", "33", "100"]);
+    }
+
+    #[tokio::test]
+    async fn sort_numeric_reverse() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo '5\n1\n100\n20' | sort -nr"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["100", "20", "5", "1"]);
+    }
+
+    #[tokio::test]
+    async fn sort_unique() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'b\na\nb\nc\na' | sort -u"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["a", "b", "c"]);
+    }
+
+    #[tokio::test]
+    async fn sort_key_field() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.csv", "bob,30\nalice,25\ncharlie,35\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "sort -t, -k2 -n data.csv"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["alice,25", "bob,30", "charlie,35"]);
+    }
+
+    #[tokio::test]
+    async fn sort_numeric_pipeline() {
+        // LLM pattern: extract numbers and sort numerically
+        let mut h = McpTestHarness::new();
+        h.write_fixture("scores.txt", "alice 95\nbob 72\ncharlie 88\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk '{print $2}' scores.txt | sort -n"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["72", "88", "95"]);
+    }
+}
+
+// ============================================================
+// TDD: grep improvements — line numbers, counts, recursive, regex
+// ============================================================
+
+mod grep_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn grep_line_numbers() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("code.rs", "fn main() {\n    println!(\"hello\");\n}\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -n println code.rs"}),
+            )
+            .await;
+        assert!(
+            text.contains("2:"),
+            "Should show line number 2: {}",
+            text
+        );
+        assert!(
+            text.contains("println"),
+            "Should show matching line: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn grep_count() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("log.txt", "ERROR foo\nINFO bar\nERROR baz\nINFO qux\nERROR end\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -c ERROR log.txt"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "3");
+    }
+
+    #[tokio::test]
+    async fn grep_files_only() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("a.txt", "hello world\n");
+        h.write_fixture("b.txt", "goodbye world\n");
+        h.write_fixture("c.txt", "hello there\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -l hello a.txt b.txt c.txt"}),
+            )
+            .await;
+        assert!(text.contains("a.txt"), "Should list a.txt: {}", text);
+        assert!(text.contains("c.txt"), "Should list c.txt: {}", text);
+        assert!(!text.contains("b.txt"), "Should not list b.txt: {}", text);
+    }
+
+    #[tokio::test]
+    async fn grep_recursive() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("src/main.rs", "fn main() { todo!() }\n");
+        h.write_fixture("src/lib.rs", "pub fn hello() {}\n");
+        h.write_fixture("src/util/helper.rs", "fn todo_helper() { todo!() }\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -r todo src"}),
+            )
+            .await;
+        assert!(
+            text.contains("main.rs"),
+            "Should find in main.rs: {}",
+            text
+        );
+        assert!(
+            text.contains("helper.rs"),
+            "Should find in helper.rs: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn grep_recursive_with_line_numbers() {
+        // Extremely common LLM pattern: grep -rn
+        let mut h = McpTestHarness::new();
+        h.write_fixture("src/main.rs", "line1\nTODO: fix\nline3\n");
+        h.write_fixture("src/lib.rs", "TODO: refactor\nline2\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -rn TODO src"}),
+            )
+            .await;
+        assert!(
+            text.contains("main.rs") && text.contains("2:"),
+            "Should show main.rs:2: {}",
+            text
+        );
+        assert!(
+            text.contains("lib.rs") && text.contains("1:"),
+            "Should show lib.rs:1: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn grep_extended_regex() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "cat\nbat\nhat\ndog\nfog\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep -E '^(c|b)at$' data.txt"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["cat", "bat"]);
+    }
+
+    #[tokio::test]
+    async fn grep_count_stdin() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'a\nb\na\nc\na' | grep -c a"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "3");
+    }
+}
+
+// ============================================================
+// TDD: redirect patterns — stderr, append, /dev/null
+// ============================================================
+
+mod redirect_patterns {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn append_redirect() {
+        let mut h = McpTestHarness::new();
+        h.call_tool_text(
+            "shell_eval",
+            json!({"command": "echo 'first' > out.txt"}),
+        )
+        .await;
+        h.call_tool_text(
+            "shell_eval",
+            json!({"command": "echo 'second' >> out.txt"}),
+        )
+        .await;
+        let text = h
+            .call_tool_text("read_file", json!({"path": "out.txt"}))
+            .await;
+        assert!(text.contains("first"), "Should have first: {}", text);
+        assert!(text.contains("second"), "Should have second: {}", text);
+    }
+
+    #[tokio::test]
+    async fn redirect_dev_null() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'visible'; echo 'hidden' > /dev/null"}),
+            )
+            .await;
+        assert!(
+            text.contains("visible"),
+            "Should see visible: {}",
+            text
+        );
+        assert!(
+            !text.contains("hidden"),
+            "Should not see hidden: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn stderr_redirect_to_stdout() {
+        // 2>&1 is probably the most common redirect LLMs generate
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "ls /nonexistent 2>&1"}),
+            )
+            .await;
+        // The error message about nonexistent should appear in stdout
+        assert!(
+            text.contains("No such file") || text.contains("not found") || text.contains("error"),
+            "Stderr should be in output: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn input_redirect() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("input.txt", "hello from file\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat < input.txt"}),
+            )
+            .await;
+        assert!(
+            text.contains("hello from file"),
+            "Should read from redirect: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: exit code and error handling
+// ============================================================
+
+mod exit_code_handling {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn exit_code_variable() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "true; echo $?"}),
+            )
+            .await;
+        assert!(text.contains("0"), "true should have exit code 0: {}", text);
+    }
+
+    #[tokio::test]
+    async fn exit_code_failure() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "false; echo $?"}),
+            )
+            .await;
+        assert!(text.contains("1"), "false should have exit code 1: {}", text);
+    }
+
+    #[tokio::test]
+    async fn conditional_on_exit_code() {
+        // Common LLM pattern: do something, check if it worked
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo hello > test.txt && echo 'write succeeded'"}),
+            )
+            .await;
+        assert!(
+            text.contains("write succeeded"),
+            "Should succeed: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn or_fallback() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat nonexistent.txt 2>/dev/null || echo 'fallback'"}),
+            )
+            .await;
+        assert!(
+            text.contains("fallback"),
+            "Should fall back: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: jq improvements — pipes, select, map
+// ============================================================
+
+mod jq_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn jq_pipe_chain() {
+        // Very common: .[] | .field
+        let mut h = McpTestHarness::new();
+        h.write_fixture(
+            "users.json",
+            r#"[{"name":"alice","age":30},{"name":"bob","age":25}]"#,
+        );
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat users.json | jq '.[] | .name'"}),
+            )
+            .await;
+        assert!(text.contains("alice"), "Should have alice: {}", text);
+        assert!(text.contains("bob"), "Should have bob: {}", text);
+    }
+
+    #[tokio::test]
+    async fn jq_select_filter() {
+        // LLM-critical: select is how you filter JSON
+        let mut h = McpTestHarness::new();
+        h.write_fixture(
+            "items.json",
+            r#"[{"name":"a","val":10},{"name":"b","val":5},{"name":"c","val":20}]"#,
+        );
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat items.json | jq '.[] | select(.val > 8) | .name'"}),
+            )
+            .await;
+        assert!(text.contains("a"), "Should have a (val=10): {}", text);
+        assert!(text.contains("c"), "Should have c (val=20): {}", text);
+        assert!(!text.contains("b"), "Should not have b (val=5): {}", text);
+    }
+
+    #[tokio::test]
+    async fn jq_select_string_equality() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture(
+            "status.json",
+            r#"[{"id":1,"status":"active"},{"id":2,"status":"inactive"},{"id":3,"status":"active"}]"#,
+        );
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat status.json | jq '.[] | select(.status == \"active\") | .id'"}),
+            )
+            .await;
+        assert!(text.contains("1"), "Should have id 1: {}", text);
+        assert!(text.contains("3"), "Should have id 3: {}", text);
+        assert!(!text.contains("2"), "Should not have id 2: {}", text);
+    }
+
+    #[tokio::test]
+    async fn jq_raw_output_with_pipe() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture(
+            "data.json",
+            r#"[{"name":"alice"},{"name":"bob"}]"#,
+        );
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat data.json | jq -r '.[] | .name'"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        // -r should produce raw strings without quotes
+        assert_eq!(lines, vec!["alice", "bob"]);
+    }
+
+    #[tokio::test]
+    async fn jq_map() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("nums.json", "[1, 2, 3, 4, 5]");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat nums.json | jq 'map(. * 2)'"}),
+            )
+            .await;
+        assert!(text.contains("2"), "Should have 2: {}", text);
+        assert!(text.contains("10"), "Should have 10: {}", text);
+    }
+
+    #[tokio::test]
+    async fn jq_has_key() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("obj.json", r#"{"name":"test","count":5}"#);
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat obj.json | jq 'has(\"name\")'"}),
+            )
+            .await;
+        assert!(text.contains("true"), "Should return true: {}", text);
+    }
+
+    #[tokio::test]
+    async fn jq_type_filter() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("obj.json", r#"{"name":"test","count":5}"#);
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat obj.json | jq 'type'"}),
+            )
+            .await;
+        assert!(
+            text.contains("object"),
+            "Should return object type: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: sed improvements — deletion, regex
+// ============================================================
+
+mod sed_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn sed_delete_line() {
+        // Very common: sed '1d' to remove header
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.csv", "header\nrow1\nrow2\nrow3\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "sed '1d' data.csv"}),
+            )
+            .await;
+        assert!(
+            !text.contains("header"),
+            "Should delete header line: {}",
+            text
+        );
+        assert!(text.contains("row1"), "Should keep row1: {}", text);
+    }
+
+    #[tokio::test]
+    async fn sed_delete_last_line() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "a\nb\nc\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "sed '$d' data.txt"}),
+            )
+            .await;
+        assert!(text.contains("a"), "Should keep a: {}", text);
+        assert!(text.contains("b"), "Should keep b: {}", text);
+        assert!(!text.contains("c"), "Should delete c: {}", text);
+    }
+
+    #[tokio::test]
+    async fn sed_regex_substitution() {
+        // LLMs frequently use regex in sed
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "foo123bar\nhello456world\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "sed 's/[0-9]\\+/NUM/g' data.txt"}),
+            )
+            .await;
+        assert!(
+            text.contains("fooNUMbar"),
+            "Should replace digits with NUM: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn sed_print_range() {
+        // sed -n '2,4p' — print lines 2-4
+        let mut h = McpTestHarness::new();
+        h.write_fixture("lines.txt", "a\nb\nc\nd\ne\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "sed -n '2,4p' lines.txt"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["b", "c", "d"]);
+    }
+}
+
+// ============================================================
+// TDD: awk improvements — NF, field separator, BEGIN/END
+// ============================================================
+
+mod awk_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn awk_last_field_nf() {
+        // Very common: awk '{print $NF}' to get last field
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "one two three\nfour five\nsix\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk '{print $NF}' data.txt"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["three", "five", "six"]);
+    }
+
+    #[tokio::test]
+    async fn awk_field_count() {
+        // awk '{print NF}' — count fields per line
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'a b c\nd e\nf' | awk '{print NF}'"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["3", "2", "1"]);
+    }
+
+    #[tokio::test]
+    async fn awk_custom_separator_csv() {
+        // Very common LLM pattern: process CSV with awk
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.csv", "alice,30,NY\nbob,25,CA\ncharlie,35,TX\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk -F, '{print $1, $3}' data.csv"}),
+            )
+            .await;
+        assert!(text.contains("alice NY"), "Should have alice NY: {}", text);
+        assert!(text.contains("bob CA"), "Should have bob CA: {}", text);
+    }
+
+    #[tokio::test]
+    async fn awk_begin_end() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo '1\n2\n3' | awk 'BEGIN{sum=0} {sum+=$1} END{print sum}'"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "6");
+    }
+
+    #[tokio::test]
+    async fn awk_conditional_print() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("scores.txt", "alice 95\nbob 60\ncharlie 85\ndave 45\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk '$2 >= 80 {print $1}' scores.txt"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["alice", "charlie"]);
+    }
+
+    #[tokio::test]
+    async fn awk_output_separator() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.csv", "a,b,c\n1,2,3\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk -F, '{print $1, $2, $3}' data.csv"}),
+            )
+            .await;
+        // Default OFS is space
+        assert!(text.contains("a b c"), "Should use space OFS: {}", text);
+    }
+}
+
+// ============================================================
+// TDD: find improvements — maxdepth, exec pattern
+// ============================================================
+
+mod find_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn find_maxdepth() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("a/b/deep.txt", "deep\n");
+        h.write_fixture("a/shallow.txt", "shallow\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "find a -maxdepth 1 -name '*.txt'"}),
+            )
+            .await;
+        assert!(
+            text.contains("shallow.txt"),
+            "Should find shallow: {}",
+            text
+        );
+        assert!(
+            !text.contains("deep.txt"),
+            "Should not find deep: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn find_type_and_name() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("proj/src/main.rs", "fn main() {}\n");
+        h.write_fixture("proj/src/lib.rs", "pub fn lib() {}\n");
+        h.write_fixture("proj/README.md", "# readme\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "find proj -type f -name '*.rs'"}),
+            )
+            .await;
+        assert!(text.contains("main.rs"), "Should find main.rs: {}", text);
+        assert!(text.contains("lib.rs"), "Should find lib.rs: {}", text);
+        assert!(
+            !text.contains("README.md"),
+            "Should not find README.md: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: xargs execution
+// ============================================================
+
+mod xargs_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn xargs_executes_commands() {
+        // xargs should actually RUN the commands, not just print them
+        let mut h = McpTestHarness::new();
+        h.write_fixture("file1.txt", "hello\n");
+        h.write_fixture("file2.txt", "world\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'file1.txt\nfile2.txt' | xargs cat"}),
+            )
+            .await;
+        assert!(text.contains("hello"), "Should cat file1: {}", text);
+        assert!(text.contains("world"), "Should cat file2: {}", text);
+    }
+
+    #[tokio::test]
+    async fn xargs_with_replacement() {
+        // xargs -I {} cmd {} — very common LLM pattern
+        let mut h = McpTestHarness::new();
+        h.write_fixture("a.txt", "aaa\n");
+        h.write_fixture("b.txt", "bbb\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'a.txt\nb.txt' | xargs -I {} cat {}"}),
+            )
+            .await;
+        assert!(text.contains("aaa"), "Should cat a.txt: {}", text);
+        assert!(text.contains("bbb"), "Should cat b.txt: {}", text);
+    }
+}
+
+// ============================================================
+// TDD: variable expansion — defaults, substrings, special vars
+// ============================================================
+
+mod variable_expansion {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn var_default_when_unset() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo ${UNDEFINED_VAR:-fallback}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "fallback");
+    }
+
+    #[tokio::test]
+    async fn var_default_when_set() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X=hello; echo ${X:-fallback}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "hello");
+    }
+
+    #[tokio::test]
+    async fn var_string_length() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X=hello; echo ${#X}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "5");
+    }
+
+    #[tokio::test]
+    async fn var_substring() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X=helloworld; echo ${X:0:5}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "hello");
+    }
+
+    #[tokio::test]
+    async fn var_suffix_removal() {
+        // ${var%pattern} — remove shortest suffix match
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "FILE=document.tar.gz; echo ${FILE%.gz}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "document.tar");
+    }
+
+    #[tokio::test]
+    async fn var_prefix_removal() {
+        // ${var##pattern} — remove longest prefix match
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "PATH_VAR=/usr/local/bin/tool; echo ${PATH_VAR##*/}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "tool");
+    }
+
+    #[tokio::test]
+    async fn arithmetic_expansion() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo $(( 10 + 20 * 3 ))"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "70");
+    }
+
+    #[tokio::test]
+    async fn arithmetic_with_variables() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X=5; Y=3; echo $(( X + Y ))"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "8");
+    }
+}
+
+// ============================================================
+// TDD: tr improvements — squeeze, POSIX classes
+// ============================================================
+
+mod tr_improvements {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn tr_squeeze_repeated() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'hello    world   test' | tr -s ' '"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "hello world test");
+    }
+
+    #[tokio::test]
+    async fn tr_complement_delete() {
+        // Delete everything except digits
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'abc123def456' | tr -cd '0-9'"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "123456");
+    }
+
+    #[tokio::test]
+    async fn tr_newline_to_space() {
+        // Common LLM pattern: join lines
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo 'a\nb\nc' | tr '\\n' ' '"}),
+            )
+            .await;
+        assert!(
+            text.contains("a b c"),
+            "Should join with spaces: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: LLM-critical pipeline patterns
+// ============================================================
+
+mod llm_pipeline_patterns {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn count_unique_words() {
+        // LLM pattern: word frequency analysis
+        let mut h = McpTestHarness::new();
+        h.write_fixture("text.txt", "the cat sat on the mat the cat\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat text.txt | tr ' ' '\\n' | sort | uniq -c | sort -nr | head -3"}),
+            )
+            .await;
+        // "the" appears 3 times, "cat" appears 2 times
+        assert!(text.contains("the"), "Should have 'the': {}", text);
+        assert!(text.contains("cat"), "Should have 'cat': {}", text);
+    }
+
+    #[tokio::test]
+    async fn csv_to_json_pattern() {
+        // LLM might do this: build JSON from CSV
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.csv", "alice,30\nbob,25\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "awk -F, '{print \"{\\\"name\\\":\\\"\" $1 \"\\\",\\\"age\\\":\" $2 \"}\"}' data.csv"}),
+            )
+            .await;
+        assert!(
+            text.contains("alice") && text.contains("30"),
+            "Should have alice:30: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn log_analysis_pipeline() {
+        // Very common: grep + sort + uniq -c + sort -nr
+        let mut h = McpTestHarness::new();
+        h.write_fixture(
+            "access.log",
+            "GET /api/users\nGET /api/items\nPOST /api/users\nGET /api/users\nGET /api/items\nGET /api/users\n",
+        );
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat access.log | sort | uniq -c | sort -nr | head -2"}),
+            )
+            .await;
+        // GET /api/users appears 3 times (most), GET /api/items appears 2 times
+        let first_line = text.trim().lines().next().unwrap_or("");
+        assert!(
+            first_line.contains("users"),
+            "Most frequent should be users: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn multi_step_data_transform() {
+        // Write file, process it, save result, verify
+        let mut h = McpTestHarness::new();
+        h.write_fixture("raw.txt", "Name: Alice\nAge: 30\nName: Bob\nAge: 25\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "grep 'Name:' raw.txt | sed 's/Name: //' | sort"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["Alice", "Bob"]);
+    }
+
+    #[tokio::test]
+    async fn heredoc_write_and_read() {
+        // LLMs love heredocs for multi-line content
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "cat << 'EOF'\nline1\nline2\nline3\nEOF"}),
+            )
+            .await;
+        assert!(text.contains("line1"), "Should have line1: {}", text);
+        assert!(text.contains("line2"), "Should have line2: {}", text);
+        assert!(text.contains("line3"), "Should have line3: {}", text);
+    }
+
+    #[tokio::test]
+    async fn subshell_grouping() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "(echo hello; echo world) | sort -r"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["world", "hello"]);
+    }
+
+    #[tokio::test]
+    async fn command_substitution_in_assignment() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("count.txt", "a\nb\nc\nd\ne\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "COUNT=$(wc -l < count.txt); echo \"Lines: $COUNT\""}),
+            )
+            .await;
+        assert!(
+            text.contains("Lines: 5") || text.contains("Lines:5"),
+            "Should have line count: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn nested_command_substitution() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo \"Today is $(date +%Y)\""}),
+            )
+            .await;
+        assert!(
+            text.contains("Today is 20"),
+            "Should have year: {}",
+            text
+        );
+    }
+}
+
+// ============================================================
+// TDD: quoting edge cases
+// ============================================================
+
+mod quoting_edge_cases {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn double_quote_variable_expansion() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X='hello world'; echo \"Value is: $X\""}),
+            )
+            .await;
+        assert_eq!(text.trim(), "Value is: hello world");
+    }
+
+    #[tokio::test]
+    async fn double_quote_preserves_spaces() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo \"  spaced   out  \""}),
+            )
+            .await;
+        assert!(
+            text.contains("  spaced   out  "),
+            "Should preserve spaces: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn mixed_quoting() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "X=world; echo 'hello '$X' goodbye'"}),
+            )
+            .await;
+        assert!(
+            text.contains("hello world goodbye"),
+            "Mixed quoting: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn escaped_dollar_in_double_quotes() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo \"Price is \\$5\""}),
+            )
+            .await;
+        assert!(text.contains("$5"), "Should have literal $5: {}", text);
+    }
+
+    #[tokio::test]
+    async fn backtick_command_substitution() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "echo `echo hello`"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "hello");
+    }
+}

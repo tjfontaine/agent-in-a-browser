@@ -652,19 +652,61 @@ fn apply_expansion_operator(
     }
 }
 
+/// Simple glob matching (supports * and ? wildcards)
+fn glob_match(s: &str, pattern: &str) -> bool {
+    let s = s.as_bytes();
+    let p = pattern.as_bytes();
+    let mut si = 0;
+    let mut pi = 0;
+    let mut star_pi: Option<usize> = None;
+    let mut star_si = 0;
+
+    while si < s.len() {
+        if pi < p.len() && (p[pi] == b'?' || p[pi] == s[si]) {
+            si += 1;
+            pi += 1;
+        } else if pi < p.len() && p[pi] == b'*' {
+            star_pi = Some(pi);
+            star_si = si;
+            pi += 1;
+        } else if let Some(sp) = star_pi {
+            pi = sp + 1;
+            star_si += 1;
+            si = star_si;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == b'*' {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
 /// Remove prefix matching pattern
 fn remove_prefix(value: &str, pattern: &str, longest: bool) -> String {
-    // Simple glob-like matching for * at end
-    if pattern.ends_with('*') {
-        let prefix = &pattern[..pattern.len() - 1];
-        if value.starts_with(prefix) {
-            if longest {
-                // Find longest match - return empty if pattern matches all
-                return String::new();
-            } else {
-                return value[prefix.len()..].to_string();
+    if pattern.contains('*') || pattern.contains('?') {
+        // Glob pattern — try each possible prefix length
+        // Collect valid char boundary positions
+        let positions: Vec<usize> = value
+            .char_indices()
+            .map(|(i, _)| i)
+            .chain(std::iter::once(value.len()))
+            .collect();
+        if longest {
+            for &end in positions.iter().rev() {
+                if glob_match(&value[..end], pattern) {
+                    return value[end..].to_string();
+                }
+            }
+        } else {
+            for &end in &positions {
+                if glob_match(&value[..end], pattern) {
+                    return value[end..].to_string();
+                }
             }
         }
+        return value.to_string();
     }
 
     // Exact prefix match
@@ -675,19 +717,29 @@ fn remove_prefix(value: &str, pattern: &str, longest: bool) -> String {
     }
 }
 
-/// Remove suffix matching pattern  
+/// Remove suffix matching pattern
 fn remove_suffix(value: &str, pattern: &str, longest: bool) -> String {
-    // Simple glob-like matching for * at start
-    if pattern.starts_with('*') {
-        let suffix = &pattern[1..];
-        if value.ends_with(suffix) {
-            if longest {
-                // Find longest match - return empty if pattern matches all
-                return String::new();
-            } else {
-                return value[..value.len() - suffix.len()].to_string();
+    if pattern.contains('*') || pattern.contains('?') {
+        // Glob pattern — try each possible suffix length
+        let positions: Vec<usize> = value
+            .char_indices()
+            .map(|(i, _)| i)
+            .chain(std::iter::once(value.len()))
+            .collect();
+        if longest {
+            for &start in &positions {
+                if glob_match(&value[start..], pattern) {
+                    return value[..start].to_string();
+                }
+            }
+        } else {
+            for &start in positions.iter().rev() {
+                if glob_match(&value[start..], pattern) {
+                    return value[..start].to_string();
+                }
             }
         }
+        return value.to_string();
     }
 
     // Exact suffix match

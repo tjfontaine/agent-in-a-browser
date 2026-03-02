@@ -162,9 +162,15 @@ fn wordpiece_to_string(piece: &brush_parser::word::WordPiece) -> String {
         WordPiece::CommandSubstitution(s) => format!("$({})", s),
         WordPiece::BackquotedCommandSubstitution(s) => format!("$({})", s),
         WordPiece::EscapeSequence(s) => {
-            // Strip the backslash from escape sequences
+            // Strip the backslash from escape sequences, but preserve it for
+            // chars that have special meaning in expansion ($, `) so they
+            // remain literal when expand_string processes them later.
             if s.starts_with('\\') && s.len() >= 2 {
-                s[1..].to_string()
+                let escaped_char = s.chars().nth(1).unwrap();
+                match escaped_char {
+                    '$' | '`' => s.clone(), // Keep backslash to prevent expansion
+                    _ => s[1..].to_string(),
+                }
             } else {
                 s.clone()
             }
@@ -195,6 +201,12 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
                 match parameter {
                     Parameter::Named(name) => format!("${}", name),
                     Parameter::Positional(n) => format!("${}", n),
+                    Parameter::Special(sp) => {
+                        // Special params ($?, $$, $#, etc.) must use $X format
+                        // so expand_dollar handles them, not parse_braced_expansion
+                        let sp_str = format_special_parameter(sp);
+                        format!("${}", sp_str)
+                    }
                     _ => {
                         let param_str = format_parameter(parameter);
                         format!("${{{}}}", param_str)
@@ -249,11 +261,186 @@ fn format_parameter_expansion(expr: &brush_parser::word::ParameterExpr) -> Strin
                 format!("${{{}{}}}", format_parameter(parameter), op)
             }
         }
-        // For other complex expressions, fall back to debug but wrapped as a shell expansion
-        _ => {
-            // Since Display isn't implemented, we need to handle more cases above
-            // For now, use Debug format which our expand code won't handle gracefully
-            format!("${{{:?}}}", expr)
+        // ${var%pattern} — remove smallest suffix
+        ParameterExpr::RemoveSmallestSuffixPattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}%{}}}", param, pat)
+            } else {
+                format!("${{{}%}}", param)
+            }
+        }
+        // ${var%%pattern} — remove largest suffix
+        ParameterExpr::RemoveLargestSuffixPattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}%%{}}}", param, pat)
+            } else {
+                format!("${{{}%%}}", param)
+            }
+        }
+        // ${var#pattern} — remove smallest prefix
+        ParameterExpr::RemoveSmallestPrefixPattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}#{}}}", param, pat)
+            } else {
+                format!("${{{}#}}", param)
+            }
+        }
+        // ${var##pattern} — remove largest prefix
+        ParameterExpr::RemoveLargestPrefixPattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}##{}}}", param, pat)
+            } else {
+                format!("${{{}##}}", param)
+            }
+        }
+        // ${var:offset} or ${var:offset:length} — substring
+        ParameterExpr::Substring {
+            parameter,
+            offset,
+            length,
+            ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(len) = length {
+                format!("${{{}:{}:{}}}", param, offset.value, len.value)
+            } else {
+                format!("${{{}:{}}}", param, offset.value)
+            }
+        }
+        // ${var:=default} — assign default values
+        ParameterExpr::AssignDefaultValues {
+            parameter,
+            test_type,
+            default_value,
+            ..
+        } => {
+            let op = match test_type {
+                brush_parser::word::ParameterTestType::UnsetOrNull => ":=",
+                brush_parser::word::ParameterTestType::Unset => "=",
+            };
+            if let Some(val) = default_value {
+                format!("${{{}{}{}}}", format_parameter(parameter), op, val)
+            } else {
+                format!("${{{}{}}}", format_parameter(parameter), op)
+            }
+        }
+        // ${var:?message} — error if null/unset
+        ParameterExpr::IndicateErrorIfNullOrUnset {
+            parameter,
+            test_type,
+            error_message,
+            ..
+        } => {
+            let op = match test_type {
+                brush_parser::word::ParameterTestType::UnsetOrNull => ":?",
+                brush_parser::word::ParameterTestType::Unset => "?",
+            };
+            if let Some(msg) = error_message {
+                format!("${{{}{}{}}}", format_parameter(parameter), op, msg)
+            } else {
+                format!("${{{}{}}}", format_parameter(parameter), op)
+            }
+        }
+        // ${var:+alternative} — use alternative value
+        ParameterExpr::UseAlternativeValue {
+            parameter,
+            test_type,
+            alternative_value,
+            ..
+        } => {
+            let op = match test_type {
+                brush_parser::word::ParameterTestType::UnsetOrNull => ":+",
+                brush_parser::word::ParameterTestType::Unset => "+",
+            };
+            if let Some(val) = alternative_value {
+                format!("${{{}{}{}}}", format_parameter(parameter), op, val)
+            } else {
+                format!("${{{}{}}}", format_parameter(parameter), op)
+            }
+        }
+        // ${var^pattern} — uppercase first char
+        ParameterExpr::UppercaseFirstChar {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}^{}}}", param, pat)
+            } else {
+                format!("${{{}^}}", param)
+            }
+        }
+        // ${var^^pattern} — uppercase all
+        ParameterExpr::UppercasePattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{}^^{}}}", param, pat)
+            } else {
+                format!("${{{}^^}}", param)
+            }
+        }
+        // ${var,pattern} — lowercase first char
+        ParameterExpr::LowercaseFirstChar {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{},{}}}", param, pat)
+            } else {
+                format!("${{{},}}", param)
+            }
+        }
+        // ${var,,pattern} — lowercase all
+        ParameterExpr::LowercasePattern {
+            parameter, pattern, ..
+        } => {
+            let param = format_parameter(parameter);
+            if let Some(pat) = pattern {
+                format!("${{{},,{}}}", param, pat)
+            } else {
+                format!("${{{},,}}", param)
+            }
+        }
+        // ${var/pattern/replacement} — substring replacement
+        ParameterExpr::ReplaceSubstring {
+            parameter,
+            pattern,
+            replacement,
+            match_kind,
+            ..
+        } => {
+            let param = format_parameter(parameter);
+            let op = match match_kind {
+                brush_parser::word::SubstringMatchKind::Prefix => "/#",
+                brush_parser::word::SubstringMatchKind::Suffix => "/%",
+                brush_parser::word::SubstringMatchKind::Anywhere => "//",
+                brush_parser::word::SubstringMatchKind::FirstOccurrence => "/",
+            };
+            if let Some(repl) = replacement {
+                format!("${{{}{}{}/{}}}", param, op, pattern, repl)
+            } else {
+                format!("${{{}{}{}}}", param, op, pattern)
+            }
+        }
+        // ${var@op} — transformation (fallback to debug for op)
+        ParameterExpr::Transform {
+            parameter, op, ..
+        } => {
+            let param = format_parameter(parameter);
+            format!("${{{}@{:?}}}", param, op)
         }
     }
 }
@@ -445,10 +632,10 @@ fn convert_simple_command(cmd: ast::SimpleCommand) -> Option<ParsedCommand> {
                 ast::CommandPrefixOrSuffixItem::AssignmentWord(assignment, _word) => {
                     let key = format!("{}", assignment.name);
                     let value = match &assignment.value {
-                        ast::AssignmentValue::Scalar(word) => format!("{}", word),
+                        ast::AssignmentValue::Scalar(word) => word_to_string(word),
                         ast::AssignmentValue::Array(words) => words
                             .iter()
-                            .map(|w| format!("{}", w.1))
+                            .map(|w| word_to_string(&w.1))
                             .collect::<Vec<_>>()
                             .join(" "),
                     };

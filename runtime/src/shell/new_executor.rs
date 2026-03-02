@@ -55,6 +55,7 @@ pub async fn execute_sequence(
         combined_stdout.push_str(&result.stdout);
         combined_stderr.push_str(&result.stderr);
         last_code = result.code;
+        env.last_exit_code = result.code;
 
         // For And/Or chains, the branching is handled inside execute_command
     }
@@ -437,7 +438,9 @@ async fn execute_simple(
             return ShellResult::error(format!("{}: readonly variable", key), 1);
         }
         let expanded = expand::expand_string(value, env, false).unwrap_or_else(|_| value.clone());
-        let _ = env.set_var(key, &expanded);
+        // Process command substitution markers (e.g. COUNT=$(wc -l file))
+        let final_val = super::pipeline::execute_command_substitutions(&expanded, env).await;
+        let _ = env.set_var(key, &final_val);
     }
 
     // If no command name, this is just a variable assignment
@@ -974,18 +977,30 @@ fn get_stdin_data(
     redirects: &[ParsedRedirect],
     env: &ShellEnv,
 ) -> Result<Option<Vec<u8>>, ShellResult> {
-    // Check for stdin redirect (< file)
+    // Check for stdin redirect (< file) and heredoc/herestring
     for redirect in redirects {
-        if let ParsedRedirect::Read { target, .. } = redirect {
-            let full_path = if target.starts_with('/') {
-                target.clone()
-            } else {
-                format!("{}/{}", env.cwd.to_string_lossy(), target)
-            };
-            match std::fs::read(&full_path) {
-                Ok(content) => return Ok(Some(content)),
-                Err(e) => return Err(ShellResult::error(format!("{}: {}", target, e), 1)),
+        match redirect {
+            ParsedRedirect::Read { target, .. } => {
+                let full_path = if target.starts_with('/') {
+                    target.clone()
+                } else {
+                    format!("{}/{}", env.cwd.to_string_lossy(), target)
+                };
+                match std::fs::read(&full_path) {
+                    Ok(content) => return Ok(Some(content)),
+                    Err(e) => return Err(ShellResult::error(format!("{}: {}", target, e), 1)),
+                }
             }
+            ParsedRedirect::Heredoc { content, .. } => {
+                return Ok(Some(content.as_bytes().to_vec()));
+            }
+            ParsedRedirect::HereString { content, .. } => {
+                // Here-strings append a newline
+                let mut data = content.as_bytes().to_vec();
+                data.push(b'\n');
+                return Ok(Some(data));
+            }
+            _ => {}
         }
     }
 

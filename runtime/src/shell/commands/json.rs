@@ -126,15 +126,16 @@ impl JsonCommands {
     #[shell_command(
         name = "xargs",
         usage = "xargs [-n NUM] [-I REPLACE] COMMAND [ARGS]...",
-        description = "Build arguments from stdin and output the command"
+        description = "Build and execute commands from stdin"
     )]
     fn cmd_xargs(
         args: Vec<String>,
-        _env: &ShellEnv,
+        env: &ShellEnv,
         stdin: piper::Reader,
         mut stdout: piper::Writer,
-        _stderr: piper::Writer,
+        mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
+        let env = env.clone();
         Box::pin(async move {
             let (opts, remaining) = parse_common(&args);
             if opts.help {
@@ -198,8 +199,7 @@ impl JsonCommands {
                 return 0;
             }
 
-            // Output the command(s) that would be executed
-            // In a full implementation, we'd actually execute these
+            // Execute the built commands
             if let Some(ref repl) = replace_str {
                 // -I mode: one command per item, replacing the placeholder
                 for item in &items {
@@ -207,27 +207,86 @@ impl JsonCommands {
                         .iter()
                         .map(|arg| arg.replace(repl, item))
                         .collect();
-                    let _ = stdout.write_all(cmd_line.join(" ").as_bytes()).await;
-                    let _ = stdout.write_all(b"\n").await;
+                    let code =
+                        execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
+                    if code != 0 {
+                        return code;
+                    }
                 }
             } else if let Some(n) = max_args {
                 // -n mode: batch items
                 for chunk in items.chunks(n) {
                     let mut cmd_line = command_args.clone();
                     cmd_line.extend(chunk.iter().cloned());
-                    let _ = stdout.write_all(cmd_line.join(" ").as_bytes()).await;
-                    let _ = stdout.write_all(b"\n").await;
+                    let code =
+                        execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
+                    if code != 0 {
+                        return code;
+                    }
                 }
             } else {
                 // Default: all items in one command
                 let mut cmd_line = command_args.clone();
                 cmd_line.extend(items);
-                let _ = stdout.write_all(cmd_line.join(" ").as_bytes()).await;
-                let _ = stdout.write_all(b"\n").await;
+                return execute_xargs_cmd(&cmd_line, &env, &mut stdout, &mut stderr).await;
             }
 
             0
         })
+    }
+}
+
+/// Execute a single command for xargs, with concurrent output draining
+async fn execute_xargs_cmd(
+    cmd_line: &[String],
+    env: &ShellEnv,
+    stdout: &mut piper::Writer,
+    stderr: &mut piper::Writer,
+) -> i32 {
+    use futures::future::join;
+    use futures_lite::io::AsyncReadExt;
+
+    if cmd_line.is_empty() {
+        return 0;
+    }
+    let cmd_name = &cmd_line[0];
+    let cmd_args = cmd_line[1..].to_vec();
+
+    if let Some(cmd_fn) = super::ShellCommands::get_command(cmd_name) {
+        let (child_stdin_r, child_stdin_w) = piper::pipe(1024);
+        let (child_stdout_r, child_stdout_w) = piper::pipe(65536);
+        let (child_stderr_r, child_stderr_w) = piper::pipe(65536);
+        drop(child_stdin_w); // No stdin for child command
+
+        // Run command and drain outputs concurrently to avoid deadlocks
+        let cmd = cmd_fn(cmd_args, env, child_stdin_r, child_stdout_w, child_stderr_w);
+        let drain_out = async {
+            let mut buf = Vec::new();
+            let mut r = child_stdout_r;
+            let _ = r.read_to_end(&mut buf).await;
+            buf
+        };
+        let drain_err = async {
+            let mut buf = Vec::new();
+            let mut r = child_stderr_r;
+            let _ = r.read_to_end(&mut buf).await;
+            buf
+        };
+
+        let (code, (out_bytes, err_bytes)) = join(cmd, join(drain_out, drain_err)).await;
+
+        if !out_bytes.is_empty() {
+            let _ = stdout.write_all(&out_bytes).await;
+        }
+        if !err_bytes.is_empty() {
+            let _ = stderr.write_all(&err_bytes).await;
+        }
+
+        code
+    } else {
+        let msg = format!("xargs: {}: command not found\n", cmd_name);
+        let _ = stderr.write_all(msg.as_bytes()).await;
+        127
     }
 }
 
@@ -237,6 +296,17 @@ fn apply_jq_filter(
     filter: &str,
 ) -> Result<Vec<serde_json::Value>, String> {
     let filter = filter.trim();
+
+    // Handle pipe chains: split on | and process sequentially
+    if let Some((left, right)) = split_jq_pipe(filter) {
+        let intermediate = apply_jq_filter(json, left.trim())?;
+        let mut results = Vec::new();
+        for item in &intermediate {
+            let sub = apply_jq_filter(item, right.trim())?;
+            results.extend(sub);
+        }
+        return Ok(results);
+    }
 
     if filter == "." {
         return Ok(vec![json.clone()]);
@@ -271,6 +341,18 @@ fn apply_jq_filter(
         };
     }
 
+    if filter == "type" {
+        let type_name = match json {
+            serde_json::Value::Null => "null",
+            serde_json::Value::Bool(_) => "boolean",
+            serde_json::Value::Number(_) => "number",
+            serde_json::Value::String(_) => "string",
+            serde_json::Value::Array(_) => "array",
+            serde_json::Value::Object(_) => "object",
+        };
+        return Ok(vec![serde_json::Value::String(type_name.to_string())]);
+    }
+
     if filter == ".[]" {
         return match json {
             serde_json::Value::Array(arr) => Ok(arr.clone()),
@@ -293,6 +375,51 @@ fn apply_jq_filter(
             results.extend(sub);
         }
         return Ok(results);
+    }
+
+    // select(.field op value) — filter
+    if filter.starts_with("select(") && filter.ends_with(')') {
+        let inner = &filter[7..filter.len() - 1];
+        let matches = evaluate_jq_condition(json, inner)?;
+        if matches {
+            return Ok(vec![json.clone()]);
+        } else {
+            return Ok(vec![]);
+        }
+    }
+
+    // has("key") — check if key exists
+    if filter.starts_with("has(") && filter.ends_with(')') {
+        let inner = &filter[4..filter.len() - 1].trim();
+        let key = inner.trim_matches('"');
+        let result = match json {
+            serde_json::Value::Object(map) => map.contains_key(key),
+            serde_json::Value::Array(arr) => {
+                if let Ok(idx) = key.parse::<usize>() {
+                    idx < arr.len()
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        return Ok(vec![serde_json::Value::Bool(result)]);
+    }
+
+    // map(expr) — apply expr to each element
+    if filter.starts_with("map(") && filter.ends_with(')') {
+        let inner = &filter[4..filter.len() - 1];
+        return match json {
+            serde_json::Value::Array(arr) => {
+                let mut results = Vec::new();
+                for item in arr {
+                    let sub = apply_jq_map_expr(item, inner.trim())?;
+                    results.push(sub);
+                }
+                Ok(vec![serde_json::Value::Array(results)])
+            }
+            _ => Err("map requires an array".to_string()),
+        };
     }
 
     // Handle field access: .field or .field1.field2
@@ -343,6 +470,194 @@ fn apply_jq_filter(
     }
 
     Err(format!("unsupported filter: {}", filter))
+}
+
+/// Split a jq filter on the top-level pipe character, respecting parentheses
+fn split_jq_pipe(filter: &str) -> Option<(&str, &str)> {
+    let mut paren_depth = 0;
+    let mut bracket_depth = 0;
+    let mut in_string = false;
+    let bytes = filter.as_bytes();
+
+    for i in 0..bytes.len() {
+        match bytes[i] {
+            b'"' if !in_string => in_string = true,
+            b'"' if in_string => in_string = false,
+            b'(' if !in_string => paren_depth += 1,
+            b')' if !in_string => paren_depth -= 1,
+            b'[' if !in_string => bracket_depth += 1,
+            b']' if !in_string => bracket_depth -= 1,
+            b'|' if !in_string && paren_depth == 0 && bracket_depth == 0 => {
+                return Some((&filter[..i], &filter[i + 1..]));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Evaluate a simple jq condition (for select)
+fn evaluate_jq_condition(json: &serde_json::Value, condition: &str) -> Result<bool, String> {
+    let condition = condition.trim();
+
+    // Parse: .field op value
+    // Operators: >, <, >=, <=, ==, !=
+    let ops = [">=", "<=", "!=", "==", ">", "<"];
+    for op in &ops {
+        if let Some(pos) = condition.find(op) {
+            let left_expr = condition[..pos].trim();
+            let right_expr = condition[pos + op.len()..].trim();
+
+            // Evaluate left side
+            let left_vals = apply_jq_filter(json, left_expr)?;
+            let left_val = left_vals.first().cloned().unwrap_or(serde_json::Value::Null);
+
+            // Parse right side as a value
+            let right_val = parse_jq_literal(right_expr);
+
+            return Ok(compare_jq_values(&left_val, *op, &right_val));
+        }
+    }
+
+    // Just a field access as boolean
+    let vals = apply_jq_filter(json, condition)?;
+    Ok(vals
+        .first()
+        .map(|v| match v {
+            serde_json::Value::Bool(b) => *b,
+            serde_json::Value::Null => false,
+            _ => true,
+        })
+        .unwrap_or(false))
+}
+
+/// Parse a literal value in a jq expression
+fn parse_jq_literal(s: &str) -> serde_json::Value {
+    let s = s.trim();
+    // Try string (quoted)
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\\') && s.contains('"')) {
+        let unquoted = s.trim_matches('"').trim_start_matches("\\\"").trim_end_matches("\\\"");
+        // Also handle escaped quotes within
+        let clean = s.trim_matches(|c| c == '"' || c == '\\');
+        if !clean.is_empty() {
+            return serde_json::Value::String(clean.to_string());
+        }
+        return serde_json::Value::String(unquoted.to_string());
+    }
+    // Try number
+    if let Ok(n) = s.parse::<i64>() {
+        return serde_json::json!(n);
+    }
+    if let Ok(n) = s.parse::<f64>() {
+        return serde_json::json!(n);
+    }
+    // Try bool/null
+    match s {
+        "true" => serde_json::Value::Bool(true),
+        "false" => serde_json::Value::Bool(false),
+        "null" => serde_json::Value::Null,
+        _ => serde_json::Value::String(s.to_string()),
+    }
+}
+
+/// Compare two jq values with an operator
+fn compare_jq_values(left: &serde_json::Value, op: &str, right: &serde_json::Value) -> bool {
+    // Numeric comparison
+    let left_num = match left {
+        serde_json::Value::Number(n) => n.as_f64(),
+        _ => None,
+    };
+    let right_num = match right {
+        serde_json::Value::Number(n) => n.as_f64(),
+        _ => None,
+    };
+
+    if let (Some(l), Some(r)) = (left_num, right_num) {
+        return match op {
+            ">" => l > r,
+            "<" => l < r,
+            ">=" => l >= r,
+            "<=" => l <= r,
+            "==" => (l - r).abs() < f64::EPSILON,
+            "!=" => (l - r).abs() >= f64::EPSILON,
+            _ => false,
+        };
+    }
+
+    // String comparison
+    let left_str = match left {
+        serde_json::Value::String(s) => Some(s.as_str()),
+        _ => None,
+    };
+    let right_str = match right {
+        serde_json::Value::String(s) => Some(s.as_str()),
+        _ => None,
+    };
+
+    if let (Some(l), Some(r)) = (left_str, right_str) {
+        return match op {
+            "==" => l == r,
+            "!=" => l != r,
+            ">" => l > r,
+            "<" => l < r,
+            ">=" => l >= r,
+            "<=" => l <= r,
+            _ => false,
+        };
+    }
+
+    // General equality
+    match op {
+        "==" => left == right,
+        "!=" => left != right,
+        _ => false,
+    }
+}
+
+/// Apply a simple map expression (. * N, . + N, etc.)
+fn apply_jq_map_expr(
+    item: &serde_json::Value,
+    expr: &str,
+) -> Result<serde_json::Value, String> {
+    let expr = expr.trim();
+
+    // Handle ". * N" or ". + N"
+    let ops = ["*", "+", "-", "/"];
+    for op in &ops {
+        if let Some(pos) = expr.find(op) {
+            let left = expr[..pos].trim();
+            let right = expr[pos + 1..].trim();
+
+            if left == "." {
+                let item_num = match item {
+                    serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
+                    _ => return Ok(item.clone()),
+                };
+                let right_num: f64 = right.parse().unwrap_or(0.0);
+                let result = match *op {
+                    "*" => item_num * right_num,
+                    "+" => item_num + right_num,
+                    "-" => item_num - right_num,
+                    "/" => {
+                        if right_num != 0.0 {
+                            item_num / right_num
+                        } else {
+                            0.0
+                        }
+                    }
+                    _ => item_num,
+                };
+                // Return as integer if possible
+                if result == result.floor() && result.abs() < i64::MAX as f64 {
+                    return Ok(serde_json::json!(result as i64));
+                }
+                return Ok(serde_json::json!(result));
+            }
+        }
+    }
+
+    // Simple field access
+    apply_jq_filter(item, expr).map(|v| v.into_iter().next().unwrap_or(serde_json::Value::Null))
 }
 
 #[cfg(test)]
@@ -419,7 +734,7 @@ mod tests {
     #[test]
     fn test_jq_unsupported() {
         let data = json!({});
-        let result = apply_jq_filter(&data, "select(.x > 1)");
+        let result = apply_jq_filter(&data, "some_unknown_func()");
         assert!(result.is_err());
     }
 }

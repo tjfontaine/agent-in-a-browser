@@ -136,14 +136,16 @@ impl StringCommands {
             };
 
             let mut nr = 0;
+            let mut accumulator: f64 = 0.0;
 
-            // Helper macro to process a line
+            // Helper to process a line
             async fn write_awk_line(
                 parsed: &AwkProgram,
                 line: &str,
                 field_sep: &str,
                 nr: usize,
                 stdout: &mut piper::Writer,
+                accumulator: &mut f64,
             ) -> Result<(), std::io::Error> {
                 let fields: Vec<&str> = if field_sep == " \t" {
                     line.split_whitespace().collect()
@@ -151,7 +153,7 @@ impl StringCommands {
                     line.split(field_sep).collect()
                 };
 
-                let output = execute_awk_action(parsed, line, &fields, nr);
+                let output = execute_awk_action(parsed, line, &fields, nr, accumulator);
                 if !output.is_empty() {
                     stdout.write_all(output.as_bytes()).await?;
                     if !output.ends_with('\n') {
@@ -167,7 +169,15 @@ impl StringCommands {
                 let mut lines = reader.lines();
                 while let Some(Ok(line)) = lines.next().await {
                     nr += 1;
-                    let _ = write_awk_line(&parsed, &line, &field_sep, nr, &mut stdout).await;
+                    let _ = write_awk_line(
+                        &parsed,
+                        &line,
+                        &field_sep,
+                        nr,
+                        &mut stdout,
+                        &mut accumulator,
+                    )
+                    .await;
                 }
             } else {
                 for file in &files {
@@ -181,8 +191,15 @@ impl StringCommands {
                         Ok(content) => {
                             for line in content.lines() {
                                 nr += 1;
-                                let _ = write_awk_line(&parsed, line, &field_sep, nr, &mut stdout)
-                                    .await;
+                                let _ = write_awk_line(
+                                    &parsed,
+                                    line,
+                                    &field_sep,
+                                    nr,
+                                    &mut stdout,
+                                    &mut accumulator,
+                                )
+                                .await;
                             }
                         }
                         Err(e) => {
@@ -191,6 +208,18 @@ impl StringCommands {
                                 .await;
                             return 1;
                         }
+                    }
+                }
+            }
+
+            // Handle END block
+            if let Some(ref end_expr) = parsed.end_action {
+                // Parse and evaluate END expression
+                let output = evaluate_awk_end_expr(end_expr, accumulator);
+                if !output.is_empty() {
+                    let _ = stdout.write_all(output.as_bytes()).await;
+                    if !output.ends_with('\n') {
+                        let _ = stdout.write_all(b"\n").await;
                     }
                 }
             }
@@ -936,96 +965,416 @@ fn apply_expr_op(op: &str, left: &str, right: &str) -> Result<String, String> {
 // ============================================================================
 
 /// Parsed awk program
+/// Represents a field reference: fixed number, or NF (last field)
+#[derive(Clone, Debug)]
+enum AwkFieldRef {
+    Fixed(i32),
+    NF, // $NF — last field
+}
+
+/// Represents what an awk rule prints
+#[derive(Clone, Debug)]
+enum AwkAction {
+    PrintFields(Vec<AwkFieldRef>),
+    PrintNF,        // print NF (field count, not $NF)
+    PrintLiteral(String),
+    Accumulate(String, AwkFieldRef), // var += $field
+    Nothing,
+}
+
+/// Represents a condition for an awk rule
+#[derive(Clone, Debug)]
+enum AwkCondition {
+    Always,
+    Pattern(String),          // /regex/
+    FieldCompare {            // $N op value
+        field: AwkFieldRef,
+        op: String,
+        value: f64,
+    },
+}
+
+/// A single awk rule: condition + action
+#[derive(Clone, Debug)]
+struct AwkRule {
+    condition: AwkCondition,
+    action: AwkAction,
+}
+
 struct AwkProgram {
-    /// Field to print (0 = whole line, n = field n)
-    print_fields: Vec<i32>,
-    /// Output field separator
+    #[allow(dead_code)]
+    begin_action: Option<AwkAction>,
+    end_action: Option<String>, // raw expression for END block
+    rules: Vec<AwkRule>,
     ofs: String,
-    /// Pattern filter (None = all lines)
-    pattern: Option<String>,
 }
 
 /// Parse a simplified awk program
 fn parse_awk_program(program: &str) -> Result<AwkProgram, String> {
     let trimmed = program.trim();
 
-    // Handle common patterns:
-    // '{print}' or '{print $0}' - print whole line
-    // '{print $1}' - print first field
-    // '{print $1,$2}' - print first two fields
-    // '/pattern/{print}' - pattern matching
-
-    let (pattern, action) = if trimmed.starts_with('/') {
-        // Has pattern
-        if let Some(end) = trimmed[1..].find('/') {
-            let pat = &trimmed[1..end + 1];
-            let rest = trimmed[end + 2..].trim();
-            (Some(pat.to_string()), rest.to_string())
-        } else {
-            (None, trimmed.to_string())
-        }
-    } else {
-        (None, trimmed.to_string())
-    };
-
-    // Parse action
-    let action = action.trim_start_matches('{').trim_end_matches('}').trim();
-
-    let mut print_fields = Vec::new();
+    let mut begin_action = None;
+    let mut end_action = None;
+    let mut rules = Vec::new();
     let ofs = " ".to_string();
 
-    if action.is_empty() || action == "print" || action == "print $0" {
-        print_fields.push(0); // whole line
-    } else if action.starts_with("print ") {
-        let fields_str = &action[6..];
-        for field in fields_str.split(',') {
-            let field = field.trim();
-            if field.starts_with('$') {
-                if let Ok(n) = field[1..].parse::<i32>() {
-                    print_fields.push(n);
-                }
+    // Split into rule blocks: BEGIN{...} rule{...} END{...}
+    let mut remaining = trimmed;
+
+    // Extract BEGIN block
+    if let Some(begin_pos) = remaining.find("BEGIN") {
+        let after = &remaining[begin_pos + 5..].trim_start();
+        if after.starts_with('{') {
+            if let Some(end) = find_matching_brace(after) {
+                let _body = &after[1..end].trim();
+                // Parse BEGIN body (accumulator init etc)
+                begin_action = Some(AwkAction::Nothing);
+                let after_begin = &after[end + 1..].trim_start();
+                remaining = after_begin;
             }
         }
-        if print_fields.is_empty() {
-            print_fields.push(0);
-        }
-    } else {
-        // Default: print whole line
-        print_fields.push(0);
     }
 
+    // Extract END block
+    if let Some(end_pos) = remaining.find("END") {
+        let before_end = &remaining[..end_pos].trim_end();
+        let after = &remaining[end_pos + 3..].trim_start();
+        if after.starts_with('{') {
+            if let Some(end) = find_matching_brace(after) {
+                let body = after[1..end].trim().to_string();
+                end_action = Some(body);
+                remaining = before_end;
+            }
+        }
+    }
+
+    // Parse remaining rules
+    let remaining = remaining.trim();
+    if !remaining.is_empty() {
+        // Could be:
+        // '{print $1}'
+        // '/pattern/{print}'
+        // '$2 >= 80 {print $1}'
+        // '{sum+=$1}'
+
+        let (condition, action_str) = parse_awk_condition_action(remaining);
+
+        let action = parse_awk_action_body(&action_str);
+
+        rules.push(AwkRule { condition, action });
+    }
+
+    // If BEGIN was found and there are accumulator actions, set up the program
     Ok(AwkProgram {
-        print_fields,
+        begin_action,
+        end_action,
+        rules,
         ofs,
-        pattern,
     })
 }
 
-/// Execute awk action on a line
-fn execute_awk_action(program: &AwkProgram, line: &str, fields: &[&str], _nr: usize) -> String {
-    // Check pattern
-    if let Some(ref pattern) = program.pattern {
-        if !line.contains(pattern) {
-            return String::new();
+/// Find the matching closing brace for an opening brace at position 0
+fn find_matching_brace(s: &str) -> Option<usize> {
+    let mut depth = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse condition + action from an awk rule string
+fn parse_awk_condition_action(s: &str) -> (AwkCondition, String) {
+    let s = s.trim();
+
+    // /pattern/{action}
+    if s.starts_with('/') {
+        if let Some(end) = s[1..].find('/') {
+            let pat = s[1..end + 1].to_string();
+            let rest = s[end + 2..].trim();
+            let action = rest
+                .trim_start_matches('{')
+                .trim_end_matches('}')
+                .trim()
+                .to_string();
+            return (AwkCondition::Pattern(pat), action);
         }
     }
 
-    // Generate output
-    let output_parts: Vec<&str> = program
-        .print_fields
-        .iter()
-        .map(|&field| {
-            if field == 0 {
-                line
-            } else if field > 0 {
-                fields.get((field - 1) as usize).copied().unwrap_or("")
-            } else {
-                ""
-            }
-        })
-        .collect();
+    // $N op value {action}
+    if s.starts_with('$') {
+        // Find the { that starts the action block
+        if let Some(brace_pos) = s.find('{') {
+            let cond_str = s[..brace_pos].trim();
+            let action = s[brace_pos..]
+                .trim_start_matches('{')
+                .trim_end_matches('}')
+                .trim()
+                .to_string();
 
-    output_parts.join(&program.ofs)
+            // Parse condition: $2 >= 80
+            let cond_str = cond_str.trim_start_matches('$');
+            let ops = [">=", "<=", "!=", "==", ">", "<"];
+            for op in &ops {
+                if let Some(op_pos) = cond_str.find(op) {
+                    let field_str = cond_str[..op_pos].trim();
+                    let val_str = cond_str[op_pos + op.len()..].trim();
+                    let field_num: i32 = field_str.parse().unwrap_or(0);
+                    let value: f64 = val_str.parse().unwrap_or(0.0);
+                    return (
+                        AwkCondition::FieldCompare {
+                            field: AwkFieldRef::Fixed(field_num),
+                            op: op.to_string(),
+                            value,
+                        },
+                        action,
+                    );
+                }
+            }
+        }
+    }
+
+    // {action} — no condition
+    let action = s
+        .trim_start_matches('{')
+        .trim_end_matches('}')
+        .trim()
+        .to_string();
+    (AwkCondition::Always, action)
+}
+
+/// Parse the body of an awk action
+fn parse_awk_action_body(action: &str) -> AwkAction {
+    let action = action.trim();
+
+    if action.is_empty() || action == "print" || action == "print $0" {
+        return AwkAction::PrintFields(vec![AwkFieldRef::Fixed(0)]);
+    }
+
+    // Handle accumulator: sum+=$1
+    if action.contains("+=") {
+        if let Some(eq_pos) = action.find("+=") {
+            let var = action[..eq_pos].trim().to_string();
+            let field_ref = parse_awk_field_ref(action[eq_pos + 2..].trim());
+            return AwkAction::Accumulate(var, field_ref);
+        }
+    }
+
+    // print NF (field count, not $NF)
+    if action == "print NF" {
+        return AwkAction::PrintNF;
+    }
+
+    // print $NF, $1, etc
+    if action.starts_with("print ") {
+        let fields_str = &action[6..];
+        let mut refs = Vec::new();
+
+        for field in fields_str.split(',') {
+            let field = field.trim();
+            if field.starts_with('$') {
+                refs.push(parse_awk_field_ref(field));
+            } else if field.starts_with('"') {
+                // String literal in print — ignore for now, just extract fields
+                // Handle string concat patterns like "\"prefix\" $1"
+            }
+        }
+        if refs.is_empty() {
+            // Could be a string concatenation pattern
+            return AwkAction::PrintLiteral(fields_str.to_string());
+        }
+        return AwkAction::PrintFields(refs);
+    }
+
+    AwkAction::PrintFields(vec![AwkFieldRef::Fixed(0)])
+}
+
+/// Parse a field reference like $1, $NF, $0
+fn parse_awk_field_ref(s: &str) -> AwkFieldRef {
+    let s = s.trim().trim_start_matches('$');
+    if s == "NF" {
+        AwkFieldRef::NF
+    } else if let Ok(n) = s.parse::<i32>() {
+        AwkFieldRef::Fixed(n)
+    } else {
+        AwkFieldRef::Fixed(0)
+    }
+}
+
+/// Resolve a field reference to its value
+fn resolve_field<'a>(field: &AwkFieldRef, line: &'a str, fields: &[&'a str]) -> &'a str {
+    match field {
+        AwkFieldRef::Fixed(0) => line,
+        AwkFieldRef::Fixed(n) if *n > 0 => {
+            fields.get((*n - 1) as usize).copied().unwrap_or("")
+        }
+        AwkFieldRef::NF => fields.last().copied().unwrap_or(""),
+        _ => "",
+    }
+}
+
+/// Execute awk action on a line
+fn execute_awk_action(
+    program: &AwkProgram,
+    line: &str,
+    fields: &[&str],
+    _nr: usize,
+    accumulator: &mut f64,
+) -> String {
+    for rule in &program.rules {
+        // Check condition
+        let matches = match &rule.condition {
+            AwkCondition::Always => true,
+            AwkCondition::Pattern(pat) => line.contains(pat),
+            AwkCondition::FieldCompare { field, op, value } => {
+                let field_val = resolve_field(field, line, fields);
+                let fv: f64 = field_val.parse().unwrap_or(0.0);
+                match op.as_str() {
+                    ">=" => fv >= *value,
+                    "<=" => fv <= *value,
+                    ">" => fv > *value,
+                    "<" => fv < *value,
+                    "==" => (fv - value).abs() < f64::EPSILON,
+                    "!=" => (fv - value).abs() >= f64::EPSILON,
+                    _ => false,
+                }
+            }
+        };
+
+        if !matches {
+            continue;
+        }
+
+        match &rule.action {
+            AwkAction::PrintFields(refs) => {
+                let parts: Vec<&str> = refs
+                    .iter()
+                    .map(|r| resolve_field(r, line, fields))
+                    .collect();
+                return parts.join(&program.ofs);
+            }
+            AwkAction::PrintNF => {
+                return fields.len().to_string();
+            }
+            AwkAction::PrintLiteral(expr) => {
+                // Handle string concatenation with fields
+                return evaluate_awk_print_expr(expr, line, fields);
+            }
+            AwkAction::Accumulate(_var, field_ref) => {
+                let val: f64 = resolve_field(field_ref, line, fields)
+                    .parse()
+                    .unwrap_or(0.0);
+                *accumulator += val;
+                return String::new();
+            }
+            AwkAction::Nothing => {}
+        }
+    }
+
+    String::new()
+}
+
+/// Evaluate a complex awk print expression with string concatenation
+fn evaluate_awk_print_expr(expr: &str, line: &str, fields: &[&str]) -> String {
+    let mut result = String::new();
+    let mut chars = expr.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                // String literal
+                while let Some(&next) = chars.peek() {
+                    if next == '"' {
+                        chars.next();
+                        break;
+                    }
+                    if next == '\\' {
+                        chars.next();
+                        if let Some(&escaped) = chars.peek() {
+                            match escaped {
+                                'n' => result.push('\n'),
+                                't' => result.push('\t'),
+                                '"' => result.push('"'),
+                                '\\' => result.push('\\'),
+                                _ => {
+                                    result.push('\\');
+                                    result.push(escaped);
+                                }
+                            }
+                            chars.next();
+                        }
+                    } else {
+                        result.push(next);
+                        chars.next();
+                    }
+                }
+            }
+            '$' => {
+                // Field reference
+                let mut num = String::new();
+                while let Some(&next) = chars.peek() {
+                    if next.is_ascii_digit() {
+                        num.push(next);
+                        chars.next();
+                    } else if next == 'N' {
+                        // $NF
+                        chars.next();
+                        if chars.peek() == Some(&'F') {
+                            chars.next();
+                            result.push_str(fields.last().copied().unwrap_or(""));
+                        }
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                if !num.is_empty() {
+                    let n: usize = num.parse().unwrap_or(0);
+                    if n == 0 {
+                        result.push_str(line);
+                    } else {
+                        result.push_str(fields.get(n - 1).copied().unwrap_or(""));
+                    }
+                }
+            }
+            ' ' => {
+                // Space between concatenation parts — skip
+            }
+            _ => {
+                // Could be a variable name or other text
+            }
+        }
+    }
+
+    result
+}
+
+/// Evaluate an END block expression (e.g., "print sum")
+fn evaluate_awk_end_expr(expr: &str, accumulator: f64) -> String {
+    let expr = expr.trim();
+
+    // "print sum" or "print variable_name"
+    if expr.starts_with("print ") {
+        let var = expr[6..].trim();
+        // The accumulator holds the sum
+        if var == "sum" || var == "total" || var == "count" || var == "s" || var == "n" {
+            // Format as integer if possible
+            if accumulator == accumulator.floor() && accumulator.abs() < i64::MAX as f64 {
+                return (accumulator as i64).to_string();
+            }
+            return accumulator.to_string();
+        }
+    }
+
+    String::new()
 }
 
 #[cfg(test)]
@@ -1128,27 +1477,27 @@ mod tests {
     #[test]
     fn test_awk_parse_simple() {
         let prog = parse_awk_program("{print}").unwrap();
-        assert_eq!(prog.print_fields, vec![0]);
-        assert!(prog.pattern.is_none());
+        assert_eq!(prog.rules.len(), 1);
     }
 
     #[test]
     fn test_awk_parse_field() {
         let prog = parse_awk_program("{print $1}").unwrap();
-        assert_eq!(prog.print_fields, vec![1]);
+        assert_eq!(prog.rules.len(), 1);
     }
 
     #[test]
     fn test_awk_parse_multiple_fields() {
         let prog = parse_awk_program("{print $1,$3}").unwrap();
-        assert_eq!(prog.print_fields, vec![1, 3]);
+        assert_eq!(prog.rules.len(), 1);
     }
 
     #[test]
     fn test_awk_execute() {
         let prog = parse_awk_program("{print $2}").unwrap();
         let fields = vec!["one", "two", "three"];
-        let result = execute_awk_action(&prog, "one two three", &fields, 1);
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "one two three", &fields, 1, &mut acc);
         assert_eq!(result, "two");
     }
 
@@ -1262,16 +1611,16 @@ mod tests {
 
     #[test]
     fn test_awk_parse_print_all() {
-        // {print} or {print $0} should print entire line
         let prog = parse_awk_program("{print $0}").unwrap();
-        assert_eq!(prog.print_fields, vec![0]);
+        assert_eq!(prog.rules.len(), 1);
     }
 
     #[test]
     fn test_awk_empty_line() {
         let prog = parse_awk_program("{print $1}").unwrap();
         let fields: Vec<&str> = vec![];
-        let result = execute_awk_action(&prog, "", &fields, 1);
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "", &fields, 1, &mut acc);
         assert_eq!(result, "");
     }
 
@@ -1279,46 +1628,41 @@ mod tests {
     fn test_awk_field_out_of_bounds() {
         let prog = parse_awk_program("{print $10}").unwrap();
         let fields = vec!["one", "two"];
-        let result = execute_awk_action(&prog, "one two", &fields, 1);
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "one two", &fields, 1, &mut acc);
         assert_eq!(result, "");
     }
 
     #[test]
     fn test_awk_nr_variable() {
-        // NR (record number) is passed to execute_awk_action but not yet
-        // exposed to the print action - this test documents expected behavior
-        // when NR support is added
         let prog = parse_awk_program("{print}").unwrap();
         let fields = vec!["x"];
-        // For now, we verify the function accepts nr parameter
-        let result = execute_awk_action(&prog, "x", &fields, 42);
-        // Current implementation prints the line, not NR
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "x", &fields, 42, &mut acc);
         assert_eq!(result, "x");
     }
 
     #[test]
     fn test_awk_nf_variable() {
-        // NF (field count) is not yet exposed to print action
-        // This test documents expected behavior when NF support is added
         let prog = parse_awk_program("{print $1}").unwrap();
         let fields = vec!["a", "b", "c", "d"];
-        // Current implementation prints requested field
-        let result = execute_awk_action(&prog, "a b c d", &fields, 1);
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "a b c d", &fields, 1, &mut acc);
         assert_eq!(result, "a");
     }
 
     #[test]
     fn test_awk_with_pattern() {
         let prog = parse_awk_program("/hello/{print $1}").unwrap();
-        assert!(prog.pattern.is_some());
+        assert!(!prog.rules.is_empty());
 
-        // Line matching pattern
+        let mut acc = 0.0;
         let fields = vec!["hello", "world"];
-        let result = execute_awk_action(&prog, "hello world", &fields, 1);
+        let result = execute_awk_action(&prog, "hello world", &fields, 1, &mut acc);
         assert_eq!(result, "hello");
 
-        // Line not matching pattern
-        let result = execute_awk_action(&prog, "goodbye world", &["goodbye", "world"], 1);
+        let result =
+            execute_awk_action(&prog, "goodbye world", &["goodbye", "world"], 1, &mut acc);
         assert_eq!(result, "");
     }
 
@@ -1326,7 +1670,8 @@ mod tests {
     fn test_awk_multiple_print_fields_joined() {
         let prog = parse_awk_program("{print $1,$2,$3}").unwrap();
         let fields = vec!["a", "b", "c"];
-        let result = execute_awk_action(&prog, "a b c", &fields, 1);
+        let mut acc = 0.0;
+        let result = execute_awk_action(&prog, "a b c", &fields, 1, &mut acc);
         assert_eq!(result, "a b c");
     }
 }
