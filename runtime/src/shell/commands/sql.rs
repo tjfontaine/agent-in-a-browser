@@ -135,14 +135,12 @@ impl SqlCommands {
                     }
                 };
 
-                // Run statement with row callback
+                // Collect rows first, then write — avoids nested block_on which panics in WASM
+                let mut rows: Vec<String> = Vec::new();
                 let result = stmt.run_with_row_callback(|row| {
-                    // Get column count and format output
                     let values = row.get_values();
                     let formatted: Vec<String> = values.map(format_value).collect();
-                    let line = formatted.join("|") + "\n";
-                    // Use blocking write for callback context
-                    let _ = futures_lite::future::block_on(stdout.write_all(line.as_bytes()));
+                    rows.push(formatted.join("|"));
                     Ok(())
                 });
 
@@ -150,6 +148,12 @@ impl SqlCommands {
                     let msg = format!("Error: {}\n", e);
                     let _ = stderr.write_all(msg.as_bytes()).await;
                     return 1;
+                }
+
+                // Write collected rows to stdout
+                for row in &rows {
+                    let _ = stdout.write_all(row.as_bytes()).await;
+                    let _ = stdout.write_all(b"\n").await;
                 }
             }
 

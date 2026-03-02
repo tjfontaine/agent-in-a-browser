@@ -53,6 +53,15 @@ pub fn expand_string(
                     result.push('\\');
                 }
             }
+            '\\' if !in_double_quotes => {
+                // Outside double quotes, \X is always literal X (POSIX behavior).
+                // This handles escaped chars from single-quoted text (\$, \{, \}, etc.).
+                if let Some(_next) = chars.peek() {
+                    result.push(chars.next().unwrap());
+                } else {
+                    result.push('\\');
+                }
+            }
             _ => result.push(c),
         }
     }

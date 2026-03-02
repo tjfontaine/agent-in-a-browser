@@ -53,8 +53,11 @@ impl WasiHttpView for McpHostState {
 // Implement the module-loader Host trait for McpHostState
 // (same implementation as TUI's HostState but on this type)
 impl crate::bindings::ModuleLoaderHost for McpHostState {
-    fn get_lazy_module(&mut self, command: String) -> Option<String> {
-        self.module_loader.get_lazy_module(&command)
+    fn get_lazy_module(&mut self, _command: String) -> Option<String> {
+        // In the MCP test harness, always return None so commands fall through
+        // to built-in implementations. The lazy module system is for browser/native
+        // environments where separate WASM modules handle certain commands (sqlite3, etc.).
+        None
     }
 
     fn spawn_lazy_command(

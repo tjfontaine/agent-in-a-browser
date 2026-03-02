@@ -131,7 +131,26 @@ fn wordpiece_to_string(piece: &brush_parser::word::WordPiece) -> String {
 
     match piece {
         WordPiece::Text(s) => s.clone(),
-        WordPiece::SingleQuotedText(s) => s.clone(), // Already unquoted by parser
+        WordPiece::SingleQuotedText(s) => {
+            // Single-quoted text is literal — escape shell-special characters so that
+            // downstream processing (brace expansion, variable expansion, glob) treats
+            // them as literal. This preserves content like '{print $2}' for awk.
+            let mut result = String::with_capacity(s.len());
+            for c in s.chars() {
+                match c {
+                    '$' | '{' | '}' | ',' | '*' | '?' | '[' => {
+                        result.push('\\');
+                        result.push(c);
+                    }
+                    '\\' => {
+                        result.push('\\');
+                        result.push('\\');
+                    }
+                    _ => result.push(c),
+                }
+            }
+            result
+        }
         WordPiece::AnsiCQuotedText(s) => s.clone(),
         WordPiece::DoubleQuotedSequence(seq) => {
             seq.iter().map(|p| wordpiece_to_string(&p.piece)).collect()

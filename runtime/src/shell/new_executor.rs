@@ -936,19 +936,22 @@ async fn execute_simple(
     }
     drop(stdin_writer); // Signal EOF
 
-    // Execute command
-    let code = cmd_fn(
+    // Execute command and drain output concurrently to prevent deadlocks.
+    // If the command writes more than the pipe buffer (or if the async runtime
+    // needs to yield), the writer blocks until the reader consumes data.
+    // Running them concurrently ensures the reader is always draining.
+    let cmd_future = cmd_fn(
         expanded_args,
         env,
         stdin_reader,
         stdout_writer,
         stderr_writer,
-    )
-    .await;
+    );
+    let stdout_drain = drain_reader(stdout_reader);
+    let stderr_drain = drain_reader(stderr_reader);
 
-    // Collect output
-    let stdout_bytes = drain_reader(stdout_reader).await;
-    let stderr_bytes = drain_reader(stderr_reader).await;
+    let (code, (stdout_bytes, stderr_bytes)) =
+        join(cmd_future, join(stdout_drain, stderr_drain)).await;
 
     // Handle output redirects
     let (stdout, stderr) = handle_output_redirects(
@@ -1235,10 +1238,12 @@ async fn execute_for(
     let mut combined_stderr = String::new();
     let mut last_code = 0;
 
-    // Expand words
+    // Expand words (variable expansion + command substitution + glob)
     let mut expanded_words = Vec::new();
     for word in words {
         let expanded = expand::expand_string(word, env, false).unwrap_or_else(|_| word.clone());
+        // Resolve any command substitution markers (e.g. $(seq 1 3))
+        let expanded = super::pipeline::execute_command_substitutions(&expanded, env).await;
         // Split on whitespace for word splitting
         for part in expanded.split_whitespace() {
             expanded_words.push(part.to_string());
@@ -1639,7 +1644,11 @@ fn handle_cd(args: &[String], env: &mut ShellEnv) -> ShellResult {
     }
 
     env.prev_cwd = env.cwd.clone();
-    env.cwd = PathBuf::from(normalized);
+    env.cwd = PathBuf::from(&normalized);
+
+    // Keep PWD env var in sync
+    env.env_vars.insert("PWD".to_string(), normalized.clone());
+    let _ = env.set_var("PWD", &normalized);
 
     ShellResult::success("")
 }

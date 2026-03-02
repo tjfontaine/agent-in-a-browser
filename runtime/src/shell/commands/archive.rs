@@ -132,41 +132,18 @@ impl ArchiveCommands {
                         }
 
                         if metadata.is_dir() {
-                            if let Err(e) = builder.append_dir_all(archive_path, &resolved) {
-                                stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
-                            }
-                        } else {
-                            // Read file content first to avoid WASI File::metadata issues
-                            let content = match std::fs::read(&resolved) {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
-                                    continue;
-                                }
-                            };
-
-                            // Create header manually
-                            let mut header = tar::Header::new_gnu();
-                            header.set_path(archive_path).unwrap_or_else(|_| {});
-                            header.set_size(content.len() as u64);
-                            header.set_mode(0o644);
-                            header.set_mtime(
-                                metadata
-                                    .modified()
-                                    .map(|t| {
-                                        t.duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_secs()
-                                    })
-                                    .unwrap_or(0),
+                            // Walk directory manually to avoid tar's append_fs
+                            // which panics in WASM due to File::metadata issues
+                            tar_add_dir_recursive(
+                                &mut builder,
+                                &resolved,
+                                archive_path,
+                                verbose,
+                                &mut stdout_msgs,
+                                &mut stderr_msgs,
                             );
-                            header.set_cksum();
-
-                            if let Err(e) =
-                                builder.append_data(&mut header, archive_path, content.as_slice())
-                            {
-                                stderr_msgs.push(format!("tar: {}: {}\n", resolved, e));
-                            }
+                        } else {
+                            tar_add_file(&mut builder, &resolved, archive_path, &mut stderr_msgs);
                         }
                     }
 
@@ -999,6 +976,110 @@ impl ArchiveCommands {
                 }
             }
         })
+    }
+}
+
+/// Add a single file to a tar archive using manual headers (WASM-safe).
+fn tar_add_file<W: Write>(
+    builder: &mut tar::Builder<W>,
+    fs_path: &str,
+    archive_path: &str,
+    stderr_msgs: &mut Vec<String>,
+) {
+    let content = match std::fs::read(fs_path) {
+        Ok(c) => c,
+        Err(e) => {
+            stderr_msgs.push(format!("tar: {}: {}\n", fs_path, e));
+            return;
+        }
+    };
+
+    let mut header = tar::Header::new_gnu();
+    header.set_path(archive_path).unwrap_or_else(|_| {});
+    header.set_size(content.len() as u64);
+    header.set_mode(0o644);
+    header.set_mtime(
+        std::fs::metadata(fs_path)
+            .and_then(|m| m.modified())
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            })
+            .unwrap_or(0),
+    );
+    header.set_cksum();
+
+    if let Err(e) = builder.append_data(&mut header, archive_path, content.as_slice()) {
+        stderr_msgs.push(format!("tar: {}: {}\n", fs_path, e));
+    }
+}
+
+/// Recursively add a directory to a tar archive using manual headers (WASM-safe).
+/// Avoids tar's `append_dir_all` / `append_fs` which panic in WASM due to
+/// File::metadata issues.
+fn tar_add_dir_recursive<W: Write>(
+    builder: &mut tar::Builder<W>,
+    fs_path: &str,
+    archive_path: &str,
+    verbose: bool,
+    stdout_msgs: &mut Vec<String>,
+    stderr_msgs: &mut Vec<String>,
+) {
+    // Add the directory entry itself
+    let mut header = tar::Header::new_gnu();
+    let dir_archive_path = if archive_path.ends_with('/') {
+        archive_path.to_string()
+    } else {
+        format!("{}/", archive_path)
+    };
+    header.set_path(&dir_archive_path).unwrap_or_else(|_| {});
+    header.set_size(0);
+    header.set_mode(0o755);
+    header.set_entry_type(tar::EntryType::Directory);
+    header.set_mtime(0);
+    header.set_cksum();
+
+    if let Err(e) = builder.append_data(&mut header, &dir_archive_path, &[] as &[u8]) {
+        stderr_msgs.push(format!("tar: {}: {}\n", fs_path, e));
+        return;
+    }
+
+    // Read directory entries
+    let entries = match std::fs::read_dir(fs_path) {
+        Ok(e) => e,
+        Err(e) => {
+            stderr_msgs.push(format!("tar: {}: {}\n", fs_path, e));
+            return;
+        }
+    };
+
+    let mut sorted_entries: Vec<_> = entries.flatten().collect();
+    sorted_entries.sort_by_key(|e| e.file_name());
+
+    for entry in sorted_entries {
+        let entry_name = entry.file_name().to_string_lossy().to_string();
+        let entry_fs_path = format!("{}/{}", fs_path, entry_name);
+        let entry_archive_path = format!("{}/{}", archive_path.trim_end_matches('/'), entry_name);
+
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+        if verbose {
+            stdout_msgs.push(format!("a {}\n", entry_archive_path));
+        }
+
+        if is_dir {
+            tar_add_dir_recursive(
+                builder,
+                &entry_fs_path,
+                &entry_archive_path,
+                verbose,
+                stdout_msgs,
+                stderr_msgs,
+            );
+        } else {
+            tar_add_file(builder, &entry_fs_path, &entry_archive_path, stderr_msgs);
+        }
     }
 }
 

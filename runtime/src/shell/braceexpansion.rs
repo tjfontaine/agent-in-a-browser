@@ -98,28 +98,70 @@ pub fn expand_braces_with_parser(word: &str) -> Vec<String> {
         return vec![word.to_string()];
     }
 
+    // Protect escaped brace-expansion characters (\{, \}, \,) by replacing them
+    // with placeholders before parsing. This prevents single-quoted text content
+    // (which escapes these chars) from being incorrectly expanded.
+    let protected = word
+        .replace("\\{", "\x01LBRACE\x01")
+        .replace("\\}", "\x01RBRACE\x01")
+        .replace("\\,", "\x01COMMA\x01");
+
+    // Re-check after protection: if no unescaped braces remain, skip expansion
+    if !may_contain_braces_to_expand(&protected) {
+        return vec![word.to_string()];
+    }
+
     // Use brush_parser to parse brace expansions
     let options = brush_parser::ParserOptions::default();
 
-    match brush_parser::word::parse_brace_expansions(word, &options) {
+    let results = match brush_parser::word::parse_brace_expansions(&protected, &options) {
         Ok(Some(pieces)) => generate_and_combine_brace_expansions(pieces)
             .into_iter()
-            .collect(),
-        Ok(None) => vec![word.to_string()],
-        Err(_) => vec![word.to_string()],
-    }
+            .collect::<Vec<String>>(),
+        Ok(None) => vec![protected],
+        Err(_) => vec![protected],
+    };
+
+    // Restore the escaped characters
+    results
+        .into_iter()
+        .map(|s| {
+            s.replace("\x01LBRACE\x01", "\\{")
+                .replace("\x01RBRACE\x01", "\\}")
+                .replace("\x01COMMA\x01", "\\,")
+        })
+        .collect()
 }
 
 /// Quick check to see if a word may contain brace expressions.
 /// This is a heuristic to avoid parsing when unnecessary.
 fn may_contain_braces_to_expand(word: &str) -> bool {
-    // Must have at least one '{' and one '}'
-    if !word.contains('{') || !word.contains('}') {
+    // Must have at least one unescaped '{' and one unescaped '}'
+    if !has_unescaped_char(word, '{') || !has_unescaped_char(word, '}') {
         return false;
     }
 
-    // Must have either a comma or '..' inside braces for expansion
-    word.contains(',') || word.contains("..")
+    // Must have either an unescaped comma or '..' inside braces for expansion
+    has_unescaped_char(word, ',') || word.contains("..")
+}
+
+/// Check if a string contains an unescaped occurrence of a character.
+fn has_unescaped_char(s: &str, target: char) -> bool {
+    let mut escaped = false;
+    for c in s.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if c == '\\' {
+            escaped = true;
+            continue;
+        }
+        if c == target {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

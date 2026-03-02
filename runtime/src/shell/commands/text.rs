@@ -21,11 +21,13 @@ impl TextCommands {
     )]
     fn cmd_head(
         args: Vec<String>,
-        _env: &ShellEnv,
+        env: &ShellEnv,
         stdin: piper::Reader,
         mut stdout: piper::Writer,
-        _stderr: piper::Writer,
+        mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+
         Box::pin(async move {
             let (opts, remaining) = parse_common(&args);
             if opts.help {
@@ -36,6 +38,7 @@ impl TextCommands {
             }
 
             let mut count = 10usize;
+            let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
 
             while let Some(arg) = parser.next().ok().flatten() {
@@ -45,27 +48,59 @@ impl TextCommands {
                             count = val.string().ok().and_then(|s| s.parse().ok()).unwrap_or(10);
                         }
                     }
+                    Value(val) => files.push(val.string().unwrap_or_default()),
                     _ => {}
                 }
             }
 
-            let reader = BufReader::new(stdin);
-            let mut lines = reader.lines();
-            let mut written = 0;
+            if files.is_empty() {
+                // Read from stdin
+                let reader = BufReader::new(stdin);
+                let mut lines = reader.lines();
+                let mut written = 0;
 
-            while written < count {
-                match lines.next().await {
-                    Some(Ok(line)) => {
-                        if stdout.write_all(line.as_bytes()).await.is_err() {
-                            break;
+                while written < count {
+                    match lines.next().await {
+                        Some(Ok(line)) => {
+                            if stdout.write_all(line.as_bytes()).await.is_err() {
+                                break;
+                            }
+                            if stdout.write_all(b"\n").await.is_err() {
+                                break;
+                            }
+                            written += 1;
                         }
-                        if stdout.write_all(b"\n").await.is_err() {
-                            break;
-                        }
-                        written += 1;
+                        Some(Err(_)) => break,
+                        None => break,
                     }
-                    Some(Err(_)) => break,
-                    None => break,
+                }
+            } else {
+                // Read from file(s)
+                for file in &files {
+                    let path = if file.starts_with('/') {
+                        file.clone()
+                    } else {
+                        format!("{}/{}", cwd, file)
+                    };
+
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => {
+                            let mut written = 0;
+                            for line in content.lines() {
+                                if written >= count {
+                                    break;
+                                }
+                                let _ = stdout.write_all(line.as_bytes()).await;
+                                let _ = stdout.write_all(b"\n").await;
+                                written += 1;
+                            }
+                        }
+                        Err(e) => {
+                            let msg = format!("head: {}: {}\n", path, e);
+                            let _ = stderr.write_all(msg.as_bytes()).await;
+                            return 1;
+                        }
+                    }
                 }
             }
             0
@@ -97,6 +132,7 @@ impl TextCommands {
             }
 
             let mut count = 10usize;
+            let mut from_beginning = false; // true when +N is used
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
 
@@ -104,7 +140,15 @@ impl TextCommands {
                 match arg {
                     Short('n') | Long("number") => {
                         if let Ok(val) = parser.value() {
-                            count = val.string().ok().and_then(|s| s.parse().ok()).unwrap_or(10);
+                            if let Ok(s) = val.string() {
+                                if let Some(stripped) = s.strip_prefix('+') {
+                                    // +N means "output from line N onwards"
+                                    from_beginning = true;
+                                    count = stripped.parse().unwrap_or(10);
+                                } else {
+                                    count = s.parse().unwrap_or(10);
+                                }
+                            }
                         }
                     }
                     Value(val) => files.push(val.string().unwrap_or_default()),
@@ -143,7 +187,14 @@ impl TextCommands {
                 }
             }
 
-            let start = if all_lines.len() > count {
+            let start = if from_beginning {
+                // +N means start from line N (1-based), so skip N-1 lines
+                if count > 0 {
+                    count - 1
+                } else {
+                    0
+                }
+            } else if all_lines.len() > count {
                 all_lines.len() - count
             } else {
                 0

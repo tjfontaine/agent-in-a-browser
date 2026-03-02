@@ -279,6 +279,22 @@ fn apply_jq_filter(
         };
     }
 
+    // Handle .[].field or .[].field1.field2 — iterate then access fields on each element
+    if let Some(rest) = filter.strip_prefix(".[].") {
+        let items = match json {
+            serde_json::Value::Array(arr) => arr.clone(),
+            serde_json::Value::Object(map) => map.values().cloned().collect(),
+            _ => return Err(".[].field requires an array or object".to_string()),
+        };
+        let sub_filter = format!(".{}", rest);
+        let mut results = Vec::new();
+        for item in &items {
+            let sub = apply_jq_filter(item, &sub_filter)?;
+            results.extend(sub);
+        }
+        return Ok(results);
+    }
+
     // Handle field access: .field or .field1.field2
     if filter.starts_with('.') {
         let path = &filter[1..];

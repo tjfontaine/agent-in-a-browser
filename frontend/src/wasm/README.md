@@ -88,10 +88,12 @@ This code has been extracted into standalone npm packages under `packages/`:
 | Package | Purpose |
 |---------|---------|
 | `@tjfontaine/wasm-loader` | Core module registration system |
+| `@tjfontaine/wasm-modules` | Aggregator for all module metadata |
 | `@tjfontaine/wasm-tsx` | TSX engine metadata |
 | `@tjfontaine/wasm-sqlite` | SQLite module metadata |
 | `@tjfontaine/wasm-ratatui` | Ratatui demo metadata |
 | `@tjfontaine/wasm-vim` | Vim editor metadata |
-| `@tjfontaine/wasi-shims` | Shared WASI shims (OPFS filesystem, HTTP, clocks, streams, terminal) |
+| `@tjfontaine/wasi-shims` | Shared WASI shims (OPFS filesystem, clocks, streams, terminal) |
+| `@tjfontaine/wasi-http-handler` | HTTP handler implementation |
 | `@tjfontaine/mcp-wasm-server` | MCP runtime with lazy loading |
 | `@tjfontaine/browser-mcp-runtime` | Meta-package for one-line setup |

@@ -480,12 +480,36 @@ pub struct ShellEnv {
 impl ShellEnv {
     /// Create a new shell environment with default values.
     pub fn new() -> Self {
+        // Standard POSIX environment variables for the sandbox
+        let default_env: Vec<(&str, &str)> = vec![
+            ("PWD", "/"),
+            ("HOME", "/"),
+            ("SHELL", "/bin/sh"),
+            ("PATH", "/usr/bin:/bin"),
+            ("USER", "user"),
+            ("TERM", "xterm"),
+        ];
+
+        let mut env_vars = HashMap::new();
+        let mut variables = HashMap::new();
+        for (key, value) in &default_env {
+            env_vars.insert(key.to_string(), value.to_string());
+            variables.insert(
+                key.to_string(),
+                ShellVariable {
+                    value: ShellValue::String(value.to_string()),
+                    exported: true,
+                    ..Default::default()
+                },
+            );
+        }
+
         Self {
             // Use "/" for root directory - consistent with absolute paths in the VFS
             cwd: PathBuf::from("/"),
             prev_cwd: PathBuf::from("/"),
             dir_stack: Vec::new(),
-            variables: HashMap::new(),
+            variables,
             local_scopes: Vec::new(),
             positional_params: Vec::new(),
             last_exit_code: 0,
@@ -505,7 +529,7 @@ impl ShellEnv {
             // Interactive mode (default false, set true for REPL)
             is_interactive: false,
             // Legacy compatibility
-            env_vars: HashMap::new(),
+            env_vars,
             local_vars: HashMap::new(),
             readonly: HashSet::new(),
         }

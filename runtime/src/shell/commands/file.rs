@@ -673,30 +673,38 @@ impl FileCommands {
             let mut search_path = "/".to_string();
             let mut name_pattern: Option<String> = None;
             let mut type_filter: Option<char> = None;
-            let mut parser = make_parser(remaining);
 
-            while let Some(arg) = parser.next().ok().flatten() {
-                match arg {
-                    Long("name") | Short('n') => {
-                        if let Ok(val) = parser.value() {
-                            name_pattern = Some(val.string().unwrap_or_default());
+            // Parse manually because find uses POSIX primary expressions
+            // (-name, -type) not GNU-style flags that lexopt handles.
+            let mut i = 0;
+            while i < remaining.len() {
+                match remaining[i].as_str() {
+                    "-name" | "--name" => {
+                        if i + 1 < remaining.len() {
+                            name_pattern = Some(remaining[i + 1].clone());
+                            i += 2;
+                        } else {
+                            i += 1;
                         }
                     }
-                    Long("type") | Short('t') => {
-                        if let Ok(val) = parser.value() {
-                            let s = val.string().unwrap_or_default();
-                            type_filter = s.chars().next();
+                    "-type" | "--type" => {
+                        if i + 1 < remaining.len() {
+                            type_filter = remaining[i + 1].chars().next();
+                            i += 2;
+                        } else {
+                            i += 1;
                         }
                     }
-                    Value(val) => {
-                        let path = val.string().unwrap_or_default();
+                    arg => {
+                        // First non-option arg is the search path
+                        let path = arg.to_string();
                         search_path = if path.starts_with('/') {
                             path
                         } else {
                             format!("{}/{}", cwd, path)
                         };
+                        i += 1;
                     }
-                    _ => {}
                 }
             }
 
