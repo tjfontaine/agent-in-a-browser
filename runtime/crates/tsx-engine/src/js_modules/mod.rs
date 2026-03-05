@@ -9,6 +9,8 @@ pub mod child_process;
 pub mod cluster;
 pub mod console;
 pub mod crypto;
+// NOTE: `utils` is not listed alphabetically because it must be installed first.
+// See install_all() for ordering rationale.
 pub mod dgram;
 pub mod dns;
 pub mod domain;
@@ -36,6 +38,7 @@ pub mod tls;
 pub mod tty;
 pub mod url;
 pub mod util;
+pub mod utils;
 pub mod v8;
 pub mod vm;
 pub mod worker_threads;
@@ -48,7 +51,20 @@ pub use console::{clear_logs, get_logs};
 use rquickjs::{Ctx, Result};
 
 /// Install all JavaScript modules on the global context.
+///
+/// ## Bridge conventions
+///
+/// Rust bridges expose globals that JS shims can call for correctness-critical operations:
+///
+/// - **Latin1 strings** (preferred for binary data): `utils.rs`, `crypto.rs` — each JS char
+///   represents one byte (code points 0–255). Use for encoding, hashing, HMAC.
+/// - **JSON strings** (for structured returns): `child_process.rs`, `fetch.rs` — multiple
+///   fields serialized as JSON, parsed in JS.
+///
+/// The `__tsxUtils__` bridge (utils.rs) provides shared UTF-8, base64, and hex primitives.
+/// JS shims should delegate to these instead of reimplementing encoding logic.
 pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
+    utils::install(ctx)?; // Install first — shared encoding bridge used by crypto, encoding, buffer, etc.
     console::install(ctx)?;
     process::install(ctx)?; // Install process early so it's available (sets up require + builtin registry)
     timers::install(ctx)?; // Install timers after process (depends on timer globals from process.js)

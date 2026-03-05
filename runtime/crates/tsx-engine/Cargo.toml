@@ -43,6 +43,9 @@ web-sys = { version = "0.3", features = [
 ] }
 wit-bindgen-rt.workspace = true
 
+# Base64 encoding/decoding
+base64 = "0.22"
+
 # Crypto hash algorithms
 md-5 = "0.10"
 sha1 = "0.10"

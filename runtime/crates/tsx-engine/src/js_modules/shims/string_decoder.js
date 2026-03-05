@@ -1,5 +1,6 @@
 // string_decoder.js - Node.js string_decoder module compatible subset
-// Handles incremental decoding of multi-byte character sequences
+// Handles incremental decoding of multi-byte character sequences.
+// Delegates UTF-8 decode and base64 encode to __tsxUtils__ Rust bridge.
 
 (function () {
     function StringDecoder(encoding) {
@@ -19,6 +20,18 @@
         if ((b & 0xF0) === 0xE0) return 3;
         if ((b & 0xF8) === 0xF0) return 4;
         return 1; // invalid, treat as single byte
+    }
+
+    function decodeUtf8Bytes(bytes) {
+        var latin1 = '';
+        for (var i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]);
+        return globalThis.__tsxUtils__.utf8Decode(latin1);
+    }
+
+    function bytesToBase64(bytes) {
+        var latin1 = '';
+        for (var i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]);
+        return globalThis.__tsxUtils__.base64Encode(latin1);
     }
 
     StringDecoder.prototype.write = function (buf) {
@@ -88,39 +101,6 @@
 
         return out;
     };
-
-    function decodeUtf8Bytes(bytes) {
-        var len = bytes.length;
-        var cp;
-        if (len === 2) {
-            cp = ((bytes[0] & 0x1F) << 6) | (bytes[1] & 0x3F);
-        } else if (len === 3) {
-            cp = ((bytes[0] & 0x0F) << 12) | ((bytes[1] & 0x3F) << 6) | (bytes[2] & 0x3F);
-        } else if (len === 4) {
-            cp = ((bytes[0] & 0x07) << 18) | ((bytes[1] & 0x3F) << 12) | ((bytes[2] & 0x3F) << 6) | (bytes[3] & 0x3F);
-        } else {
-            return '\uFFFD';
-        }
-        if (cp > 0xFFFF) {
-            // Surrogate pair
-            cp -= 0x10000;
-            return String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF));
-        }
-        return String.fromCharCode(cp);
-    }
-
-    var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    function bytesToBase64(bytes) {
-        var out = '';
-        for (var i = 0; i < bytes.length; i += 3) {
-            var b0 = bytes[i], b1 = (i + 1 < bytes.length) ? bytes[i + 1] : 0, b2 = (i + 2 < bytes.length) ? bytes[i + 2] : 0;
-            out += B64[(b0 >> 2) & 0x3F];
-            out += B64[((b0 << 4) | (b1 >> 4)) & 0x3F];
-            out += (i + 1 < bytes.length) ? B64[((b1 << 2) | (b2 >> 6)) & 0x3F] : '=';
-            out += (i + 2 < bytes.length) ? B64[b2 & 0x3F] : '=';
-        }
-        return out;
-    }
 
     var sdModule = { StringDecoder: StringDecoder };
     globalThis.__tsxBuiltinModules.set('string_decoder', sdModule);

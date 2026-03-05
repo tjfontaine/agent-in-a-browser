@@ -3915,3 +3915,202 @@ fn test_string_decoder_node_prefix() {
     );
     assert_eq!(result.unwrap(), "ok");
 }
+
+// ========================================================================
+// __tsxUtils__ Bridge Tests
+// ========================================================================
+
+#[test]
+fn test_utils_utf8_encode_ascii() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.utf8Encode('hello');
+        if (encoded.length !== 5) throw new Error('length: ' + encoded.length);
+        if (encoded.charCodeAt(0) !== 104) throw new Error('byte0: ' + encoded.charCodeAt(0));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_utf8_encode_multibyte() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.utf8Encode('café');
+        // 'café' = 63 61 66 c3 a9 = 5 UTF-8 bytes
+        if (encoded.length !== 5) throw new Error('length: ' + encoded.length);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_utf8_encode_empty() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.utf8Encode('');
+        if (encoded.length !== 0) throw new Error('length: ' + encoded.length);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_utf8_decode_ascii() {
+    let result = eval_js(
+        r#"
+        var decoded = globalThis.__tsxUtils__.utf8Decode('hello');
+        if (decoded !== 'hello') throw new Error('got: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_utf8_roundtrip() {
+    let result = eval_js(
+        r#"
+        var original = 'Hello, 世界! 🌍';
+        var encoded = globalThis.__tsxUtils__.utf8Encode(original);
+        var decoded = globalThis.__tsxUtils__.utf8Decode(encoded);
+        if (decoded !== original) throw new Error('roundtrip failed: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_base64_encode_basic() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.base64Encode('Hello');
+        if (encoded !== 'SGVsbG8=') throw new Error('got: ' + encoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_base64_roundtrip() {
+    let result = eval_js(
+        r#"
+        var original = 'Hello, World!';
+        var encoded = globalThis.__tsxUtils__.base64Encode(original);
+        var decoded = globalThis.__tsxUtils__.base64Decode(encoded);
+        if (decoded !== original) throw new Error('roundtrip failed: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_base64_empty() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.base64Encode('');
+        if (encoded !== '') throw new Error('encode: ' + encoded);
+        var decoded = globalThis.__tsxUtils__.base64Decode('');
+        if (decoded !== '') throw new Error('decode: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_hex_encode_basic() {
+    let result = eval_js(
+        r#"
+        // 'Hi' = 0x48 0x69
+        var encoded = globalThis.__tsxUtils__.hexEncode('Hi');
+        if (encoded !== '4869') throw new Error('got: ' + encoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_hex_roundtrip() {
+    let result = eval_js(
+        r#"
+        var original = 'test';
+        var encoded = globalThis.__tsxUtils__.hexEncode(original);
+        var decoded = globalThis.__tsxUtils__.hexDecode(encoded);
+        if (decoded !== original) throw new Error('roundtrip failed: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_utils_hex_empty() {
+    let result = eval_js(
+        r#"
+        var encoded = globalThis.__tsxUtils__.hexEncode('');
+        if (encoded !== '') throw new Error('encode: ' + encoded);
+        var decoded = globalThis.__tsxUtils__.hexDecode('');
+        if (decoded !== '') throw new Error('decode: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Encoding bridge integration tests
+// ========================================================================
+
+#[test]
+fn test_text_encoder_uses_bridge() {
+    let result = eval_js(
+        r#"
+        var enc = new TextEncoder();
+        var bytes = enc.encode('hello');
+        if (bytes.length !== 5) throw new Error('length: ' + bytes.length);
+        if (bytes[0] !== 104) throw new Error('byte0: ' + bytes[0]);
+        if (bytes[4] !== 111) throw new Error('byte4: ' + bytes[4]);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_btoa_atob_use_bridge() {
+    let result = eval_js(
+        r#"
+        var encoded = btoa('Hello');
+        if (encoded !== 'SGVsbG8=') throw new Error('btoa: ' + encoded);
+        var decoded = atob(encoded);
+        if (decoded !== 'Hello') throw new Error('atob: ' + decoded);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_has_write_method() {
+    // Verify string_decoder module has correct StringDecoder with write(), not TextDecoder alias
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        var d = new StringDecoder('utf8');
+        if (typeof d.write !== 'function') throw new Error('no write method');
+        if (typeof d.end !== 'function') throw new Error('no end method');
+        // Should NOT have decode() — that's TextDecoder's API
+        if (typeof d.decode === 'function') throw new Error('has decode — wrong class');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}

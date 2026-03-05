@@ -1,5 +1,6 @@
 // crypto.js - Node.js crypto module compatible subset
 // Hash and HMAC operations are delegated to Rust crypto crates via bridge functions.
+// Encoding helpers delegate to __tsxUtils__ (Rust bridge).
 
 (function () {
     // --- randomBytes ---
@@ -30,11 +31,7 @@
     // Convert data to latin1 string (each char = one byte) for passing to Rust bridge
     function toLatin1(data) {
         if (typeof data === 'string') {
-            // UTF-8 encode the string to bytes, then to latin1 chars
-            var bytes = stringToUtf8Bytes(data);
-            var s = '';
-            for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-            return s;
+            return globalThis.__tsxUtils__.utf8Encode(data);
         }
         if (data && typeof data.length === 'number') {
             // Buffer or Uint8Array
@@ -45,53 +42,11 @@
         return String(data);
     }
 
-    function stringToUtf8Bytes(str) {
-        var bytes = [];
-        for (var ci = 0; ci < str.length; ci++) {
-            var code = str.charCodeAt(ci);
-            if (code < 0x80) {
-                bytes.push(code);
-            } else if (code < 0x800) {
-                bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-            } else if (code < 0xd800 || code >= 0xe000) {
-                bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-            } else {
-                ci++;
-                code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(ci) & 0x3ff));
-                bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-            }
-        }
-        return bytes;
-    }
-
     // Convert latin1 result string from Rust bridge to Uint8Array
     function fromLatin1(s) {
         var arr = new Uint8Array(s.length);
         for (var i = 0; i < s.length; i++) arr[i] = s.charCodeAt(i);
         return arr;
-    }
-
-    // --- Hex and Base64 encoding ---
-    function toHex(bytes) {
-        var hex = '';
-        for (var i = 0; i < bytes.length; i++) {
-            hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
-        }
-        return hex;
-    }
-
-    var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    function toBase64(bytes) {
-        var result = '';
-        for (var i = 0; i < bytes.length; i += 3) {
-            var a = bytes[i], b = bytes[i + 1], c = bytes[i + 2];
-            var triple = (a << 16) | ((b || 0) << 8) | (c || 0);
-            result += B64[(triple >> 18) & 63];
-            result += B64[(triple >> 12) & 63];
-            result += (i + 1 < bytes.length) ? B64[(triple >> 6) & 63] : '=';
-            result += (i + 2 < bytes.length) ? B64[triple & 63] : '=';
-        }
-        return result;
     }
 
     // --- Supported algorithms ---
@@ -120,10 +75,9 @@
                 if (resultLatin1.length === 0) {
                     throw new Error('Unsupported hash algorithm: ' + algorithm);
                 }
-                var hashBytes = fromLatin1(resultLatin1);
-                if (encoding === 'hex') return toHex(hashBytes);
-                if (encoding === 'base64') return toBase64(hashBytes);
-                if (encoding === 'buffer' || encoding === undefined) return Buffer.from(hashBytes);
+                if (encoding === 'hex') return globalThis.__tsxUtils__.hexEncode(resultLatin1);
+                if (encoding === 'base64') return globalThis.__tsxUtils__.base64Encode(resultLatin1);
+                if (encoding === 'buffer' || encoding === undefined) return Buffer.from(fromLatin1(resultLatin1));
                 throw new Error('Unsupported encoding: ' + encoding);
             }
         };
@@ -153,10 +107,9 @@
                 if (resultLatin1.length === 0) {
                     throw new Error('Unsupported hash algorithm: ' + algorithm);
                 }
-                var hmacBytes = fromLatin1(resultLatin1);
-                if (encoding === 'hex') return toHex(hmacBytes);
-                if (encoding === 'base64') return toBase64(hmacBytes);
-                if (encoding === 'buffer' || encoding === undefined) return Buffer.from(hmacBytes);
+                if (encoding === 'hex') return globalThis.__tsxUtils__.hexEncode(resultLatin1);
+                if (encoding === 'base64') return globalThis.__tsxUtils__.base64Encode(resultLatin1);
+                if (encoding === 'buffer' || encoding === undefined) return Buffer.from(fromLatin1(resultLatin1));
                 throw new Error('Unsupported encoding: ' + encoding);
             }
         };
