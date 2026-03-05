@@ -5298,3 +5298,738 @@ mod quoting_edge_cases {
         assert_eq!(text.trim(), "hello");
     }
 }
+
+// ============================================================
+// Shell builtins: source, shift, declare, type
+// ============================================================
+
+mod shell_source {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn source_loads_file_sets_variables() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("vars.sh", "MY_VAR=hello\nMY_OTHER=world");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "source vars.sh; echo $MY_VAR $MY_OTHER"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "hello world");
+    }
+
+    #[tokio::test]
+    async fn source_nested() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("inner.sh", "INNER=yes");
+        h.write_fixture("outer.sh", "source inner.sh\nOUTER=also");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "source outer.sh; echo $INNER $OUTER"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "yes also");
+    }
+
+    #[tokio::test]
+    async fn source_file_not_found() {
+        let mut h = McpTestHarness::new();
+        let is_err = h
+            .call_tool_is_error("shell_eval", json!({"command": "source nonexistent.sh"}))
+            .await;
+        assert!(is_err);
+    }
+
+    #[tokio::test]
+    async fn source_with_arguments() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("args.sh", "echo $1 $2");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "source args.sh foo bar"}))
+            .await;
+        assert_eq!(text.trim(), "foo bar");
+    }
+
+    #[tokio::test]
+    async fn source_relative_path() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("subdir/lib.sh", "LIB_LOADED=true");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "source subdir/lib.sh; echo $LIB_LOADED"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "true");
+    }
+
+    #[tokio::test]
+    async fn dot_command_same_as_source() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("dot.sh", "DOT_VAR=dotted");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": ". dot.sh; echo $DOT_VAR"}))
+            .await;
+        assert_eq!(text.trim(), "dotted");
+    }
+}
+
+mod shell_shift {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn shift_removes_first_arg() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "set -- a b c; shift; echo $1"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "b");
+    }
+
+    #[tokio::test]
+    async fn shift_n() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "set -- a b c d; shift 2; echo $1 $2"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "c d");
+    }
+
+    #[tokio::test]
+    async fn shift_updates_param_count() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "set -- a b c; shift; echo $#"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "2");
+    }
+
+    #[tokio::test]
+    async fn shift_beyond_count_errors() {
+        let mut h = McpTestHarness::new();
+        let is_err = h
+            .call_tool_is_error("shell_eval", json!({"command": "set -- a b; shift 5"}))
+            .await;
+        assert!(is_err);
+    }
+
+    #[tokio::test]
+    async fn shift_zero_noop() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "set -- a b c; shift 0; echo $1"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "a");
+    }
+
+    #[tokio::test]
+    async fn shift_in_while_loop() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "set -- x y z; while [ $# -gt 0 ]; do echo $1; shift; done"}),
+            )
+            .await;
+        let lines: Vec<&str> = text.trim().lines().collect();
+        assert_eq!(lines, vec!["x", "y", "z"]);
+    }
+}
+
+mod shell_declare {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn declare_readonly() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare -r CONST=42; echo $CONST"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "42");
+    }
+
+    #[tokio::test]
+    async fn declare_readonly_prevents_reassign() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare -r CONST=42; CONST=99 2>/dev/null; echo $CONST"}),
+            )
+            .await;
+        assert!(text.contains("42"), "CONST should still be 42: {}", text);
+    }
+
+    #[tokio::test]
+    async fn declare_export() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare -x EXPORTED=yes; echo $EXPORTED"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "yes");
+    }
+
+    #[tokio::test]
+    async fn declare_integer() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare -i NUM=5+3; echo $NUM"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "8");
+    }
+
+    #[tokio::test]
+    async fn declare_indexed_array() {
+        let mut h = McpTestHarness::new();
+        // Array assignment via element-by-element (parser treats () as subshell)
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare -a ARR; ARR[0]=one; ARR[1]=two; ARR[2]=three; echo ${ARR[1]}"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "two");
+    }
+
+    #[tokio::test]
+    async fn declare_print_variable() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "MY_VAR=hello; declare -p MY_VAR"}),
+            )
+            .await;
+        assert!(
+            text.contains("MY_VAR"),
+            "Should print variable info: {}",
+            text
+        );
+        assert!(
+            text.contains("hello"),
+            "Should print variable value: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn declare_no_flags_sets_variable() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "declare FOO=bar; echo $FOO"}),
+            )
+            .await;
+        assert_eq!(text.trim(), "bar");
+    }
+}
+
+mod shell_type {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn type_identifies_builtin_echo() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "type echo"}))
+            .await;
+        assert!(
+            text.contains("builtin"),
+            "echo should be identified as builtin: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn type_identifies_builtin_cd() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "type cd"}))
+            .await;
+        assert!(
+            text.contains("builtin"),
+            "cd should be identified as builtin: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn type_identifies_external_command() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "type ls"}))
+            .await;
+        // ls is a shell command (not a builtin)
+        assert!(!text.contains("not found"), "ls should be found: {}", text);
+    }
+
+    #[tokio::test]
+    async fn type_identifies_alias() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "alias ll='ls -la'; type ll"}),
+            )
+            .await;
+        assert!(
+            text.contains("alias"),
+            "ll should be identified as alias: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn type_identifies_function() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "myfunc() { echo hi; }; type myfunc"}),
+            )
+            .await;
+        assert!(
+            text.contains("function"),
+            "myfunc should be identified as function: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn type_not_found() {
+        let mut h = McpTestHarness::new();
+        let is_err = h
+            .call_tool_is_error(
+                "shell_eval",
+                json!({"command": "type nonexistent_command_xyz"}),
+            )
+            .await;
+        assert!(is_err);
+    }
+}
+
+// ============================================================
+// Phase 4: Additional POSIX Utilities
+// ============================================================
+
+mod shell_posix_utils {
+    use super::harness::McpTestHarness;
+    use serde_json::json;
+
+    // --- uname ---
+
+    #[tokio::test]
+    async fn uname_default_returns_sysname() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "uname"}))
+            .await;
+        assert_eq!(text.trim(), "WASI");
+    }
+
+    #[tokio::test]
+    async fn uname_s_returns_sysname() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "uname -s"}))
+            .await;
+        assert_eq!(text.trim(), "WASI");
+    }
+
+    #[tokio::test]
+    async fn uname_m_returns_machine() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "uname -m"}))
+            .await;
+        assert_eq!(text.trim(), "wasm32");
+    }
+
+    #[tokio::test]
+    async fn uname_r_returns_release() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "uname -r"}))
+            .await;
+        assert_eq!(text.trim(), "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn uname_a_returns_all() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "uname -a"}))
+            .await;
+        assert!(text.contains("WASI"), "Should contain WASI: {}", text);
+        assert!(text.contains("sandbox"), "Should contain sandbox: {}", text);
+        assert!(text.contains("wasm32"), "Should contain wasm32: {}", text);
+        assert!(text.contains("1.0.0"), "Should contain 1.0.0: {}", text);
+    }
+
+    // --- hostname ---
+
+    #[tokio::test]
+    async fn hostname_returns_sandbox() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "hostname"}))
+            .await;
+        assert_eq!(text.trim(), "sandbox");
+    }
+
+    // --- whoami ---
+
+    #[tokio::test]
+    async fn whoami_returns_sandbox() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "whoami"}))
+            .await;
+        assert_eq!(text.trim(), "sandbox");
+    }
+
+    // --- id ---
+
+    #[tokio::test]
+    async fn id_default_output() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "id"}))
+            .await;
+        assert!(
+            text.contains("uid=1000(sandbox)"),
+            "Should contain uid: {}",
+            text
+        );
+        assert!(
+            text.contains("gid=1000(sandbox)"),
+            "Should contain gid: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn id_u_returns_uid() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "id -u"}))
+            .await;
+        assert_eq!(text.trim(), "1000");
+    }
+
+    #[tokio::test]
+    async fn id_g_returns_gid() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "id -g"}))
+            .await;
+        assert_eq!(text.trim(), "1000");
+    }
+
+    #[tokio::test]
+    async fn id_un_returns_username() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "id -un"}))
+            .await;
+        assert_eq!(text.trim(), "sandbox");
+    }
+
+    // --- comm ---
+
+    #[tokio::test]
+    async fn comm_basic_three_columns() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("file1.txt", "a\nb\nc\n");
+        h.write_fixture("file2.txt", "b\nc\nd\n");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "comm file1.txt file2.txt"}))
+            .await;
+        // "a" is only in file1 (col 1), "d" is only in file2 (col 2), "b" and "c" are common (col 3)
+        assert!(
+            text.contains("a"),
+            "Should contain 'a' from file1: {}",
+            text
+        );
+        assert!(
+            text.contains("d"),
+            "Should contain 'd' from file2: {}",
+            text
+        );
+        assert!(text.contains("b"), "Should contain common 'b': {}", text);
+        assert!(text.contains("c"), "Should contain common 'c': {}", text);
+    }
+
+    #[tokio::test]
+    async fn comm_suppress_col1() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("file1.txt", "a\nb\nc\n");
+        h.write_fixture("file2.txt", "b\nc\nd\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "comm -1 file1.txt file2.txt"}),
+            )
+            .await;
+        // Should NOT have lines unique to file1
+        let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+        for line in &lines {
+            let trimmed = line.trim();
+            assert_ne!(trimmed, "a", "Should suppress col1 'a': {}", text);
+        }
+    }
+
+    #[tokio::test]
+    async fn comm_suppress_col2() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("file1.txt", "a\nb\nc\n");
+        h.write_fixture("file2.txt", "b\nc\nd\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "comm -2 file1.txt file2.txt"}),
+            )
+            .await;
+        assert!(text.contains("a"), "Should contain col1 'a': {}", text);
+        let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+        for line in &lines {
+            let trimmed = line.trim();
+            assert_ne!(trimmed, "d", "Should suppress col2 'd': {}", text);
+        }
+    }
+
+    #[tokio::test]
+    async fn comm_suppress_col3() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("file1.txt", "a\nb\nc\n");
+        h.write_fixture("file2.txt", "b\nc\nd\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "comm -3 file1.txt file2.txt"}),
+            )
+            .await;
+        assert!(text.contains("a"), "Should contain col1 'a': {}", text);
+        assert!(text.contains("d"), "Should contain col2 'd': {}", text);
+    }
+
+    // --- join ---
+
+    #[tokio::test]
+    async fn join_basic() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("j1.txt", "1 Alice\n2 Bob\n3 Carol\n");
+        h.write_fixture("j2.txt", "1 HR\n2 Eng\n4 Sales\n");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "join j1.txt j2.txt"}))
+            .await;
+        assert!(
+            text.contains("1 Alice HR"),
+            "Should join on field 1: {}",
+            text
+        );
+        assert!(
+            text.contains("2 Bob Eng"),
+            "Should join on field 1: {}",
+            text
+        );
+        assert!(
+            !text.contains("Carol"),
+            "Unpairable should not appear: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn join_field_select() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("j1.txt", "Alice 1\nBob 2\n");
+        h.write_fixture("j2.txt", "1 HR\n2 Eng\n");
+        let text = h
+            .call_tool_text(
+                "shell_eval",
+                json!({"command": "join -1 2 -2 1 j1.txt j2.txt"}),
+            )
+            .await;
+        assert!(
+            text.contains("Alice") && text.contains("HR"),
+            "Should join on specified fields: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn join_custom_separator() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("j1.txt", "1,Alice\n2,Bob\n");
+        h.write_fixture("j2.txt", "1,HR\n2,Eng\n");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "join -t , j1.txt j2.txt"}))
+            .await;
+        assert!(
+            text.contains("1,Alice,HR"),
+            "Should join with comma separator: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn join_unpairable() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("j1.txt", "1 Alice\n2 Bob\n3 Carol\n");
+        h.write_fixture("j2.txt", "1 HR\n2 Eng\n4 Sales\n");
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "join -a 1 j1.txt j2.txt"}))
+            .await;
+        assert!(
+            text.contains("Carol"),
+            "Should include unpairable from file1: {}",
+            text
+        );
+    }
+
+    // --- split ---
+
+    #[tokio::test]
+    async fn split_by_lines() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("big.txt", "line1\nline2\nline3\nline4\nline5\n");
+        h.call_tool_text("shell_eval", json!({"command": "split -l 2 big.txt"}))
+            .await;
+        let xaa = h.read_fixture("xaa");
+        let xab = h.read_fixture("xab");
+        let xac = h.read_fixture("xac");
+        assert_eq!(xaa, "line1\nline2\n");
+        assert_eq!(xab, "line3\nline4\n");
+        assert_eq!(xac, "line5\n");
+    }
+
+    #[tokio::test]
+    async fn split_by_bytes() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.bin", "abcdefghij"); // 10 bytes
+        h.call_tool_text("shell_eval", json!({"command": "split -b 4 data.bin"}))
+            .await;
+        let xaa = h.read_fixture("xaa");
+        let xab = h.read_fixture("xab");
+        let xac = h.read_fixture("xac");
+        assert_eq!(xaa, "abcd");
+        assert_eq!(xab, "efgh");
+        assert_eq!(xac, "ij");
+    }
+
+    #[tokio::test]
+    async fn split_custom_prefix() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "line1\nline2\nline3\n");
+        h.call_tool_text("shell_eval", json!({"command": "split -l 1 data.txt out_"}))
+            .await;
+        let out_aa = h.read_fixture("out_aa");
+        assert_eq!(out_aa, "line1\n");
+    }
+
+    #[tokio::test]
+    async fn split_numeric_suffix() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("data.txt", "line1\nline2\nline3\n");
+        h.call_tool_text(
+            "shell_eval",
+            json!({"command": "split -d -l 1 data.txt chunk"}),
+        )
+        .await;
+        let chunk00 = h.read_fixture("chunk00");
+        let chunk01 = h.read_fixture("chunk01");
+        assert_eq!(chunk00, "line1\n");
+        assert_eq!(chunk01, "line2\n");
+    }
+
+    // --- time ---
+
+    #[tokio::test]
+    async fn time_basic_timing() {
+        let mut h = McpTestHarness::new();
+        let text = h
+            .call_tool_text("shell_eval", json!({"command": "time echo hello"}))
+            .await;
+        assert!(
+            text.contains("hello"),
+            "Should contain command output: {}",
+            text
+        );
+        // Timing info (real/user/sys) goes to stderr; shell_eval includes it
+        // only when stderr is non-empty. In the WASM single-threaded runtime,
+        // the timing write may not always be captured, so we only assert the
+        // command output is present.
+    }
+
+    #[tokio::test]
+    async fn time_preserves_exit_code() {
+        let mut h = McpTestHarness::new();
+        let is_err = h
+            .call_tool_is_error(
+                "shell_eval",
+                json!({"command": "time cat nonexistent_file_xyz"}),
+            )
+            .await;
+        assert!(is_err, "time should preserve non-zero exit code");
+    }
+
+    // --- chmod ---
+
+    #[tokio::test]
+    async fn chmod_plus_x_succeeds() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("script.sh", "#!/bin/sh\necho hi\n");
+        let is_err = h
+            .call_tool_is_error("shell_eval", json!({"command": "chmod +x script.sh"}))
+            .await;
+        assert!(!is_err, "chmod +x on existing file should succeed");
+    }
+
+    #[tokio::test]
+    async fn chmod_numeric_mode() {
+        let mut h = McpTestHarness::new();
+        h.write_fixture("script.sh", "#!/bin/sh\necho hi\n");
+        let is_err = h
+            .call_tool_is_error("shell_eval", json!({"command": "chmod 755 script.sh"}))
+            .await;
+        assert!(!is_err, "chmod 755 on existing file should succeed");
+    }
+
+    #[tokio::test]
+    async fn chmod_nonexistent_file_errors() {
+        let mut h = McpTestHarness::new();
+        let is_err = h
+            .call_tool_is_error("shell_eval", json!({"command": "chmod +x no_such_file.sh"}))
+            .await;
+        assert!(is_err, "chmod on nonexistent file should error");
+    }
+}

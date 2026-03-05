@@ -58,6 +58,8 @@ pub enum ParsedCommand {
     },
     /// Background job (cmd &)
     Background(Box<ParsedCommand>),
+    /// Timed command (time cmd)
+    Timed(Box<ParsedCommand>),
 }
 
 /// A parsed I/O redirection.
@@ -533,6 +535,7 @@ fn convert_and_or_list(list: ast::AndOrList) -> Option<ParsedCommand> {
 
 /// Convert a Pipeline to ParsedCommand.
 fn convert_pipeline(pipeline: ast::Pipeline) -> Option<ParsedCommand> {
+    let timed = pipeline.timed.is_some();
     let commands: Vec<ParsedCommand> = pipeline
         .seq
         .into_iter()
@@ -543,13 +546,19 @@ fn convert_pipeline(pipeline: ast::Pipeline) -> Option<ParsedCommand> {
         return None;
     }
 
-    if commands.len() == 1 && !pipeline.bang {
-        Some(commands.into_iter().next().unwrap())
+    let result = if commands.len() == 1 && !pipeline.bang {
+        commands.into_iter().next().unwrap()
     } else {
-        Some(ParsedCommand::Pipeline {
+        ParsedCommand::Pipeline {
             commands,
             negate: pipeline.bang,
-        })
+        }
+    };
+
+    if timed {
+        Some(ParsedCommand::Timed(Box::new(result)))
+    } else {
+        Some(result)
     }
 }
 

@@ -1,4 +1,4 @@
-//! Miscellaneous commands: seq, sleep, date
+//! Miscellaneous commands: seq, sleep, date, uname, hostname, whoami, id, time
 
 use futures_lite::io::AsyncWriteExt;
 use runtime_macros::shell_commands;
@@ -304,6 +304,189 @@ impl MiscCommands {
                     1
                 }
             }
+        })
+    }
+
+    /// uname - print system information
+    #[shell_command(
+        name = "uname",
+        usage = "uname [-snrvma]",
+        description = "Print system information"
+    )]
+    fn cmd_uname(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        _stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("uname") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            const SYSNAME: &str = "WASI";
+            const NODENAME: &str = "sandbox";
+            const RELEASE: &str = "1.0.0";
+            const VERSION: &str = "wasm32";
+            const MACHINE: &str = "wasm32";
+
+            let flags: String = remaining.iter().flat_map(|a| a.chars()).collect();
+
+            if flags.is_empty() || (flags.len() == 1 && flags.contains('s')) {
+                let _ = stdout.write_all(format!("{}\n", SYSNAME).as_bytes()).await;
+                return 0;
+            }
+
+            if flags.contains('a') {
+                let _ = stdout
+                    .write_all(
+                        format!(
+                            "{} {} {} {} {}\n",
+                            SYSNAME, NODENAME, RELEASE, VERSION, MACHINE
+                        )
+                        .as_bytes(),
+                    )
+                    .await;
+                return 0;
+            }
+
+            let mut parts: Vec<&str> = Vec::new();
+            for ch in flags.chars() {
+                match ch {
+                    's' => parts.push(SYSNAME),
+                    'n' => parts.push(NODENAME),
+                    'r' => parts.push(RELEASE),
+                    'v' => parts.push(VERSION),
+                    'm' => parts.push(MACHINE),
+                    '-' => {}
+                    _ => {}
+                }
+            }
+            let _ = stdout
+                .write_all(format!("{}\n", parts.join(" ")).as_bytes())
+                .await;
+            0
+        })
+    }
+
+    /// hostname - print the system hostname
+    #[shell_command(
+        name = "hostname",
+        usage = "hostname",
+        description = "Print the system hostname"
+    )]
+    fn cmd_hostname(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        _stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, _remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("hostname") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            let _ = stdout.write_all(b"sandbox\n").await;
+            0
+        })
+    }
+
+    /// whoami - print the current user
+    #[shell_command(
+        name = "whoami",
+        usage = "whoami",
+        description = "Print the current user name"
+    )]
+    fn cmd_whoami(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        _stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, _remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("whoami") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+            let _ = stdout.write_all(b"sandbox\n").await;
+            0
+        })
+    }
+
+    /// id - print user identity
+    #[shell_command(
+        name = "id",
+        usage = "id [-u] [-g] [-un] [-gn]",
+        description = "Print user and group information"
+    )]
+    fn cmd_id(
+        args: Vec<String>,
+        _env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        _stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = MiscCommands::show_help("id") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut show_uid = false;
+            let mut show_gid = false;
+            let mut show_name = false;
+
+            for arg in &remaining {
+                match arg.as_str() {
+                    "-u" => show_uid = true,
+                    "-g" => show_gid = true,
+                    "-n" => show_name = true,
+                    "-un" | "-nu" => {
+                        show_uid = true;
+                        show_name = true;
+                    }
+                    "-gn" | "-ng" => {
+                        show_gid = true;
+                        show_name = true;
+                    }
+                    _ => {}
+                }
+            }
+
+            if show_uid {
+                if show_name {
+                    let _ = stdout.write_all(b"sandbox\n").await;
+                } else {
+                    let _ = stdout.write_all(b"1000\n").await;
+                }
+            } else if show_gid {
+                if show_name {
+                    let _ = stdout.write_all(b"sandbox\n").await;
+                } else {
+                    let _ = stdout.write_all(b"1000\n").await;
+                }
+            } else {
+                let _ = stdout
+                    .write_all(b"uid=1000(sandbox) gid=1000(sandbox) groups=1000(sandbox)\n")
+                    .await;
+            }
+            0
         })
     }
 }

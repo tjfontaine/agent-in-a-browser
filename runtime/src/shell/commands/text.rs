@@ -1287,6 +1287,319 @@ impl TextCommands {
             0
         })
     }
+
+    /// comm - compare two sorted files line by line
+    #[shell_command(
+        name = "comm",
+        usage = "comm [-1] [-2] [-3] FILE1 FILE2",
+        description = "Compare two sorted files line by line"
+    )]
+    fn cmd_comm(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = TextCommands::show_help("comm") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut suppress1 = false;
+            let mut suppress2 = false;
+            let mut suppress3 = false;
+            let mut files: Vec<String> = Vec::new();
+
+            for arg in &remaining {
+                match arg.as_str() {
+                    "-1" => suppress1 = true,
+                    "-2" => suppress2 = true,
+                    "-3" => suppress3 = true,
+                    "-12" | "-21" => {
+                        suppress1 = true;
+                        suppress2 = true;
+                    }
+                    "-13" | "-31" => {
+                        suppress1 = true;
+                        suppress3 = true;
+                    }
+                    "-23" | "-32" => {
+                        suppress2 = true;
+                        suppress3 = true;
+                    }
+                    "-123" => {
+                        suppress1 = true;
+                        suppress2 = true;
+                        suppress3 = true;
+                    }
+                    _ => files.push(arg.clone()),
+                }
+            }
+
+            if files.len() < 2 {
+                let _ = stderr.write_all(b"comm: missing operand\n").await;
+                return 1;
+            }
+
+            let resolve = |f: &str| -> String {
+                if f.starts_with('/') {
+                    f.to_string()
+                } else {
+                    format!("{}/{}", cwd, f)
+                }
+            };
+
+            let lines1: Vec<String> = match std::fs::read_to_string(resolve(&files[0])) {
+                Ok(s) => s.lines().map(String::from).collect(),
+                Err(e) => {
+                    let msg = format!("comm: {}: {}\n", files[0], e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+            let lines2: Vec<String> = match std::fs::read_to_string(resolve(&files[1])) {
+                Ok(s) => s.lines().map(String::from).collect(),
+                Err(e) => {
+                    let msg = format!("comm: {}: {}\n", files[1], e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+
+            let mut i = 0;
+            let mut j = 0;
+            while i < lines1.len() || j < lines2.len() {
+                if i < lines1.len() && j < lines2.len() {
+                    match lines1[i].cmp(&lines2[j]) {
+                        std::cmp::Ordering::Less => {
+                            if !suppress1 {
+                                let _ = stdout
+                                    .write_all(format!("{}\n", lines1[i]).as_bytes())
+                                    .await;
+                            }
+                            i += 1;
+                        }
+                        std::cmp::Ordering::Greater => {
+                            if !suppress2 {
+                                let prefix = if suppress1 { "" } else { "\t" };
+                                let _ = stdout
+                                    .write_all(format!("{}{}\n", prefix, lines2[j]).as_bytes())
+                                    .await;
+                            }
+                            j += 1;
+                        }
+                        std::cmp::Ordering::Equal => {
+                            if !suppress3 {
+                                let prefix = match (suppress1, suppress2) {
+                                    (true, true) => "",
+                                    (true, false) | (false, true) => "\t",
+                                    (false, false) => "\t\t",
+                                };
+                                let _ = stdout
+                                    .write_all(format!("{}{}\n", prefix, lines1[i]).as_bytes())
+                                    .await;
+                            }
+                            i += 1;
+                            j += 1;
+                        }
+                    }
+                } else if i < lines1.len() {
+                    if !suppress1 {
+                        let _ = stdout
+                            .write_all(format!("{}\n", lines1[i]).as_bytes())
+                            .await;
+                    }
+                    i += 1;
+                } else {
+                    if !suppress2 {
+                        let prefix = if suppress1 { "" } else { "\t" };
+                        let _ = stdout
+                            .write_all(format!("{}{}\n", prefix, lines2[j]).as_bytes())
+                            .await;
+                    }
+                    j += 1;
+                }
+            }
+            0
+        })
+    }
+
+    /// join - join lines of two files on a common field
+    #[shell_command(
+        name = "join",
+        usage = "join [-1 FIELD] [-2 FIELD] [-t CHAR] [-a FILENUM] FILE1 FILE2",
+        description = "Join lines of two files on a common field"
+    )]
+    fn cmd_join(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = TextCommands::show_help("join") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut field1: usize = 1;
+            let mut field2: usize = 1;
+            let mut separator: Option<char> = None;
+            let mut unpairable: Option<usize> = None; // 1 or 2
+            let mut files: Vec<String> = Vec::new();
+
+            let mut i = 0;
+            while i < remaining.len() {
+                match remaining[i].as_str() {
+                    "-1" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            field1 = remaining[i].parse().unwrap_or(1);
+                        }
+                    }
+                    "-2" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            field2 = remaining[i].parse().unwrap_or(1);
+                        }
+                    }
+                    "-t" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            separator = remaining[i].chars().next();
+                        }
+                    }
+                    "-a" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            unpairable = remaining[i].parse().ok();
+                        }
+                    }
+                    s if !s.starts_with('-') => files.push(s.to_string()),
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            if files.len() < 2 {
+                let _ = stderr.write_all(b"join: missing operand\n").await;
+                return 1;
+            }
+
+            let resolve = |f: &str| -> String {
+                if f.starts_with('/') {
+                    f.to_string()
+                } else {
+                    format!("{}/{}", cwd, f)
+                }
+            };
+
+            let split_line = |line: &str, sep: Option<char>| -> Vec<String> {
+                match sep {
+                    Some(c) => line.split(c).map(String::from).collect(),
+                    None => line.split_whitespace().map(String::from).collect(),
+                }
+            };
+
+            let lines1: Vec<String> = match std::fs::read_to_string(resolve(&files[0])) {
+                Ok(s) => s.lines().map(String::from).collect(),
+                Err(e) => {
+                    let msg = format!("join: {}: {}\n", files[0], e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+            let lines2: Vec<String> = match std::fs::read_to_string(resolve(&files[1])) {
+                Ok(s) => s.lines().map(String::from).collect(),
+                Err(e) => {
+                    let msg = format!("join: {}: {}\n", files[1], e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+
+            let sep_str = match separator {
+                Some(c) => c.to_string(),
+                None => " ".to_string(),
+            };
+
+            // Build index for file2: key -> list of lines
+            let mut file2_map: std::collections::BTreeMap<String, Vec<Vec<String>>> =
+                std::collections::BTreeMap::new();
+            let mut file2_matched: Vec<bool> = vec![false; lines2.len()];
+
+            for (idx, line) in lines2.iter().enumerate() {
+                let fields = split_line(line, separator);
+                if field2 > 0 && field2 <= fields.len() {
+                    let key = fields[field2 - 1].clone();
+                    file2_map
+                        .entry(key)
+                        .or_default()
+                        .push(vec![idx.to_string()].into_iter().chain(fields).collect());
+                }
+            }
+
+            for line1 in &lines1 {
+                let fields1 = split_line(line1, separator);
+                if field1 == 0 || field1 > fields1.len() {
+                    continue;
+                }
+                let key = &fields1[field1 - 1];
+                let mut matched = false;
+
+                if let Some(entries) = file2_map.get(key) {
+                    for entry in entries {
+                        let idx: usize = entry[0].parse().unwrap();
+                        file2_matched[idx] = true;
+                        let fields2 = &entry[1..]; // skip the idx
+
+                        // Output: key, then other fields from file1, then other fields from file2
+                        let mut parts = vec![key.clone()];
+                        for (k, f) in fields1.iter().enumerate() {
+                            if k != field1 - 1 {
+                                parts.push(f.clone());
+                            }
+                        }
+                        for (k, f) in fields2.iter().enumerate() {
+                            if k != field2 - 1 {
+                                parts.push(f.clone());
+                            }
+                        }
+                        let _ = stdout
+                            .write_all(format!("{}\n", parts.join(&sep_str)).as_bytes())
+                            .await;
+                        matched = true;
+                    }
+                }
+
+                if !matched && unpairable == Some(1) {
+                    let _ = stdout.write_all(format!("{}\n", line1).as_bytes()).await;
+                }
+            }
+
+            // Print unpairable lines from file2 if requested
+            if unpairable == Some(2) {
+                for (idx, line) in lines2.iter().enumerate() {
+                    if !file2_matched[idx] {
+                        let _ = stdout.write_all(format!("{}\n", line).as_bytes()).await;
+                    }
+                }
+            }
+
+            0
+        })
+    }
 }
 
 /// Recursively collect files for grep -r

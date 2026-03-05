@@ -153,6 +153,19 @@ pub async fn execute_command(
             // For single-threaded WASM, background is same as foreground
             Box::pin(execute_command(cmd, env, stdin)).await
         }
+
+        ParsedCommand::Timed(cmd) => {
+            use crate::bindings::wasi::clocks::monotonic_clock;
+            let start = monotonic_clock::now();
+            let mut result = Box::pin(execute_command(cmd, env, stdin)).await;
+            let elapsed = monotonic_clock::now() - start;
+            let elapsed_secs = elapsed as f64 / 1_000_000_000.0;
+            let mins = (elapsed_secs / 60.0) as u64;
+            let secs = elapsed_secs % 60.0;
+            let timing = format!("\nreal\t{}m{:.3}s\n", mins, secs);
+            result.stderr.push_str(&timing);
+            result
+        }
     }
 }
 
@@ -746,6 +759,82 @@ async fn execute_simple(
             }
         }
 
+        // source / . — execute file in current environment
+        "source" | "." => {
+            if expanded_args.is_empty() {
+                return ShellResult::error("source: filename argument required", 2);
+            }
+            let filename = &expanded_args[0];
+
+            // Resolve path relative to cwd
+            let path = if filename.starts_with('/') {
+                std::path::PathBuf::from(filename)
+            } else {
+                env.cwd.join(filename)
+            };
+
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    return ShellResult::error(format!("source: {}: {}", filename, e), 1);
+                }
+            };
+
+            // Set positional params from remaining args, restore after
+            let old_params = if expanded_args.len() > 1 {
+                Some(std::mem::replace(
+                    &mut env.positional_params,
+                    expanded_args[1..].to_vec(),
+                ))
+            } else {
+                None
+            };
+
+            let result = match super::parser::parse_command(&content) {
+                Ok(parsed) if !parsed.is_empty() => {
+                    Box::pin(execute_sequence(&parsed, env, stdin)).await
+                }
+                Ok(_) => ShellResult::success(""),
+                Err(e) => ShellResult::error(format!("source: {}", e), 1),
+            };
+
+            // Restore positional params
+            if let Some(old) = old_params {
+                env.positional_params = old;
+            }
+
+            return result;
+        }
+
+        // shift — remove positional parameters from the front
+        "shift" => {
+            let n: usize = expanded_args
+                .first()
+                .and_then(|a| a.parse().ok())
+                .unwrap_or(1);
+
+            if n == 0 {
+                return ShellResult::success("");
+            }
+
+            if n > env.positional_params.len() {
+                return ShellResult::error(format!("shift: {}: shift count out of range", n), 1);
+            }
+
+            env.positional_params.drain(..n);
+            return ShellResult::success("");
+        }
+
+        // declare — set variable attributes
+        "declare" | "typeset" => {
+            return handle_declare_builtin(&expanded_args, env);
+        }
+
+        // type — describe a command
+        "type" => {
+            return handle_type_builtin(&expanded_args, env);
+        }
+
         _ => {}
     }
 
@@ -1063,7 +1152,11 @@ fn handle_set_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
     let mut i = 0;
     while i < args.len() {
         let arg = &args[i];
-        if arg.starts_with('-') || arg.starts_with('+') {
+        if arg == "--" {
+            // set -- arg1 arg2 ... sets positional parameters
+            env.positional_params = args[i + 1..].to_vec();
+            return ShellResult::success("");
+        } else if arg.starts_with('-') || arg.starts_with('+') {
             let enable = arg.starts_with('-');
             let flag = &arg[1..];
 
@@ -1090,6 +1183,271 @@ fn handle_set_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
         i += 1;
     }
     ShellResult::success("")
+}
+
+/// Handle declare/typeset builtin
+fn handle_declare_builtin(args: &[String], env: &mut ShellEnv) -> ShellResult {
+    let mut readonly = false;
+    let mut export = false;
+    let mut integer = false;
+    let mut indexed_array = false;
+    let mut _assoc_array = false;
+    let mut print_mode = false;
+    let mut assignments: Vec<&String> = Vec::new();
+
+    for arg in args {
+        if arg.starts_with('-') {
+            for c in arg[1..].chars() {
+                match c {
+                    'r' => readonly = true,
+                    'x' => export = true,
+                    'i' => integer = true,
+                    'a' => indexed_array = true,
+                    'A' => _assoc_array = true,
+                    'p' => print_mode = true,
+                    _ => {}
+                }
+            }
+        } else {
+            assignments.push(arg);
+        }
+    }
+
+    // Print mode: declare -p [name]
+    if print_mode {
+        if assignments.is_empty() {
+            // List all variables
+            let mut output = String::new();
+            for (name, var) in env.list_all_variables() {
+                let mut flags = String::from("-");
+                if var.readonly {
+                    flags.push('r');
+                }
+                if var.exported {
+                    flags.push('x');
+                }
+                if var.integer {
+                    flags.push('i');
+                }
+                if flags == "-" {
+                    flags = String::from("--");
+                }
+                output.push_str(&format!(
+                    "declare {} {}=\"{}\"\n",
+                    flags,
+                    name,
+                    var.value.as_string()
+                ));
+            }
+            return ShellResult::success(output);
+        } else {
+            let mut output = String::new();
+            for name in &assignments {
+                if let Some(var) = env.get_variable(name.as_str()) {
+                    let mut flags = String::from("-");
+                    if var.readonly {
+                        flags.push('r');
+                    }
+                    if var.exported {
+                        flags.push('x');
+                    }
+                    if var.integer {
+                        flags.push('i');
+                    }
+                    if flags == "-" {
+                        flags = String::from("--");
+                    }
+                    output.push_str(&format!(
+                        "declare {} {}=\"{}\"\n",
+                        flags,
+                        name,
+                        var.value.as_string()
+                    ));
+                } else {
+                    return ShellResult::error(format!("declare: {}: not found", name), 1);
+                }
+            }
+            return ShellResult::success(output);
+        }
+    }
+
+    // Process assignments — may need to reconstruct array values split across args
+    let mut i = 0;
+    while i < assignments.len() {
+        let arg = assignments[i];
+        if let Some(eq_pos) = arg.find('=') {
+            let name = &arg[..eq_pos];
+            let value = &arg[eq_pos + 1..];
+
+            // Handle indexed array: declare -a ARR=(val1 val2 val3)
+            // The parser may split this into ["ARR=(val1", "val2", "val3)"]
+            if indexed_array && value.starts_with('(') {
+                // Collect values until we find the closing ')'
+                let mut array_str = value[1..].to_string(); // skip '('
+                if !array_str.ends_with(')') {
+                    i += 1;
+                    while i < assignments.len() {
+                        let next = assignments[i];
+                        if next.ends_with(')') {
+                            array_str.push(' ');
+                            array_str.push_str(&next[..next.len() - 1]);
+                            break;
+                        } else {
+                            array_str.push(' ');
+                            array_str.push_str(next);
+                        }
+                        i += 1;
+                    }
+                } else {
+                    array_str = array_str[..array_str.len() - 1].to_string();
+                }
+                let values: Vec<String> = array_str
+                    .split_whitespace()
+                    .map(|s| s.to_string())
+                    .collect();
+                let _ = env.set_indexed_array(name, values);
+                i += 1;
+                continue;
+            }
+
+            // Handle integer arithmetic for declare -i
+            let final_value = if integer {
+                eval_simple_arithmetic(value)
+            } else {
+                value.to_string()
+            };
+
+            let _ = env.set_var(name, &final_value);
+
+            if readonly {
+                env.readonly.insert(name.to_string());
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.readonly = true;
+                }
+            }
+            if export {
+                env.env_vars.insert(name.to_string(), final_value.clone());
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.exported = true;
+                }
+            }
+            if integer {
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.integer = true;
+                }
+            }
+        } else {
+            // No assignment, just set attributes on existing or create empty
+            let name = arg.as_str();
+            if env.get_var(name).is_none() {
+                let _ = env.set_var(name, "");
+            }
+            if readonly {
+                env.readonly.insert(name.to_string());
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.readonly = true;
+                }
+            }
+            if export {
+                let val = env.get_var_value(name).unwrap_or_default();
+                env.env_vars.insert(name.to_string(), val);
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.exported = true;
+                }
+            }
+            if integer {
+                if let Some(var) = env.get_variable_mut(name) {
+                    var.integer = true;
+                }
+            }
+        }
+        i += 1;
+    }
+
+    ShellResult::success("")
+}
+
+/// Evaluate simple integer arithmetic for declare -i
+fn eval_simple_arithmetic(expr: &str) -> String {
+    let expr = expr.trim();
+    // Try simple addition: N+M
+    if let Some(pos) = expr.find('+') {
+        let left: i64 = expr[..pos].trim().parse().unwrap_or(0);
+        let right: i64 = expr[pos + 1..].trim().parse().unwrap_or(0);
+        return (left + right).to_string();
+    }
+    // Try subtraction (but not negative numbers)
+    if expr.len() > 1 {
+        if let Some(pos) = expr[1..].find('-') {
+            let pos = pos + 1;
+            let left: i64 = expr[..pos].trim().parse().unwrap_or(0);
+            let right: i64 = expr[pos + 1..].trim().parse().unwrap_or(0);
+            return (left - right).to_string();
+        }
+    }
+    // Try multiplication
+    if let Some(pos) = expr.find('*') {
+        let left: i64 = expr[..pos].trim().parse().unwrap_or(0);
+        let right: i64 = expr[pos + 1..].trim().parse().unwrap_or(0);
+        return (left * right).to_string();
+    }
+    // Try division
+    if let Some(pos) = expr.find('/') {
+        let left: i64 = expr[..pos].trim().parse().unwrap_or(0);
+        let right: i64 = expr[pos + 1..].trim().parse().unwrap_or(1);
+        if right == 0 {
+            return "0".to_string();
+        }
+        return (left / right).to_string();
+    }
+    // Plain integer
+    expr.parse::<i64>()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|_| "0".to_string())
+}
+
+/// List of shell builtins for the `type` command
+const SHELL_BUILTINS: &[&str] = &[
+    ":", "true", "false", "export", "unset", "set", "shopt", "readonly", "local", "return",
+    "break", "continue", "cd", "pushd", "popd", "dirs", "pwd", "eval", "alias", "unalias",
+    "getopts", "source", ".", "shift", "declare", "typeset", "type", "echo", "printf", "read",
+    "test", "[", "exit", "trap", "wait", "jobs", "bg", "fg", "kill", "umask", "hash", "command",
+    "builtin", "exec", "let",
+];
+
+/// Handle type builtin
+fn handle_type_builtin(args: &[String], env: &ShellEnv) -> ShellResult {
+    if args.is_empty() {
+        return ShellResult::error("type: usage: type name [name ...]", 1);
+    }
+
+    let mut output = String::new();
+    let mut all_found = true;
+
+    for name in args {
+        if let Some(value) = env.aliases.get(name) {
+            output.push_str(&format!("{} is aliased to `{}'\n", name, value));
+        } else if env.functions.contains_key(name) {
+            output.push_str(&format!("{} is a function\n", name));
+        } else if SHELL_BUILTINS.contains(&name.as_str()) {
+            output.push_str(&format!("{} is a shell builtin\n", name));
+        } else if ShellCommands::get_command(name).is_some() {
+            output.push_str(&format!("{} is {}\n", name, name));
+        } else {
+            output.push_str(&format!("-bash: type: {}: not found\n", name));
+            all_found = false;
+        }
+    }
+
+    if all_found {
+        ShellResult::success(output)
+    } else {
+        ShellResult {
+            stdout: String::new(),
+            stderr: output,
+            code: 1,
+        }
+    }
 }
 
 /// Handle shopt builtin for bash-style shell options
@@ -1609,6 +1967,9 @@ fn to_shell_string(cmd: &ParsedCommand) -> String {
         }
         ParsedCommand::Background(cmd) => {
             format!("{} &", to_shell_string(cmd))
+        }
+        ParsedCommand::Timed(cmd) => {
+            format!("time {}", to_shell_string(cmd))
         }
     }
 }

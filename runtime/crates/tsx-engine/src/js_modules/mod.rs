@@ -30,6 +30,7 @@ pub mod punycode;
 pub mod querystring;
 pub mod readline;
 pub mod stream;
+pub mod string_decoder;
 pub mod timers;
 pub mod tls;
 pub mod tty;
@@ -82,6 +83,7 @@ pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
     vm::install(ctx)?;
     v8::install(ctx)?;
     domain::install(ctx)?;
+    string_decoder::install(ctx)?;
     ios_bridge::install(ctx)?;
     Ok(())
 }

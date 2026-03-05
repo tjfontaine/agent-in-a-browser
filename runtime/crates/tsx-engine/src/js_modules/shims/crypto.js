@@ -1,10 +1,10 @@
 // crypto.js - Node.js crypto module compatible subset
+// Hash and HMAC operations are delegated to Rust crypto crates via bridge functions.
 
 (function () {
     // --- randomBytes ---
     function randomBytes(n) {
         var arr = new Uint8Array(n);
-        // Use Rust-provided random bytes if available, otherwise Math.random fallback
         if (typeof globalThis.__tsxGetRandomBytes__ === 'function') {
             var bytes = globalThis.__tsxGetRandomBytes__(n);
             for (var i = 0; i < n; i++) arr[i] = bytes.charCodeAt(i);
@@ -17,11 +17,8 @@
     // --- randomUUID ---
     function randomUUID() {
         var bytes = randomBytes(16);
-        // Set version 4 (bits 12-15 of time_hi_and_version)
         bytes[6] = (bytes[6] & 0x0f) | 0x40;
-        // Set variant (bits 6-7 of clk_seq_hi_res)
         bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
         var hex = '';
         for (var i = 0; i < 16; i++) {
             hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
@@ -29,94 +26,49 @@
         return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20, 32);
     }
 
-    // --- SHA-256 (pure JS) ---
-    var SHA256_K = new Uint32Array([
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-    ]);
-
-    function sha256(data) {
-        // Convert string to bytes
-        var bytes;
+    // --- Byte conversion helpers ---
+    // Convert data to latin1 string (each char = one byte) for passing to Rust bridge
+    function toLatin1(data) {
         if (typeof data === 'string') {
-            bytes = [];
-            for (var ci = 0; ci < data.length; ci++) {
-                var code = data.charCodeAt(ci);
-                if (code < 0x80) {
-                    bytes.push(code);
-                } else if (code < 0x800) {
-                    bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-                } else if (code < 0xd800 || code >= 0xe000) {
-                    bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-                } else {
-                    ci++;
-                    code = 0x10000 + (((code & 0x3ff) << 10) | (data.charCodeAt(ci) & 0x3ff));
-                    bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-                }
-            }
-        } else {
-            bytes = Array.from(data);
+            // UTF-8 encode the string to bytes, then to latin1 chars
+            var bytes = stringToUtf8Bytes(data);
+            var s = '';
+            for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+            return s;
         }
-
-        var len = bytes.length;
-        // Pre-processing: adding padding bits
-        bytes.push(0x80);
-        while ((bytes.length % 64) !== 56) bytes.push(0);
-        // Append original length in bits as 64-bit big-endian
-        var bitLen = len * 8;
-        for (var s = 56; s >= 0; s -= 8) bytes.push((bitLen / Math.pow(2, s)) & 0xff);
-
-        // Initialize hash values
-        var h0 = 0x6a09e667 | 0, h1 = 0xbb67ae85 | 0, h2 = 0x3c6ef372 | 0, h3 = 0xa54ff53a | 0;
-        var h4 = 0x510e527f | 0, h5 = 0x9b05688c | 0, h6 = 0x1f83d9ab | 0, h7 = 0x5be0cd19 | 0;
-
-        var w = new Int32Array(64);
-
-        // Process each 64-byte chunk
-        for (var off = 0; off < bytes.length; off += 64) {
-            for (var i = 0; i < 16; i++) {
-                w[i] = (bytes[off + i * 4] << 24) | (bytes[off + i * 4 + 1] << 16) | (bytes[off + i * 4 + 2] << 8) | bytes[off + i * 4 + 3];
-            }
-            for (var i = 16; i < 64; i++) {
-                var s0 = ((w[i-15] >>> 7) | (w[i-15] << 25)) ^ ((w[i-15] >>> 18) | (w[i-15] << 14)) ^ (w[i-15] >>> 3);
-                var s1 = ((w[i-2] >>> 17) | (w[i-2] << 15)) ^ ((w[i-2] >>> 19) | (w[i-2] << 13)) ^ (w[i-2] >>> 10);
-                w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
-            }
-
-            var a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
-
-            for (var i = 0; i < 64; i++) {
-                var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
-                var ch = (e & f) ^ (~e & g);
-                var temp1 = (h + S1 + ch + SHA256_K[i] + w[i]) | 0;
-                var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
-                var maj = (a & b) ^ (a & c) ^ (b & c);
-                var temp2 = (S0 + maj) | 0;
-
-                h = g; g = f; f = e; e = (d + temp1) | 0;
-                d = c; c = b; b = a; a = (temp1 + temp2) | 0;
-            }
-
-            h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
-            h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
+        if (data && typeof data.length === 'number') {
+            // Buffer or Uint8Array
+            var s = '';
+            for (var i = 0; i < data.length; i++) s += String.fromCharCode(data[i]);
+            return s;
         }
+        return String(data);
+    }
 
-        return new Uint8Array([
-            (h0 >>> 24) & 0xff, (h0 >>> 16) & 0xff, (h0 >>> 8) & 0xff, h0 & 0xff,
-            (h1 >>> 24) & 0xff, (h1 >>> 16) & 0xff, (h1 >>> 8) & 0xff, h1 & 0xff,
-            (h2 >>> 24) & 0xff, (h2 >>> 16) & 0xff, (h2 >>> 8) & 0xff, h2 & 0xff,
-            (h3 >>> 24) & 0xff, (h3 >>> 16) & 0xff, (h3 >>> 8) & 0xff, h3 & 0xff,
-            (h4 >>> 24) & 0xff, (h4 >>> 16) & 0xff, (h4 >>> 8) & 0xff, h4 & 0xff,
-            (h5 >>> 24) & 0xff, (h5 >>> 16) & 0xff, (h5 >>> 8) & 0xff, h5 & 0xff,
-            (h6 >>> 24) & 0xff, (h6 >>> 16) & 0xff, (h6 >>> 8) & 0xff, h6 & 0xff,
-            (h7 >>> 24) & 0xff, (h7 >>> 16) & 0xff, (h7 >>> 8) & 0xff, h7 & 0xff,
-        ]);
+    function stringToUtf8Bytes(str) {
+        var bytes = [];
+        for (var ci = 0; ci < str.length; ci++) {
+            var code = str.charCodeAt(ci);
+            if (code < 0x80) {
+                bytes.push(code);
+            } else if (code < 0x800) {
+                bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+            } else if (code < 0xd800 || code >= 0xe000) {
+                bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+            } else {
+                ci++;
+                code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(ci) & 0x3ff));
+                bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+            }
+        }
+        return bytes;
+    }
+
+    // Convert latin1 result string from Rust bridge to Uint8Array
+    function fromLatin1(s) {
+        var arr = new Uint8Array(s.length);
+        for (var i = 0; i < s.length; i++) arr[i] = s.charCodeAt(i);
+        return arr;
     }
 
     // --- Hex and Base64 encoding ---
@@ -142,21 +94,33 @@
         return result;
     }
 
+    // --- Supported algorithms ---
+    var supportedAlgorithms = ['md5', 'sha1', 'sha-1', 'sha256', 'sha-256', 'sha512', 'sha-512'];
+
     // --- createHash ---
     function createHash(algorithm) {
         var algo = algorithm.toLowerCase();
-        if (algo !== 'sha256' && algo !== 'sha-256') {
-            throw new Error('Unsupported hash algorithm: ' + algorithm + '. Only sha256 is supported.');
+        if (supportedAlgorithms.indexOf(algo) === -1) {
+            throw new Error('Unsupported hash algorithm: ' + algorithm);
         }
         var chunks = [];
+        var digested = false;
         return {
             update: function (data) {
-                chunks.push(typeof data === 'string' ? data : String(data));
+                chunks.push(toLatin1(data));
                 return this;
             },
             digest: function (encoding) {
-                var input = chunks.join('');
-                var hashBytes = sha256(input);
+                if (digested) {
+                    throw new Error('Digest already called');
+                }
+                digested = true;
+                var latin1Data = chunks.join('');
+                var resultLatin1 = globalThis.__tsxHashDigest__(algo, latin1Data);
+                if (resultLatin1.length === 0) {
+                    throw new Error('Unsupported hash algorithm: ' + algorithm);
+                }
+                var hashBytes = fromLatin1(resultLatin1);
                 if (encoding === 'hex') return toHex(hashBytes);
                 if (encoding === 'base64') return toBase64(hashBytes);
                 if (encoding === 'buffer' || encoding === undefined) return Buffer.from(hashBytes);
@@ -165,10 +129,112 @@
         };
     }
 
+    // --- createHmac ---
+    function createHmac(algorithm, key) {
+        var algo = algorithm.toLowerCase();
+        if (supportedAlgorithms.indexOf(algo) === -1) {
+            throw new Error('Unsupported hash algorithm: ' + algorithm);
+        }
+        var keyLatin1 = toLatin1(key);
+        var chunks = [];
+        var digested = false;
+        return {
+            update: function (data) {
+                chunks.push(toLatin1(data));
+                return this;
+            },
+            digest: function (encoding) {
+                if (digested) {
+                    throw new Error('Digest already called');
+                }
+                digested = true;
+                var dataLatin1 = chunks.join('');
+                var resultLatin1 = globalThis.__tsxHmacDigest__(algo, keyLatin1, dataLatin1);
+                if (resultLatin1.length === 0) {
+                    throw new Error('Unsupported hash algorithm: ' + algorithm);
+                }
+                var hmacBytes = fromLatin1(resultLatin1);
+                if (encoding === 'hex') return toHex(hmacBytes);
+                if (encoding === 'base64') return toBase64(hmacBytes);
+                if (encoding === 'buffer' || encoding === undefined) return Buffer.from(hmacBytes);
+                throw new Error('Unsupported encoding: ' + encoding);
+            }
+        };
+    }
+
+    // --- pbkdf2Sync ---
+    // PBKDF2 uses iterative HMAC, delegated to Rust HMAC bridge
+    function pbkdf2Sync(password, salt, iterations, keylen, digest) {
+        if (iterations <= 0) {
+            throw new Error('Iterations must be a positive number');
+        }
+        if (keylen === 0) {
+            return Buffer.alloc(0);
+        }
+
+        var algo = (digest || 'sha1').toLowerCase();
+        if (supportedAlgorithms.indexOf(algo) === -1) {
+            throw new Error('Unsupported hash algorithm: ' + digest);
+        }
+
+        var keyLatin1 = toLatin1(password);
+        var saltLatin1 = toLatin1(salt);
+
+        // Determine hash output length
+        var hashLen = globalThis.__tsxHashDigest__(algo, '').length;
+        var numBlocks = Math.ceil(keylen / hashLen);
+        var result = [];
+
+        for (var block = 1; block <= numBlocks; block++) {
+            // salt || INT_32_BE(block)
+            var blockSuffix = String.fromCharCode(
+                (block >>> 24) & 0xff,
+                (block >>> 16) & 0xff,
+                (block >>> 8) & 0xff,
+                block & 0xff
+            );
+            var saltBlock = saltLatin1 + blockSuffix;
+
+            // U1 = HMAC(password, salt || block)
+            var u = globalThis.__tsxHmacDigest__(algo, keyLatin1, saltBlock);
+            // t starts as U1 bytes
+            var t = fromLatin1(u);
+
+            for (var iter = 1; iter < iterations; iter++) {
+                u = globalThis.__tsxHmacDigest__(algo, keyLatin1, u);
+                var uBytes = fromLatin1(u);
+                for (var k = 0; k < t.length; k++) {
+                    t[k] ^= uBytes[k];
+                }
+            }
+
+            for (var k = 0; k < t.length && result.length < keylen; k++) {
+                result.push(t[k]);
+            }
+        }
+
+        return Buffer.from(new Uint8Array(result.slice(0, keylen)));
+    }
+
+    // --- timingSafeEqual ---
+    function timingSafeEqual(a, b) {
+        if (a.length !== b.length) {
+            throw new RangeError('Input buffers must have the same byte length');
+        }
+        var result = 0;
+        for (var i = 0; i < a.length; i++) {
+            result |= a[i] ^ b[i];
+        }
+        return result === 0;
+    }
+
     var cryptoModule = {
         randomBytes: randomBytes,
         randomUUID: randomUUID,
         createHash: createHash,
+        createHmac: createHmac,
+        pbkdf2Sync: pbkdf2Sync,
+        timingSafeEqual: timingSafeEqual,
     };
 
     globalThis.__tsxBuiltinModules.set('crypto', cryptoModule);

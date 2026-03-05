@@ -1038,6 +1038,268 @@ fn test_crypto_require_node_prefix() {
     assert_eq!(result.unwrap(), "ok");
 }
 
+// ===== Crypto: MD5 tests =====
+
+#[test]
+fn test_crypto_create_hash_md5_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('md5').update('hello').digest('hex'); if (h !== '5d41402abc4b2a76b9719d911017c592') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_md5_base64() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('md5').update('hello').digest('base64'); if (h !== 'XUFAKrxLKna5cZ2REBfFkg==') throw new Error('bad b64: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_md5_empty_string() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('md5').update('').digest('hex'); if (h !== 'd41d8cd98f00b204e9800998ecf8427e') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: SHA-1 tests =====
+
+#[test]
+fn test_crypto_create_hash_sha1_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha1').update('hello').digest('hex'); if (h !== 'aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_sha1_base64() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha1').update('hello').digest('base64'); if (h !== 'qvTGHdzF6KLavt4PO0gs2a6pQ00=') throw new Error('bad b64: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: SHA-512 tests =====
+
+#[test]
+fn test_crypto_create_hash_sha512_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha512').update('hello').digest('hex'); if (h !== '9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_sha512_base64() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha512').update('hello').digest('base64'); if (h !== 'm3HSJL1i83hdltRq0+o9czGb+8KJDKra4t/3JRlnPKcjI8PZm6XBHXx6zG4UuMXaDEZjR1wuXDre9G9zvN7AQw==') throw new Error('bad b64: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: Hash edge cases =====
+
+#[test]
+fn test_crypto_create_hash_sha256_empty_string() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha256').update('').digest('hex'); if (h !== 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_sha1_empty_string() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha1').update('').digest('hex'); if (h !== 'da39a3ee5e6b4b0d3255bfef95601890afd80709') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_sha512_empty_string() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha512').update('').digest('hex'); if (h !== 'cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_unicode() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha256').update('héllo wörld').digest('hex'); if (h !== 'a1003f7d04a4115711d0b48a2eaf1359ce565d2d2a6fd65098dfcffadeeef59f') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_unicode_produces_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha256').update('héllo').digest('hex'); if (!/^[0-9a-f]{64}$/.test(h)) throw new Error('bad hex: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_multiple_updates() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h1 = c.createHash('md5').update('a').update('b').update('c').digest('hex'); const h2 = c.createHash('md5').update('abc').digest('hex'); if (h1 !== h2) throw new Error('mismatch: ' + h1 + ' vs ' + h2); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_buffer_input() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const b = Buffer.from('hello'); const h = c.createHash('sha256').update(b).digest('hex'); if (h !== '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824') throw new Error('bad hash: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_digest_twice_throws() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha256'); h.update('hello'); h.digest('hex'); try { h.digest('hex'); return 'should have thrown'; } catch(e) { return 'ok'; }"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_unsupported_algorithm() {
+    let result = eval_js(
+        r#"const c = require('crypto'); try { c.createHash('sha384'); return 'should have thrown'; } catch(e) { if (e.message.indexOf('Unsupported') >= 0) return 'ok'; throw e; }"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hash_digest_returns_buffer() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHash('sha256').update('hello').digest(); if (!(h instanceof Buffer)) throw new Error('not a Buffer'); if (h.length !== 32) throw new Error('bad length: ' + h.length); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: HMAC tests =====
+
+#[test]
+fn test_crypto_create_hmac_sha256_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('sha256', 'secret').update('hello').digest('hex'); if (h !== '88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b') throw new Error('bad hmac: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_sha1_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('sha1', 'secret').update('hello').digest('hex'); if (h !== '5112055c05f944f85755efc5cd8970e194e9f45b') throw new Error('bad hmac: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_md5_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('md5', 'secret').update('hello').digest('hex'); if (h !== 'bade63863c61ed0b3165806ecd6acefc') throw new Error('bad hmac: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_sha512_hex() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('sha512', 'secret').update('hello').digest('hex'); if (h !== 'db1595ae88a62fd151ec1cba81b98c39df82daae7b4cb9820f446d5bf02f1dcfca6683d88cab3e273f5963ab8ec469a746b5b19086371239f67d1e5f99a79440') throw new Error('bad hmac: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_empty_key() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('sha256', '').update('hello').digest('hex'); if (!/^[0-9a-f]{64}$/.test(h)) throw new Error('bad hex: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_chained_updates() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h1 = c.createHmac('sha256', 'key').update('hel').update('lo').digest('hex'); const h2 = c.createHmac('sha256', 'key').update('hello').digest('hex'); if (h1 !== h2) throw new Error('mismatch: ' + h1 + ' vs ' + h2); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_create_hmac_buffer_key() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const h = c.createHmac('sha256', Buffer.from('secret')).update('hello').digest('hex'); if (h !== '88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b') throw new Error('bad hmac: ' + h); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: PBKDF2 tests =====
+
+#[test]
+fn test_crypto_pbkdf2_sync_sha256() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const key = c.pbkdf2Sync('password', 'salt', 1, 32, 'sha256'); if (!(key instanceof Buffer)) throw new Error('not Buffer'); if (key.length !== 32) throw new Error('bad len: ' + key.length); const hex = key.toString('hex'); if (hex !== '120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b') throw new Error('bad key: ' + hex); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_pbkdf2_sync_sha1() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const key = c.pbkdf2Sync('password', 'salt', 1, 20, 'sha1'); if (key.length !== 20) throw new Error('bad len: ' + key.length); const hex = key.toString('hex'); if (hex !== '0c60c80f961f0e71f3a9b524af6012062fe037a6') throw new Error('bad key: ' + hex); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_pbkdf2_sync_zero_iterations_throws() {
+    let result = eval_js(
+        r#"const c = require('crypto'); try { c.pbkdf2Sync('p', 's', 0, 32, 'sha256'); return 'should have thrown'; } catch(e) { return 'ok'; }"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_pbkdf2_sync_zero_keylen() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const key = c.pbkdf2Sync('password', 'salt', 1, 0, 'sha256'); if (key.length !== 0) throw new Error('bad len: ' + key.length); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== Crypto: timingSafeEqual tests =====
+
+#[test]
+fn test_crypto_timing_safe_equal_matching() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const a = Buffer.from('hello'); const b = Buffer.from('hello'); if (!c.timingSafeEqual(a, b)) throw new Error('should be equal'); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_timing_safe_equal_mismatched() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const a = Buffer.from('hello'); const b = Buffer.from('world'); if (c.timingSafeEqual(a, b)) throw new Error('should not be equal'); return 'ok';"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_crypto_timing_safe_equal_different_lengths_throws() {
+    let result = eval_js(
+        r#"const c = require('crypto'); const a = Buffer.from('hello'); const b = Buffer.from('hi'); try { c.timingSafeEqual(a, b); return 'should have thrown'; } catch(e) { return 'ok'; }"#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
 // ===== OS module tests =====
 
 #[test]
@@ -1775,7 +2037,7 @@ fn test_timers_promises_node_prefix() {
     assert_eq!(result.unwrap(), "ok");
 }
 
-// ===== child_process stub module tests =====
+// ===== child_process module tests =====
 
 #[test]
 fn test_child_process_require_exists() {
@@ -1794,12 +2056,14 @@ fn test_child_process_require_node_prefix() {
 }
 
 #[test]
-fn test_child_process_exec_throws() {
+fn test_child_process_has_all_methods() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
-        try { cp.exec('ls'); throw new Error('should throw'); }
-        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        const methods = ['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'];
+        for (const m of methods) {
+            if (typeof cp[m] !== 'function') throw new Error('missing ' + m);
+        }
         return 'ok';
         "#,
     );
@@ -1807,12 +2071,12 @@ fn test_child_process_exec_throws() {
 }
 
 #[test]
-fn test_child_process_exec_sync_throws() {
+fn test_child_process_exec_sync_echo() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
-        try { cp.execSync('ls'); throw new Error('should throw'); }
-        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        const out = cp.execSync('echo hello', { encoding: 'utf8' });
+        if (out.trim() !== 'hello') throw new Error('unexpected: ' + JSON.stringify(out));
         return 'ok';
         "#,
     );
@@ -1820,12 +2084,12 @@ fn test_child_process_exec_sync_throws() {
 }
 
 #[test]
-fn test_child_process_spawn_throws() {
+fn test_child_process_exec_sync_returns_buffer() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
-        try { cp.spawn('ls'); throw new Error('should throw'); }
-        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        const out = cp.execSync('echo hello');
+        if (!Buffer.isBuffer(out)) throw new Error('expected Buffer, got: ' + typeof out);
         return 'ok';
         "#,
     );
@@ -1833,12 +2097,12 @@ fn test_child_process_spawn_throws() {
 }
 
 #[test]
-fn test_child_process_spawn_sync_throws() {
+fn test_child_process_exec_sync_pipe() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
-        try { cp.spawnSync('ls'); throw new Error('should throw'); }
-        catch (e) { if (!e.message.includes('not supported')) throw e; }
+        const out = cp.execSync('echo foo | tr a-z A-Z', { encoding: 'utf8' });
+        if (out.trim() !== 'FOO') throw new Error('unexpected: ' + JSON.stringify(out));
         return 'ok';
         "#,
     );
@@ -1846,7 +2110,170 @@ fn test_child_process_spawn_sync_throws() {
 }
 
 #[test]
-fn test_child_process_fork_throws() {
+fn test_child_process_exec_sync_nonzero_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try {
+            cp.execSync('exit 42');
+            throw new Error('should throw');
+        } catch (e) {
+            if (e.message === 'should throw') throw e;
+            if (e.code !== 42 && e.status !== 42) throw new Error('expected code 42, got: ' + JSON.stringify({code: e.code, status: e.status}));
+        }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_sync_encoding_utf8() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const out = cp.execSync('echo test', { encoding: 'utf8' });
+        if (typeof out !== 'string') throw new Error('expected string with encoding, got: ' + typeof out);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_sync_input_stdin() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const out = cp.execSync('cat', { input: 'hello from stdin', encoding: 'utf8' });
+        if (out.trim() !== 'hello from stdin') throw new Error('unexpected: ' + JSON.stringify(out));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_sync_multiline() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const out = cp.execSync('printf "line1\nline2\nline3"', { encoding: 'utf8' });
+        const lines = out.split('\n').filter(l => l.length > 0);
+        if (lines.length !== 3) throw new Error('expected 3 lines, got: ' + lines.length);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_sync_status() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const r = cp.spawnSync('echo', ['hello'], { encoding: 'utf8' });
+        if (r.status !== 0) throw new Error('expected status 0, got: ' + r.status);
+        if (r.stdout.trim() !== 'hello') throw new Error('unexpected stdout: ' + JSON.stringify(r.stdout));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_sync_stderr() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const r = cp.spawnSync('sh', ['-c', 'echo err >&2'], { encoding: 'utf8' });
+        if (r.stderr.trim() !== 'err') throw new Error('unexpected stderr: ' + JSON.stringify(r.stderr));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_sync_exit_code() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const r = cp.spawnSync('sh', ['-c', 'exit 7']);
+        if (r.status !== 7) throw new Error('expected status 7, got: ' + r.status);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_spawn_sync_signal_null() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        const r = cp.spawnSync('echo', ['test']);
+        if (r.signal !== null) throw new Error('expected null signal, got: ' + r.signal);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_callback() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        var cbErr = null, cbOut = '', cbStderr = '';
+        cp.exec('echo callback_test', function(err, stdout, stderr) {
+            cbErr = err;
+            cbOut = stdout;
+            cbStderr = stderr;
+        });
+        if (cbErr !== null) throw new Error('expected no error, got: ' + cbErr);
+        if (cbOut.trim() !== 'callback_test') throw new Error('unexpected stdout: ' + JSON.stringify(cbOut));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_error_callback() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        var gotError = false;
+        cp.exec('exit 1', function(err, stdout, stderr) {
+            if (err) gotError = true;
+        });
+        if (!gotError) throw new Error('expected error callback');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_exec_sync_empty_command_throws() {
+    let result = eval_js(
+        r#"
+        const cp = require('child_process');
+        try {
+            cp.execSync('');
+            throw new Error('should throw');
+        } catch (e) {
+            if (e.message === 'should throw') throw e;
+        }
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_child_process_fork_still_throws() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
@@ -1859,13 +2286,16 @@ fn test_child_process_fork_throws() {
 }
 
 #[test]
-fn test_child_process_has_all_methods() {
+fn test_child_process_exec_sync_stderr_capture() {
     let result = eval_js(
         r#"
         const cp = require('child_process');
-        const methods = ['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'];
-        for (const m of methods) {
-            if (typeof cp[m] !== 'function') throw new Error('missing ' + m);
+        try {
+            cp.execSync('sh -c "echo errdata >&2; exit 1"');
+        } catch (e) {
+            if (typeof e.stderr === 'undefined') throw new Error('missing stderr on error');
+            var stderrStr = Buffer.isBuffer(e.stderr) ? e.stderr.toString() : e.stderr;
+            if (!stderrStr.includes('errdata')) throw new Error('stderr missing errdata: ' + stderrStr);
         }
         return 'ok';
         "#,
@@ -3130,4 +3560,358 @@ fn test_domain_run_executes_function() {
     )
     .unwrap();
     assert_eq!(result, "42");
+}
+
+// ===== Stream pipeline / finished / Readable.from / destroy / Duplex tests =====
+
+#[test]
+fn test_stream_pipeline_basic_chain() {
+    let result = eval_js(
+        r#"
+        const { Readable, Transform, Writable, pipeline } = require('stream');
+        let output = '';
+        const src = new Readable({ read: function() {} });
+        const upper = new Transform({ transform: function(chunk, enc, cb) { cb(null, String(chunk).toUpperCase()); } });
+        const sink = new Writable({ write: function(chunk, enc, cb) { output += chunk; cb(); } });
+        let cbCalled = false;
+        pipeline(src, upper, sink, function(err) { cbCalled = true; });
+        src.push('hello');
+        src.push(null);
+        if (output !== 'HELLO') throw new Error('got: ' + output);
+        if (!cbCalled) throw new Error('callback not called');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_pipeline_error_propagation() {
+    let result = eval_js(
+        r#"
+        const { Readable, Writable, pipeline } = require('stream');
+        const src = new Readable({ read: function() {} });
+        const sink = new Writable({ write: function(chunk, enc, cb) { cb(); } });
+        let gotErr = null;
+        pipeline(src, sink, function(err) { gotErr = err; });
+        src.emit('error', new Error('source fail'));
+        if (!gotErr) throw new Error('no error propagated');
+        if (gotErr.message !== 'source fail') throw new Error('wrong error: ' + gotErr.message);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_pipeline_promise_return() {
+    let result = eval_js(
+        r#"
+        const { Readable, Writable, pipeline } = require('stream');
+        const src = new Readable({ read: function() {} });
+        const sink = new Writable({ write: function(chunk, enc, cb) { cb(); } });
+        const result = pipeline(src, sink);
+        if (!result || typeof result.then !== 'function') throw new Error('not a promise');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_pipeline_auto_destroy_on_error() {
+    let result = eval_js(
+        r#"
+        const { Readable, Writable, pipeline } = require('stream');
+        const src = new Readable({ read: function() {} });
+        const sink = new Writable({ write: function(chunk, enc, cb) { cb(); } });
+        pipeline(src, sink, function(err) {});
+        src.emit('error', new Error('fail'));
+        if (!src.destroyed) throw new Error('src not destroyed');
+        if (!sink.destroyed) throw new Error('sink not destroyed');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_finished_writable_finish() {
+    let result = eval_js(
+        r#"
+        const { Writable, finished } = require('stream');
+        const w = new Writable({ write: function(chunk, enc, cb) { cb(); } });
+        let done = false;
+        finished(w, function(err) { done = true; });
+        w.end();
+        if (!done) throw new Error('finished not called');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_finished_readable_end() {
+    let result = eval_js(
+        r#"
+        const { Readable, finished } = require('stream');
+        const r = new Readable({ read: function() {} });
+        let done = false;
+        finished(r, function(err) { done = true; });
+        r.push(null);
+        if (!done) throw new Error('finished not called');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_finished_error() {
+    let result = eval_js(
+        r#"
+        const { Readable, finished } = require('stream');
+        const r = new Readable({ read: function() {} });
+        let gotErr = null;
+        finished(r, function(err) { gotErr = err; });
+        r.emit('error', new Error('stream error'));
+        if (!gotErr || gotErr.message !== 'stream error') throw new Error('wrong: ' + gotErr);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_readable_from_array_strings() {
+    let result = eval_js(
+        r#"
+        const { Readable } = require('stream');
+        let collected = '';
+        const r = Readable.from(['a', 'b', 'c']);
+        r.on('data', function(chunk) { collected += chunk; });
+        if (collected !== 'abc') throw new Error('got: ' + collected);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_readable_from_array_buffers() {
+    let result = eval_js(
+        r#"
+        const { Readable } = require('stream');
+        const { Buffer } = require('buffer');
+        let chunks = [];
+        const r = Readable.from([Buffer.from('hi'), Buffer.from('lo')]);
+        r.on('data', function(chunk) { chunks.push(chunk); });
+        if (chunks.length !== 2) throw new Error('got ' + chunks.length + ' chunks');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_readable_from_single_string() {
+    let result = eval_js(
+        r#"
+        const { Readable } = require('stream');
+        let collected = '';
+        const r = Readable.from(['hello']);
+        r.on('data', function(chunk) { collected += chunk; });
+        if (collected !== 'hello') throw new Error('got: ' + collected);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_destroy_readable_emits_close() {
+    let result = eval_js(
+        r#"
+        const { Readable } = require('stream');
+        const r = new Readable({ read: function() {} });
+        let closed = false;
+        r.on('close', function() { closed = true; });
+        r.destroy();
+        if (!r.destroyed) throw new Error('not destroyed');
+        if (!closed) throw new Error('close not emitted');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_destroy_writable_emits_close() {
+    let result = eval_js(
+        r#"
+        const { Writable } = require('stream');
+        const w = new Writable({ write: function(chunk, enc, cb) { cb(); } });
+        let closed = false;
+        w.on('close', function() { closed = true; });
+        w.destroy();
+        if (!w.destroyed) throw new Error('not destroyed');
+        if (!closed) throw new Error('close not emitted');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_duplex_basic_read_write() {
+    let result = eval_js(
+        r#"
+        const { Duplex } = require('stream');
+        let written = '';
+        const d = new Duplex({
+            read: function() {},
+            write: function(chunk, enc, cb) { written += chunk; cb(); }
+        });
+        d.write('hello');
+        d.push('world');
+        let readData = '';
+        d.on('data', function(chunk) { readData += chunk; });
+        d.push('!');
+        if (written !== 'hello') throw new Error('written: ' + written);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_duplex_pipe_to_writable() {
+    let result = eval_js(
+        r#"
+        const { Duplex, Writable } = require('stream');
+        let output = '';
+        const d = new Duplex({
+            read: function() {},
+            write: function(chunk, enc, cb) { cb(); }
+        });
+        const sink = new Writable({ write: function(chunk, enc, cb) { output += chunk; cb(); } });
+        d.pipe(sink);
+        d.push('piped');
+        d.push(null);
+        if (output !== 'piped') throw new Error('got: ' + output);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ===== string_decoder module tests =====
+
+#[test]
+fn test_string_decoder_utf8_complete() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('utf8');
+        const { Buffer } = require('buffer');
+        const out = d.write(Buffer.from('hello'));
+        if (out !== 'hello') throw new Error('got: ' + out);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_utf8_multibyte() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('utf8');
+        const { Buffer } = require('buffer');
+        const out = d.write(Buffer.from('\u00e9'));
+        if (out !== '\u00e9') throw new Error('got: ' + out);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_utf8_split_multibyte() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('utf8');
+        const { Buffer } = require('buffer');
+        // Euro sign U+20AC is 3 bytes: 0xE2 0x82 0xAC
+        var out1 = d.write(Buffer.from([0xE2, 0x82]));
+        var out2 = d.write(Buffer.from([0xAC]));
+        if (out1 !== '') throw new Error('partial should be empty, got: ' + JSON.stringify(out1));
+        if (out2 !== '\u20AC') throw new Error('completed should be euro, got: ' + JSON.stringify(out2));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_end_flushes() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('utf8');
+        const { Buffer } = require('buffer');
+        d.write(Buffer.from([0xE2, 0x82]));
+        var out = d.end();
+        // Incomplete sequence should produce replacement character(s)
+        if (out.length === 0) throw new Error('end should flush something');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_ascii() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('ascii');
+        const { Buffer } = require('buffer');
+        const out = d.write(Buffer.from([0x48, 0x69]));
+        if (out !== 'Hi') throw new Error('got: ' + out);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_base64() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('string_decoder');
+        const d = new StringDecoder('base64');
+        const { Buffer } = require('buffer');
+        const out = d.write(Buffer.from([0x48, 0x65, 0x6C]));
+        // 3 bytes -> 4 base64 chars: "SGVs"
+        if (out !== 'SGVs') throw new Error('got: ' + out);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_string_decoder_node_prefix() {
+    let result = eval_js(
+        r#"
+        const { StringDecoder } = require('node:string_decoder');
+        if (typeof StringDecoder !== 'function') throw new Error('not a function');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
 }

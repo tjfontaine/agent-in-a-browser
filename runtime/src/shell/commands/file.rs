@@ -1165,6 +1165,187 @@ impl FileCommands {
             0
         })
     }
+
+    /// split - split a file into pieces
+    #[shell_command(
+        name = "split",
+        usage = "split [-l LINES] [-b BYTES] [-d] [FILE [PREFIX]]",
+        description = "Split a file into pieces"
+    )]
+    fn cmd_split(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("split") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            let mut lines_per_file: Option<usize> = None;
+            let mut bytes_per_file: Option<usize> = None;
+            let mut numeric_suffix = false;
+            let mut positional: Vec<String> = Vec::new();
+
+            let mut i = 0;
+            while i < remaining.len() {
+                match remaining[i].as_str() {
+                    "-l" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            lines_per_file = remaining[i].parse().ok();
+                        }
+                    }
+                    "-b" => {
+                        i += 1;
+                        if i < remaining.len() {
+                            bytes_per_file = remaining[i].parse().ok();
+                        }
+                    }
+                    "-d" => numeric_suffix = true,
+                    s if !s.starts_with('-') => positional.push(s.to_string()),
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            if positional.is_empty() {
+                let _ = stderr.write_all(b"split: missing operand\n").await;
+                return 1;
+            }
+
+            let input_file = &positional[0];
+            let prefix = if positional.len() > 1 {
+                positional[1].clone()
+            } else {
+                "x".to_string()
+            };
+
+            let input_path = if input_file.starts_with('/') {
+                input_file.clone()
+            } else {
+                format!("{}/{}", cwd, input_file)
+            };
+
+            let content = match std::fs::read(&input_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    let msg = format!("split: {}: {}\n", input_file, e);
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    return 1;
+                }
+            };
+
+            let make_suffix = |idx: usize, numeric: bool| -> String {
+                if numeric {
+                    format!("{:02}", idx)
+                } else {
+                    let a = (b'a' + (idx / 26) as u8) as char;
+                    let b = (b'a' + (idx % 26) as u8) as char;
+                    format!("{}{}", a, b)
+                }
+            };
+
+            let write_chunk = |idx: usize, data: &[u8]| -> Result<(), String> {
+                let suffix = make_suffix(idx, numeric_suffix);
+                let out_path = if prefix.starts_with('/') {
+                    format!("{}{}", prefix, suffix)
+                } else {
+                    format!("{}/{}{}", cwd, prefix, suffix)
+                };
+                std::fs::write(&out_path, data).map_err(|e| format!("split: {}: {}", out_path, e))
+            };
+
+            if let Some(n) = bytes_per_file {
+                let mut idx = 0;
+                for chunk in content.chunks(n) {
+                    if let Err(e) = write_chunk(idx, chunk) {
+                        let _ = stderr.write_all(format!("{}\n", e).as_bytes()).await;
+                        return 1;
+                    }
+                    idx += 1;
+                }
+            } else {
+                let n = lines_per_file.unwrap_or(1000);
+                let text = String::from_utf8_lossy(&content);
+                let lines: Vec<&str> = text.lines().collect();
+                let mut idx = 0;
+                for chunk in lines.chunks(n) {
+                    let mut data = String::new();
+                    for line in chunk {
+                        data.push_str(line);
+                        data.push('\n');
+                    }
+                    if let Err(e) = write_chunk(idx, data.as_bytes()) {
+                        let _ = stderr.write_all(format!("{}\n", e).as_bytes()).await;
+                        return 1;
+                    }
+                    idx += 1;
+                }
+            }
+
+            0
+        })
+    }
+
+    /// chmod - change file mode bits (no-op in sandbox)
+    #[shell_command(
+        name = "chmod",
+        usage = "chmod MODE FILE...",
+        description = "Change file mode bits (no-op in sandbox)"
+    )]
+    fn cmd_chmod(
+        args: Vec<String>,
+        env: &ShellEnv,
+        _stdin: piper::Reader,
+        mut stdout: piper::Writer,
+        mut stderr: piper::Writer,
+    ) -> futures_lite::future::Boxed<i32> {
+        let cwd = env.cwd.to_string_lossy().to_string();
+        Box::pin(async move {
+            let (opts, remaining) = parse_common(&args);
+            if opts.help {
+                if let Some(help) = FileCommands::show_help("chmod") {
+                    let _ = stdout.write_all(help.as_bytes()).await;
+                    return 0;
+                }
+            }
+
+            if remaining.len() < 2 {
+                let _ = stderr.write_all(b"chmod: missing operand\n").await;
+                return 1;
+            }
+
+            // First arg is the mode (ignored), rest are files
+            let files = &remaining[1..];
+            let mut exit_code = 0;
+
+            for file in files {
+                let path = if file.starts_with('/') {
+                    file.clone()
+                } else {
+                    format!("{}/{}", cwd, file)
+                };
+                if !std::path::Path::new(&path).exists() {
+                    let msg = format!(
+                        "chmod: cannot access '{}': No such file or directory\n",
+                        file
+                    );
+                    let _ = stderr.write_all(msg.as_bytes()).await;
+                    exit_code = 1;
+                }
+                // No-op: WASM doesn't have real permissions
+            }
+            exit_code
+        })
+    }
 }
 
 /// Simple glob pattern matching (supports * and ?)
