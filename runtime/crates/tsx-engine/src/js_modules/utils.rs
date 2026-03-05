@@ -53,10 +53,7 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     utils.set(
         "hexEncode",
         Function::new(ctx.clone(), |latin1: String| -> String {
-            latin1
-                .chars()
-                .map(|c| format!("{:02x}", c as u8))
-                .collect()
+            latin1.chars().map(|c| format!("{:02x}", c as u8)).collect()
         })?,
     )?;
 
