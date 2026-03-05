@@ -157,6 +157,21 @@ class Buffer extends Uint8Array {
         }
     }
 
+    fill(value, offset = 0, end = this.length, encoding = 'utf8') {
+        if (typeof value === 'string') {
+            if (typeof offset === 'string') { encoding = offset; offset = 0; end = this.length; }
+            else if (typeof end === 'string') { encoding = end; end = this.length; }
+            const bytes = Buffer._encodeString(value, encoding);
+            if (bytes.length === 0) return this;
+            for (let i = offset; i < end; i++) {
+                this[i] = bytes[(i - offset) % bytes.length];
+            }
+        } else {
+            super.fill(value, offset, end);
+        }
+        return this;
+    }
+
     write(string, offset = 0, length, encoding = 'utf8') {
         if (typeof offset === 'string') {
             encoding = offset;
@@ -167,7 +182,8 @@ class Buffer extends Uint8Array {
         }
 
         const bytes = Buffer._encodeString(string, encoding);
-        const writeLength = Math.min(bytes.length, length || bytes.length, this.length - offset);
+        const remaining = Math.max(0, this.length - offset);
+        const writeLength = Math.min(bytes.length, length || bytes.length, remaining);
 
         for (let i = 0; i < writeLength; i++) {
             this[offset + i] = bytes[i];

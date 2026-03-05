@@ -4556,3 +4556,208 @@ fn test_ios_bridge_photos_namespace() {
     );
     assert_eq!(result.unwrap(), "ok");
 }
+
+// ========================================================================
+// Buffer.fill() tests
+// ========================================================================
+
+#[test]
+fn test_buffer_alloc_fill_string() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(5, 'a');
+        if (buf[0] !== 97) throw new Error('byte0: ' + buf[0]);
+        if (buf[4] !== 97) throw new Error('byte4: ' + buf[4]);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_buffer_alloc_fill_number() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(3, 0xff);
+        if (buf[0] !== 255) throw new Error('byte0: ' + buf[0]);
+        if (buf[2] !== 255) throw new Error('byte2: ' + buf[2]);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_buffer_fill_string_repeats() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(6, 'ab');
+        return buf.toString();
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ababab");
+}
+
+#[test]
+fn test_buffer_fill_with_encoding() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(3);
+        buf.fill('4142', 'hex');
+        return buf.toString();
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ABA");
+}
+
+// ========================================================================
+// Buffer.write() bounds tests
+// ========================================================================
+
+#[test]
+fn test_buffer_write_offset_beyond_length() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(5, 0);
+        var written = buf.write('hello', 10);
+        if (written !== 0) throw new Error('written: ' + written);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_buffer_write_partial() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.alloc(5, 0);
+        var written = buf.write('hello world', 3);
+        if (written !== 2) throw new Error('written: ' + written);
+        return buf.toString('utf8', 3, 5);
+        "#,
+    );
+    assert_eq!(result.unwrap(), "he");
+}
+
+// ========================================================================
+// stream.finished() cleanup tests
+// ========================================================================
+
+#[test]
+fn test_stream_finished_cleanup_removes_listeners() {
+    let result = eval_js(
+        r#"
+        const stream = require('stream');
+        const w = new stream.Writable();
+        var cleanup = stream.finished(w, function() {});
+        var before = w.listenerCount('finish');
+        cleanup();
+        var after = w.listenerCount('finish');
+        if (before !== 1) throw new Error('before: ' + before);
+        if (after !== 0) throw new Error('after: ' + after);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_stream_finished_calls_callback() {
+    let result = eval_js(
+        r#"
+        const stream = require('stream');
+        const w = new stream.Writable();
+        var called = false;
+        stream.finished(w, function(err) { called = true; });
+        w.end();
+        if (!called) throw new Error('not called');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// stream.pipeline() return value tests
+// ========================================================================
+
+#[test]
+fn test_stream_pipeline_returns_last_stream() {
+    let result = eval_js(
+        r#"
+        const stream = require('stream');
+        const r = new stream.Readable({ read: function() { this.push('x'); this.push(null); } });
+        const pt = new stream.PassThrough();
+        var result = stream.pipeline(r, pt, function() {});
+        if (result !== pt) throw new Error('did not return last stream');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// EventEmitter maxListeners tests
+// ========================================================================
+
+#[test]
+fn test_eventemitter_max_listeners_default() {
+    let result = eval_js(
+        r#"
+        const EventEmitter = require('events');
+        const ee = new EventEmitter();
+        if (ee.getMaxListeners() !== 10) throw new Error('default: ' + ee.getMaxListeners());
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_eventemitter_set_max_listeners() {
+    let result = eval_js(
+        r#"
+        const EventEmitter = require('events');
+        const ee = new EventEmitter();
+        ee.setMaxListeners(5);
+        if (ee.getMaxListeners() !== 5) throw new Error('got: ' + ee.getMaxListeners());
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_eventemitter_max_listeners_warns() {
+    // Adding more listeners than maxListeners should not throw, just warn
+    let result = eval_js(
+        r#"
+        const EventEmitter = require('events');
+        const ee = new EventEmitter();
+        ee.setMaxListeners(2);
+        ee.on('test', function() {});
+        ee.on('test', function() {});
+        ee.on('test', function() {}); // exceeds limit — should warn, not throw
+        if (ee.listenerCount('test') !== 3) throw new Error('count: ' + ee.listenerCount('test'));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_eventemitter_zero_max_disables_warning() {
+    // setMaxListeners(0) means unlimited — no warning
+    let result = eval_js(
+        r#"
+        const EventEmitter = require('events');
+        const ee = new EventEmitter();
+        ee.setMaxListeners(0);
+        for (var i = 0; i < 100; i++) ee.on('test', function() {});
+        if (ee.listenerCount('test') !== 100) throw new Error('count: ' + ee.listenerCount('test'));
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}

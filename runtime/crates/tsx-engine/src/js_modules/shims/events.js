@@ -8,9 +8,21 @@
 
     EventEmitter.defaultMaxListeners = 10;
 
+    function _checkMaxListeners(emitter, event) {
+        var max = emitter._maxListeners;
+        if (max > 0 && emitter._events[event] && emitter._events[event].length > max) {
+            console.warn(
+                'MaxListenersExceededWarning: Possible EventEmitter memory leak detected. ' +
+                emitter._events[event].length + ' ' + event + ' listeners added. ' +
+                'Use emitter.setMaxListeners() to increase limit'
+            );
+        }
+    }
+
     EventEmitter.prototype.on = function (event, listener) {
         if (!this._events[event]) this._events[event] = [];
         this._events[event].push({ fn: listener, once: false });
+        _checkMaxListeners(this, event);
         return this;
     };
 
@@ -19,6 +31,7 @@
     EventEmitter.prototype.once = function (event, listener) {
         if (!this._events[event]) this._events[event] = [];
         this._events[event].push({ fn: listener, once: true });
+        _checkMaxListeners(this, event);
         return this;
     };
 

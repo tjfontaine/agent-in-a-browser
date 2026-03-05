@@ -212,6 +212,8 @@
                 cb = function (err) { err ? reject(err) : resolve(); };
             });
         }
+
+        return last;
     }
 
     // --- finished ---
@@ -222,12 +224,23 @@
             if (cb) { var fn = cb; cb = null; fn(err); }
         }
 
-        stream.on('finish', function () { done(null); });
-        stream.on('end', function () { done(null); });
-        stream.on('error', function (err) { done(err); });
-        stream.on('close', function () { done(null); });
+        function onFinish() { done(null); }
+        function onEnd() { done(null); }
+        function onError(err) { done(err); }
+        function onClose() { done(null); }
 
-        return function cleanup() { cb = null; };
+        stream.on('finish', onFinish);
+        stream.on('end', onEnd);
+        stream.on('error', onError);
+        stream.on('close', onClose);
+
+        return function cleanup() {
+            cb = null;
+            stream.removeListener('finish', onFinish);
+            stream.removeListener('end', onEnd);
+            stream.removeListener('error', onError);
+            stream.removeListener('close', onClose);
+        };
     }
 
     var streamModule = {
