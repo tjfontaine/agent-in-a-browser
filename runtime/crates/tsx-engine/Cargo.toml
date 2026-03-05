@@ -60,6 +60,9 @@ serde_json = "1"
 # Async executor
 futures-lite = "2"
 
+[dev-dependencies]
+proptest = "1"
+
 
 [package.metadata.component]
 package = "shell:unix"

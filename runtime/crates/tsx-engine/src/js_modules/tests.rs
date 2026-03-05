@@ -1,8 +1,10 @@
 //! Tests for JavaScript modules.
 //!
 //! These tests verify the Node.js-compatible APIs provided by js_modules.
+//! Includes property-based tests (proptest) for encoding roundtrip invariants.
 
 use super::*;
+use proptest::prelude::*;
 use rquickjs::{AsyncContext, AsyncRuntime, CatchResultExt};
 
 /// Helper to evaluate JavaScript code and return the result as a string.
@@ -4760,4 +4762,228 @@ fn test_eventemitter_zero_max_disables_warning() {
         "#,
     );
     assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Property-based tests (proptest)
+// ========================================================================
+
+/// Escape a string for safe embedding in JS source code.
+/// Handles backslashes, quotes, newlines, and non-ASCII via \uXXXX escapes.
+fn js_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\0' => out.push_str("\\0"),
+            c if c.is_ascii_graphic() || c == ' ' => out.push(c),
+            c => {
+                // Use \uXXXX for non-ASCII (handles BMP); surrogate pairs for supplementary
+                let mut buf = [0u16; 2];
+                for unit in c.encode_utf16(&mut buf) {
+                    out.push_str(&format!("\\u{:04x}", unit));
+                }
+            }
+        }
+    }
+    out
+}
+
+proptest! {
+    // --- UTF-8 roundtrip: decode(encode(s)) === s for any string ---
+    #[test]
+    fn prop_utf8_roundtrip(s in "\\PC{0,100}") {
+        let escaped = js_escape(&s);
+        let code = format!(
+            r#"
+            var s = "{}";
+            var encoded = globalThis.__tsxUtils__.utf8Encode(s);
+            var decoded = globalThis.__tsxUtils__.utf8Decode(encoded);
+            if (decoded !== s) throw new Error('roundtrip failed');
+            return 'ok';
+            "#,
+            escaped
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Base64 roundtrip: decode(encode(s)) === s for any latin1 bytes ---
+    #[test]
+    fn prop_base64_roundtrip(bytes in proptest::collection::vec(0u8..=255, 0..100)) {
+        // Build a latin1 string from raw bytes
+        let latin1_chars: String = bytes.iter().map(|&b| {
+            format!("\\u{:04x}", b)
+        }).collect();
+        let code = format!(
+            r#"
+            var s = "{}";
+            var encoded = globalThis.__tsxUtils__.base64Encode(s);
+            var decoded = globalThis.__tsxUtils__.base64Decode(encoded);
+            if (decoded !== s) throw new Error('roundtrip failed: len ' + s.length + ' vs ' + decoded.length);
+            return 'ok';
+            "#,
+            latin1_chars
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Hex roundtrip: decode(encode(s)) === s for any latin1 bytes ---
+    #[test]
+    fn prop_hex_roundtrip(bytes in proptest::collection::vec(0u8..=255, 0..100)) {
+        let latin1_chars: String = bytes.iter().map(|&b| {
+            format!("\\u{:04x}", b)
+        }).collect();
+        let code = format!(
+            r#"
+            var s = "{}";
+            var encoded = globalThis.__tsxUtils__.hexEncode(s);
+            var decoded = globalThis.__tsxUtils__.hexDecode(encoded);
+            if (decoded !== s) throw new Error('roundtrip failed');
+            return 'ok';
+            "#,
+            latin1_chars
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- TextEncoder/TextDecoder roundtrip matches __tsxUtils__ ---
+    #[test]
+    fn prop_text_encoder_roundtrip(s in "\\PC{0,80}") {
+        let escaped = js_escape(&s);
+        let code = format!(
+            r#"
+            var s = "{}";
+            var encoded = new TextEncoder().encode(s);
+            var decoded = new TextDecoder().decode(encoded);
+            if (decoded !== s) throw new Error('roundtrip failed');
+            return 'ok';
+            "#,
+            escaped
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Buffer hex roundtrip: Buffer.from(hex, 'hex').toString('hex') === hex ---
+    #[test]
+    fn prop_buffer_hex_roundtrip(bytes in proptest::collection::vec(0u8..=255, 0..50)) {
+        let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        let code = format!(
+            r#"
+            var hex = '{}';
+            var buf = Buffer.from(hex, 'hex');
+            var result = buf.toString('hex');
+            if (result !== hex) throw new Error('roundtrip: ' + result + ' vs ' + hex);
+            return 'ok';
+            "#,
+            hex
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Buffer base64 roundtrip ---
+    #[test]
+    fn prop_buffer_base64_roundtrip(bytes in proptest::collection::vec(0u8..=255, 0..50)) {
+        // Build buffer from bytes, encode to base64, decode back
+        let arr = bytes.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(",");
+        let code = format!(
+            r#"
+            var buf = Buffer.from([{}]);
+            var b64 = buf.toString('base64');
+            var buf2 = Buffer.from(b64, 'base64');
+            if (buf.length !== buf2.length) throw new Error('length: ' + buf.length + ' vs ' + buf2.length);
+            for (var i = 0; i < buf.length; i++) {{
+                if (buf[i] !== buf2[i]) throw new Error('byte ' + i + ': ' + buf[i] + ' vs ' + buf2[i]);
+            }}
+            return 'ok';
+            "#,
+            arr
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Buffer UTF-8 roundtrip ---
+    #[test]
+    fn prop_buffer_utf8_roundtrip(s in "[a-zA-Z0-9 !@#$%^&*()]{0,80}") {
+        let escaped = js_escape(&s);
+        let code = format!(
+            r#"
+            var s = "{}";
+            var buf = Buffer.from(s);
+            var result = buf.toString();
+            if (result !== s) throw new Error('roundtrip failed');
+            return 'ok';
+            "#,
+            escaped
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Crypto hash determinism: same input always produces same hash ---
+    #[test]
+    fn prop_crypto_hash_deterministic(s in "\\PC{0,50}") {
+        let escaped = js_escape(&s);
+        let code = format!(
+            r#"
+            var s = "{}";
+            var c = require('crypto');
+            var h1 = c.createHash('sha256').update(s).digest('hex');
+            var h2 = c.createHash('sha256').update(s).digest('hex');
+            if (h1 !== h2) throw new Error('non-deterministic');
+            if (h1.length !== 64) throw new Error('bad length: ' + h1.length);
+            return 'ok';
+            "#,
+            escaped
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- Buffer.alloc fill consistency: all bytes equal ---
+    #[test]
+    fn prop_buffer_alloc_fill(size in 1usize..64, fill_byte in 0u8..=255) {
+        let code = format!(
+            r#"
+            var buf = Buffer.alloc({}, {});
+            for (var i = 0; i < buf.length; i++) {{
+                if (buf[i] !== {}) throw new Error('byte ' + i + ': ' + buf[i]);
+            }}
+            return 'ok';
+            "#,
+            size, fill_byte, fill_byte
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
+
+    // --- btoa/atob roundtrip for latin1 strings ---
+    #[test]
+    fn prop_btoa_atob_roundtrip(bytes in proptest::collection::vec(0u8..=255, 0..80)) {
+        let latin1_chars: String = bytes.iter().map(|&b| {
+            format!("\\u{:04x}", b)
+        }).collect();
+        let code = format!(
+            r#"
+            var s = "{}";
+            var encoded = btoa(s);
+            var decoded = atob(encoded);
+            if (decoded !== s) throw new Error('roundtrip failed: len ' + s.length + ' vs ' + decoded.length);
+            return 'ok';
+            "#,
+            latin1_chars
+        );
+        let result = eval_js(&code);
+        prop_assert_eq!(result.unwrap(), "ok");
+    }
 }
