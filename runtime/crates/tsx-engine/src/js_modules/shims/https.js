@@ -5,10 +5,16 @@
     var EventEmitter = globalThis.__tsxBuiltinModules.get('events');
     if (!EventEmitter) throw new Error('https module requires events module to be loaded first');
 
+    var streamMod = globalThis.__tsxBuiltinModules.get('stream');
+    if (!streamMod) throw new Error('https module requires stream module to be loaded first');
+
+    var Readable = streamMod.Readable;
+
     // --- IncomingMessage ---
     // Represents an HTTP response received by the client.
+    // Extends Readable stream (consistent with http module).
     function IncomingMessage(statusCode, statusMessage, headers, body) {
-        EventEmitter.call(this);
+        Readable.call(this);
         this.statusCode = statusCode;
         this.statusMessage = statusMessage || '';
         this.headers = headers || {};
@@ -18,15 +24,15 @@
         this.complete = false;
         this._body = body || '';
     }
-    IncomingMessage.prototype = Object.create(EventEmitter.prototype);
+    IncomingMessage.prototype = Object.create(Readable.prototype);
     IncomingMessage.prototype.constructor = IncomingMessage;
 
     IncomingMessage.prototype._deliver = function () {
         if (this._body && this._body.length > 0) {
-            this.emit('data', this._body);
+            this.push(this._body);
         }
         this.complete = true;
-        this.emit('end');
+        this.push(null); // signals end
     };
 
     IncomingMessage.prototype.setEncoding = function () {

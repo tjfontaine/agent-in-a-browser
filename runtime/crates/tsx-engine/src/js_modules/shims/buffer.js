@@ -92,12 +92,12 @@ class Buffer extends Uint8Array {
         encoding = String(encoding).toLowerCase();
 
         switch (encoding) {
-            case 'hex':
-                const hexBytes = [];
-                for (let i = 0; i < str.length; i += 2) {
-                    hexBytes.push(parseInt(str.substr(i, 2), 16));
-                }
+            case 'hex': {
+                const latin1 = globalThis.__tsxUtils__.hexDecode(str);
+                const hexBytes = new Array(latin1.length);
+                for (let i = 0; i < latin1.length; i++) hexBytes[i] = latin1.charCodeAt(i);
                 return hexBytes;
+            }
 
             case 'base64':
                 const binaryStr = atob(str);
@@ -129,10 +129,11 @@ class Buffer extends Uint8Array {
         const slice = this.subarray(start, end);
 
         switch (encoding) {
-            case 'hex':
-                return Array.from(slice)
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
+            case 'hex': {
+                let latin1 = '';
+                for (let i = 0; i < slice.length; i++) latin1 += String.fromCharCode(slice[i]);
+                return globalThis.__tsxUtils__.hexEncode(latin1);
+            }
 
             case 'base64':
                 let binary = '';

@@ -63,21 +63,36 @@ use rquickjs::{Ctx, Result};
 ///
 /// The `__tsxUtils__` bridge (utils.rs) provides shared UTF-8, base64, and hex primitives.
 /// JS shims should delegate to these instead of reimplementing encoding logic.
+///
+/// ## Install ordering contract
+///
+/// The install order below is load-bearing. Key dependencies:
+///
+/// 1. `utils` — first; provides `__tsxUtils__` used by crypto, encoding, buffer, string_decoder
+/// 2. `process` — initializes `__tsxBuiltinModules` Map and `require()`. All subsequent shims
+///    that call `.set()` or `.get()` on this Map depend on process being loaded first.
+/// 3. `events` — before stream, http, https, zlib, and all modules that extend EventEmitter
+/// 4. `stream` — before http, https, zlib (they extend Readable/Writable/Transform)
+/// 5. `encoding` — before buffer (Buffer uses TextEncoder/TextDecoder)
+///
+/// Adding defensive `if (!__tsxBuiltinModules)` checks is unnecessary because this Rust
+/// function enforces the ordering. If you add a new shim that depends on another, place it
+/// after its dependency here and document the relationship with a comment.
 pub fn install_all(ctx: &Ctx<'_>) -> Result<()> {
     utils::install(ctx)?; // Install first — shared encoding bridge used by crypto, encoding, buffer, etc.
     console::install(ctx)?;
-    process::install(ctx)?; // Install process early so it's available (sets up require + builtin registry)
-    timers::install(ctx)?; // Install timers after process (depends on timer globals from process.js)
-    events::install(ctx)?;
+    process::install(ctx)?; // Initializes __tsxBuiltinModules, require(), timers — must precede all module registrations
+    timers::install(ctx)?; // After process (depends on timer globals from process.js)
+    events::install(ctx)?; // Before stream, http, https, zlib, and all EventEmitter-based modules
     crypto::install(ctx)?;
     os::install(ctx)?;
     util::install(ctx)?;
     assert::install(ctx)?;
-    stream::install(ctx)?;
+    stream::install(ctx)?; // Before http, https, zlib (they extend Readable/Writable/Transform)
     path::install(ctx)?;
     fs_promises::install(ctx)?;
     fetch::install(ctx)?;
-    encoding::install(ctx)?;
+    encoding::install(ctx)?; // Before buffer (Buffer uses TextEncoder/TextDecoder/btoa/atob)
     buffer::install(ctx)?;
     url::install(ctx)?;
     querystring::install(ctx)?;

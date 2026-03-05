@@ -4114,3 +4114,445 @@ fn test_string_decoder_has_write_method() {
     );
     assert_eq!(result.unwrap(), "ok");
 }
+
+// ========================================================================
+// Buffer hex/base64 bridge tests
+// ========================================================================
+
+#[test]
+fn test_buffer_hex_encode_via_bridge() {
+    let result = eval_js("return Buffer.from([0x48, 0x65, 0x6c]).toString('hex')").unwrap();
+    assert_eq!(result, "48656c");
+}
+
+#[test]
+fn test_buffer_hex_decode_via_bridge() {
+    let result = eval_js(
+        r#"
+        var buf = Buffer.from('48656c6c6f', 'hex');
+        return buf.toString('utf8');
+        "#,
+    );
+    assert_eq!(result.unwrap(), "Hello");
+}
+
+#[test]
+fn test_buffer_hex_roundtrip() {
+    let result = eval_js(
+        r#"
+        var original = Buffer.from('Hello, World!');
+        var hex = original.toString('hex');
+        var decoded = Buffer.from(hex, 'hex');
+        return decoded.toString();
+        "#,
+    );
+    assert_eq!(result.unwrap(), "Hello, World!");
+}
+
+// ========================================================================
+// Fetch / AbortController / Request tests
+// ========================================================================
+
+#[test]
+fn test_abort_controller_reason() {
+    let result = eval_js(
+        r#"
+        const c = new AbortController();
+        const reason = new Error('custom reason');
+        c.abort(reason);
+        return c.signal.reason.message;
+        "#,
+    );
+    assert_eq!(result.unwrap(), "custom reason");
+}
+
+#[test]
+fn test_abort_controller_default_reason() {
+    let result = eval_js(
+        r#"
+        const c = new AbortController();
+        c.abort();
+        return c.signal.reason.message;
+        "#,
+    );
+    assert_eq!(result.unwrap(), "Aborted");
+}
+
+#[test]
+fn test_abort_signal_listener() {
+    let result = eval_js(
+        r#"
+        const c = new AbortController();
+        let fired = false;
+        c.signal.addEventListener('abort', () => { fired = true; });
+        c.abort();
+        return String(fired);
+        "#,
+    );
+    assert_eq!(result.unwrap(), "true");
+}
+
+#[test]
+fn test_abort_signal_remove_listener() {
+    let result = eval_js(
+        r#"
+        const c = new AbortController();
+        let fired = false;
+        const fn = () => { fired = true; };
+        c.signal.addEventListener('abort', fn);
+        c.signal.removeEventListener('abort', fn);
+        c.abort();
+        return String(fired);
+        "#,
+    );
+    assert_eq!(result.unwrap(), "false");
+}
+
+#[test]
+fn test_abort_signal_double_abort() {
+    let result = eval_js(
+        r#"
+        const c = new AbortController();
+        let count = 0;
+        c.signal.addEventListener('abort', () => { count++; });
+        c.abort();
+        c.abort(); // second abort should be no-op
+        return String(count);
+        "#,
+    );
+    assert_eq!(result.unwrap(), "1");
+}
+
+#[test]
+fn test_request_class_from_request_object() {
+    let result = eval_js(
+        r#"
+        const r1 = new Request('https://example.com', { method: 'POST', body: 'test' });
+        const r2 = new Request(r1, { method: 'PUT' });
+        return r2.url + '|' + r2.method;
+        "#,
+    );
+    assert_eq!(result.unwrap(), "https://example.com|PUT");
+}
+
+#[test]
+fn test_request_class_default_method() {
+    let result = eval_js(
+        r#"
+        const req = new Request('https://example.com');
+        return req.method;
+        "#,
+    );
+    assert_eq!(result.unwrap(), "GET");
+}
+
+#[test]
+fn test_request_class_headers() {
+    let result = eval_js(
+        r#"
+        const req = new Request('https://example.com', {
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return req.headers.get('Content-Type');
+        "#,
+    );
+    assert_eq!(result.unwrap(), "application/json");
+}
+
+// ========================================================================
+// HTTPS IncomingMessage stream consistency tests
+// ========================================================================
+
+#[test]
+fn test_https_incoming_message_extends_readable() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        const stream = require('stream');
+        const msg = new https.IncomingMessage(200, 'OK', {}, 'body');
+        if (!(msg instanceof stream.Readable)) throw new Error('not a Readable');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_https_incoming_message_has_push() {
+    let result = eval_js(
+        r#"
+        const https = require('https');
+        const msg = new https.IncomingMessage(200, 'OK', {}, 'test');
+        if (typeof msg.push !== 'function') throw new Error('no push method');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+// ========================================================================
+// Process module tests
+// ========================================================================
+
+#[test]
+fn test_process_exit_throws() {
+    let result =
+        eval_js("try { process.exit(1); return 'no throw'; } catch(e) { return e.message; }");
+    assert_eq!(result.unwrap(), "process.exit(1)");
+}
+
+#[test]
+fn test_process_exit_default_code() {
+    let result =
+        eval_js("try { process.exit(); return 'no throw'; } catch(e) { return e.message; }");
+    assert_eq!(result.unwrap(), "process.exit(0)");
+}
+
+#[test]
+fn test_process_next_tick_exists() {
+    let result = eval_js("return typeof process.nextTick");
+    assert_eq!(result.unwrap(), "function");
+}
+
+#[test]
+fn test_process_hrtime_returns_array() {
+    let result = eval_js(
+        r#"
+        var t = process.hrtime();
+        if (!Array.isArray(t)) throw new Error('not array');
+        if (t.length !== 2) throw new Error('length: ' + t.length);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_process_hrtime_diff() {
+    let result = eval_js(
+        r#"
+        var start = process.hrtime();
+        var diff = process.hrtime(start);
+        if (!Array.isArray(diff)) throw new Error('not array');
+        if (diff.length !== 2) throw new Error('length: ' + diff.length);
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_process_stdout_write_returns_true() {
+    let result = eval_js("return String(process.stdout.write('test'))");
+    assert_eq!(result.unwrap(), "true");
+}
+
+#[test]
+fn test_process_stderr_write_returns_true() {
+    let result = eval_js("return String(process.stderr.write('test'))");
+    assert_eq!(result.unwrap(), "true");
+}
+
+#[test]
+fn test_process_stdout_is_not_tty() {
+    let result = eval_js("return String(process.stdout.isTTY)");
+    assert_eq!(result.unwrap(), "false");
+}
+
+#[test]
+fn test_process_platform() {
+    let result = eval_js("return typeof process.platform");
+    assert_eq!(result.unwrap(), "string");
+}
+
+#[test]
+fn test_process_env_is_object() {
+    let result = eval_js("return typeof process.env");
+    assert_eq!(result.unwrap(), "object");
+}
+
+#[test]
+fn test_process_chdir_relative() {
+    let result = eval_js_with_runtime(
+        r#"
+        process.chdir('subdir');
+        return process.cwd();
+        "#,
+        "/work/project".to_string(),
+        Vec::new(),
+    );
+    assert_eq!(result.unwrap(), "/work/project/subdir");
+}
+
+#[test]
+fn test_process_chdir_dotdot() {
+    let result = eval_js_with_runtime(
+        r#"
+        process.chdir('..');
+        return process.cwd();
+        "#,
+        "/work/project".to_string(),
+        Vec::new(),
+    );
+    assert_eq!(result.unwrap(), "/work");
+}
+
+#[test]
+fn test_process_chdir_empty_throws() {
+    let result =
+        eval_js("try { process.chdir(''); return 'no throw'; } catch(e) { return 'threw'; }");
+    assert_eq!(result.unwrap(), "threw");
+}
+
+// ========================================================================
+// iOS Bridge tests
+// ========================================================================
+
+#[test]
+fn test_ios_bridge_global_exists() {
+    let result = eval_js("return typeof globalThis.ios");
+    assert_eq!(result.unwrap(), "object");
+}
+
+#[test]
+fn test_ios_bridge_storage_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.storage.get !== 'function') throw new Error('no get');
+        if (typeof ios.storage.set !== 'function') throw new Error('no set');
+        if (typeof ios.storage.remove !== 'function') throw new Error('no remove');
+        if (typeof ios.storage.keys !== 'function') throw new Error('no keys');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_device_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.device.info !== 'function') throw new Error('no info');
+        if (typeof ios.device.connectivity !== 'function') throw new Error('no connectivity');
+        if (typeof ios.device.locale !== 'function') throw new Error('no locale');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_render_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.render.show !== 'function') throw new Error('no show');
+        if (typeof ios.render.patch !== 'function') throw new Error('no patch');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_permissions_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.permissions.request !== 'function') throw new Error('no request');
+        if (typeof ios.permissions.revoke !== 'function') throw new Error('no revoke');
+        if (typeof ios.permissions.check !== 'function') throw new Error('no check');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_contacts_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.contacts.search !== 'function') throw new Error('no search');
+        if (typeof ios.contacts.get !== 'function') throw new Error('no get');
+        if (typeof ios.contacts.authorizationStatus !== 'function') throw new Error('no auth');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_calendar_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.calendar.calendars !== 'function') throw new Error('no calendars');
+        if (typeof ios.calendar.events !== 'function') throw new Error('no events');
+        if (typeof ios.calendar.createEvent !== 'function') throw new Error('no createEvent');
+        if (typeof ios.calendar.reminders !== 'function') throw new Error('no reminders');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_clipboard_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.clipboard.get !== 'function') throw new Error('no get');
+        if (typeof ios.clipboard.set !== 'function') throw new Error('no set');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_location_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.location.current !== 'function') throw new Error('no current');
+        if (typeof ios.location.geocode !== 'function') throw new Error('no geocode');
+        if (typeof ios.location.reverseGeocode !== 'function') throw new Error('no reverseGeocode');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_health_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.health.query !== 'function') throw new Error('no query');
+        if (typeof ios.health.statistics !== 'function') throw new Error('no statistics');
+        if (typeof ios.health.authorizationStatus !== 'function') throw new Error('no auth');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_keychain_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.keychain.get !== 'function') throw new Error('no get');
+        if (typeof ios.keychain.set !== 'function') throw new Error('no set');
+        if (typeof ios.keychain.remove !== 'function') throw new Error('no remove');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
+
+#[test]
+fn test_ios_bridge_photos_namespace() {
+    let result = eval_js(
+        r#"
+        if (typeof ios.photos.search !== 'function') throw new Error('no search');
+        if (typeof ios.photos.asset !== 'function') throw new Error('no asset');
+        if (typeof ios.photos.albums !== 'function') throw new Error('no albums');
+        return 'ok';
+        "#,
+    );
+    assert_eq!(result.unwrap(), "ok");
+}
