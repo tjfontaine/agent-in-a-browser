@@ -19,11 +19,23 @@ pub fn install(ctx: &Ctx<'_>) -> Result<()> {
     // ========================================================================
 
     // fs.readFileSync(path, options?)
+    // When encoding is specified (e.g. 'utf8'), returns a string.
+    // When no encoding, also returns a string (Node.js returns Buffer, but
+    // our tsx-engine doesn't have full Buffer support — callers use .toString()).
     let read_file_sync = Function::new(
         ctx.clone(),
         |path: String, options: Value| -> rquickjs::Result<String> {
-            let _encoding = get_encoding(&options);
-            std::fs::read_to_string(&path).map_err(rquickjs::Error::Io)
+            let encoding = get_encoding(&options);
+            let bytes = std::fs::read(&path).map_err(rquickjs::Error::Io)?;
+            match encoding.as_deref() {
+                Some("utf8" | "utf-8") | None => String::from_utf8(bytes).map_err(|e| {
+                    rquickjs::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                }),
+                Some(enc) => Err(rquickjs::Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    format!("unsupported encoding: {enc}"),
+                ))),
+            }
         },
     )?;
     fs.set("readFileSync", read_file_sync)?;

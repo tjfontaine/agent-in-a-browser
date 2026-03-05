@@ -29,7 +29,8 @@ import {
     getEntryFromOpfs,
     getTreeEntryWithScan,
     listDirectory,
-    type TreeEntry
+    type TreeEntry,
+    registerFileBufferCache
 } from './directory-tree';
 import {
     initHelperWorker,
@@ -48,6 +49,8 @@ import { hasJSPI } from './execution-mode';
 // This persists data across writeViaStream() calls since each call creates a new OutputStream.
 // Key: normalized file path, Value: accumulated binary data
 const fileBufferCache = new Map<string, Uint8Array>();
+// Register with directory-tree so getEntryFromOpfs can find buffered files
+registerFileBufferCache(fileBufferCache);
 
 // ============================================================
 // WASI TYPES & CLASSES
@@ -196,17 +199,29 @@ class OpfsDescriptor {
     }
 
     async openAt(
-        _pathFlags: number,
+        pathFlags: number,
         subpath: string,
         openFlags: { create?: boolean; directory?: boolean; truncate?: boolean },
         _descriptorFlags: number,
         _modes: number
     ): Promise<Descriptor> {
-        const fullPath = this.resolvePath(subpath);
-        const normalizedPath = normalizePath(fullPath);
+        const rawPath = this.resolvePath(subpath);
+        // Follow symlinks: check path-flags bit 0, but also always resolve
+        // if the entry is a symlink (symlink entries can't be read as files)
+        const shouldFollow = (pathFlags & 1) !== 0;
+        let fullPath = shouldFollow ? resolveSymlinks(rawPath) : rawPath;
+        let normalizedPath = normalizePath(fullPath);
 
         // Use async tree entry lookup that scans directories lazily
         let entry = await getTreeEntryWithScan(fullPath);
+
+        // If entry is a symlink and we didn't follow, resolve now
+        // (symlink entries can't be opened as files/dirs directly)
+        if (entry && entry.symlink !== undefined) {
+            fullPath = resolveSymlinks(rawPath);
+            normalizedPath = normalizePath(fullPath);
+            entry = await getTreeEntryWithScan(fullPath);
+        }
 
         if (!entry && openFlags.create) {
             // Create new entry with current timestamp
@@ -378,14 +393,20 @@ class OpfsDescriptor {
             async blockingRead(len: bigint): Promise<Uint8Array> {
                 // Lazy load file on first read
                 if (fileData === null) {
-                    try {
-                        fileData = await asyncReadFile(asyncPath);
-                        fileSize = fileData.length;
-                    } catch (e) {
-                        console.error('[opfs-fs] readViaStream async fallback error:', e);
-                        // Set to empty array to signal EOF rather than hanging
-                        fileData = new Uint8Array(0);
-                        fileSize = 0;
+                    // Check buffer cache first (file may not be flushed to OPFS yet)
+                    const buffered = fileBufferCache.get(asyncPath);
+                    if (buffered) {
+                        fileData = buffered;
+                        fileSize = buffered.length;
+                    } else {
+                        try {
+                            fileData = await asyncReadFile(asyncPath);
+                            fileSize = fileData.length;
+                        } catch (e) {
+                            console.error('[opfs-fs] readViaStream async fallback error:', e);
+                            fileData = new Uint8Array(0);
+                            fileSize = 0;
+                        }
                     }
                 }
 
@@ -728,17 +749,22 @@ class OpfsDescriptor {
             throw 'not-directory';
         }
 
+        // POSIX rmdir: directory must be empty
+        const entries = await listDirectory(normalizedPath);
+        if (entries.length > 0) {
+            throw 'not-empty';
+        }
+
         // Delete any symlinks under this directory from IndexedDB
         deleteSymlinksUnderPath(normalizedPath).catch(e => {
             console.error('[opfs-fs] Failed to cascade delete symlinks:', normalizedPath, e);
         });
 
-        // Remove from OPFS (async)
-        this.removeOpfsEntry(normalizedPath, true);
+        // Remove from OPFS — non-recursive since we verified it's empty
+        await this.removeOpfsEntry(normalizedPath, false);
     }
 
     async renameAt(
-        _oldPathFlags: number,
         oldPath: string,
         newDescriptor: Descriptor,
         newPath: string
@@ -746,24 +772,26 @@ class OpfsDescriptor {
         const oldFullPath = this.resolvePath(oldPath);
         const oldNormalized = normalizePath(oldFullPath);
 
-        // Resolve new path relative to new descriptor
-        const newFullPath = newDescriptor.resolvePath(newPath);
+        // Resolve new path — newDescriptor may be a JCO resource handle
+        // without resolvePath. In OPFS all paths share the same root.
+        const newFullPath = (typeof newDescriptor?.resolvePath === 'function')
+            ? newDescriptor.resolvePath(newPath)
+            : this.resolvePath(newPath);
         const newNormalized = normalizePath(newFullPath);
 
+        // Check fileBufferCache first — in JSPI mode, writes may not have
+        // flushed to OPFS yet (fire-and-forget asyncWriteFile in write()).
+        const bufferedData = fileBufferCache.get(oldNormalized);
 
-        // Get old entry from OPFS
-        const oldEntry = await getEntryFromOpfs(oldNormalized);
+        // Get old entry from OPFS (or trust buffer cache as proof of existence)
+        const oldEntry = bufferedData
+            ? { size: bufferedData.length, mtime: Date.now() } as TreeEntry
+            : await getEntryFromOpfs(oldNormalized);
         if (!oldEntry) {
             throw 'no-entry';
         }
 
-        // Check if new path already exists in OPFS
-        const existingEntry = await getEntryFromOpfs(newNormalized);
-        if (existingEntry) {
-            throw 'exist';
-        }
-
-        // For files, handle sync handle
+        // For files, close sync handle if any
         if (oldEntry.dir === undefined) {
             const handle = syncHandleCache.get(oldNormalized);
             if (handle) {
@@ -776,66 +804,73 @@ class OpfsDescriptor {
             }
         }
 
-        // Move in OPFS (async operation)
-        this.moveInOpfs(oldNormalized, newNormalized, oldEntry.dir !== undefined);
+        // Move: use buffered data if available, otherwise read from OPFS
+        await this.moveInOpfs(oldNormalized, newNormalized, oldEntry.dir !== undefined, bufferedData);
+
+        // Migrate buffer cache entry to new path
+        if (bufferedData) {
+            fileBufferCache.delete(oldNormalized);
+            fileBufferCache.set(newNormalized, bufferedData);
+        }
     }
 
-    private moveInOpfs(oldPath: string, newPath: string, isDirectory: boolean): void {
-        const move = async () => {
-            try {
-                if (isDirectory) {
-                    // For directories, we need to create new and copy recursively, then delete old
-                    // This is complex - for now just log
-                    console.warn('[opfs-fs] Directory rename in OPFS not fully implemented:', oldPath, '->', newPath);
-                    return;
-                }
+    private async moveInOpfs(oldPath: string, newPath: string, isDirectory: boolean, bufferedData?: Uint8Array): Promise<void> {
+        if (isDirectory) {
+            console.warn('[opfs-fs] Directory rename in OPFS not fully implemented:', oldPath, '->', newPath);
+            return;
+        }
 
-                // For files: read old content, create new file, write content, delete old
-                const oldParts = oldPath.split('/').filter(p => p && p !== '.');
-                const newParts = newPath.split('/').filter(p => p && p !== '.');
+        const newParts = newPath.split('/').filter(p => p && p !== '.');
+        if (newParts.length === 0) return;
 
-                if (oldParts.length === 0 || newParts.length === 0) return;
+        const newName = newParts.pop()!;
+        const newParent = newParts.length > 0
+            ? await getOpfsDirectory(newParts, true)
+            : getOpfsRoot();
+        if (!newParent) {
+            throw new Error(`Cannot find parent directory for move target: ${newPath}`);
+        }
 
-                const oldName = oldParts.pop()!;
-                const newName = newParts.pop()!;
-
-                const oldParent = oldParts.length > 0
-                    ? await getOpfsDirectory(oldParts, false)
-                    : getOpfsRoot();
-
-                const newParent = newParts.length > 0
-                    ? await getOpfsDirectory(newParts, true)
-                    : getOpfsRoot();
-
-                if (!oldParent || !newParent) {
-                    console.error('[opfs-fs] Cannot find parent directories for move');
-                    return;
-                }
-
-                // Get old file and read content
-                const oldFileHandle = await oldParent.getFileHandle(oldName);
-                const oldFile = await oldFileHandle.getFile();
-                const content = await oldFile.arrayBuffer();
-
-                // Create new file and write
-                const newFileHandle = await newParent.getFileHandle(newName, { create: true });
-                const writable = await newFileHandle.createWritable();
-                await writable.write(content);
-                await writable.close();
-
-                // Acquire sync handle for new file
-                const syncHandle = await newFileHandle.createSyncAccessHandle();
-                syncHandleCache.set(newPath, syncHandle);
-
-                // Delete old file
-                await oldParent.removeEntry(oldName);
-
-            } catch (e) {
-                console.error('[opfs-fs] Failed to move in OPFS:', oldPath, '->', newPath, e);
+        // Get content: prefer buffered data, fall back to OPFS read
+        let content: ArrayBuffer;
+        if (bufferedData) {
+            content = bufferedData.buffer as ArrayBuffer;
+        } else {
+            const oldParts = oldPath.split('/').filter(p => p && p !== '.');
+            if (oldParts.length === 0) return;
+            const oldName = oldParts.pop()!;
+            const oldParent = oldParts.length > 0
+                ? await getOpfsDirectory(oldParts, false)
+                : getOpfsRoot();
+            if (!oldParent) {
+                throw new Error(`Cannot find parent directory for move source: ${oldPath}`);
             }
-        };
+            const oldFileHandle = await oldParent.getFileHandle(oldName);
+            const oldFile = await oldFileHandle.getFile();
+            content = await oldFile.arrayBuffer();
+        }
 
-        move();
+        // Create new file and write
+        const newFileHandle = await newParent.getFileHandle(newName, { create: true });
+        const writable = await newFileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+
+        // Delete old file from OPFS (may not exist if only in buffer cache)
+        const oldParts2 = oldPath.split('/').filter(p => p && p !== '.');
+        if (oldParts2.length > 0) {
+            const oldName2 = oldParts2.pop()!;
+            const oldParent2 = oldParts2.length > 0
+                ? await getOpfsDirectory(oldParts2, false)
+                : getOpfsRoot();
+            if (oldParent2) {
+                try {
+                    await oldParent2.removeEntry(oldName2);
+                } catch {
+                    // File may not exist in OPFS if it was only in buffer cache
+                }
+            }
+        }
     }
 
     /**
@@ -893,52 +928,43 @@ class OpfsDescriptor {
             syncHandleCache.delete(normalizedPath);
         }
 
-        // Remove from OPFS (async)
-        this.removeOpfsEntry(normalizedPath, false);
+        // Remove from OPFS
+        await this.removeOpfsEntry(normalizedPath, false);
     }
 
-    private removeOpfsEntry(path: string, isDirectory: boolean): void {
+    private async removeOpfsEntry(path: string, isDirectory: boolean): Promise<void> {
         const parts = path.split('/').filter(p => p && p !== '.');
         if (parts.length === 0) return;
 
         const name = parts.pop()!;
 
-        // Get parent directory
-        const getParentAndRemove = async () => {
-            try {
-                const parentDir = parts.length > 0
-                    ? await getOpfsDirectory(parts, false)
-                    : getOpfsRoot();
+        const parentDir = parts.length > 0
+            ? await getOpfsDirectory(parts, false)
+            : getOpfsRoot();
 
-                if (!parentDir) {
-                    console.warn('[opfs-fs] No parent directory for removal:', path);
-                    return;
-                }
+        if (!parentDir) {
+            console.warn('[opfs-fs] No parent directory for removal:', path);
+            return;
+        }
 
-                if (isDirectory) {
-                    // Close all sync handles for files under this directory
-                    // to avoid NoModificationAllowedError during recursive removal
-                    const pathPrefix = path + '/';
-                    for (const [handlePath, handle] of syncHandleCache) {
-                        if (handlePath === path || handlePath.startsWith(pathPrefix)) {
-                            try {
-                                handle.close();
-                            } catch (e) {
-                                console.warn('[opfs-fs] Failed to close handle during recursive delete:', handlePath, e);
-                            }
-                            syncHandleCache.delete(handlePath);
-                        }
+        if (isDirectory) {
+            // Close all sync handles for files under this directory
+            // to avoid NoModificationAllowedError during recursive removal
+            const pathPrefix = path + '/';
+            for (const [handlePath, handle] of syncHandleCache) {
+                if (handlePath === path || handlePath.startsWith(pathPrefix)) {
+                    try {
+                        handle.close();
+                    } catch (e) {
+                        console.warn('[opfs-fs] Failed to close handle during recursive delete:', handlePath, e);
                     }
-                    await parentDir.removeEntry(name, { recursive: true });
-                } else {
-                    await parentDir.removeEntry(name);
+                    syncHandleCache.delete(handlePath);
                 }
-            } catch (e) {
-                console.error('[opfs-fs] Failed to remove from OPFS:', path, e);
             }
-        };
-
-        getParentAndRemove();
+            await parentDir.removeEntry(name, { recursive: true });
+        } else {
+            await parentDir.removeEntry(name);
+        }
     }
     isSameObject(other: Descriptor): boolean { return other === this; }
     metadataHash() { return { upper: BigInt(0), lower: BigInt(0) }; }

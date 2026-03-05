@@ -250,6 +250,25 @@ function resolvePath(base: string, subpath: string): string {
     return normalizePath(`${base}/${subpath}`);
 }
 
+/**
+ * Resolve symlinks in a path by following symlink entries in the tree.
+ * Returns the final resolved path.
+ */
+function resolveTreeSymlinks(path: string): string {
+    const entry = getTreeEntry(path);
+    if (!entry || !entry.symlink) return path;
+
+    let resolved = entry.symlink;
+    let loopCount = 0;
+    while (loopCount++ < 40) {
+        const target = normalizePath(resolved);
+        const targetEntry = getTreeEntry(target);
+        if (!targetEntry || !targetEntry.symlink) return target;
+        resolved = targetEntry.symlink;
+    }
+    throw 'loop'; // ELOOP
+}
+
 // ============================================================
 // WASI CLASSES (Sync versions)
 // ============================================================
@@ -343,16 +362,24 @@ class _DescriptorSync {
     }
 
     // SYNC: stat at subpath
-    statAt(_pathFlags: number, subpath: string) {
-        const fullPath = resolvePath(this.path, subpath);
-        const entry = getTreeEntry(fullPath);
+    statAt(pathFlags: number, subpath: string) {
+        let fullPath = resolvePath(this.path, subpath);
+        let entry = getTreeEntry(fullPath);
+
+        // Follow symlinks if requested (bit 0 = symlink-follow)
+        if (entry && entry.symlink !== undefined && (pathFlags & 1) !== 0) {
+            fullPath = resolveTreeSymlinks(fullPath);
+            entry = getTreeEntry(fullPath);
+        }
 
         if (!entry) throw 'no-entry';
 
         let type = 'unknown';
         let size = BigInt(0);
 
-        if (entry.dir !== undefined) {
+        if (entry.symlink !== undefined) {
+            type = 'symbolic-link';
+        } else if (entry.dir !== undefined) {
             type = 'directory';
         } else {
             type = 'regular-file';
@@ -377,6 +404,16 @@ class _DescriptorSync {
         };
     }
 
+    // SYNC: readlink — return symlink target
+    readlinkAt(subpath: string): string {
+        const fullPath = resolvePath(this.path, subpath);
+        const entry = getTreeEntry(fullPath);
+        if (!entry || entry.symlink === undefined) {
+            throw 'no-entry';
+        }
+        return entry.symlink;
+    }
+
     // SYNC: open file or directory at subpath
     openAt(
         _pathFlags: number,
@@ -385,8 +422,14 @@ class _DescriptorSync {
         _descriptorFlags: number,
         _modes: number
     ): Descriptor {
-        const fullPath = resolvePath(this.path, subpath);
+        let fullPath = resolvePath(this.path, subpath);
         let entry = getTreeEntry(fullPath);
+
+        // Follow symlinks
+        if (entry && entry.symlink !== undefined) {
+            fullPath = resolveTreeSymlinks(fullPath);
+            entry = getTreeEntry(fullPath);
+        }
 
         if (!entry && openFlags.create) {
             // Create new entry
@@ -698,7 +741,7 @@ export function initFilesystem(sharedBuffer?: SharedArrayBuffer): Promise<void> 
     if (initPromise) return initPromise;
 
     // Use provided buffer or create new one (only works in contexts where SAB is available)
-    const bufferSize = 64 + 64 * 1024; // 64 bytes control + 64KB data
+    const bufferSize = 64 + 2 * 1024 * 1024; // 64 bytes control + 2MB data
     const buffer = sharedBuffer ?? new SharedArrayBuffer(bufferSize);
 
     initPromise = initFilesystemSync(buffer);

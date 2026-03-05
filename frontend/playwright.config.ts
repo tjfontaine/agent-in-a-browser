@@ -41,12 +41,33 @@ export default defineConfig({
                 },
             },
         },
+        // Chromium with JSPI disabled — forces sync-worker mode (SharedArrayBuffer + Atomics.wait)
+        // Uses addInitScript to delete WebAssembly.Suspending before any code runs
+        {
+            name: 'chromium-sync',
+            use: {
+                ...devices['Desktop Chrome'],
+                ...(useSystemChrome ? { channel: 'chrome' } : {}),
+                launchOptions: {
+                    args: [
+                        '--enable-experimental-web-platform-features',
+                    ],
+                },
+            },
+        },
         // WebKit (Safari) - enabled for debugging shim isolation issues
         // Note: OPFS behavior may differ in Playwright's ephemeral context
         {
             name: 'webkit',
             use: {
                 ...devices['Desktop Safari'],
+            },
+        },
+        // Firefox — exercises sync-worker path (JSPI stripped via addInitScript)
+        {
+            name: 'firefox',
+            use: {
+                ...devices['Desktop Firefox'],
             },
         },
     ],

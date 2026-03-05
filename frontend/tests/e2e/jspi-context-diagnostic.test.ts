@@ -10,11 +10,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('JSPI Minimal Diagnostics', () => {
-    // Skip on WebKit - JSPI is not supported
+    // Skip on WebKit and sync-mode projects where JSPI is intentionally stripped
     test.skip(({ browserName }) => browserName === 'webkit', 'JSPI not supported on WebKit');
 
     // Use the real server for SharedWorker support (origin can't be 'null')
-    test.beforeEach(async ({ page }) => {
+    test.beforeEach(async ({ page }, testInfo) => {
+        test.skip(['chromium-sync', 'firefox'].includes(testInfo.project.name),
+            'JSPI intentionally stripped in sync-mode projects');
         await page.goto('http://localhost:8080/');
     });
 

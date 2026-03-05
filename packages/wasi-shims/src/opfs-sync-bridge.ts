@@ -57,6 +57,7 @@ let sharedBuffer: SharedArrayBuffer | null = null;
 let controlArray: Int32Array | null = null;
 let dataArray: Uint8Array | null = null;
 let helperReady = false;
+let helperCrashed = false;
 
 // Control array layout (matches opfs-async-helper.ts)
 const CONTROL = {
@@ -123,8 +124,8 @@ export async function initHelperWorker(): Promise<void> {
     }
 
     // Create shared buffer for communication with helper worker
-    // 64KB should be plenty for directory listings
-    sharedBuffer = new SharedArrayBuffer(64 * 1024);
+    // 2MB to support large file reads/writes through the sync bridge
+    sharedBuffer = new SharedArrayBuffer(2 * 1024 * 1024);
     controlArray = new Int32Array(sharedBuffer, 0, 16);
     dataArray = new Uint8Array(sharedBuffer, 64);
 
@@ -147,18 +148,83 @@ export async function initHelperWorker(): Promise<void> {
             if (e.data.type === 'ready') {
                 clearTimeout(timeout);
                 helperReady = true;
+                helperCrashed = false;
                 resolve();
+            }
+            if (e.data.type === 'error') {
+                clearTimeout(timeout);
+                reject(new Error(e.data.error));
             }
         };
 
         helperWorker!.onerror = (e) => {
             clearTimeout(timeout);
+            helperCrashed = true;
+            helperReady = false;
+            console.error('[opfs-sync-bridge] Helper worker crashed:', e);
             reject(e);
         };
 
         // Send shared buffer to helper
         helperWorker!.postMessage({ type: 'init', buffer: sharedBuffer });
     });
+}
+
+/**
+ * Reinitialize the helper worker after a crash.
+ * Reuses the existing SharedArrayBuffer.
+ */
+export async function reinitHelperWorker(): Promise<void> {
+    if (!sharedBuffer || !controlArray) {
+        throw new Error('Cannot reinit: no shared buffer (call initHelperWorker first)');
+    }
+
+    console.warn('[opfs-sync-bridge] Reinitializing crashed helper worker');
+    helperReady = false;
+    helperCrashed = false;
+
+    // Terminate old worker if it still exists
+    if (helperWorker) {
+        try { helperWorker.terminate(); } catch { /* ignore */ }
+    }
+
+    // Reset control flags
+    Atomics.store(controlArray, CONTROL.REQUEST_READY, 0);
+    Atomics.store(controlArray, CONTROL.RESPONSE_READY, 0);
+    Atomics.store(controlArray, CONTROL.SHUTDOWN, 0);
+
+    helperWorker = new Worker(
+        new URL('./opfs-async-helper.js', import.meta.url),
+        { type: 'module' }
+    );
+
+    await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Helper worker reinit timeout')), 5000);
+
+        helperWorker!.onmessage = (e) => {
+            if (e.data.type === 'ready') {
+                clearTimeout(timeout);
+                helperReady = true;
+                helperCrashed = false;
+                resolve();
+            }
+            if (e.data.type === 'error') {
+                clearTimeout(timeout);
+                reject(new Error(e.data.error));
+            }
+        };
+
+        helperWorker!.onerror = (e) => {
+            clearTimeout(timeout);
+            helperCrashed = true;
+            console.error('[opfs-sync-bridge] Helper worker crash during reinit:', e);
+            reject(e);
+        };
+
+        helperWorker!.postMessage({ type: 'init', buffer: sharedBuffer });
+    });
+
+    console.log('[opfs-sync-bridge] Helper worker reinitialized successfully');
 }
 
 // ============================================================
@@ -168,8 +234,15 @@ export async function initHelperWorker(): Promise<void> {
 /**
  * Execute a file operation synchronously via the helper worker.
  * Uses Atomics.wait() to block until the helper completes.
+ * If the helper has crashed, throws immediately with a descriptive error
+ * instead of blocking forever.
  */
 export function syncFileOperation(request: SyncFileRequest): SyncFileResponse {
+    if (helperCrashed) {
+        throw new Error(
+            'OPFS helper worker has crashed. Call reinitHelperWorker() to recover.'
+        );
+    }
     if (!sharedBuffer || !controlArray || !dataArray || !helperReady) {
         throw new Error('OPFS helper not ready for sync file operations');
     }
@@ -183,7 +256,13 @@ export function syncFileOperation(request: SyncFileRequest): SyncFileResponse {
 
     const waitResult = Atomics.wait(controlArray, CONTROL.RESPONSE_READY, 0, 30000);
     if (waitResult === 'timed-out') {
-        throw new Error('Timeout waiting for file operation');
+        // Mark as crashed so subsequent calls fail fast instead of blocking
+        helperCrashed = true;
+        helperReady = false;
+        throw new Error(
+            'Timeout waiting for OPFS helper worker (30s). Worker may have crashed. ' +
+            'Call reinitHelperWorker() to recover.'
+        );
     }
 
     const responseLength = Atomics.load(controlArray, CONTROL.DATA_LENGTH);

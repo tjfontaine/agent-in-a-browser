@@ -17,14 +17,16 @@
 
 // JSPI feature detection
 // WebAssembly.Suspending is not yet in TypeScript's lib.dom.d.ts
-const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown };
+const webAssembly = WebAssembly as typeof WebAssembly & { Suspending?: unknown; promising?: unknown };
 
 /**
  * Whether the browser supports JSPI (JavaScript Promise Integration).
- * True for Chrome with flags, false for Safari/Firefox.
+ * Checks both the current API (WebAssembly.Suspending) and the future
+ * API (WebAssembly.promising) for forward compatibility.
  */
-// export const hasJSPI: boolean = typeof webAssembly.Suspending !== 'undefined';
-export const hasJSPI: boolean = typeof webAssembly.Suspending !== 'undefined';
+export const hasJSPI: boolean =
+    typeof webAssembly.Suspending !== 'undefined' ||
+    typeof webAssembly.promising !== 'undefined';
 
 /**
  * Execution mode type - determines which code paths to use.
@@ -101,3 +103,10 @@ export function isCrossOriginIsolated(): boolean {
 
 // Log at startup with full context
 console.log(`[ExecutionMode] JSPI: ${hasJSPI ? 'YES' : 'NO'}, Mode: ${_currentMode}, CrossOriginIsolated: ${isCrossOriginIsolated() ? 'YES' : 'NO'}`);
+if (_currentMode === 'sync-main') {
+    console.warn(
+        '[ExecutionMode] Running in sync-main mode. Atomics.wait() will throw on the ' +
+        'main thread in all browsers. WASM operations requiring synchronous blocking ' +
+        'will fail. Move execution to a Worker for full sync-mode support.'
+    );
+}

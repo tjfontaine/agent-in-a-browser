@@ -140,6 +140,7 @@ fn exec_bridge(
 }
 
 /// Escape a string for JSON embedding
+#[cfg(not(target_arch = "wasm32"))]
 fn escape_json_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {

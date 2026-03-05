@@ -35,6 +35,14 @@ export const syncHandleCache = new Map<string, FileSystemSyncAccessHandle>();
 // Cache of symlinks (loaded from IndexedDB at startup)
 let symlinkCache: Map<string, string> = new Map();
 
+// External file buffer cache reference — set by opfs-filesystem-impl to allow
+// getEntryFromOpfs to find files that exist only in memory (JSPI write() fire-and-forget)
+let externalFileBufferCache: Map<string, Uint8Array> | null = null;
+
+export function registerFileBufferCache(cache: Map<string, Uint8Array>): void {
+    externalFileBufferCache = cache;
+}
+
 // ============================================================
 // CWD MANAGEMENT
 // ============================================================
@@ -302,7 +310,32 @@ export async function getEntryFromOpfs(path: string): Promise<TreeEntry | undefi
         // Not a directory, try as file
     }
 
-    // Try as file
+    // Check if we have a cached sync handle — confirms file exists even when
+    // getFile() would fail due to OPFS exclusive SyncAccessHandle lock
+    const cachedHandle = syncHandleCache.get(normalizedPath);
+    if (cachedHandle) {
+        try {
+            return {
+                size: cachedHandle.getSize(),
+                mtime: Date.now() // Approximate — sync handles don't expose mtime
+            };
+        } catch {
+            // Handle may have been invalidated
+        }
+    }
+
+    // Check file buffer cache — in JSPI mode, file may only exist in memory
+    if (externalFileBufferCache) {
+        const buffered = externalFileBufferCache.get(normalizedPath);
+        if (buffered) {
+            return {
+                size: buffered.length,
+                mtime: Date.now()
+            };
+        }
+    }
+
+    // Try as file via OPFS
     try {
         const fileHandle = await getOpfsFile(normalizedPath, false);
         const file = await fileHandle.getFile();

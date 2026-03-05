@@ -252,9 +252,13 @@ impl UtilCommands {
                 {
                     std::os::unix::fs::symlink(&target, &link_name)
                 }
-                #[cfg(not(unix))]
+                #[cfg(target_os = "wasi")]
                 {
-                    // On non-Unix, copy the file instead
+                    wasi_symlink_at(&target, &link_name)
+                }
+                #[cfg(not(any(unix, target_os = "wasi")))]
+                {
+                    // On platforms without symlink support, copy instead
                     std::fs::copy(&target, &link_name).map(|_| ())
                 }
             } else {
@@ -533,6 +537,34 @@ fn is_shell_keyword(name: &str) -> bool {
             | "[["
             | "]]"
     )
+}
+
+/// Create a symbolic link using the WASI filesystem symlink_at interface.
+/// Resolves the link_name to a preopened directory descriptor + relative path.
+#[cfg(target_os = "wasi")]
+fn wasi_symlink_at(target: &str, link_name: &str) -> std::io::Result<()> {
+    use crate::bindings::wasi::filesystem::preopens;
+
+    let dirs = preopens::get_directories();
+
+    // Find the best-matching preopened directory for link_name
+    let (desc, prefix) = dirs
+        .into_iter()
+        .filter(|(_, p)| link_name.starts_with(p.as_str()) || p == "/")
+        .max_by_key(|(_, p)| p.len())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "no suitable preopened directory",
+            )
+        })?;
+
+    // Make link_name relative to the preopened directory
+    let relative_link = link_name.strip_prefix(prefix.as_str()).unwrap_or(link_name);
+    let relative_link = relative_link.strip_prefix('/').unwrap_or(relative_link);
+
+    desc.symlink_at(target, relative_link)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("symlink_at: {e:?}")))
 }
 
 #[cfg(test)]
