@@ -28,6 +28,7 @@ pub fn resolve_path(cwd: &str, path: &str) -> String {
 ///
 /// If the string is longer than `max_len`, it is truncated and `...` is appended.
 /// If `max_len` is less than 3, the string is simply truncated without ellipsis.
+#[allow(dead_code)]
 pub fn truncate_line(s: &str, max_len: usize) -> String {
     let char_count = s.chars().count();
     if char_count <= max_len {

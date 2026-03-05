@@ -81,6 +81,7 @@ pub fn make_parser(args: Vec<String>) -> lexopt::Parser {
 /// Common parsed options that many commands share.
 #[derive(Default)]
 pub struct CommonOpts {
+    #[allow(dead_code)]
     pub help: bool,
 }
 
