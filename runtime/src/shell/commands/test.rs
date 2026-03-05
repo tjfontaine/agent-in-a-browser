@@ -26,17 +26,11 @@ impl TestCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = TestCommands::show_help("test").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Evaluate the expression
             let result = evaluate_test_expression(&remaining);
             if result {
@@ -57,17 +51,11 @@ impl TestCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, mut remaining) = parse_common(&args);
-            if opts.help {
-                let help = TestCommands::show_help("[").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, mut remaining) = parse_common(&args);
             // Check for closing bracket
             if remaining.last().map(|s| s.as_str()) != Some("]") {
                 let _ = stderr.write_all(b"[: missing ']'\n").await;
@@ -99,17 +87,11 @@ impl TestCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, mut remaining) = parse_common(&args);
-            if opts.help {
-                let help = TestCommands::show_help("[[").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, mut remaining) = parse_common(&args);
             // Check for closing bracket
             if remaining.last().map(|s| s.as_str()) != Some("]]") {
                 let _ = stderr.write_all(b"[[: missing ']]'\n").await;

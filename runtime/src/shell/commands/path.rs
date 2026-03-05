@@ -25,14 +25,7 @@ impl PathCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = PathCommands::show_help("basename") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"basename: missing operand\n").await;
                 return 1;
@@ -72,14 +65,7 @@ impl PathCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = PathCommands::show_help("dirname") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"dirname: missing operand\n").await;
                 return 1;

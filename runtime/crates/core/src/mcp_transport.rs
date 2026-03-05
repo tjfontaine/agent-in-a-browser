@@ -52,43 +52,107 @@ pub struct JsonRpcError {
     pub message: String,
 }
 
+/// Transport-layer errors (network, HTTP, lock)
+#[derive(Debug, Clone)]
+pub enum TransportError {
+    Network(String),
+    Http(String),
+    Lock,
+}
+
+impl std::fmt::Display for TransportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransportError::Network(e) => write!(f, "Transport error: {}", e),
+            TransportError::Http(e) => write!(f, "HTTP error: {}", e),
+            TransportError::Lock => write!(f, "Failed to acquire lock"),
+        }
+    }
+}
+
+/// Protocol-layer errors (JSON, RPC, invalid messages)
+#[derive(Debug, Clone)]
+pub enum ProtocolError {
+    Invalid(String),
+    Json(String),
+    Rpc(String),
+}
+
+impl std::fmt::Display for ProtocolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProtocolError::Invalid(e) => write!(f, "Protocol error: {}", e),
+            ProtocolError::Json(e) => write!(f, "JSON error: {}", e),
+            ProtocolError::Rpc(msg) => write!(f, "RPC error: {}", msg),
+        }
+    }
+}
+
 /// Error type for MCP operations
 #[derive(Debug, Clone)]
 pub enum McpError {
-    /// Transport error (network, IPC, etc.)
-    TransportError(String),
-    /// Protocol error (invalid JSON-RPC, etc.)
-    ProtocolError(String),
-    /// Tool not found
-    ToolNotFound(String),
-    /// Tool execution error
-    ToolExecutionError(String),
-    /// HTTP error
-    HttpError(String),
-    /// JSON error
-    JsonError(String),
-    /// RPC error
-    RpcError(String),
+    /// Transport errors (network, HTTP, lock)
+    Transport(TransportError),
+    /// Protocol errors (JSON, RPC, invalid messages)
+    Protocol(ProtocolError),
+    /// Tool-related errors
+    Tool { name: String, message: String },
     /// Not initialized
     NotInitialized,
-    /// Lock error
-    LockError,
     /// OAuth authentication required - contains server URL for OAuth flow
     OAuthRequired(String),
+}
+
+// Convenience constructors preserving the old API
+#[allow(non_snake_case)]
+impl McpError {
+    pub fn TransportError(msg: String) -> Self {
+        McpError::Transport(TransportError::Network(msg))
+    }
+    pub fn ProtocolError(msg: String) -> Self {
+        McpError::Protocol(ProtocolError::Invalid(msg))
+    }
+    pub fn ToolNotFound(name: String) -> Self {
+        McpError::Tool {
+            message: format!("Tool not found: {}", name),
+            name,
+        }
+    }
+    pub fn ToolExecutionError(msg: String) -> Self {
+        McpError::Tool {
+            name: String::new(),
+            message: msg,
+        }
+    }
+    pub fn HttpError(msg: String) -> Self {
+        McpError::Transport(TransportError::Http(msg))
+    }
+    pub fn JsonError(msg: String) -> Self {
+        McpError::Protocol(ProtocolError::Json(msg))
+    }
+    pub fn RpcError(msg: String) -> Self {
+        McpError::Protocol(ProtocolError::Rpc(msg))
+    }
+    pub fn LockError() -> Self {
+        McpError::Transport(TransportError::Lock)
+    }
 }
 
 impl std::fmt::Display for McpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            McpError::TransportError(e) => write!(f, "Transport error: {}", e),
-            McpError::ProtocolError(e) => write!(f, "Protocol error: {}", e),
-            McpError::ToolNotFound(name) => write!(f, "Tool not found: {}", name),
-            McpError::ToolExecutionError(e) => write!(f, "Tool execution error: {}", e),
-            McpError::HttpError(e) => write!(f, "HTTP error: {}", e),
-            McpError::JsonError(e) => write!(f, "JSON error: {}", e),
-            McpError::RpcError(msg) => write!(f, "RPC error: {}", msg),
+            McpError::Transport(e) => write!(f, "{}", e),
+            McpError::Protocol(e) => write!(f, "{}", e),
+            McpError::Tool { name, message } => {
+                if name.is_empty() {
+                    write!(f, "Tool execution error: {}", message)
+                } else if message.starts_with("Tool not found:") {
+                    write!(f, "{}", message)
+                } else {
+                    write!(f, "Tool error ({}): {}", name, message)
+                }
+            }
             McpError::NotInitialized => write!(f, "MCP client not initialized"),
-            McpError::LockError => write!(f, "Failed to acquire lock"),
             McpError::OAuthRequired(url) => write!(f, "OAuth required for {}", url),
         }
     }
@@ -102,7 +166,7 @@ unsafe impl Sync for McpError {}
 
 impl From<serde_json::Error> for McpError {
     fn from(e: serde_json::Error) -> Self {
-        McpError::JsonError(e.to_string())
+        McpError::Protocol(ProtocolError::Json(e.to_string()))
     }
 }
 
@@ -163,6 +227,97 @@ mod tests {
             .returning(|name, _args| Err(McpError::ToolNotFound(name.to_string())));
 
         let result = mock.call_tool("unknown_tool", serde_json::json!({}));
-        assert!(matches!(result, Err(McpError::ToolNotFound(_))));
+        assert!(matches!(result, Err(McpError::Tool { .. })));
+    }
+
+    // ---- McpError Display tests ----
+
+    #[test]
+    fn mcp_error_transport_display() {
+        let e = McpError::TransportError("connection refused".to_string());
+        assert_eq!(e.to_string(), "Transport error: connection refused");
+    }
+
+    #[test]
+    fn mcp_error_http_display() {
+        let e = McpError::HttpError("404 Not Found".to_string());
+        assert_eq!(e.to_string(), "HTTP error: 404 Not Found");
+    }
+
+    #[test]
+    fn mcp_error_lock_display() {
+        let e = McpError::LockError();
+        assert_eq!(e.to_string(), "Failed to acquire lock");
+    }
+
+    #[test]
+    fn mcp_error_protocol_display() {
+        let e = McpError::ProtocolError("invalid message".to_string());
+        assert_eq!(e.to_string(), "Protocol error: invalid message");
+    }
+
+    #[test]
+    fn mcp_error_json_display() {
+        let e = McpError::JsonError("unexpected token".to_string());
+        assert_eq!(e.to_string(), "JSON error: unexpected token");
+    }
+
+    #[test]
+    fn mcp_error_rpc_display() {
+        let e = McpError::RpcError("method not found".to_string());
+        assert_eq!(e.to_string(), "RPC error: method not found");
+    }
+
+    #[test]
+    fn mcp_error_tool_not_found_display() {
+        let e = McpError::ToolNotFound("shell_eval".to_string());
+        assert_eq!(e.to_string(), "Tool not found: shell_eval");
+    }
+
+    #[test]
+    fn mcp_error_tool_execution_display() {
+        let e = McpError::ToolExecutionError("timeout".to_string());
+        assert_eq!(e.to_string(), "Tool execution error: timeout");
+    }
+
+    #[test]
+    fn mcp_error_not_initialized_display() {
+        let e = McpError::NotInitialized;
+        assert_eq!(e.to_string(), "MCP client not initialized");
+    }
+
+    #[test]
+    fn mcp_error_oauth_display() {
+        let e = McpError::OAuthRequired("https://example.com".to_string());
+        assert_eq!(e.to_string(), "OAuth required for https://example.com");
+    }
+
+    #[test]
+    fn mcp_error_from_serde_json() {
+        let json_err: Result<serde_json::Value, _> = serde_json::from_str("invalid");
+        let mcp_err: McpError = json_err.unwrap_err().into();
+        assert!(mcp_err.to_string().starts_with("JSON error:"));
+    }
+
+    #[test]
+    fn mcp_error_nested_variants() {
+        // Verify nested enum structure is accessible
+        let transport = McpError::Transport(TransportError::Network("test".into()));
+        assert!(matches!(
+            transport,
+            McpError::Transport(TransportError::Network(_))
+        ));
+
+        let protocol = McpError::Protocol(ProtocolError::Rpc("test".into()));
+        assert!(matches!(
+            protocol,
+            McpError::Protocol(ProtocolError::Rpc(_))
+        ));
+
+        let tool = McpError::Tool {
+            name: "test".into(),
+            message: "failed".into(),
+        };
+        assert!(matches!(tool, McpError::Tool { .. }));
     }
 }

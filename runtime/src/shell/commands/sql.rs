@@ -32,14 +32,7 @@ impl SqlCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = SqlCommands::show_help("sqlite3") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Parse positional arguments: [DATABASE] [SQL]
             // If only one arg, it could be DATABASE or SQL
             // If arg looks like a path or :memory:, treat as DATABASE

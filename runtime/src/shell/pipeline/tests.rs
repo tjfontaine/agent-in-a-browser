@@ -1925,3 +1925,95 @@ fn test_sqlite3_with_memory_explicit() {
     assert_eq!(result.code, 0);
     assert!(result.stdout.contains("200"));
 }
+
+// =============================================================================
+// Auto-generated --help tests (macro help injection)
+// =============================================================================
+
+#[test]
+fn test_auto_help_ls() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("ls --help", &mut env));
+    assert_eq!(result.code, 0, "ls --help should exit 0");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "ls --help should contain Usage:"
+    );
+    assert!(result.stdout.contains("ls"), "ls --help should mention ls");
+}
+
+#[test]
+fn test_auto_help_echo() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("echo --help", &mut env));
+    assert_eq!(result.code, 0, "echo --help should exit 0");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "echo --help should contain Usage:"
+    );
+    assert!(
+        result.stdout.contains("echo"),
+        "echo --help should mention echo"
+    );
+}
+
+#[test]
+fn test_auto_help_cat() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("cat --help", &mut env));
+    assert_eq!(result.code, 0, "cat --help should exit 0");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "cat --help should contain Usage:"
+    );
+}
+
+#[test]
+fn test_auto_help_grep() {
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("grep --help", &mut env));
+    assert_eq!(result.code, 0, "grep --help should exit 0");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "grep --help should contain Usage:"
+    );
+}
+
+#[test]
+fn test_auto_help_short_flag() {
+    // Verify -h also triggers help
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("sort -h", &mut env));
+    // sort -h means "human-numeric-sort" in real sort, but our parse_common treats -h as help
+    // The auto-generated help check intercepts -h before the command runs
+    assert_eq!(result.code, 0, "sort -h should exit 0 via auto-help");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "sort -h should show help via auto-injection"
+    );
+}
+
+#[test]
+fn test_auto_help_with_other_args() {
+    // --help should be handled even when mixed with other arguments
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("ls -l --help /tmp", &mut env));
+    assert_eq!(result.code, 0, "ls with --help mixed in should exit 0");
+    assert!(
+        result.stdout.contains("Usage:"),
+        "should show help when --help is present among other args"
+    );
+}
+
+#[test]
+fn test_auto_help_description_content() {
+    // Verify help output contains the description from the macro attribute
+    let mut env = ShellEnv::new();
+    let result = futures_lite::future::block_on(run_pipeline("wc --help", &mut env));
+    assert_eq!(result.code, 0);
+    // wc's description is "Count lines, words, and bytes"
+    assert!(
+        result.stdout.contains("Count") || result.stdout.contains("count"),
+        "wc --help should contain its description"
+    );
+}

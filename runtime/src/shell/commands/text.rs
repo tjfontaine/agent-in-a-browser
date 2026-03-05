@@ -6,6 +6,7 @@ use lexopt::prelude::*;
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::{make_parser, parse_common};
 
 /// Text processing commands.
@@ -29,14 +30,7 @@ impl TextCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("head") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut count = 10usize;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -77,11 +71,7 @@ impl TextCommands {
             } else {
                 // Read from file(s)
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -123,14 +113,7 @@ impl TextCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("tail") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut count = 10usize;
             let mut from_beginning = false; // true when +N is used
             let mut files: Vec<String> = Vec::new();
@@ -166,11 +149,7 @@ impl TextCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -222,14 +201,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("grep") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut ignore_case = false;
             let mut invert = false;
             let mut show_line_numbers = false;
@@ -311,20 +283,12 @@ impl TextCommands {
             let mut search_files: Vec<(String, String)> = Vec::new(); // (display_name, path)
             if recursive && !files.is_empty() {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
                     collect_files_recursive(&path, file, &mut search_files);
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
                     search_files.push((file.clone(), path));
                 }
             }
@@ -439,14 +403,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("wc") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut show_lines = false;
             let mut show_words = false;
             let mut show_chars = false;
@@ -527,11 +484,7 @@ impl TextCommands {
             } else {
                 let mut total = (0, 0, 0);
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -576,14 +529,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("sort") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut reverse = false;
             let mut numeric = false;
             let mut unique = false;
@@ -642,11 +588,7 @@ impl TextCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -750,14 +692,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("uniq") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut show_count = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -780,11 +715,7 @@ impl TextCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -851,14 +782,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("tee") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut append = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -885,11 +809,7 @@ impl TextCommands {
             let _ = stdout.write_all(&content).await;
 
             for file in files {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 let result = std::fs::OpenOptions::new()
                     .create(true)
@@ -923,14 +843,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("sed") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Parse -n flag and script
             let mut quiet = false;
             let mut script_idx = 0;
@@ -976,11 +889,7 @@ impl TextCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -1078,14 +987,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("cut") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut delimiter = '\t';
             let mut fields: Vec<usize> = Vec::new();
             let mut files: Vec<String> = Vec::new();
@@ -1137,11 +1039,7 @@ impl TextCommands {
                 }
             } else {
                 for file in files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -1177,14 +1075,7 @@ impl TextCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("tr") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut delete_mode = false;
             let mut squeeze_mode = false;
             let mut complement_mode = false;
@@ -1303,14 +1194,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("comm") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut suppress1 = false;
             let mut suppress2 = false;
             let mut suppress3 = false;
@@ -1347,13 +1231,7 @@ impl TextCommands {
                 return 1;
             }
 
-            let resolve = |f: &str| -> String {
-                if f.starts_with('/') {
-                    f.to_string()
-                } else {
-                    format!("{}/{}", cwd, f)
-                }
-            };
+            let resolve = |f: &str| -> String { resolve_path(&cwd, &f) };
 
             let lines1: Vec<String> = match std::fs::read_to_string(resolve(&files[0])) {
                 Ok(s) => s.lines().map(String::from).collect(),
@@ -1445,14 +1323,7 @@ impl TextCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = TextCommands::show_help("join") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut field1: usize = 1;
             let mut field2: usize = 1;
             let mut separator: Option<char> = None;
@@ -1497,13 +1368,7 @@ impl TextCommands {
                 return 1;
             }
 
-            let resolve = |f: &str| -> String {
-                if f.starts_with('/') {
-                    f.to_string()
-                } else {
-                    format!("{}/{}", cwd, f)
-                }
-            };
+            let resolve = |f: &str| -> String { resolve_path(&cwd, &f) };
 
             let split_line = |line: &str, sep: Option<char>| -> Vec<String> {
                 match sep {

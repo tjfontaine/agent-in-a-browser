@@ -308,24 +308,20 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
         let name = &tool.name;
         let method_ident = &tool.method_ident;
 
-        // Generate argument extraction
+        // Generate argument extraction using Arguments methods
         let arg_extractions = tool.params.iter().map(|p| {
             let param_name = &p.name;
             let param_ident = format_ident!("{}", param_name);
 
             if p.is_optional {
                 quote! {
-                    let #param_ident = arguments.get(#param_name)
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
+                    let #param_ident = arguments.get_optional_string(#param_name);
                 }
             } else {
                 quote! {
-                    let #param_ident = match arguments.get(#param_name).and_then(|v| v.as_str()) {
-                        Some(v) => v.to_string(),
-                        None => return crate::mcp_server::ToolResult::error(
-                            format!("Missing required parameter: {}", #param_name)
-                        ),
+                    let #param_ident = match arguments.get_string(#param_name) {
+                        Ok(v) => v,
+                        Err(e) => return crate::mcp_server::ToolResult::error(e),
                     };
                 }
             }
@@ -347,7 +343,7 @@ fn generate_call_tool(tools: &[ToolInfo]) -> proc_macro2::TokenStream {
     });
 
     quote! {
-        fn call_tool(&mut self, name: &str, arguments: serde_json::Value) -> crate::mcp_server::ToolResult {
+        fn call_tool(&mut self, name: &str, arguments: crate::mcp_server::Arguments) -> crate::mcp_server::ToolResult {
             match name {
                 #(#match_arms)*
                 _ => crate::mcp_server::ToolResult::error(format!("Unknown tool: {}", name)),
@@ -517,21 +513,51 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    // Generate get_command() dispatcher
-    let get_command_arms = commands.iter().map(|cmd| {
-        let name = &cmd.name;
+    // Generate wrapper functions that auto-check --help before delegating
+    let wrapper_fns = commands.iter().map(|cmd| {
         let method_ident = cmd.method_ident.as_ref().unwrap();
+        let wrapper_ident = format_ident!("{}_with_help", method_ident);
+        let help_text = format!("Usage: {}\n\n{}\n", cmd.usage, cmd.description);
+
         quote! {
-            #name => Some(Self::#method_ident)
+            fn #wrapper_ident(
+                args: Vec<String>,
+                env: &crate::shell::ShellEnv,
+                stdin: piper::Reader,
+                stdout: piper::Writer,
+                stderr: piper::Writer,
+            ) -> futures_lite::future::Boxed<i32> {
+                // Auto-generated help check
+                if args.iter().any(|a| a == "--help" || a == "-h") {
+                    let mut stdout = stdout;
+                    return Box::pin(async move {
+                        let _ = futures_lite::io::AsyncWriteExt::write_all(
+                            &mut stdout,
+                            #help_text.as_bytes(),
+                        ).await;
+                        0
+                    });
+                }
+                // Delegate to the actual command implementation
+                Self::#method_ident(args, env, stdin, stdout, stderr)
+            }
+        }
+    });
+
+    // Generate get_command() dispatcher (returns wrappers with auto-help)
+    let get_command_arms = commands.iter().map(|cmd| {
+        let cmd_name = &cmd.name;
+        let method_ident = cmd.method_ident.as_ref().unwrap();
+        let wrapper_ident = format_ident!("{}_with_help", method_ident);
+        quote! {
+            #cmd_name => Some(Self::#wrapper_ident)
         }
     });
 
     // Generate show_help() function
     let help_arms = commands.iter().map(|cmd| {
         let name = &cmd.name;
-        let usage = &cmd.usage;
-        let description = &cmd.description;
-        let help_text = format!("Usage: {}\n\n{}\n", usage, description);
+        let help_text = format!("Usage: {}\n\n{}\n", cmd.usage, cmd.description);
         quote! {
             #name => Some(#help_text)
         }
@@ -548,6 +574,8 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let output = quote! {
         impl #impl_generics #self_ty #ty_generics #where_clause {
             #(#methods)*
+
+            #(#wrapper_fns)*
 
             #(#other_items)*
 
@@ -570,6 +598,20 @@ pub fn shell_commands(_attr: TokenStream, item: TokenStream) -> TokenStream {
             /// List all available commands.
             pub fn list_commands() -> &'static [&'static str] {
                 &[#(#command_names),*]
+            }
+        }
+
+        impl #impl_generics crate::shell::commands::CommandCategory for #self_ty #ty_generics #where_clause {
+            fn get_command(name: &str) -> Option<crate::shell::commands::CommandFn> {
+                Self::get_command(name)
+            }
+
+            fn show_help(name: &str) -> Option<&'static str> {
+                Self::show_help(name)
+            }
+
+            fn list_commands() -> &'static [&'static str] {
+                Self::list_commands()
             }
         }
     };

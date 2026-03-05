@@ -4,6 +4,7 @@ use futures_lite::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::{parse_common, ShellCommands};
 
 // Import WASI random bindings for cryptographic randomness
@@ -30,13 +31,7 @@ impl UtilCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("printf").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"printf: missing format\n").await;
                 return 1;
@@ -69,13 +64,7 @@ impl UtilCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("read").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut raw_mode = false;
             let mut prompt = None;
             let mut var_names = Vec::new();
@@ -162,13 +151,7 @@ impl UtilCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("stat").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"stat: missing operand\n").await;
                 return 1;
@@ -178,11 +161,7 @@ impl UtilCommands {
             let mut exit_code = 0;
 
             for file in &remaining {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 match std::fs::metadata(&path) {
                     Ok(metadata) => {
@@ -241,18 +220,12 @@ impl UtilCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("ln").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut symbolic = false;
             let mut paths = Vec::new();
 
@@ -270,17 +243,9 @@ impl UtilCommands {
             }
 
             // cwd already cloned above
-            let target = if paths[0].starts_with('/') {
-                paths[0].clone()
-            } else {
-                format!("{}/{}", cwd, paths[0])
-            };
+            let target = resolve_path(&cwd, &paths[0]);
 
-            let link_name = if paths[1].starts_with('/') {
-                paths[1].clone()
-            } else {
-                format!("{}/{}", cwd, paths[1])
-            };
+            let link_name = resolve_path(&cwd, &paths[1]);
 
             let result = if symbolic {
                 #[cfg(unix)]
@@ -323,13 +288,7 @@ impl UtilCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("mktemp").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut directory = false;
             let mut template = "tmp.XXXXXX".to_string();
 
@@ -353,11 +312,7 @@ impl UtilCommands {
                 .collect();
 
             let path = template.replace("XXXXXX", &suffix);
-            let full_path = if path.starts_with('/') {
-                path
-            } else {
-                format!("{}/{}", cwd, path)
-            };
+            let full_path = resolve_path(&cwd, &path);
 
             let result = if directory {
                 std::fs::create_dir_all(&full_path)
@@ -396,13 +351,7 @@ impl UtilCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("type").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut exit_code = 0;
 
             for name in &remaining {
@@ -440,13 +389,7 @@ impl UtilCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                let help = UtilCommands::show_help("which").unwrap_or("");
-                let _ = stdout.write_all(help.as_bytes()).await;
-                return 0;
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut exit_code = 0;
 
             for name in &remaining {

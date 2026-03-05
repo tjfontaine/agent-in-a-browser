@@ -6,6 +6,7 @@ use lexopt::prelude::*;
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::{make_parser, parse_common};
 
 /// File manipulation commands.
@@ -30,14 +31,7 @@ impl FileCommands {
         let no_color = env.get_var("NO_COLOR").is_some();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("ls") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Parse flags
             let mut long_format = false;
             let mut show_all = false;
@@ -109,13 +103,7 @@ impl FileCommands {
             }
 
             for path in paths {
-                let resolved = if path.starts_with('/') {
-                    path.clone()
-                } else if cwd_str == "." || cwd_str.is_empty() {
-                    format!("/{}", path)
-                } else {
-                    format!("{}/{}", cwd_str, path)
-                };
+                let resolved = resolve_path(&cwd_str, &path);
 
                 // Handle -d flag: list directory itself, not its contents
                 if dir_only {
@@ -221,14 +209,7 @@ impl FileCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("cat") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let mut buf = [0u8; 4096];
                 let mut reader = stdin;
@@ -245,11 +226,7 @@ impl FileCommands {
                 }
             } else {
                 for arg in &remaining {
-                    let path = if arg.starts_with('/') {
-                        arg.clone()
-                    } else {
-                        format!("{}/{}", cwd, arg)
-                    };
+                    let path = resolve_path(&cwd, &arg);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -279,19 +256,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("touch") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"touch: missing file operand\n").await;
                 return 1;
@@ -299,11 +269,7 @@ impl FileCommands {
 
             let mut exit_code = 0;
             for arg in &remaining {
-                let path = if arg.starts_with('/') {
-                    arg.clone()
-                } else {
-                    format!("{}/{}", cwd, arg)
-                };
+                let path = resolve_path(&cwd, &arg);
 
                 if let Err(e) = std::fs::OpenOptions::new()
                     .create(true)
@@ -329,19 +295,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("mkdir") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut parents = false;
             let mut dirs: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -361,11 +320,7 @@ impl FileCommands {
 
             let mut exit_code = 0;
             for dir in dirs {
-                let path = if dir.starts_with('/') {
-                    dir.clone()
-                } else {
-                    format!("{}/{}", cwd, dir)
-                };
+                let path = resolve_path(&cwd, &dir);
 
                 let result = if parents {
                     std::fs::create_dir_all(&path)
@@ -393,19 +348,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("rmdir") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"rmdir: missing operand\n").await;
                 return 1;
@@ -413,11 +361,7 @@ impl FileCommands {
 
             let mut exit_code = 0;
             for dir in &remaining {
-                let path = if dir.starts_with('/') {
-                    dir.clone()
-                } else {
-                    format!("{}/{}", cwd, dir)
-                };
+                let path = resolve_path(&cwd, &dir);
 
                 if let Err(e) = std::fs::remove_dir(&path) {
                     let msg = format!("rmdir: {}: {}\n", path, e);
@@ -439,19 +383,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("rm") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut recursive = false;
             let mut force = false;
             let mut files: Vec<String> = Vec::new();
@@ -476,11 +413,7 @@ impl FileCommands {
 
             let mut exit_code = 0;
             for file in files {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 let metadata = match std::fs::metadata(&path) {
                     Ok(m) => m,
@@ -529,34 +462,19 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("mv") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.len() < 2 {
                 let _ = stderr.write_all(b"mv: missing destination operand\n").await;
                 return 1;
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
-
-            let src = resolve(&remaining[0]);
-            let dst = resolve(&remaining[1]);
+            let src = resolve_path(&cwd, &remaining[0]);
+            let dst = resolve_path(&cwd, &remaining[1]);
 
             if let Err(e) = std::fs::rename(&src, &dst) {
                 let msg = format!("mv: {}: {}\n", src, e);
@@ -577,19 +495,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("cp") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut recursive = false;
             let mut paths: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -607,16 +518,8 @@ impl FileCommands {
                 return 1;
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
-
-            let src = resolve(&paths[0]);
-            let dst = resolve(&paths[1]);
+            let src = resolve_path(&cwd, &paths[0]);
+            let dst = resolve_path(&cwd, &paths[1]);
 
             let metadata = match std::fs::metadata(&src) {
                 Ok(m) => m,
@@ -662,14 +565,7 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("find") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut search_path = "/".to_string();
             let mut name_pattern: Option<String> = None;
             let mut type_filter: Option<char> = None;
@@ -708,11 +604,7 @@ impl FileCommands {
                     arg if !arg.starts_with('-') && !path_set => {
                         // First non-option arg is the search path
                         let path = arg.to_string();
-                        search_path = if path.starts_with('/') {
-                            path
-                        } else {
-                            format!("{}/{}", cwd, path)
-                        };
+                        search_path = resolve_path(&cwd, &path);
                         path_set = true;
                         i += 1;
                     }
@@ -807,14 +699,7 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("diff") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut unified = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -832,16 +717,8 @@ impl FileCommands {
                 return 1;
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
-
-            let path1 = resolve(&files[0]);
-            let path2 = resolve(&files[1]);
+            let path1 = resolve_path(&cwd, &files[0]);
+            let path2 = resolve_path(&cwd, &files[1]);
 
             let content1 = match std::fs::read_to_string(&path1) {
                 Ok(c) => c,
@@ -947,25 +824,14 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("file") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"file: missing operand\n").await;
                 return 1;
             }
 
             for file in &remaining {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 let file_type = detect_file_type(&path);
                 let _ = stdout
@@ -992,14 +858,7 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("realpath") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"realpath: missing operand\n").await;
                 return 1;
@@ -1039,14 +898,7 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("du") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut summary_only = false;
             let mut human_readable = false;
             let mut paths: Vec<String> = Vec::new();
@@ -1068,11 +920,7 @@ impl FileCommands {
             }
 
             for path in &paths {
-                let full_path = if path.starts_with('/') {
-                    path.clone()
-                } else {
-                    format!("{}/{}", cwd, path)
-                };
+                let full_path = resolve_path(&cwd, &path);
 
                 match calculate_disk_usage(&full_path, summary_only, human_readable, &mut stdout)
                     .await
@@ -1112,14 +960,7 @@ impl FileCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("readlink") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut canonicalize = false;
             let mut files: Vec<String> = Vec::new();
 
@@ -1137,11 +978,7 @@ impl FileCommands {
             }
 
             for file in &files {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 if canonicalize {
                     // Return canonical path
@@ -1176,19 +1013,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("split") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut lines_per_file: Option<usize> = None;
             let mut bytes_per_file: Option<usize> = None;
             let mut numeric_suffix = false;
@@ -1228,11 +1058,7 @@ impl FileCommands {
                 "x".to_string()
             };
 
-            let input_path = if input_file.starts_with('/') {
-                input_file.clone()
-            } else {
-                format!("{}/{}", cwd, input_file)
-            };
+            let input_path = resolve_path(&cwd, &input_file);
 
             let content = match std::fs::read(&input_path) {
                 Ok(c) => c,
@@ -1305,19 +1131,12 @@ impl FileCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = FileCommands::show_help("chmod") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.len() < 2 {
                 let _ = stderr.write_all(b"chmod: missing operand\n").await;
                 return 1;
@@ -1328,11 +1147,7 @@ impl FileCommands {
             let mut exit_code = 0;
 
             for file in files {
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
                 if !std::path::Path::new(&path).exists() {
                     let msg = format!(
                         "chmod: cannot access '{}': No such file or directory\n",
@@ -1503,11 +1318,7 @@ fn detect_file_type(path: &str) -> String {
 
 /// Resolve a path to its canonical form
 fn resolve_canonical_path(cwd: &str, path: &str) -> String {
-    let abs_path = if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("{}/{}", cwd, path)
-    };
+    let abs_path = resolve_path(&cwd, &path);
 
     // Normalize the path
     let mut parts: Vec<&str> = Vec::new();

@@ -27,7 +27,7 @@
 //!         vec![]
 //!     }
 //!     
-//!     fn call_tool(&mut self, name: &str, arguments: serde_json::Value) -> ToolResult {
+//!     fn call_tool(&mut self, name: &str, arguments: Arguments) -> ToolResult {
 //!         ToolResult::text("Hello!")
 //!     }
 //! }
@@ -40,5 +40,6 @@ mod protocol;
 pub use handler::{handle_request, McpServer};
 pub use jsonrpc::{JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 pub use protocol::{
-    LogLevel, LogMessage, ServerInfo, ToolAnnotations, ToolContent, ToolDefinition, ToolResult,
+    Arguments, LogLevel, LogMessage, ServerInfo, ToolAnnotations, ToolContent, ToolDefinition,
+    ToolResult,
 };

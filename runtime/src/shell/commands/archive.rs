@@ -8,6 +8,7 @@ use runtime_macros::shell_commands;
 use std::io::{Read, Write};
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::{make_parser, parse_common};
 
 /// Archive manipulation commands.
@@ -31,14 +32,7 @@ impl ArchiveCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = ArchiveCommands::show_help("tar") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut create = false;
             let mut extract = false;
             let mut list = false;
@@ -67,13 +61,7 @@ impl ArchiveCommands {
                 }
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
+            let resolve = |p: &str| -> String { resolve_path(&cwd, &p) };
 
             // Determine operation based on flags
             if create {
@@ -349,14 +337,7 @@ impl ArchiveCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = ArchiveCommands::show_help("gzip") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut decompress = false;
             let mut to_stdout = false;
             let mut keep = false;
@@ -373,13 +354,7 @@ impl ArchiveCommands {
                 }
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
+            let resolve = |p: &str| -> String { resolve_path(&cwd, &p) };
 
             // If no files, read from stdin and write to stdout
             if files.is_empty() {
@@ -540,14 +515,7 @@ impl ArchiveCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = ArchiveCommands::show_help("bzip2") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut decompress = false;
             let mut to_stdout = false;
             let mut keep = false;
@@ -564,13 +532,7 @@ impl ArchiveCommands {
                 }
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
+            let resolve = |p: &str| -> String { resolve_path(&cwd, &p) };
 
             // If no files, read from stdin
             if files.is_empty() {
@@ -705,20 +667,13 @@ impl ArchiveCommands {
         args: Vec<String>,
         env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = ArchiveCommands::show_help("zip") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut recursive = false;
             let mut files: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -738,13 +693,7 @@ impl ArchiveCommands {
                 return 1;
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
+            let resolve = |p: &str| -> String { resolve_path(&cwd, &p) };
 
             let archive_path = resolve(&files[0]);
             let files_to_add = &files[1..];
@@ -856,14 +805,7 @@ impl ArchiveCommands {
         let cwd = env.cwd.to_string_lossy().to_string();
 
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = ArchiveCommands::show_help("unzip") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut list_only = false;
             let mut dest_dir: Option<String> = None;
             let mut archive_file: Option<String> = None;
@@ -882,13 +824,7 @@ impl ArchiveCommands {
                 }
             }
 
-            let resolve = |p: &str| -> String {
-                if p.starts_with('/') {
-                    p.to_string()
-                } else {
-                    format!("{}/{}", cwd, p)
-                }
-            };
+            let resolve = |p: &str| -> String { resolve_path(&cwd, &p) };
 
             let archive_path = match &archive_file {
                 Some(f) => resolve(f),

@@ -49,7 +49,8 @@ pub use local_tools::{
     TaskStatus,
 };
 pub use mcp_transport::{
-    JsonRpcError, JsonRpcResponse, McpError, McpTransport, ToolContent, ToolDefinition, ToolResult,
+    JsonRpcError, JsonRpcResponse, McpError, McpTransport, ProtocolError, ToolContent,
+    ToolDefinition, ToolResult, TransportError,
 };
 pub use models::{get_models_for_provider, ModelInfo, ProviderInfo, PROVIDERS};
 pub use models_api::{fetch_models_for_provider, FetchedModel, ModelFetchHttp};

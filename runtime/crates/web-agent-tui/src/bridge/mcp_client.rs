@@ -30,7 +30,7 @@ impl McpClient {
 
     /// Initialize the MCP connection
     pub fn initialize(&self) -> Result<(), McpError> {
-        let mut client = self.inner.lock().map_err(|_| McpError::LockError)?;
+        let mut client = self.inner.lock().map_err(|_| McpError::LockError())?;
         // connect() handles initialization (and listing tools, but we ignore tools here)
         let _ = client.connect()?;
         Ok(())
@@ -38,7 +38,7 @@ impl McpClient {
 
     /// List available tools
     pub fn list_tools(&self) -> Result<Vec<ToolDefinition>, McpError> {
-        let client = self.inner.lock().map_err(|_| McpError::LockError)?;
+        let client = self.inner.lock().map_err(|_| McpError::LockError())?;
         // If not initialized, connect? RemoteMcpClient tracks initialization state?
         // RemoteMcpClient::connect() sets initialized = true.
         // But list_tools() checks? No, RemoteMcpClient::list_tools doesn't auto-connect (unlike TUI version).
@@ -61,7 +61,7 @@ impl McpClient {
 
     /// Call a tool by name with arguments
     pub fn call_tool(&self, name: &str, arguments: Value) -> Result<String, McpError> {
-        let client = self.inner.lock().map_err(|_| McpError::LockError)?;
+        let client = self.inner.lock().map_err(|_| McpError::LockError())?;
         client.call_tool(name, arguments)
     }
 }

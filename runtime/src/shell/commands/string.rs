@@ -5,6 +5,7 @@ use futures_lite::StreamExt;
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::parse_common;
 
 /// Get a random u64 - uses WASI in production, std in tests
@@ -45,14 +46,7 @@ impl StringCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("expr") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"expr: missing operand\n").await;
                 return 2;
@@ -91,14 +85,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("awk") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Parse options
             let mut field_sep = " \t".to_string();
             let mut program = String::new();
@@ -181,11 +168,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -243,14 +226,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("paste") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut delimiter = "\t".to_string();
             let mut files: Vec<String> = Vec::new();
             let mut i = 0;
@@ -291,11 +267,7 @@ impl StringCommands {
                     return 1;
                 }
 
-                let path = if file.starts_with('/') {
-                    file.clone()
-                } else {
-                    format!("{}/{}", cwd, file)
-                };
+                let path = resolve_path(&cwd, &file);
 
                 match std::fs::read_to_string(&path) {
                     Ok(content) => {
@@ -342,14 +314,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("rev") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let reverse_line = |line: &str| -> String { line.chars().rev().collect() };
 
             if remaining.is_empty() {
@@ -363,11 +328,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &remaining {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -406,14 +367,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("fold") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut width: usize = 80;
             let mut files: Vec<String> = Vec::new();
             let mut i = 0;
@@ -460,11 +414,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -504,14 +454,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("nl") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut number_empty = false; // -b a
             let mut files: Vec<String> = Vec::new();
             let mut i = 0;
@@ -553,11 +496,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -596,14 +535,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("shuf") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut count: Option<usize> = None;
             let mut files: Vec<String> = Vec::new();
             let mut i = 0;
@@ -631,11 +563,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {
@@ -685,14 +613,7 @@ impl StringCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = StringCommands::show_help("column") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut table_mode = false;
             let mut separator = " \t".to_string();
             let mut files: Vec<String> = Vec::new();
@@ -724,11 +645,7 @@ impl StringCommands {
                 }
             } else {
                 for file in &files {
-                    let path = if file.starts_with('/') {
-                        file.clone()
-                    } else {
-                        format!("{}/{}", cwd, file)
-                    };
+                    let path = resolve_path(&cwd, &file);
 
                     match std::fs::read_to_string(&path) {
                         Ok(content) => {

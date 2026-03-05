@@ -26,14 +26,7 @@ impl CoreCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("echo") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             // Parse echo-specific flags
             let mut interpret_escapes = false;
             let mut trailing_newline = true;
@@ -105,13 +98,7 @@ impl CoreCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, _) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("pwd") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
+            let (_, _) = parse_common(&args);
             if stdout.write_all(cwd.as_bytes()).await.is_err() {
                 return 1;
             }
@@ -135,7 +122,7 @@ impl CoreCommands {
         mut stdout: piper::Writer,
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
-        let (opts, remaining) = parse_common(&args);
+        let (_, remaining) = parse_common(&args);
         let output = if remaining.is_empty() {
             "y".to_string()
         } else {
@@ -143,12 +130,6 @@ impl CoreCommands {
         };
 
         Box::pin(async move {
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("yes") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
             let line = format!("{}\n", output);
             loop {
                 match stdout.write_all(line.as_bytes()).await {
@@ -170,17 +151,11 @@ impl CoreCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, _) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("true") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
+            let (_, _) = parse_common(&args);
             0
         })
     }
@@ -195,17 +170,11 @@ impl CoreCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, _) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("false") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
+            let (_, _) = parse_common(&args);
             1
         })
     }
@@ -224,14 +193,7 @@ impl CoreCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = CoreCommands::show_help("help") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 // List all commands
                 let commands = ShellCommands::list_commands();

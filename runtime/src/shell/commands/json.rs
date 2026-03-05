@@ -6,6 +6,7 @@ use lexopt::prelude::*;
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::{make_parser, parse_common};
 
 /// JSON and pipeline commands.
@@ -28,14 +29,7 @@ impl JsonCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = JsonCommands::show_help("jq") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut raw_output = false;
             let mut positional: Vec<String> = Vec::new();
             let mut parser = make_parser(remaining);
@@ -58,11 +52,7 @@ impl JsonCommands {
 
             // Read JSON input
             let input = if let Some(file_path) = file {
-                let path = if file_path.starts_with('/') {
-                    file_path.clone()
-                } else {
-                    format!("{}/{}", cwd, file_path)
-                };
+                let path = resolve_path(&cwd, &file_path);
 
                 match std::fs::read_to_string(&path) {
                     Ok(content) => content,
@@ -137,14 +127,7 @@ impl JsonCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let env = env.clone();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = JsonCommands::show_help("xargs") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut max_args: Option<usize> = None;
             let mut replace_str: Option<String> = None;
             let mut command_args: Vec<String> = Vec::new();

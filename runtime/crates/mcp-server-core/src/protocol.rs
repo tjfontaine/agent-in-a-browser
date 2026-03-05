@@ -121,68 +121,151 @@ pub struct ToolResult {
     pub meta: Option<serde_json::Value>,
 }
 
+/// Typed wrapper around tool call arguments for safer extraction
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct Arguments(serde_json::Value);
+
+#[allow(dead_code)]
+impl Arguments {
+    /// Create Arguments from a JSON value
+    pub fn new(value: serde_json::Value) -> Self {
+        Self(value)
+    }
+
+    /// Get a required string parameter
+    pub fn get_string(&self, key: &str) -> Result<String, String> {
+        self.0
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| format!("Missing required parameter: {}", key))
+    }
+
+    /// Get an optional string parameter
+    pub fn get_optional_string(&self, key: &str) -> Option<String> {
+        self.0
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+
+    /// Get a required boolean parameter
+    pub fn get_bool(&self, key: &str) -> Result<bool, String> {
+        self.0
+            .get(key)
+            .and_then(|v| v.as_bool())
+            .ok_or_else(|| format!("Missing required parameter: {}", key))
+    }
+
+    /// Get the inner JSON value
+    pub fn inner(&self) -> &serde_json::Value {
+        &self.0
+    }
+}
+
 /// Tool content item - text, image, audio, resource, or resource_link
-#[derive(Debug, Serialize, Clone, PartialEq)]
-pub struct ToolContent {
-    #[serde(rename = "type")]
-    pub content_type: String,
-    /// Text content (for type: "text")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    /// Base64 encoded data (for type: "image", "audio")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
-    /// MIME type (for type: "image", "audio")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
-    /// Resource URI (for type: "resource", "resource_link")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub uri: Option<String>,
-    /// Resource name (for type: "resource", "resource_link")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    /// Resource title (for type: "resource", "resource_link")
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolContent {
+    Text {
+        text: String,
+    },
+    Image {
+        data: String,
+        mime_type: String,
+    },
+    Audio {
+        data: String,
+        mime_type: String,
+    },
+    Resource {
+        uri: String,
+        text: Option<String>,
+        mime_type: Option<String>,
+    },
+    ResourceLink {
+        uri: String,
+        name: Option<String>,
+        title: Option<String>,
+    },
+}
+
+impl Serialize for ToolContent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        match self {
+            ToolContent::Text { text } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "text")?;
+                map.serialize_entry("text", text)?;
+                map.end()
+            }
+            ToolContent::Image { data, mime_type } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "image")?;
+                map.serialize_entry("data", data)?;
+                map.serialize_entry("mimeType", mime_type)?;
+                map.end()
+            }
+            ToolContent::Audio { data, mime_type } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "audio")?;
+                map.serialize_entry("data", data)?;
+                map.serialize_entry("mimeType", mime_type)?;
+                map.end()
+            }
+            ToolContent::Resource {
+                uri,
+                text,
+                mime_type,
+            } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "resource")?;
+                if let Some(text) = text {
+                    map.serialize_entry("text", text)?;
+                }
+                if let Some(mime_type) = mime_type {
+                    map.serialize_entry("mimeType", mime_type)?;
+                }
+                map.serialize_entry("uri", uri)?;
+                map.end()
+            }
+            ToolContent::ResourceLink { uri, name, title } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "resource_link")?;
+                if let Some(name) = name {
+                    map.serialize_entry("name", name)?;
+                }
+                if let Some(title) = title {
+                    map.serialize_entry("title", title)?;
+                }
+                map.serialize_entry("uri", uri)?;
+                map.end()
+            }
+        }
+    }
 }
 
 impl ToolContent {
     /// Create a text content item
     pub fn text(text: impl Into<String>) -> Self {
-        Self {
-            content_type: "text".to_string(),
-            text: Some(text.into()),
-            data: None,
-            mime_type: None,
-            uri: None,
-            name: None,
-            title: None,
-        }
+        ToolContent::Text { text: text.into() }
     }
 
     /// Create an image content item (base64 encoded)
     pub fn image(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
-        Self {
-            content_type: "image".to_string(),
-            text: None,
-            data: Some(data.into()),
-            mime_type: Some(mime_type.into()),
-            uri: None,
-            name: None,
-            title: None,
+        ToolContent::Image {
+            data: data.into(),
+            mime_type: mime_type.into(),
         }
     }
 
     /// Create an audio content item (base64 encoded)
     pub fn audio(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
-        Self {
-            content_type: "audio".to_string(),
-            text: None,
-            data: Some(data.into()),
-            mime_type: Some(mime_type.into()),
-            uri: None,
-            name: None,
-            title: None,
+        ToolContent::Audio {
+            data: data.into(),
+            mime_type: mime_type.into(),
         }
     }
 
@@ -192,14 +275,10 @@ impl ToolContent {
         text: impl Into<String>,
         mime_type: Option<String>,
     ) -> Self {
-        Self {
-            content_type: "resource".to_string(),
+        ToolContent::Resource {
+            uri: uri.into(),
             text: Some(text.into()),
-            data: None,
             mime_type,
-            uri: Some(uri.into()),
-            name: None,
-            title: None,
         }
     }
 
@@ -209,12 +288,8 @@ impl ToolContent {
         name: Option<String>,
         title: Option<String>,
     ) -> Self {
-        Self {
-            content_type: "resource_link".to_string(),
-            text: None,
-            data: None,
-            mime_type: None,
-            uri: Some(uri.into()),
+        ToolContent::ResourceLink {
+            uri: uri.into(),
             name,
             title,
         }
@@ -284,12 +359,130 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // ---- Arguments tests ----
+
+    #[test]
+    fn arguments_get_string_present() {
+        let args = Arguments::new(json!({"name": "hello"}));
+        assert_eq!(args.get_string("name").unwrap(), "hello");
+    }
+
+    #[test]
+    fn arguments_get_string_missing() {
+        let args = Arguments::new(json!({}));
+        assert!(args.get_string("name").is_err());
+        assert!(args.get_string("name").unwrap_err().contains("name"));
+    }
+
+    #[test]
+    fn arguments_get_string_wrong_type() {
+        let args = Arguments::new(json!({"count": 42}));
+        assert!(args.get_string("count").is_err());
+    }
+
+    #[test]
+    fn arguments_get_optional_string_present() {
+        let args = Arguments::new(json!({"path": "/tmp"}));
+        assert_eq!(args.get_optional_string("path"), Some("/tmp".to_string()));
+    }
+
+    #[test]
+    fn arguments_get_optional_string_missing() {
+        let args = Arguments::new(json!({}));
+        assert_eq!(args.get_optional_string("path"), None);
+    }
+
+    #[test]
+    fn arguments_get_bool_present() {
+        let args = Arguments::new(json!({"recursive": true}));
+        assert!(args.get_bool("recursive").unwrap());
+    }
+
+    #[test]
+    fn arguments_get_bool_missing() {
+        let args = Arguments::new(json!({}));
+        assert!(args.get_bool("recursive").is_err());
+    }
+
+    #[test]
+    fn arguments_get_bool_wrong_type() {
+        let args = Arguments::new(json!({"recursive": "yes"}));
+        assert!(args.get_bool("recursive").is_err());
+    }
+
+    #[test]
+    fn arguments_inner_returns_value() {
+        let val = json!({"key": "value"});
+        let args = Arguments::new(val.clone());
+        assert_eq!(args.inner(), &val);
+    }
+
+    // ---- ToolContent serialization tests ----
+
+    #[test]
+    fn tool_content_text_serializes_correctly() {
+        let content = ToolContent::text("hello");
+        let serialized = serde_json::to_value(&content).unwrap();
+        assert_eq!(serialized, json!({"type": "text", "text": "hello"}));
+    }
+
+    #[test]
+    fn tool_content_image_serializes_correctly() {
+        let content = ToolContent::image("base64data", "image/png");
+        let serialized = serde_json::to_value(&content).unwrap();
+        assert_eq!(
+            serialized,
+            json!({"type": "image", "data": "base64data", "mimeType": "image/png"})
+        );
+    }
+
+    #[test]
+    fn tool_content_audio_serializes_correctly() {
+        let content = ToolContent::audio("audiodata", "audio/mp3");
+        let serialized = serde_json::to_value(&content).unwrap();
+        assert_eq!(
+            serialized,
+            json!({"type": "audio", "data": "audiodata", "mimeType": "audio/mp3"})
+        );
+    }
+
+    #[test]
+    fn tool_content_resource_serializes_correctly() {
+        let content = ToolContent::resource(
+            "file:///test.txt",
+            "file content",
+            Some("text/plain".into()),
+        );
+        let serialized = serde_json::to_value(&content).unwrap();
+        assert_eq!(
+            serialized,
+            json!({"type": "resource", "text": "file content", "mimeType": "text/plain", "uri": "file:///test.txt"})
+        );
+    }
+
+    #[test]
+    fn tool_content_resource_link_serializes_correctly() {
+        let content =
+            ToolContent::resource_link("file:///test.txt", Some("test".to_string()), None);
+        let serialized = serde_json::to_value(&content).unwrap();
+        assert_eq!(
+            serialized,
+            json!({"type": "resource_link", "name": "test", "uri": "file:///test.txt"})
+        );
+    }
+
+    // ---- ToolResult tests ----
+
     #[test]
     fn test_tool_result_text() {
         let result = ToolResult::text("hello");
         assert_eq!(result.content.len(), 1);
-        assert_eq!(result.content[0].text, Some("hello".to_string()));
-        assert_eq!(result.content[0].content_type, "text");
+        assert_eq!(
+            result.content[0],
+            ToolContent::Text {
+                text: "hello".to_string()
+            }
+        );
         assert!(result.is_error.is_none());
     }
 

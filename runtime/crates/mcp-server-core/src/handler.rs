@@ -1,7 +1,7 @@
 //! MCP request handler and McpServer trait
 
 use crate::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
-use crate::protocol::{ServerInfo, ToolDefinition, ToolResult};
+use crate::protocol::{Arguments, ServerInfo, ToolDefinition, ToolResult};
 
 /// MCP Server trait - implement this to create an MCP server
 pub trait McpServer {
@@ -12,7 +12,7 @@ pub trait McpServer {
     fn list_tools(&self) -> Vec<ToolDefinition>;
 
     /// Call a tool with the given arguments
-    fn call_tool(&mut self, name: &str, arguments: serde_json::Value) -> ToolResult;
+    fn call_tool(&mut self, name: &str, arguments: Arguments) -> ToolResult;
 }
 
 /// Handle an MCP JSON-RPC request
@@ -56,11 +56,13 @@ pub fn handle_request<S: McpServer>(server: &mut S, request: JsonRpcRequest) -> 
 
         "tools/call" => {
             let name = request.params.get("name").and_then(|v| v.as_str());
-            let arguments = request
-                .params
-                .get("arguments")
-                .cloned()
-                .unwrap_or(serde_json::json!({}));
+            let arguments = Arguments::new(
+                request
+                    .params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({})),
+            );
 
             match name {
                 Some(name) => {

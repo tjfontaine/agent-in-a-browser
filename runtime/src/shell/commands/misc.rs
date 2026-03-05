@@ -4,6 +4,7 @@ use futures_lite::io::AsyncWriteExt;
 use runtime_macros::shell_commands;
 
 use super::super::ShellEnv;
+use super::helpers::resolve_path;
 use super::parse_common;
 
 // Import WASI clock bindings
@@ -29,14 +30,7 @@ impl MiscCommands {
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("seq") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let nums: Vec<i64> = remaining.iter().filter_map(|s| s.parse().ok()).collect();
 
             let (first, incr, last) = match nums.len() {
@@ -75,18 +69,11 @@ impl MiscCommands {
         args: Vec<String>,
         _env: &ShellEnv,
         _stdin: piper::Reader,
-        mut stdout: piper::Writer,
+        _stdout: piper::Writer,
         mut stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("sleep") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             if remaining.is_empty() {
                 let _ = stderr.write_all(b"sleep: missing operand\n").await;
                 return 1;
@@ -121,14 +108,7 @@ impl MiscCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, _remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("date") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, _remaining) = parse_common(&args);
             // Get current wall clock time from WASI
             let datetime = wall_clock::now();
 
@@ -177,14 +157,7 @@ impl MiscCommands {
     ) -> futures_lite::future::Boxed<i32> {
         let cwd = env.cwd.to_string_lossy().to_string();
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("curl") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut method = "GET".to_string();
             let mut headers: Vec<(String, String)> = Vec::new();
             let mut data: Option<String> = None;
@@ -268,11 +241,7 @@ impl MiscCommands {
             ) {
                 Ok(response) => {
                     if let Some(out_path) = output_file {
-                        let path = if out_path.starts_with('/') {
-                            out_path
-                        } else {
-                            format!("{}/{}", cwd, out_path)
-                        };
+                        let path = resolve_path(&cwd, &out_path);
                         if let Err(e) = std::fs::write(&path, &response.body()) {
                             let msg = format!("curl: {}: {}\n", path, e);
                             let _ = stderr.write_all(msg.as_bytes()).await;
@@ -321,14 +290,7 @@ impl MiscCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("uname") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             const SYSNAME: &str = "WASI";
             const NODENAME: &str = "sandbox";
             const RELEASE: &str = "1.0.0";
@@ -388,13 +350,7 @@ impl MiscCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, _remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("hostname") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
+            let (_, _remaining) = parse_common(&args);
             let _ = stdout.write_all(b"sandbox\n").await;
             0
         })
@@ -414,13 +370,7 @@ impl MiscCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, _remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("whoami") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
+            let (_, _remaining) = parse_common(&args);
             let _ = stdout.write_all(b"sandbox\n").await;
             0
         })
@@ -440,14 +390,7 @@ impl MiscCommands {
         _stderr: piper::Writer,
     ) -> futures_lite::future::Boxed<i32> {
         Box::pin(async move {
-            let (opts, remaining) = parse_common(&args);
-            if opts.help {
-                if let Some(help) = MiscCommands::show_help("id") {
-                    let _ = stdout.write_all(help.as_bytes()).await;
-                    return 0;
-                }
-            }
-
+            let (_, remaining) = parse_common(&args);
             let mut show_uid = false;
             let mut show_gid = false;
             let mut show_name = false;
