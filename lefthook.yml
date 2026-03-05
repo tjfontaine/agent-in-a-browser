@@ -3,3 +3,6 @@ pre-push:
     rust-fmt:
       run: cargo fmt --all --check
       fail_text: "Rust formatting check failed. Run 'cargo fmt --all' to fix."
+    rust-check:
+      run: cargo check --workspace --all-targets --exclude wasmtime-runner
+      fail_text: "Rust build has warnings or errors. Fix them before pushing."
