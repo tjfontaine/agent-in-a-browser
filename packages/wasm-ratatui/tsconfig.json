@@ -9,7 +9,23 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "skipLibCheck": true,
-        "esModuleInterop": true
+        "esModuleInterop": true,
+        "paths": {
+            "@tjfontaine/wasm-loader": [
+                "../wasm-loader/src/index.ts"
+            ],
+            "@tjfontaine/wasm-loader/*": [
+                "../wasm-loader/src/*"
+            ]
+        },
+        "composite": true
     },
-    "include": ["src"]
+    "include": [
+        "src"
+    ],
+    "references": [
+        {
+            "path": "../wasm-loader"
+        }
+    ]
 }

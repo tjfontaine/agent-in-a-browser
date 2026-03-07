@@ -9,7 +9,25 @@
         "rootDir": "src",
         "declaration": true,
         "sourceMap": true,
-        "lib": ["ES2022"]
+        "lib": [
+            "ES2022"
+        ],
+        "paths": {
+            "@tjfontaine/edge-agent-session": [
+                "../edge-agent-session/src/index.ts"
+            ],
+            "@tjfontaine/edge-agent-session/*": [
+                "../edge-agent-session/src/*"
+            ]
+        },
+        "composite": true
     },
-    "include": ["src/**/*.ts"]
+    "include": [
+        "src/**/*.ts"
+    ],
+    "references": [
+        {
+            "path": "../edge-agent-session"
+        }
+    ]
 }

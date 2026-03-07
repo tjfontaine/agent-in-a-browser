@@ -9,7 +9,16 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "outDir": "dist",
-        "rootDir": "src"
+        "rootDir": "src",
+        "paths": {
+            "@tjfontaine/wasi-shims": [
+                "../wasi-shims/src/index.ts"
+            ],
+            "@tjfontaine/wasi-shims/*": [
+                "../wasi-shims/src/*"
+            ]
+        },
+        "composite": true
     },
     "include": [
         "src/**/*.ts"
@@ -18,5 +27,10 @@
         "node_modules",
         "dist",
         "src/wasm"
+    ],
+    "references": [
+        {
+            "path": "../wasi-shims"
+        }
     ]
 }

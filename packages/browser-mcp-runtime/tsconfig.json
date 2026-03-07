@@ -14,7 +14,22 @@
             "ES2022",
             "DOM",
             "DOM.Iterable"
-        ]
+        ],
+        "paths": {
+            "@tjfontaine/mcp-wasm-server": [
+                "../mcp-wasm-server/src/index.ts"
+            ],
+            "@tjfontaine/mcp-wasm-server/*": [
+                "../mcp-wasm-server/src/*"
+            ],
+            "@tjfontaine/wasi-shims": [
+                "../wasi-shims/src/index.ts"
+            ],
+            "@tjfontaine/wasi-shims/*": [
+                "../wasi-shims/src/*"
+            ]
+        },
+        "composite": true
     },
     "include": [
         "src"
@@ -22,5 +37,13 @@
     "exclude": [
         "node_modules",
         "dist"
+    ],
+    "references": [
+        {
+            "path": "../mcp-wasm-server"
+        },
+        {
+            "path": "../wasi-shims"
+        }
     ]
 }

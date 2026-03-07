@@ -23,7 +23,7 @@
                 "../packages/mcp-wasm-server/src/index.ts"
             ],
             "@tjfontaine/mcp-wasm-server/*": [
-                "../packages/mcp-wasm-server/*"
+                "../packages/mcp-wasm-server/src/*"
             ],
             "@tjfontaine/wasi-shims": [
                 "../packages/wasi-shims/src/index.ts"
@@ -32,7 +32,46 @@
                 "../packages/wasi-shims/src/*"
             ],
             "@tjfontaine/wasm-vim/*": [
-                "../packages/wasm-vim/*"
+                "../packages/wasm-vim/src/*"
+            ],
+            "@tjfontaine/edge-agent-session": [
+                "../packages/edge-agent-session/src/index.ts"
+            ],
+            "@tjfontaine/edge-agent-session/*": [
+                "../packages/edge-agent-session/src/*"
+            ],
+            "@tjfontaine/wasm-loader": [
+                "../packages/wasm-loader/src/index.ts"
+            ],
+            "@tjfontaine/wasm-loader/*": [
+                "../packages/wasm-loader/src/*"
+            ],
+            "@tjfontaine/wasm-ratatui": [
+                "../packages/wasm-ratatui/src/index.ts"
+            ],
+            "@tjfontaine/wasm-ratatui/*": [
+                "../packages/wasm-ratatui/src/*"
+            ],
+            "@tjfontaine/wasm-sqlite": [
+                "../packages/wasm-sqlite/src/index.ts"
+            ],
+            "@tjfontaine/wasm-sqlite/*": [
+                "../packages/wasm-sqlite/src/*"
+            ],
+            "@tjfontaine/wasm-tsx": [
+                "../packages/wasm-tsx/src/index.ts"
+            ],
+            "@tjfontaine/wasm-tsx/*": [
+                "../packages/wasm-tsx/src/*"
+            ],
+            "@tjfontaine/wasm-vim": [
+                "../packages/wasm-vim/src/index.ts"
+            ],
+            "@tjfontaine/web-agent-core": [
+                "../packages/web-agent-core/src/index.ts"
+            ],
+            "@tjfontaine/web-agent-core/*": [
+                "../packages/web-agent-core/src/*"
             ]
         }
     },
@@ -40,5 +79,34 @@
         "src/**/*",
         "tests/**/*",
         "playwright.config.ts"
+    ],
+    "references": [
+        {
+            "path": "../packages/edge-agent-session"
+        },
+        {
+            "path": "../packages/mcp-wasm-server"
+        },
+        {
+            "path": "../packages/wasi-shims"
+        },
+        {
+            "path": "../packages/wasm-loader"
+        },
+        {
+            "path": "../packages/wasm-ratatui"
+        },
+        {
+            "path": "../packages/wasm-sqlite"
+        },
+        {
+            "path": "../packages/wasm-tsx"
+        },
+        {
+            "path": "../packages/wasm-vim"
+        },
+        {
+            "path": "../packages/web-agent-core"
+        }
     ]
 }

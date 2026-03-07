@@ -14,7 +14,16 @@
             "ESNext",
             "DOM",
             "DOM.Iterable"
-        ]
+        ],
+        "paths": {
+            "@tjfontaine/wasm-loader": [
+                "../wasm-loader/src/index.ts"
+            ],
+            "@tjfontaine/wasm-loader/*": [
+                "../wasm-loader/src/*"
+            ]
+        },
+        "composite": true
     },
     "include": [
         "src"
@@ -22,5 +31,10 @@
     "exclude": [
         "node_modules",
         "dist"
+    ],
+    "references": [
+        {
+            "path": "../wasm-loader"
+        }
     ]
 }

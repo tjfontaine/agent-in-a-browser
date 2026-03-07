@@ -14,7 +14,16 @@
             "ES2022",
             "DOM",
             "DOM.Iterable"
-        ]
+        ],
+        "paths": {
+            "@tjfontaine/wasi-shims": [
+                "../wasi-shims/src/index.ts"
+            ],
+            "@tjfontaine/wasi-shims/*": [
+                "../wasi-shims/src/*"
+            ]
+        },
+        "composite": true
     },
     "include": [
         "src"
@@ -22,5 +31,10 @@
     "exclude": [
         "node_modules",
         "dist"
+    ],
+    "references": [
+        {
+            "path": "../wasi-shims"
+        }
     ]
 }

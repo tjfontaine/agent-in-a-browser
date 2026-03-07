@@ -3,7 +3,10 @@
         "target": "ES2022",
         "module": "ESNext",
         "moduleResolution": "bundler",
-        "lib": ["ES2022", "DOM"],
+        "lib": [
+            "ES2022",
+            "DOM"
+        ],
         "strict": true,
         "declaration": true,
         "declarationMap": true,
@@ -11,7 +14,32 @@
         "outDir": "dist",
         "rootDir": "src",
         "skipLibCheck": true,
-        "esModuleInterop": true
+        "esModuleInterop": true,
+        "paths": {
+            "@tjfontaine/browser-mcp-runtime": [
+                "../browser-mcp-runtime/src/index.ts"
+            ],
+            "@tjfontaine/browser-mcp-runtime/*": [
+                "../browser-mcp-runtime/src/*"
+            ],
+            "@tjfontaine/edge-agent-session": [
+                "../edge-agent-session/src/index.ts"
+            ],
+            "@tjfontaine/edge-agent-session/*": [
+                "../edge-agent-session/src/*"
+            ]
+        },
+        "composite": true
     },
-    "include": ["src"]
+    "include": [
+        "src"
+    ],
+    "references": [
+        {
+            "path": "../browser-mcp-runtime"
+        },
+        {
+            "path": "../edge-agent-session"
+        }
+    ]
 }
