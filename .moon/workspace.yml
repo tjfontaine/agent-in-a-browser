@@ -9,3 +9,15 @@ projects:
 vcs:
   client: git
   defaultBranch: main
+
+hasher:
+  optimization: "accuracy"
+  ignoreMissingPatterns:
+    - "**/.env*"
+  ignorePatterns:
+    - "**/*.md"
+    - "**/LICENSE*"
+    - "**/.gitignore"
+
+pipeline:
+  logRunningCommand: true
