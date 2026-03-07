@@ -83,6 +83,7 @@ jobs:
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: frontend-dist
           path: frontend/dist
