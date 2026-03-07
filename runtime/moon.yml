@@ -91,6 +91,8 @@ tasks:
     inputs:
       - "@group(rust-sources)"
       - "@group(cargo-configs)"
+    deps:
+      - "~:build-wasm"
     options:
       runInCI: true
 
