@@ -4,8 +4,8 @@ tasks:
   transpile:
     command: "node ../scripts/transpile.mjs web-agent-tui"
     inputs:
-      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
-      - "../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "src/wasm/web-agent-tui"
     deps:
@@ -15,8 +15,8 @@ tasks:
   transpile-sync:
     command: "node ../scripts/transpile.mjs web-agent-tui --sync"
     inputs:
-      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
-      - "../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "src/wasm/web-agent-tui-sync"
     deps:
@@ -24,7 +24,7 @@ tasks:
       - "mcp-wasm-server:transpile-sync"
 
   build:
-    command: "tsc && vite build"
+    script: "tsc && vite build"
     inputs:
       - "src/**"
       - "public/**"
@@ -52,12 +52,12 @@ tasks:
       - "web-agent-core:transpile-sync"
 
   copy-externals:
-    command: "mkdir -p dist/wasi-shims && cp ../packages/wasi-shims/browser-dist/*.js ../packages/wasi-shims/browser-dist/*.js.map dist/wasi-shims/ 2>/dev/null; cp ../packages/wasi-shims/dist/error.js ../packages/wasi-shims/dist/random.js dist/wasi-shims/ 2>/dev/null || true && mkdir -p dist/wasm-loader && cp ../packages/wasm-loader/dist/*.js ../packages/wasm-loader/dist/*.js.map dist/wasm-loader/ 2>/dev/null || true"
+    script: "mkdir -p dist/wasi-shims && cp ../packages/wasi-shims/browser-dist/*.js ../packages/wasi-shims/browser-dist/*.js.map dist/wasi-shims/ 2>/dev/null; cp ../packages/wasi-shims/dist/error.js ../packages/wasi-shims/dist/random.js dist/wasi-shims/ 2>/dev/null || true && mkdir -p dist/wasm-loader && cp ../packages/wasm-loader/dist/*.js ../packages/wasm-loader/dist/*.js.map dist/wasm-loader/ 2>/dev/null || true"
     inputs:
-      - "../packages/wasi-shims/browser-dist/**"
-      - "../packages/wasi-shims/dist/error.js"
-      - "../packages/wasi-shims/dist/random.js"
-      - "../packages/wasm-loader/dist/**"
+      - "/packages/wasi-shims/browser-dist/**"
+      - "/packages/wasi-shims/dist/error.js"
+      - "/packages/wasi-shims/dist/random.js"
+      - "/packages/wasm-loader/dist/**"
     outputs:
       - "dist/wasi-shims"
       - "dist/wasm-loader"
@@ -87,7 +87,7 @@ tasks:
 
   dev:
     command: "vite"
-    local: true
+    preset: "server"
     options:
       persistent: true
       cache: false

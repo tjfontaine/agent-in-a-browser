@@ -17,8 +17,11 @@
     "docker:run": "docker run -p 8080:8080 web-agent"
   },
   "devDependencies": {
-    "@moonrepo/cli": "^1.32.1",
+    "@moonrepo/cli": "^2.0.4",
     "concurrently": "^9.2.1",
     "esbuild": "^0.20.0"
+  },
+  "engines": {
+    "node": "22.22.0"
   }
 }

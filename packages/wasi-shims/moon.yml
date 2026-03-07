@@ -2,7 +2,7 @@ $schema: "https://moonrepo.dev/schemas/project.json"
 
 tasks:
   build:
-    command: "tsc && node scripts/build-browser.mjs"
+    script: "tsc && node scripts/build-browser.mjs"
     inputs:
       - "src/**"
       - "scripts/**"

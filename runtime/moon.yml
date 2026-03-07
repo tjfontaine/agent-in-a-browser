@@ -1,7 +1,7 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
 
 language: rust
-type: library
+layer: library
 tags: ["rust"]
 
 workspace:
@@ -18,13 +18,13 @@ tasks:
       - "crates/*/Cargo.toml"
       - "wit/**"
     outputs:
-      - "../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
-      - "../target/wasm32-wasip2/release/tsx_engine.wasm"
-      - "../target/wasm32-wasip2/release/sqlite_module.wasm"
-      - "../target/wasm32-wasip2/release/ratatui_demo.wasm"
-      - "../target/wasm32-wasip2/release/edtui_module.wasm"
-      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
-      - "../target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "/target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
+      - "/target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "/target/wasm32-wasip2/release/sqlite_module.wasm"
+      - "/target/wasm32-wasip2/release/ratatui_demo.wasm"
+      - "/target/wasm32-wasip2/release/edtui_module.wasm"
+      - "/target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "/target/wasm32-wasip2/release/web_headless_agent.wasm"
     options:
       runInCI: true
 
@@ -57,8 +57,8 @@ tasks:
   transpile-ios:
     command: "node ../scripts/transpile.mjs web-headless-agent-ios"
     inputs:
-      - "../target/wasm32-wasip2/release/web_headless_agent.wasm"
-      - "../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "/scripts/transpile.mjs"
     deps:
       - "~:build-wasm"
     options:

@@ -4,8 +4,8 @@ tasks:
   transpile:
     command: "node ../../scripts/transpile.mjs web-headless-agent"
     inputs:
-      - "../../target/wasm32-wasip2/release/web_headless_agent.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "src/wasm"
     deps:
@@ -14,15 +14,15 @@ tasks:
   transpile-sync:
     command: "node ../../scripts/transpile.mjs web-headless-agent --sync"
     inputs:
-      - "../../target/wasm32-wasip2/release/web_headless_agent.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "src/wasm-sync"
     deps:
       - "runtime:build-wasm"
 
   build:
-    command: "tsc && cp -r src/wasm dist/"
+    script: "tsc && cp -r src/wasm dist/"
     inputs:
       - "src/**"
       - "package.json"

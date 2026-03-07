@@ -4,8 +4,8 @@ tasks:
   transpile:
     command: "node ../../scripts/transpile.mjs sqlite-module"
     inputs:
-      - "../../target/wasm32-wasip2/release/sqlite_module.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/sqlite_module.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "wasm"
     deps:
@@ -14,8 +14,8 @@ tasks:
   transpile-sync:
     command: "node ../../scripts/transpile.mjs sqlite-module --sync"
     inputs:
-      - "../../target/wasm32-wasip2/release/sqlite_module.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/sqlite_module.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "wasm-sync"
     deps:

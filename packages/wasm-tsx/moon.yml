@@ -4,8 +4,8 @@ tasks:
   transpile:
     command: "node ../../scripts/transpile.mjs tsx-engine"
     inputs:
-      - "../../target/wasm32-wasip2/release/tsx_engine.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "wasm"
     deps:
@@ -14,8 +14,8 @@ tasks:
   transpile-sync:
     command: "node ../../scripts/transpile.mjs tsx-engine --sync"
     inputs:
-      - "../../target/wasm32-wasip2/release/tsx_engine.wasm"
-      - "../../scripts/transpile.mjs"
+      - "/target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "/scripts/transpile.mjs"
     outputs:
       - "wasm-sync"
     deps:
