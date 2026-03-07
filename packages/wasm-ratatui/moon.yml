@@ -1,0 +1,22 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  transpile:
+    command: "node ../../scripts/transpile.mjs ratatui-demo"
+    inputs:
+      - "../../target/wasm32-wasip2/release/ratatui_demo.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "wasm"
+    deps:
+      - "runtime:build-wasm"
+
+  transpile-sync:
+    command: "node ../../scripts/transpile.mjs ratatui-demo --sync"
+    inputs:
+      - "../../target/wasm32-wasip2/release/ratatui_demo.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "wasm-sync"
+    deps:
+      - "runtime:build-wasm"

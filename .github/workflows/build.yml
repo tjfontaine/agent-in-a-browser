@@ -139,18 +139,14 @@ jobs:
           name: wasm-component
           path: target/wasm32-wasip2/release/
 
-      - name: Turbo Cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Moon
+        run: npm install -g @moonrepo/cli@latest
+
       - name: Build and Transpile
-        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+        run: moon run frontend:build frontend:copy-externals
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
@@ -223,18 +219,14 @@ jobs:
           name: wasm-component
           path: target/wasm32-wasip2/release/
 
-      - name: Turbo Cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Moon
+        run: npm install -g @moonrepo/cli@latest
+
       - name: Build and Transpile
-        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+        run: moon run frontend:build frontend:copy-externals
 
       - name: Run Rust tests
         working-directory: runtime
@@ -275,19 +267,14 @@ jobs:
           name: wasm-component
           path: target/wasm32-wasip2/release/
 
-      - name: Turbo Cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-${{ hashFiles('turbo.json', 'packages/wasi-shims/src/**', 'scripts/transpile.mjs', 'frontend/vite.config.ts', 'runtime/Cargo.toml', 'runtime/crates/*/Cargo.toml') }}-
-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Moon
+        run: npm install -g @moonrepo/cli@latest
+
       - name: Build and Transpile
-        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+        run: moon run frontend:build frontend:copy-externals
 
       - name: Get Playwright Version
         id: playwright-version

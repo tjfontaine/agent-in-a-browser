@@ -44,13 +44,6 @@ jobs:
           workspaces: runtime
           cache-on-failure: true
 
-      - name: Turbo Cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
-
       - name: Cache Cargo Install
         uses: actions/cache@v4
         with:
@@ -89,8 +82,11 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Moon
+        run: npm install -g @moonrepo/cli@latest
+
       - name: Build and Transpile
-        run: pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+        run: moon run frontend:build frontend:copy-externals
 
       - name: Run tests
         working-directory: frontend
@@ -100,4 +96,4 @@ jobs:
         run: |
           echo "✅ Local CI passed!"
           echo "WASM: $(ls -la target/wasm32-wasip2/release/*.wasm | wc -l) components"
-          echo "Turbo: $(du -sh .turbo 2>/dev/null || echo 'no cache')"
+          echo "Moon cache: $(du -sh .moon/cache 2>/dev/null || echo 'no cache')"

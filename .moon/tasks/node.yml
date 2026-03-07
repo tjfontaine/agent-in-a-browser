@@ -1,0 +1,11 @@
+$schema: "https://moonrepo.dev/schemas/tasks.json"
+
+tasks:
+  build:
+    command: "tsc"
+    inputs:
+      - "src/**"
+      - "package.json"
+      - "tsconfig.json"
+    outputs:
+      - "dist"

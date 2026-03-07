@@ -1,0 +1,22 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  transpile:
+    command: "node ../../scripts/transpile.mjs tsx-engine"
+    inputs:
+      - "../../target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "wasm"
+    deps:
+      - "runtime:build-wasm"
+
+  transpile-sync:
+    command: "node ../../scripts/transpile.mjs tsx-engine --sync"
+    inputs:
+      - "../../target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "wasm-sync"
+    deps:
+      - "runtime:build-wasm"

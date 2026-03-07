@@ -16,8 +16,6 @@
     "files": ["dist", "wasm", "wasm-sync"],
     "scripts": {
         "build": "tsc",
-        "transpile": "node ../../scripts/transpile.mjs tsx-engine",
-        "transpile:sync": "node ../../scripts/transpile.mjs tsx-engine --sync",
         "clean": "rm -rf dist wasm wasm-sync"
     },
     "dependencies": {

@@ -92,8 +92,8 @@ frontend/src/wasm/web-headless-agent/
 website/dist/
 website/node_modules/
 
-# Turbo
-.turbo
+# Moon
+.moon/cache/
 
 # pnpm store
 .pnpm-store

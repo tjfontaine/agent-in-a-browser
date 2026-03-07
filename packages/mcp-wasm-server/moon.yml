@@ -1,0 +1,22 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  transpile:
+    command: "node ../../scripts/transpile.mjs ts-runtime-mcp"
+    inputs:
+      - "../../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "mcp-server-jspi"
+    deps:
+      - "runtime:build-wasm"
+
+  transpile-sync:
+    command: "node ../../scripts/transpile.mjs ts-runtime-mcp --sync"
+    inputs:
+      - "../../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "mcp-server-sync"
+    deps:
+      - "runtime:build-wasm"

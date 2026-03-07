@@ -11,8 +11,8 @@ services:
     volumes:
       - ./test-results:/app/frontend/test-results
       - ./playwright-report:/app/frontend/playwright-report
-      # Mount turbo cache for faster rebuilds
-      - turbo-cache:/app/.turbo
+      # Mount moon cache for faster rebuilds
+      - moon-cache:/app/.moon/cache
 
 volumes:
-  turbo-cache:
+  moon-cache:

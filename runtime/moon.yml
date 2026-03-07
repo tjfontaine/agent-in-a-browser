@@ -1,0 +1,65 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: rust
+type: library
+tags: ["rust"]
+
+workspace:
+  inheritedTasks:
+    exclude: ["build"]
+
+tasks:
+  build-wasm:
+    command: "cargo component build --release --target wasm32-wasip2"
+    inputs:
+      - "src/**"
+      - "crates/*/src/**"
+      - "Cargo.toml"
+      - "crates/*/Cargo.toml"
+      - "wit/**"
+    outputs:
+      - "../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
+      - "../target/wasm32-wasip2/release/tsx_engine.wasm"
+      - "../target/wasm32-wasip2/release/sqlite_module.wasm"
+      - "../target/wasm32-wasip2/release/ratatui_demo.wasm"
+      - "../target/wasm32-wasip2/release/edtui_module.wasm"
+      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "../target/wasm32-wasip2/release/web_headless_agent.wasm"
+    options:
+      runInCI: true
+
+  fmt-check:
+    command: "cargo fmt --all --check"
+    inputs:
+      - "src/**/*.rs"
+      - "crates/*/src/**/*.rs"
+    options:
+      runInCI: true
+
+  check:
+    command: "cargo check --workspace --all-targets --exclude wasmtime-runner"
+    inputs:
+      - "src/**"
+      - "crates/*/src/**"
+      - "Cargo.toml"
+      - "crates/*/Cargo.toml"
+    options:
+      runInCI: true
+
+  test:
+    command: "cargo test --features sqlite"
+    inputs:
+      - "src/**"
+      - "crates/*/src/**"
+    options:
+      runInCI: true
+
+  transpile-ios:
+    command: "node ../scripts/transpile.mjs web-headless-agent-ios"
+    inputs:
+      - "../target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "../scripts/transpile.mjs"
+    deps:
+      - "~:build-wasm"
+    options:
+      runInCI: false

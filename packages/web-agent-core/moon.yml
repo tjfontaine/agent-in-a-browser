@@ -1,0 +1,33 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  transpile:
+    command: "node ../../scripts/transpile.mjs web-headless-agent"
+    inputs:
+      - "../../target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "src/wasm"
+    deps:
+      - "runtime:build-wasm"
+
+  transpile-sync:
+    command: "node ../../scripts/transpile.mjs web-headless-agent --sync"
+    inputs:
+      - "../../target/wasm32-wasip2/release/web_headless_agent.wasm"
+      - "../../scripts/transpile.mjs"
+    outputs:
+      - "src/wasm-sync"
+    deps:
+      - "runtime:build-wasm"
+
+  build:
+    command: "tsc && cp -r src/wasm dist/"
+    inputs:
+      - "src/**"
+      - "package.json"
+      - "tsconfig.json"
+    outputs:
+      - "dist"
+    deps:
+      - "~:transpile"

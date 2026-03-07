@@ -1,0 +1,93 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  transpile:
+    command: "node ../scripts/transpile.mjs web-agent-tui"
+    inputs:
+      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "../scripts/transpile.mjs"
+    outputs:
+      - "src/wasm/web-agent-tui"
+    deps:
+      - "runtime:build-wasm"
+      - "mcp-wasm-server:transpile"
+
+  transpile-sync:
+    command: "node ../scripts/transpile.mjs web-agent-tui --sync"
+    inputs:
+      - "../target/wasm32-wasip2/release/web_agent_tui.wasm"
+      - "../scripts/transpile.mjs"
+    outputs:
+      - "src/wasm/web-agent-tui-sync"
+    deps:
+      - "runtime:build-wasm"
+      - "mcp-wasm-server:transpile-sync"
+
+  build:
+    command: "tsc && vite build"
+    inputs:
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "tsconfig.json"
+      - "vite.config.ts"
+      - "index.html"
+    outputs:
+      - "dist"
+    deps:
+      - "^:build"
+      - "~:transpile"
+      - "~:transpile-sync"
+      - "mcp-wasm-server:transpile"
+      - "mcp-wasm-server:transpile-sync"
+      - "wasm-tsx:transpile"
+      - "wasm-tsx:transpile-sync"
+      - "wasm-sqlite:transpile"
+      - "wasm-sqlite:transpile-sync"
+      - "wasm-ratatui:transpile"
+      - "wasm-ratatui:transpile-sync"
+      - "wasm-vim:transpile"
+      - "wasm-vim:transpile-sync"
+      - "web-agent-core:transpile"
+      - "web-agent-core:transpile-sync"
+
+  copy-externals:
+    command: "mkdir -p dist/wasi-shims && cp ../packages/wasi-shims/browser-dist/*.js ../packages/wasi-shims/browser-dist/*.js.map dist/wasi-shims/ 2>/dev/null; cp ../packages/wasi-shims/dist/error.js ../packages/wasi-shims/dist/random.js dist/wasi-shims/ 2>/dev/null || true && mkdir -p dist/wasm-loader && cp ../packages/wasm-loader/dist/*.js ../packages/wasm-loader/dist/*.js.map dist/wasm-loader/ 2>/dev/null || true"
+    inputs:
+      - "../packages/wasi-shims/browser-dist/**"
+      - "../packages/wasi-shims/dist/error.js"
+      - "../packages/wasi-shims/dist/random.js"
+      - "../packages/wasm-loader/dist/**"
+    outputs:
+      - "dist/wasi-shims"
+      - "dist/wasm-loader"
+    deps:
+      - "~:build"
+      - "wasi-shims:build"
+      - "wasm-loader:build"
+
+  test:
+    command: "vitest run"
+    inputs:
+      - "src/**"
+      - "tests/**"
+    deps:
+      - "~:build"
+
+  test-e2e:
+    command: "npx playwright test --project=chromium"
+    inputs:
+      - "e2e/**"
+      - "src/**"
+    deps:
+      - "~:build"
+      - "~:copy-externals"
+    options:
+      cache: false
+
+  dev:
+    command: "vite"
+    local: true
+    options:
+      persistent: true
+      cache: false

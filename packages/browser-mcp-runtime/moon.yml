@@ -1,0 +1,10 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  test:
+    command: "vitest run"
+    inputs:
+      - "src/**"
+      - "tests/**"
+    deps:
+      - "~:build"
