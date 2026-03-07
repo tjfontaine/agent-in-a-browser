@@ -10,8 +10,8 @@ node_modules/
 dist/
 **/dist/
 
-# Turbo cache (prevents cross-platform cache contamination)
-.turbo/
+# Moon cache (prevents cross-platform cache contamination)
+.moon/cache/
 
 # ALL Rust/Cargo build artifacts - must build from scratch in container
 # This is critical because macOS-built WASM may differ from Linux-built WASM

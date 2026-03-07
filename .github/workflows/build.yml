@@ -133,6 +133,9 @@ jobs:
           node-version: "22.22.0"
           cache: "pnpm"
 
+      - name: Setup Moon
+        uses: moonrepo/setup-toolchain@v0
+
       - name: Download WASM component
         uses: actions/download-artifact@v4
         with:
@@ -141,9 +144,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Setup Moon
-        run: npm install -g @moonrepo/cli@latest
 
       - name: Build and Transpile
         run: moon run frontend:build frontend:copy-externals
@@ -213,6 +213,9 @@ jobs:
           node-version: "22.22.0"
           cache: "pnpm"
 
+      - name: Setup Moon
+        uses: moonrepo/setup-toolchain@v0
+
       - name: Download WASM component
         uses: actions/download-artifact@v4
         with:
@@ -221,9 +224,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Setup Moon
-        run: npm install -g @moonrepo/cli@latest
 
       - name: Build and Transpile
         run: moon run frontend:build frontend:copy-externals
@@ -261,6 +261,9 @@ jobs:
           node-version: "22.22.0"
           cache: "pnpm"
 
+      - name: Setup Moon
+        uses: moonrepo/setup-toolchain@v0
+
       - name: Download WASM component
         uses: actions/download-artifact@v4
         with:
@@ -269,9 +272,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Setup Moon
-        run: npm install -g @moonrepo/cli@latest
 
       - name: Build and Transpile
         run: moon run frontend:build frontend:copy-externals

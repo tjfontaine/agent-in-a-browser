@@ -1,4 +1,4 @@
-# E2E Test Environment with pnpm + Turbo
+# E2E Test Environment with pnpm + Moon
 # Mirrors GitHub Actions CI environment for local testing
 
 # Stage 1: Rust WASM builder
@@ -41,7 +41,7 @@ RUN npm install -g pnpm@9
 WORKDIR /app
 
 # Copy workspace config
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY .npmrc ./
 
 # Copy all package.json files
@@ -63,8 +63,8 @@ COPY scripts/ ./scripts/
 # Copy source files
 COPY frontend/ ./frontend/
 
-# Build and transpile everything using turbo
-RUN pnpm turbo run build transpile transpile:sync --filter=web-agent-frontend...
+# Build and transpile everything
+RUN pnpm exec moon run frontend:build frontend:copy-externals
 
 # Install Playwright browsers
 RUN cd frontend && npx playwright install chromium

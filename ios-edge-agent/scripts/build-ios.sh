@@ -12,33 +12,24 @@ WEB_RUNTIME_DIR="$IOS_PROJECT/EdgeAgent/Resources/WebRuntime"
 echo "=== iOS Edge Agent Build Script ==="
 echo ""
 
-# Step 1: Build WASM modules
-echo ">>> Building WASM modules..."
-cd "$PROJECT_ROOT/runtime"
-cargo component build --release --target wasm32-wasip2
-echo ""
-
-# Step 2: Transpile iOS-specific target directly
-# This uses local:// URLs for shim imports that work with WKURLSchemeHandler
-echo ">>> Transpiling web-headless-agent-ios (sync mode)..."
+# Step 1: Build WASM + transpile all sync targets via moon
+# This builds Rust WASM components, iOS-specific transpile, wasi-shims, and all sync transpiles
+echo ">>> Building WASM and transpiling (sync mode for iOS)..."
 cd "$PROJECT_ROOT"
-node scripts/transpile.mjs web-headless-agent-ios --sync
+pnpm exec moon run runtime:transpile-ios :transpile-sync wasi-shims:build
 echo ""
 
-# Step 3: Copy wasi-shims to where local:// imports expect them
+# Step 2: Copy wasi-shims to where local:// imports expect them
 echo ">>> Copying WASI shims..."
 mkdir -p "$WEB_RUNTIME_DIR/web-headless-agent-sync/shims"
 if [ -d "$PROJECT_ROOT/packages/wasi-shims/browser-dist" ]; then
     cp "$PROJECT_ROOT/packages/wasi-shims/browser-dist/"*.js "$WEB_RUNTIME_DIR/web-headless-agent-sync/shims/"
     echo "  ✓ Copied wasi-shims to web-headless-agent-sync/shims/"
 else
-    echo "  ⚠ wasi-shims/dist/browser not found - run 'pnpm build' in packages/wasi-shims"
+    echo "  ⚠ wasi-shims/browser-dist not found"
 fi
 
-# Step 4: Transpile and copy MCP server (sync mode for Safari/iOS)
-echo ">>> Transpiling and copying MCP server..."
-cd "$PROJECT_ROOT/frontend"
-pnpm run transpile:all
+# Step 3: Copy MCP server (sync mode for Safari/iOS)
 
 if [ -d "$PROJECT_ROOT/packages/mcp-wasm-server/mcp-server-sync" ]; then
     mkdir -p "$WEB_RUNTIME_DIR/mcp-server-sync"
@@ -74,7 +65,7 @@ else
     echo "  ⚠ mcp-server-sync not found"
 fi
 
-# Step 4b: Copy lazy WASM modules for shell_eval support
+# Step 4: Copy lazy WASM modules for shell_eval support
 echo ">>> Copying lazy WASM modules..."
 
 # tsx-engine (for tsx/tsc commands)
@@ -117,14 +108,14 @@ echo ""
 echo "=== Build Complete ==="
 echo "WebRuntime bundled to: $WEB_RUNTIME_DIR"
 
-# Step 5: Resolve Swift Package Manager dependencies (Swift 6 MCP SDK)
+# Step 5: Resolve Swift Package Manager dependencies
 echo ""
 echo ">>> Resolving Swift Package Manager dependencies..."
 cd "$IOS_PROJECT"
 xcodebuild -project EdgeAgent.xcodeproj -scheme EdgeAgent -resolvePackageDependencies 2>&1 | grep -E "(Fetching|Checking|Resolved|resolved|error)" || true
 echo "  ✓ SPM packages resolved"
 
-# Step 6: Build iOS app (optional - can also build in Xcode)
+# Step 6: Build iOS app (optional — can also build in Xcode)
 if [ "$1" = "--build" ]; then
     echo ""
     echo ">>> Building EdgeAgent for iOS Simulator..."

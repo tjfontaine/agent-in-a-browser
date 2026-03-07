@@ -173,7 +173,7 @@ Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 
 ### TypeScript / npm
 
-- pnpm workspaces with Turbo for orchestration
+- pnpm workspaces with [Moon](https://moonrepo.dev/) for task orchestration
 - Packages under `packages/`, frontend under `frontend/`
 - Vite for dev/build, Playwright for E2E
 

@@ -79,11 +79,11 @@ jobs:
       - name: Check wasmtime-runner
         run: cargo check -p wasmtime-runner
 
+      - name: Setup Moon
+        uses: moonrepo/setup-toolchain@v0
+
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Setup Moon
-        run: npm install -g @moonrepo/cli@latest
 
       - name: Build and Transpile
         run: moon run frontend:build frontend:copy-externals

@@ -4,7 +4,7 @@ description: How to build the full project (Rust WASM + Frontend)
 
 # Full Build Workflow
 
-This workflow builds the Rust WASM components, runs tests, and transpiles for the frontend.
+This workflow builds the Rust WASM components, runs tests, and transpiles for the frontend. Build orchestration uses [Moon](https://moonrepo.dev/) — see `moon.yml` in each project directory for task definitions.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This workflow builds the Rust WASM components, runs tests, and transpiles for th
 - `wit-deps-cli` installed: `cargo install wit-deps-cli`
 - `wit-bindgen-cli` installed: `cargo install wit-bindgen-cli`
 - `wasm-tools` installed: `cargo install wasm-tools`
-- Node.js 22+ and pnpm
+- Node.js 22+ and pnpm (moon is installed as a devDependency)
 - Playwright browsers: `cd frontend && npx playwright install chromium`
 
 ## Steps
@@ -23,8 +23,6 @@ This workflow builds the Rust WASM components, runs tests, and transpiles for th
 Each WASM crate uses selective symlinks in its `wit/deps/` directory pointing to `runtime/wit/deps/<package>` for WASI dependencies. This avoids conflicts with the crate's own package namespace.
 
 To regenerate bindings for a crate (e.g., tsx-engine):
-
-// turbo
 
 ```bash
 cd runtime && wit-bindgen rust crates/tsx-engine/wit --world tsx-engine --runtime-path wit_bindgen_rt --generate-all --out-dir crates/tsx-engine/src/ && mv crates/tsx-engine/src/tsx_engine.rs crates/tsx-engine/src/bindings.rs
@@ -43,15 +41,15 @@ done
 
 ### 1. Build Rust WASM Components (Release)
 
-// turbo
-
 ```bash
+moon run runtime:build-wasm
+# or directly:
 cd runtime && cargo component build --release --target wasm32-wasip2
 ```
 
 This compiles all Rust WASM components:
 
-- `target/wasm32-wasip2/release/ts-runtime-mcp.wasm` - MCP server, shell, and sandbox tools
+- `target/wasm32-wasip2/release/ts_runtime_mcp.wasm` - MCP server, shell, and sandbox tools
 - `target/wasm32-wasip2/release/tsx_engine.wasm` - TypeScript execution engine
 - `target/wasm32-wasip2/release/sqlite_module.wasm` - SQLite database
 - `target/wasm32-wasip2/release/edtui_module.wasm` - Vim editor
@@ -60,46 +58,45 @@ This compiles all Rust WASM components:
 
 ### 2. Run Rust Unit Tests
 
-// turbo
-
 ```bash
-cd runtime && cargo test
+moon run runtime:test
+# or directly:
+cd runtime && cargo test --features sqlite
 ```
 
 Runs Rust unit tests including JS module tests (Buffer, path, fs, URL, etc.).
 
-### 3. Build TypeScript Packages
+### 3. Transpile WASM to JavaScript + Build TypeScript Packages
 
-// turbo
-
-```bash
-pnpm run build:packages
-```
-
-This builds all TypeScript packages including wasi-shims (both Node.js and browser bundles).
-
-### 4. Transpile WASM to JavaScript
-
-// turbo
+Moon handles dependency ordering automatically — transpile tasks depend on `runtime:build-wasm` and package build tasks.
 
 ```bash
-cd frontend && pnpm run transpile:all
+moon run :transpile :transpile-sync
 ```
 
 This uses `jco` to transpile all WASM components to JavaScript modules:
 
-- `frontend/src/wasm/mcp-server-jspi/` - Main shell and MCP tools
+- `frontend/src/wasm/mcp-server-jspi/` - Main shell and MCP tools (JSPI mode)
+- `frontend/src/wasm/mcp-server-sync/` - Main shell and MCP tools (sync mode)
 - `frontend/src/wasm/web-agent-tui/` - TUI application with AI agent
 - `packages/wasm-tsx/wasm/` - TypeScript execution (lazy-loaded)
 - `packages/wasm-sqlite/wasm/` - SQLite database (lazy-loaded)
 - `packages/wasm-vim/wasm/` - Vim editor (lazy-loaded)
 - `packages/wasm-ratatui/wasm/` - Interactive TUI demos (lazy-loaded)
 
-### 5. Run Frontend Unit Tests
-
-// turbo
+### 4. Build Frontend
 
 ```bash
+moon run frontend:build frontend:copy-externals
+```
+
+Runs `tsc` + `vite build`, then copies wasi-shims and wasm-loader bundles into `dist/`. This automatically runs all upstream transpile and package build tasks via moon dependency graph.
+
+### 5. Run Frontend Unit Tests
+
+```bash
+moon run frontend:test
+# or directly:
 cd frontend && pnpm test
 ```
 
@@ -107,9 +104,9 @@ Runs Vitest tests covering command-parser, TUI, types, constants, etc.
 
 ### 6. Run E2E Browser Tests (Playwright)
 
-// turbo
-
 ```bash
+moon run frontend:test-e2e
+# or directly:
 cd frontend && pnpm run test:e2e
 ```
 
@@ -124,56 +121,55 @@ Runs Playwright tests in a real browser to verify WASM components work:
 ### 7. (Optional) Run Frontend Dev Server
 
 ```bash
+moon run frontend:dev
+# or directly:
 cd frontend && pnpm run dev
 ```
 
-### 8. (Optional) Full Production Build
+### 8. (Optional) Rebuild wasi-shims (after changes)
 
 ```bash
-pnpm run build
+moon run wasi-shims:build
 ```
-
-This runs WASM build + transpile + TypeScript compilation + Vite production build.
 
 ## Quick One-Liners
 
-### Full Build (WASM + Frontend)
-
-// turbo
+### Full Build (WASM + Transpile + Frontend)
 
 ```bash
 pnpm run build
+# equivalent to: moon run :build :transpile :transpile-sync
 ```
 
-### Build and Test All
-
-// turbo
+### Build Frontend Only (moon resolves all upstream deps)
 
 ```bash
-pnpm run build:wasm && cd runtime && cargo test && cd .. && pnpm run build:packages && cd frontend && pnpm run transpile:all && pnpm run test:all
+pnpm run build:frontend
+# equivalent to: moon run frontend:build frontend:copy-externals
 ```
 
-### Quick Frontend Rebuild (after code changes)
-
-// turbo
+### Build WASM Only
 
 ```bash
-cd frontend && pnpm run build
+pnpm run build:wasm
+# equivalent to: moon run runtime:build-wasm
 ```
 
-### Rebuild wasi-shims (after changes)
-
-// turbo
+### Run All Tests
 
 ```bash
-cd packages/wasi-shims && pnpm run build && pnpm run build:browser && cd ../../frontend && pnpm run copy:wasi-shims
+moon run :test
+```
+
+### Dev Server (WASM watch + Vite)
+
+```bash
+pnpm run dev
 ```
 
 ## iOS Build
 
 ### Build iOS WebRuntime Bundle
-
-// turbo
 
 ```bash
 ./ios-edge-agent/scripts/build-ios.sh
@@ -182,7 +178,7 @@ cd packages/wasi-shims && pnpm run build && pnpm run build:browser && cd ../../f
 This builds the complete iOS WebRuntime bundle:
 
 1. Builds Rust WASM components targeting `wasm32-wasip2`
-2. Transpiles WASM to JavaScript using `jco` (sync mode for Safari - no JSPI)
+2. Transpiles WASM to JavaScript using `jco` (sync mode for Safari — no JSPI)
 3. Bundles files to `ios-edge-agent/EdgeAgent/Resources/WebRuntime/`
 
 Output includes:
@@ -190,13 +186,17 @@ Output includes:
 - `web-headless-agent-sync/` - Headless agent with WASI shims
 - `mcp-server-sync/` - MCP server WASM component
 
-### Clean iOS Build (bypass turbo cache)
+### Clean iOS Build
 
 ```bash
-rm -rf .turbo frontend/.turbo && ./ios-edge-agent/scripts/build-ios.sh
+./ios-edge-agent/scripts/build-ios.sh
 ```
 
-Use this after modifying Rust code in `runtime/crates/` to ensure the new WASM is transpiled.
+Moon tracks inputs/outputs for cache invalidation automatically. If you need to force a rebuild after modifying Rust code, use `--force`:
+
+```bash
+moon run runtime:build-wasm runtime:transpile-ios --force
+```
 
 ### Run in Xcode
 

@@ -53,19 +53,17 @@ RUN cd runtime && wit-deps update && \
     -p web-agent-tui \
     -p web-headless-agent
 
-# Transpile WASM modules first (outside of the build script)
-# This avoids nested Turbo which ignores TURBO_FORCE
+# Transpile WASM modules and build frontend
 # IMPORTANT: Only delete GENERATED wasm directories, not source files like tui/ and lazy-loading/
-ENV TURBO_FORCE=1
 RUN rm -rf frontend/src/wasm/mcp-server-jspi frontend/src/wasm/mcp-server-sync \
     frontend/src/wasm/tsx-engine frontend/src/wasm/sqlite-module \
     frontend/src/wasm/web-agent-tui frontend/src/wasm/web-agent-tui-sync \
     frontend/src/wasm/edtui-module frontend/src/wasm/ratatui-demo \
     packages/*/wasm packages/*/wasm-sync packages/*/mcp-server-* && \
-    pnpm turbo run transpile transpile:sync --filter=web-agent-frontend...
+    pnpm exec moon run :transpile :transpile-sync
 
-# Now run the build (which still calls transpile:all, but outputs already exist)
-RUN pnpm turbo run build --filter=web-agent-frontend...
+# Build frontend
+RUN pnpm exec moon run frontend:build frontend:copy-externals
 
 # Install Playwright browsers
 RUN cd frontend && npx playwright install chromium
