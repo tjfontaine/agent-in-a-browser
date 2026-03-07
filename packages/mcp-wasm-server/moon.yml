@@ -1,6 +1,10 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
 
 tasks:
+  build:
+    deps:
+      - "wasi-shims:build"
+
   transpile:
     command: "node ../../scripts/transpile.mjs ts-runtime-mcp"
     inputs:

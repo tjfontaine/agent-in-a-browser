@@ -1,1 +1,6 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  build:
+    deps:
+      - "edge-agent-session:build"

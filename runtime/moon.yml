@@ -38,7 +38,7 @@ tasks:
       runInCI: true
 
   build-wasm:
-    command: "cargo component build --release --target wasm32-wasip2"
+    script: "cargo component build --release --target wasm32-wasip2 && cargo fmt --all"
     inputs:
       - "@group(rust-sources)"
       - "@group(cargo-configs)"
@@ -69,6 +69,8 @@ tasks:
     inputs:
       - "src/**/*.rs"
       - "crates/*/src/**/*.rs"
+    deps:
+      - "~:build-wasm"
     options:
       runInCI: true
       cache: false

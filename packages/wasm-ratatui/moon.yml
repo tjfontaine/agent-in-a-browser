@@ -1,6 +1,10 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
 
 tasks:
+  build:
+    deps:
+      - "wasm-loader:build"
+
   transpile:
     command: "node ../../scripts/transpile.mjs ratatui-demo"
     inputs:

@@ -3,6 +3,8 @@ $schema: "https://moonrepo.dev/schemas/project.json"
 tasks:
   build:
     script: "tsc && node scripts/build-browser.mjs"
+    deps:
+      - "wasm-loader:build"
     inputs:
       - "src/**"
       - "scripts/**"

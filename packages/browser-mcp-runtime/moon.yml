@@ -1,6 +1,11 @@
 $schema: "https://moonrepo.dev/schemas/project.json"
 
 tasks:
+  build:
+    deps:
+      - "wasi-shims:build"
+      - "mcp-wasm-server:build"
+
   test:
     command: "vitest run"
     inputs:

@@ -31,3 +31,4 @@ tasks:
       - "dist"
     deps:
       - "~:transpile"
+      - "wasi-shims:build"
