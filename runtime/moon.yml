@@ -22,6 +22,21 @@ fileGroups:
     - "crates/*/wit/**"
 
 tasks:
+  wit-deps:
+    command: "wit-deps update"
+    inputs:
+      - "wit/deps.toml"
+    outputs:
+      - "wit/deps/cli"
+      - "wit/deps/clocks"
+      - "wit/deps/filesystem"
+      - "wit/deps/http"
+      - "wit/deps/io"
+      - "wit/deps/random"
+      - "wit/deps/sockets"
+    options:
+      runInCI: true
+
   build-wasm:
     command: "cargo component build --release --target wasm32-wasip2"
     inputs:
@@ -36,7 +51,17 @@ tasks:
       - "/target/wasm32-wasip2/release/edtui_module.wasm"
       - "/target/wasm32-wasip2/release/web_agent_tui.wasm"
       - "/target/wasm32-wasip2/release/web_headless_agent.wasm"
+    deps:
+      - "~:wit-deps"
     options:
+      runInCI: true
+
+  verify-wasm:
+    command: "wasm-tools component wit ../target/wasm32-wasip2/release/ts_runtime_mcp.wasm"
+    deps:
+      - "~:build-wasm"
+    options:
+      cache: false
       runInCI: true
 
   fmt-check:
@@ -54,6 +79,16 @@ tasks:
       - "@group(rust-sources)"
       - "@group(cargo-configs)"
       - "@group(wit-files)"
+    deps:
+      - "~:wit-deps"
+    options:
+      runInCI: true
+
+  check-native:
+    command: "cargo check -p wasmtime-runner"
+    inputs:
+      - "@group(rust-sources)"
+      - "@group(cargo-configs)"
     options:
       runInCI: true
 

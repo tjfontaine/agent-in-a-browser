@@ -8,3 +8,13 @@ node:
 
 pnpm:
   version: "9.15.4"
+
+rust:
+  components:
+    - "rustfmt"
+  targets:
+    - "wasm32-wasip2"
+  bins:
+    - "cargo-component"
+    - "wit-deps-cli"
+    - "wasm-tools"

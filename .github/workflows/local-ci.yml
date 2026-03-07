@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -32,52 +34,11 @@ jobs:
           components: rustfmt
           targets: wasm32-wasip2
 
-      - name: Check Rust formatting
-        run: cargo fmt --all --check
-
-      - name: Check warning-free Rust build
-        run: cargo check --workspace --all-targets --exclude wasmtime-runner
-
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime
           cache-on-failure: true
-
-      - name: Cache Cargo Install
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: cargo-install-${{ runner.os }}-wit-deps-cargo-component-wasm-tools-v2
-
-      - name: Install Cargo tools
-        run: |
-          which wit-deps || cargo install wit-deps-cli --locked
-          which cargo-component || cargo install cargo-component --locked
-          which wasm-tools || cargo install wasm-tools --locked
-
-      - name: Download WIT dependencies
-        working-directory: runtime
-        run: wit-deps update
-
-      - name: Build WASM components
-        working-directory: runtime
-        run: |
-          cargo component build --release --target wasm32-wasip2 \
-            -p ts-runtime-mcp \
-            -p tsx-engine \
-            -p sqlite-module \
-            -p ratatui-demo \
-            -p edtui-module \
-            -p web-agent-tui \
-            -p web-headless-agent
-
-      - name: tsx-engine WASM smoke check
-        working-directory: runtime
-        run: cargo check -p tsx-engine --target wasm32-wasip2
-
-      - name: Check wasmtime-runner
-        run: cargo check -p wasmtime-runner
 
       - name: Setup Moon
         uses: moonrepo/setup-toolchain@v0
@@ -85,12 +46,19 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and Transpile
-        run: moon run frontend:build frontend:copy-externals
-
-      - name: Run tests
-        working-directory: frontend
-        run: pnpm test
+      # Moon manages everything: Rust quality, WASM build, transpile, frontend build + test
+      - name: Build and Test
+        run: |
+          moon run \
+            runtime:fmt-check \
+            runtime:check \
+            runtime:build-wasm \
+            runtime:verify-wasm \
+            runtime:check-native \
+            runtime:test \
+            frontend:build \
+            frontend:copy-externals \
+            frontend:test
 
       - name: Summary
         run: |

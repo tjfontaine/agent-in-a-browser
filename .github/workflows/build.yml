@@ -12,117 +12,27 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  rust-quality:
-    name: Enforce Rust Quality Gates
+  ci:
+    name: Build, Test, and E2E
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: runtime
-          cache-on-failure: true
-
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Check warning-free build
-        run: cargo check --workspace --all-targets --exclude wasmtime-runner
-
-  rust-component:
-    name: Build Rust WASM Component
-    runs-on: ubuntu-latest
-    needs: rust-quality
-
-    steps:
-      - uses: actions/checkout@v4
+          fetch-depth: 0
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
+          components: rustfmt
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             runtime
-            runtime/crates/tsx-engine
-            runtime/crates/sqlite-module
-            runtime/crates/ratatui-demo
-            runtime/crates/edtui-module
-            runtime/crates/web-agent-tui
-            runtime/crates/web-headless-agent
           cache-on-failure: true
-
-      - name: Cache Cargo Install
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: cargo-install-${{ runner.os }}-wit-deps-cargo-component-wasm-tools-v2
-
-      - name: Install build tools
-        run: |
-          which wit-deps || cargo install wit-deps-cli --locked
-          which cargo-component || cargo install cargo-component --locked
-          which wasm-tools || cargo install wasm-tools --locked
-
-      - name: Cache WIT dependencies
-        uses: actions/cache@v4
-        with:
-          path: runtime/wit/deps
-          key: wit-deps-${{ hashFiles('runtime/wit/deps.toml') }}
-
-      - name: Download WIT dependencies
-        working-directory: runtime
-        run: wit-deps update
-
-      - name: Build all WASM components
-        working-directory: runtime
-        run: |
-          cargo component build --release --target wasm32-wasip2 \
-            -p ts-runtime-mcp \
-            -p tsx-engine \
-            -p sqlite-module \
-            -p ratatui-demo \
-            -p edtui-module \
-            -p web-agent-tui \
-            -p web-headless-agent
-
-      - name: Verify main component
-        run: wasm-tools component wit target/wasm32-wasip2/release/ts_runtime_mcp.wasm
-
-      - name: Check wasmtime-runner
-        run: cargo check -p wasmtime-runner
-
-      - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wasm-component
-          path: |
-            target/wasm32-wasip2/release/ts_runtime_mcp.wasm
-            target/wasm32-wasip2/release/tsx_engine.wasm
-            target/wasm32-wasip2/release/sqlite_module.wasm
-            target/wasm32-wasip2/release/ratatui_demo.wasm
-            target/wasm32-wasip2/release/edtui_module.wasm
-            target/wasm32-wasip2/release/web_agent_tui.wasm
-            target/wasm32-wasip2/release/web_headless_agent.wasm
-          retention-days: 7
-
-  frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: rust-component
-
-    steps:
-      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -136,25 +46,50 @@ jobs:
       - name: Setup Moon
         uses: moonrepo/setup-toolchain@v0
 
-      - name: Download WASM component
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-component
-          path: target/wasm32-wasip2/release/
-
-      - name: Install dependencies
+      - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and Transpile
-        run: moon run frontend:build frontend:copy-externals
+      # Moon manages the full pipeline: wit-deps → build-wasm → transpile → build → test
+      - name: Build and Test
+        run: |
+          moon run \
+            runtime:fmt-check \
+            runtime:check \
+            runtime:build-wasm \
+            runtime:verify-wasm \
+            runtime:check-native \
+            runtime:test \
+            frontend:build \
+            frontend:copy-externals \
+            frontend:test
 
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+      - name: Get Playwright Version
+        id: playwright-version
+        run: echo "version=$(cd frontend && npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
         with:
-          name: frontend-dist
-          path: frontend/dist
-          include-hidden-files: true
-          retention-days: 7
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E Tests
+        run: moon run frontend:test-e2e
+        timeout-minutes: 5
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30
 
   website:
     name: Build Website
@@ -184,123 +119,3 @@ jobs:
           name: website-dist
           path: website/dist
           retention-days: 7
-
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    needs: rust-component
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: runtime
-          cache-on-failure: true
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.22.0"
-          cache: "pnpm"
-
-      - name: Setup Moon
-        uses: moonrepo/setup-toolchain@v0
-
-      - name: Download WASM component
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-component
-          path: target/wasm32-wasip2/release/
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build and Transpile
-        run: moon run frontend:build frontend:copy-externals
-
-      - name: Run Rust tests
-        working-directory: runtime
-        run: cargo test --features sqlite
-
-      - name: Run tsx-engine wasm smoke check
-        working-directory: runtime
-        run: cargo check -p tsx-engine --target wasm32-wasip2
-
-      - name: Run frontend tests
-        working-directory: frontend
-        run: pnpm test
-
-      - name: Run frontend test coverage
-        working-directory: frontend
-        run: pnpm run test:coverage
-
-  e2e-test:
-    name: Run E2E Tests (Playwright)
-    runs-on: ubuntu-latest
-    needs: rust-component
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.22.0"
-          cache: "pnpm"
-
-      - name: Setup Moon
-        uses: moonrepo/setup-toolchain@v0
-
-      - name: Download WASM component
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-component
-          path: target/wasm32-wasip2/release/
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build and Transpile
-        run: moon run frontend:build frontend:copy-externals
-
-      - name: Get Playwright Version
-        id: playwright-version
-        run: echo "version=$(cd frontend && npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
-
-      - name: Cache Playwright Browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-
-      - name: Install Playwright Browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E tests
-        working-directory: frontend
-        timeout-minutes: 5
-        run: npx playwright test --project=chromium
-
-      - name: Upload Playwright Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: |
-            frontend/playwright-report/
-            frontend/test-results/
-          retention-days: 30
