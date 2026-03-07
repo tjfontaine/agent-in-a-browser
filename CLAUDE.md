@@ -121,29 +121,30 @@ SwiftUI (SuperAppView)
 ### Common Commands
 
 ```sh
-# Rust — build all WASM components
-cargo build --target wasm32-wasip2 --release
-
-# Rust — run tests (native)
-cargo test
-
-# Rust — format check
-cargo fmt --check
-
-# npm — install dependencies
+# Install dependencies
 pnpm install
 
-# npm — build all packages + frontend
+# Full build (WASM + transpile + frontend)
 pnpm build
+# equivalent to: moon run :build :transpile :transpile-sync
 
-# npm — dev server (frontend + WASM hot reload)
+# Dev server (WASM watch + Vite)
 pnpm dev
 
-# npm — run tests
+# Run all tests
 pnpm test
+# equivalent to: moon run :test
 
-# E2E — Playwright tests
+# E2E tests (Playwright)
 pnpm test:e2e
+
+# Individual moon targets
+moon run runtime:build-wasm        # Build WASM components
+moon run runtime:fmt-check         # Rust format check
+moon run runtime:check             # Rust warning-free build check
+moon run runtime:test              # Rust unit tests
+moon run frontend:build            # Build frontend (resolves all upstream deps)
+moon run frontend:test-e2e         # Playwright E2E tests
 
 # iOS — build via Xcode or:
 xcodebuild -project ios-edge-agent/EdgeAgent.xcodeproj -scheme EdgeAgent
@@ -151,11 +152,7 @@ xcodebuild -project ios-edge-agent/EdgeAgent.xcodeproj -scheme EdgeAgent
 
 ### CI Pipeline (`.github/workflows/build.yml`)
 
-1. `rust-quality` — `cargo fmt --check` + warning-free build
-2. `rust-component` — Build all WASM components
-3. `frontend` — Build React app
-4. `test` — Rust tests + frontend tests
-5. `e2e-test` — Playwright (Chromium)
+Single `ci` job managed by Moon — runs `runtime:fmt-check`, `runtime:check`, `runtime:build-wasm`, `runtime:verify-wasm`, `runtime:check-native`, `runtime:test`, `frontend:build`, `frontend:copy-externals`, `frontend:test`, then Playwright E2E.
 
 Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 

@@ -113,13 +113,13 @@ We support two modes depending on browser capabilities:
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Build WASM and packages
-npm run build
+pnpm build
 
 # Start dev server
-npm run dev
+pnpm dev
 ```
 
 ### License

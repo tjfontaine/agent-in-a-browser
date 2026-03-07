@@ -66,9 +66,9 @@ main-tui.ts → tui-loader.ts → ghostty-web terminal
 
 ## Build Process
 
-1. **Rust**: `cargo component build --release --target wasm32-wasip2`
-2. **jco**: `npm run transpile:all` (generates `--map` bindings to host-shims)
-3. **Vite**: bundles for browser
+1. **Rust**: `moon run runtime:build-wasm`
+2. **Transpile**: `moon run :transpile :transpile-sync` (jco with `--map` bindings to host-shims)
+3. **Vite**: `moon run frontend:build`
 
 ## jco Mapping
 

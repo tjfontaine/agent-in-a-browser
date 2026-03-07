@@ -9,12 +9,11 @@
     "build:wasm": "moon run runtime:build-wasm",
     "build:frontend": "moon run frontend:build frontend:copy-externals",
     "dev": "concurrently -n wasm,frontend -c yellow,cyan 'pnpm:dev:wasm' 'pnpm:dev:frontend'",
-    "dev:wasm": "cargo watch -w runtime/src -s 'cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml'",
+    "dev:wasm": "cargo watch -w runtime/src -s 'moon run runtime:build-wasm'",
     "dev:frontend": "moon run frontend:dev",
     "clean": "cargo clean && moon run :clean",
     "test": "moon run :test",
-    "docker:build": "docker build -t web-agent .",
-    "docker:run": "docker run -p 8080:8080 web-agent"
+    "test:e2e": "moon run frontend:test-e2e"
   },
   "devDependencies": {
     "@moonrepo/cli": "^2.0.4",

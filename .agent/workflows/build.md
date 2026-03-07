@@ -8,12 +8,8 @@ This workflow builds the Rust WASM components, runs tests, and transpiles for th
 
 ## Prerequisites
 
-- Rust toolchain with `wasm32-wasip2` target
-- `cargo-component` installed: `cargo install cargo-component`
-- `wit-deps-cli` installed: `cargo install wit-deps-cli`
-- `wit-bindgen-cli` installed: `cargo install wit-bindgen-cli`
-- `wasm-tools` installed: `cargo install wasm-tools`
-- Node.js 22+ and pnpm (moon is installed as a devDependency)
+- Rust toolchain with `wasm32-wasip2` target (moon manages components and targets via `.moon/toolchains.yml`)
+- Node.js 22+ and pnpm (`moon` is installed as a devDependency, cargo bins like `cargo-component`, `wit-deps-cli`, `wasm-tools` are managed by moon's Rust toolchain plugin)
 - Playwright browsers: `cd frontend && npx playwright install chromium`
 
 ## Steps
@@ -43,8 +39,6 @@ done
 
 ```bash
 moon run runtime:build-wasm
-# or directly:
-cd runtime && cargo component build --release --target wasm32-wasip2
 ```
 
 This compiles all Rust WASM components:
@@ -60,8 +54,6 @@ This compiles all Rust WASM components:
 
 ```bash
 moon run runtime:test
-# or directly:
-cd runtime && cargo test --features sqlite
 ```
 
 Runs Rust unit tests including JS module tests (Buffer, path, fs, URL, etc.).
@@ -96,8 +88,6 @@ Runs `tsc` + `vite build`, then copies wasi-shims and wasm-loader bundles into `
 
 ```bash
 moon run frontend:test
-# or directly:
-cd frontend && pnpm test
 ```
 
 Runs Vitest tests covering command-parser, TUI, types, constants, etc.
@@ -106,8 +96,6 @@ Runs Vitest tests covering command-parser, TUI, types, constants, etc.
 
 ```bash
 moon run frontend:test-e2e
-# or directly:
-cd frontend && pnpm run test:e2e
 ```
 
 Runs Playwright tests in a real browser to verify WASM components work:
@@ -122,8 +110,6 @@ Runs Playwright tests in a real browser to verify WASM components work:
 
 ```bash
 moon run frontend:dev
-# or directly:
-cd frontend && pnpm run dev
 ```
 
 ### 8. (Optional) Rebuild wasi-shims (after changes)

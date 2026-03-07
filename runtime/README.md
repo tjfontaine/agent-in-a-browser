@@ -149,53 +149,31 @@ These modules are transpiled separately and loaded on-demand in the browser.
 
 ### Prerequisites
 
-```bash
-# Install required tools
-rustup target add wasm32-wasip2
-cargo install cargo-component wit-deps
-```
+Moon manages the Rust toolchain (targets, components, cargo bins) via `.moon/toolchains.yml`. To build manually, ensure you have `wasm32-wasip2` target and `cargo-component` installed.
 
 ### Build Commands
 
 ```bash
-# From workspace root
-cargo component build --release --target wasm32-wasip2 --manifest-path runtime/Cargo.toml
+# Via moon (recommended — handles wit-deps, caching, dependency graph)
+moon run runtime:build-wasm
 
-# Output: target/wasm32-wasip2/release/ts-runtime-mcp.wasm
-```
-
-### Update WIT Dependencies
-
-```bash
-cd runtime
-wit-deps update
+# Output: target/wasm32-wasip2/release/ts_runtime_mcp.wasm (and other components)
 ```
 
 ## Frontend Integration
 
-After building the WASM component, it must be transpiled for browser use:
+After building the WASM components, they are transpiled and built via moon:
 
 ```bash
-cd frontend
-npm run transpile:component
+moon run frontend:build frontend:copy-externals
 ```
 
-This runs `jco transpile` with mappings that connect WASI interfaces to browser shims:
-
-- `wasi:*` → `@bytecodealliance/preview2-shim`
-- `mcp:ts-runtime/browser-fs` → `browser-fs-impl.ts`
-- `mcp:ts-runtime/browser-http` → `browser-http-impl.ts`
-
-**Output**: `frontend/src/wasm/mcp-server/` (ES modules)
+Moon resolves the full dependency graph: `wit-deps` → `build-wasm` → transpile → package builds → frontend build.
 
 ## Testing
 
 ```bash
-# Run all tests
-cargo test -p ts-runtime-mcp
-
-# Run with output
-cargo test -p ts-runtime-mcp -- --nocapture
+moon run runtime:test
 ```
 
 ## Adding New MCP Tools
