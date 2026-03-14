@@ -35,8 +35,8 @@ new_classes = ["SessionRelay"]
 # Then update the id below
 [[kv_namespaces]]
 binding = "API_KEYS"
-id = "placeholder-create-with-wrangler"
-preview_id = "placeholder-create-with-wrangler"
+id = "2b0dabb7574f4bfb95aea34b7ec539d4"
+preview_id = "2322559f992941ba989985ae3acc4806"
 
 # Observability configuration for better logging
 [observability]
