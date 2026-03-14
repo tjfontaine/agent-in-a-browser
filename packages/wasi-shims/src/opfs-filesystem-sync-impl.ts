@@ -448,6 +448,11 @@ class _DescriptorSync {
 
         if (!entry) throw 'no-entry';
 
+        // Reject opening a directory as a regular file
+        if (entry.dir !== undefined && !openFlags.directory) {
+            throw 'is-directory';
+        }
+
         if (openFlags.truncate && !entry.dir) {
             // Truncate file
             const response = makeRequest({ type: 'writeFileBinary', path: fullPath, binaryOffset: 1024, binaryLength: 0 });

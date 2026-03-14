@@ -244,6 +244,11 @@ class OpfsDescriptor {
             throw 'no-entry';
         }
 
+        // Reject opening a directory as a regular file
+        if (entry.dir !== undefined && !openFlags.directory) {
+            throw 'is-directory';
+        }
+
         // For files (not directories), verify the file actually exists in OPFS
         // This catches race conditions where tree is updated but OPFS is out of sync
         if (entry.dir === undefined && entry.symlink === undefined && !openFlags.create) {
@@ -317,17 +322,12 @@ class OpfsDescriptor {
         }
 
         // Fallback: use async read via OPFS APIs (JSPI will suspend on the Promise)
-        try {
-            const fullData = await asyncReadFile(normalizedPath);
-            const sliceStart = Math.min(offset, fullData.length);
-            const sliceEnd = Math.min(offset + length, fullData.length);
-            const slicedData = fullData.slice(sliceStart, sliceEnd);
-            const eof = sliceEnd >= fullData.length;
-            return [slicedData, eof];
-        } catch (e) {
-            console.error('[opfs-fs] asyncReadFile error:', e);
-            return [new Uint8Array(0), true];
-        }
+        const fullData = await asyncReadFile(normalizedPath);
+        const sliceStart = Math.min(offset, fullData.length);
+        const sliceEnd = Math.min(offset + length, fullData.length);
+        const slicedData = fullData.slice(sliceStart, sliceEnd);
+        const eof = sliceEnd >= fullData.length;
+        return [slicedData, eof];
     }
 
 
