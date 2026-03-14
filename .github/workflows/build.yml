@@ -18,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -31,6 +33,10 @@ jobs:
           workspaces: |
             runtime
           cache-on-failure: true
+          # Don't cache ~/.cargo/bin — it causes cargo binstall to skip
+          # reinstalling tools (wit-deps, cargo-component, wasm-tools) because
+          # metadata (.crates.toml) is restored but binaries are pruned
+          cache-bin: "false"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -46,11 +52,6 @@ jobs:
 
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
-
-      # Ensure cargo-installed bins (wit-deps, cargo-component, wasm-tools) are on PATH
-      # for Moon subprocesses (rust-cache restores bins but may not update PATH)
-      - name: Add cargo bin to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       # Moon manages the full pipeline: wit-deps → build-wasm → transpile → build → test
       - name: Build and Test
