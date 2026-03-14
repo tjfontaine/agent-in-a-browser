@@ -17,9 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -38,7 +36,7 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22.22.0"
           cache: "pnpm"
@@ -48,6 +46,11 @@ jobs:
 
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
+
+      # Ensure cargo-installed bins (wit-deps, cargo-component, wasm-tools) are on PATH
+      # for Moon subprocesses (rust-cache restores bins but may not update PATH)
+      - name: Add cargo bin to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       # Moon manages the full pipeline: wit-deps → build-wasm → transpile → build → test
       - name: Build and Test
@@ -68,7 +71,7 @@ jobs:
         run: echo "version=$(cd frontend && npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
@@ -105,10 +108,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22.22.0"
           cache: "npm"
