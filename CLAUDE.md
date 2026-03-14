@@ -1,77 +1,88 @@
-# Edge Agent
+# CLAUDE.md
 
-A privacy-first AI agent that runs entirely in the browser (WASM) or on-device (iOS), with no cloud dependency for code execution. Users interact via a terminal UI or conversational iOS workspace. The agent can read/write files, execute shell commands, run TypeScript, query SQLite, and call external MCP servers — all sandboxed.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Goals
+## What Is This
 
-- **Zero-setup, privacy-first**: All tool execution happens client-side in WASM or on-device. API keys go directly to LLM providers, never through our servers.
-- **Multi-platform**: Browser (WASM), iOS/macOS (Swift + WASM), and native CLI (wasmtime-runner) share the same Rust core.
-- **Provider-agnostic**: Works with Anthropic Claude, OpenAI, Google Gemini, OpenRouter, and any OpenAI-compatible endpoint.
-- **MCP-native**: Tools are exposed via Model Context Protocol (JSON-RPC 2.0). External MCP servers can be connected for extended capabilities.
-- **Real shell, real filesystem**: 50+ POSIX commands, pipes, redirects, control flow — not a toy sandbox.
+Edge Agent — a privacy-first AI agent that runs entirely in the browser (WASM) or on-device (iOS). No cloud dependency for code execution. Users interact via a terminal UI or conversational iOS workspace. The agent can read/write files, execute shell commands, run TypeScript, query SQLite, and call external MCP servers — all sandboxed client-side.
 
-## Repository Layout
+## Build System: Moon
+
+This monorepo uses [Moon](https://moonrepo.dev/) as its task orchestrator. Moon manages the full dependency graph across Rust, TypeScript, and frontend builds. Configuration lives in:
+
+- `.moon/workspace.yml` — project discovery (`packages/*`, `frontend`, `worker`, `runtime`)
+- `.moon/toolchains.yml` — Node 22.22.0, pnpm 9.15.4, Rust with `wasm32-wasip2`, TypeScript with `syncProjectReferences`
+- `.moon/tasks/node.yml` — default `build` task (`tsc`) inherited by all Node projects
+- Per-project `moon.yml` — project-specific tasks and dependency overrides
+
+### Build Pipeline
+
+Moon resolves this dependency graph automatically:
 
 ```
-runtime/                      Rust workspace — compiles to WASM components
-  src/                        MCP HTTP server + shell + file tools (lib.rs)
-  src/shell/                  50+ shell commands (ls, grep, sed, awk, jq, sqlite3, tsx…)
-  runtime-macros/             #[mcp_tool] and #[shell_command] proc macros
-  crates/
-    core/ (agent-bridge)      LLM integration via rig-core (models, conversation, MCP transport)
-    mcp-server-core/          MCP protocol types, JSON-RPC handler
-    tsx-engine/               TypeScript runtime (SWC transpiler + QuickJS interpreter)
-    sqlite-module/            SQLite via Turso/LibSQL
-    edtui-module/             Vim-like text editor (ropey + syntect)
-    web-agent-tui/            Ratatui terminal UI (agent mode + shell mode)
-    web-headless-agent/       Headless agent for JS embedding
-    wasmtime-runner/          Native binary runner for development/testing
-  wit/                        WIT interface definitions (world.wit)
-
-packages/                     npm packages (pnpm workspace)
-  web-agent-core/             Public JS API — WebAgent class wrapping WASM
-  browser-mcp-runtime/        Batteries-included MCP runtime for browser
-  mcp-wasm-server/            WASM MCP server loader (JSPI + sync modes)
-  wasi-shims/                 WASI Preview 2 browser shims (filesystem, HTTP, streams, clocks)
-  wasm-loader/                WASM module loading + command registry
-  wasm-ratatui/               Ratatui ↔ xterm.js bridge
-  wasm-tsx/                   TypeScript engine bindings
-  wasm-sqlite/                SQLite bindings
-  wasm-vim/                   Vim editor bindings
-  edge-agent-session/         Shared types + cloud relay client
-  edge-agent-sdk/             SDK for embedding sandboxes in third-party sites
-  edge-agent-mcp/             MCP bridge CLI tool (WebSocket relay)
-
-frontend/                     React + Vite web UI
-  src/agent/                  Agent integration (sandbox worker, streaming)
-  e2e/                        Playwright E2E tests
-
-ios-edge-agent/               iOS/macOS app (SwiftUI, Swift 6.2)
-  EdgeAgent/
-    App/                      @main entry point
-    Bridge/                   WASM ↔ Swift bridge, MCP server, agent events
-    Models/                   ConfigManager (provider, model, API key)
-    Services/                 EdgeAgentSession, MCPToolBridge, AgentInstructions
-    Views/                    SuperAppView (workspace), LauncherView, AppCanvasView,
-                              ComponentLibrary (SDUI), ConversationTimeline, SettingsView
-    Utilities/                OSLog wrappers
-  LocalPackages/
-    OpenFoundationModels/     Apple Foundation Models β SDK (has its own CLAUDE.md)
-  WASIP2Harness/              WASM runtime for iOS
-  WASIShims/                  WASI syscall shims
-  MCPServerKit/               MCP server Swift package
-  WasmBindgen/                Rust ↔ Swift bindings
-
-worker/                       Cloudflare Workers
-  index.ts                    CORS proxy, static assets, COOP/COEP headers
-  session-relay.ts            Durable Object — WebSocket relay between browser and agents
-  default-tools.ts            Default MCP tool definitions for offline fallback
-
-tools/                        MCP bridge utilities
-  mcp-bridge/                 Node.js WebSocket↔HTTP bridge (legacy)
-
-website/                      Documentation site (Vite + static HTML)
+wit-deps → build-wasm → transpile/transpile-sync → build (per package) → frontend:build → frontend:copy-externals
+                                                                                        → frontend:test
+                                                                                        → frontend:test-e2e
 ```
+
+The WASM → JS pipeline: Rust compiles to `wasm32-wasip2` components → `scripts/transpile.mjs` uses JCO to transpile each `.wasm` into JS/ESM modules → packages consume transpiled output → frontend bundles everything with Vite.
+
+### Common Commands
+
+```sh
+pnpm install                          # Install dependencies
+
+# Full builds
+pnpm build                            # moon run :build :transpile :transpile-sync
+pnpm build:wasm                       # moon run runtime:build-wasm
+pnpm build:frontend                   # moon run frontend:build frontend:copy-externals
+
+# Development
+pnpm dev                              # Concurrent WASM watch + Vite dev server
+
+# Testing
+pnpm test                             # moon run :test (Rust + frontend unit tests)
+pnpm test:e2e                         # moon run frontend:test-e2e (Playwright, chromium)
+
+# Targeted Moon tasks
+moon run runtime:build-wasm            # Build all WASM components
+moon run runtime:fmt-check             # cargo fmt --all --check
+moon run runtime:check                 # cargo check --workspace (warning-free, excludes wasmtime-runner)
+moon run runtime:check-native          # cargo check -p wasmtime-runner (depends on build-wasm)
+moon run runtime:test                  # cargo test --features sqlite
+moon run frontend:build                # Build frontend (auto-resolves all upstream deps)
+moon run frontend:test                 # vitest run
+moon run frontend:test-e2e             # Playwright E2E tests
+```
+
+### Validating Changes (Reproduce CI Locally)
+
+The CI job (`.github/workflows/build.yml`) runs this single Moon invocation:
+
+```sh
+moon run \
+  runtime:fmt-check \
+  runtime:check \
+  runtime:build-wasm \
+  runtime:verify-wasm \
+  runtime:check-native \
+  runtime:test \
+  frontend:build \
+  frontend:copy-externals \
+  frontend:test
+```
+
+Then separately: `moon run frontend:test-e2e` (requires Playwright browsers installed).
+
+**Pre-push hooks** (lefthook): `runtime:fmt-check` and `runtime:check` run automatically before `git push`. Fix with `cargo fmt --all` if formatting fails.
+
+### Moon Gotchas
+
+- Moon does NOT auto-infer deps from `package.json` — each `moon.yml` must declare explicit `deps` for inter-package ordering
+- The default `build` task (from `.moon/tasks/node.yml`) is `tsc` — Rust projects exclude it via `workspace.inheritedTasks.exclude`
+- `build-wasm` needs explicit `-p` flags for each crate; omitting them only builds the workspace root
+- `script:` tasks (not `command:`) are required for shell operators like `&&`
+- `cargo component build` regenerates `bindings.rs` — run `cargo fmt` afterward (already chained in `build-wasm`)
 
 ## Architecture
 
@@ -103,58 +114,20 @@ SwiftUI (SuperAppView)
       → AgentEvent stream → UI updates
 ```
 
+### WASM ↔ JS Bridge
+
+Rust crates compile to WASM component model (WIT interfaces in `runtime/wit/`). JCO transpiles each `.wasm` to JS/ESM with `--map` flags routing WASI imports to browser shims (`packages/wasi-shims/`). Two modes per module:
+- **JSPI (async)**: Default, uses WebAssembly JS Promise Integration
+- **Sync**: Safari fallback via `--sync` flag, generates `*-sync` variants
+
+Every new shim added to `scripts/transpile.mjs` must also be added to `frontend/vite.config.ts` paths (both worker and build sections).
+
 ### Key Abstractions
 
 - **MCP Transport** (`runtime/crates/core/src/mcp_transport.rs`): Trait abstracting tool discovery/execution across local sandbox, iOS bridge, and remote servers.
 - **ConversationHistory** (`runtime/crates/core/src/conversation.rs`): Immutable transcript with roles (User, Assistant, System, ToolCall, ToolResult) driving all LLM interactions.
 - **AgentEvent** (`ios-edge-agent/EdgeAgent/Bridge/AgentEvent.swift`): Enum bus for streaming UI updates (chunks, tool calls, results, ask_user prompts, progress).
 - **ComponentLibrary** (`ios-edge-agent/EdgeAgent/Views/ComponentLibrary.swift`): SDUI renderer — agent generates JSON component trees, Swift renders them live.
-
-## Build & Development
-
-### Prerequisites
-
-- Rust toolchain with `wasm32-wasip2` target
-- Node.js + pnpm 9.x
-- For iOS: Xcode with Swift 6.2+, iOS 18+ SDK
-
-### Common Commands
-
-```sh
-# Install dependencies
-pnpm install
-
-# Full build (WASM + transpile + frontend)
-pnpm build
-# equivalent to: moon run :build :transpile :transpile-sync
-
-# Dev server (WASM watch + Vite)
-pnpm dev
-
-# Run all tests
-pnpm test
-# equivalent to: moon run :test
-
-# E2E tests (Playwright)
-pnpm test:e2e
-
-# Individual moon targets
-moon run runtime:build-wasm        # Build WASM components
-moon run runtime:fmt-check         # Rust format check
-moon run runtime:check             # Rust warning-free build check
-moon run runtime:test              # Rust unit tests
-moon run frontend:build            # Build frontend (resolves all upstream deps)
-moon run frontend:test-e2e         # Playwright E2E tests
-
-# iOS — build via Xcode or:
-xcodebuild -project ios-edge-agent/EdgeAgent.xcodeproj -scheme EdgeAgent
-```
-
-### CI Pipeline (`.github/workflows/build.yml`)
-
-Single `ci` job managed by Moon — runs `runtime:fmt-check`, `runtime:check`, `runtime:build-wasm`, `runtime:verify-wasm`, `runtime:check-native`, `runtime:test`, `frontend:build`, `frontend:copy-externals`, `frontend:test`, then Playwright E2E.
-
-Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 
 ## Conventions
 
@@ -170,8 +143,8 @@ Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 
 ### TypeScript / npm
 
-- pnpm workspaces with [Moon](https://moonrepo.dev/) for task orchestration
-- Packages under `packages/`, frontend under `frontend/`
+- pnpm workspaces — all packages under `packages/`, frontend under `frontend/`
+- Strict TypeScript (`strict: true`) in all tsconfigs, `composite: true` for Moon project reference syncing
 - Vite for dev/build, Playwright for E2E
 
 ### Swift / iOS
@@ -181,15 +154,6 @@ Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 - OpenFoundationModels local package has its own CLAUDE.md with Apple API compliance rules
 - SDUI pattern: agent generates component JSON → ComponentLibrary renders → TemplateRenderer resolves `{{bindings}}`
 - SQLite persistence via GRDB (AppBundleRepository)
-- Agent events delivered via `@Published` properties on EdgeAgentSession
-
-### General
-
-- Avoid over-engineering — make only requested changes
-- Read code before modifying it
-- Delete unused code completely, no backward-compat shims
-- Keep responses/comments concise
-- Parallel tool calls when independent, sequential when dependent
 
 ## Key Files for Common Tasks
 
@@ -210,4 +174,9 @@ Deployment: Cloudflare Workers (`agent.edge-agent.dev`) via `deploy-pages.yml`.
 | iOS system prompt | `ios-edge-agent/EdgeAgent/Services/AgentInstructions.swift` |
 | WASM/WIT interfaces | `runtime/wit/world.wit` |
 | Proc macros | `runtime/runtime-macros/src/lib.rs` |
-| Sandbox filesystem | `ios-edge-agent/WASIP2Harness/Sources/WASIP2Harness/SandboxFilesystem.swift` |
+| WASM→JS transpile config | `scripts/transpile.mjs` |
+| Vite shim paths | `frontend/vite.config.ts` |
+| Moon workspace config | `.moon/workspace.yml`, `.moon/toolchains.yml` |
+| Per-project build tasks | `<project>/moon.yml` |
+| CI pipeline | `.github/workflows/build.yml` |
+| Pre-push hooks | `lefthook.yml` |
