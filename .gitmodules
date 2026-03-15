@@ -1,0 +1,4 @@
+[submodule "stripe-cli-wasm/stripe-cli"]
+	path = stripe-cli-wasm/stripe-cli
+	url = https://github.com/tjfontaine/stripe-cli.git
+	branch = wasip1-wasm-support
