@@ -39,7 +39,7 @@ tasks:
   # Step 3: Copy the adapted component to the shared target directory
   # The transpile script (scripts/transpile.mjs) looks for WASM files in target/wasm32-wasip2/release/
   copy-to-target:
-    script: "cp stripe-component.wasm /target/wasm32-wasip2/release/stripe_go.wasm"
+    script: "mkdir -p ../target/wasm32-wasip2/release && cp stripe-component.wasm ../target/wasm32-wasip2/release/stripe_go.wasm"
     inputs:
       - "stripe-component.wasm"
     outputs:
