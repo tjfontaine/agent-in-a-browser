@@ -63,7 +63,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Moon manages the full pipeline: wit-deps → build-wasm → transpile → build → test
+      # Note: stripe-cli Go→WASM build excluded (too slow for shared runners, run locally)
       - name: Build and Test
+        timeout-minutes: 30
         run: |
           moon run \
             runtime:fmt-check \
