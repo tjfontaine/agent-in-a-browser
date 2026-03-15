@@ -1,0 +1,64 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: go
+layer: library
+tags: ["go", "wasm"]
+
+# Exclude inherited Node tasks — this is a Go project
+workspace:
+  inheritedTasks:
+    exclude: ["build"]
+
+tasks:
+  # Step 1: Compile the Go stripe-cli fork to wasip1
+  # Requires: Go 1.21+ installed, stripe-cli fork cloned to ./stripe-cli/
+  build-go-wasm:
+    script: "cd stripe-cli && GOOS=wasip1 GOARCH=wasm go build -o ../stripe.wasm ./cmd/stripe"
+    inputs:
+      - "stripe-cli/**/*.go"
+      - "stripe-cli/go.mod"
+      - "stripe-cli/go.sum"
+      - "patches/**/*.go"
+    outputs:
+      - "stripe.wasm"
+
+  # Step 2: Embed WIT metadata for custom bridge imports, then adapt wasip1→wasip2
+  # The embed step tells wasm-tools about the stripe:bridge imports.
+  # The adapt step converts standard wasi_snapshot_preview1 imports to wasip2.
+  adapt-component:
+    script: "wasm-tools component embed wit/ --world stripe:cli/stripe-cli stripe.wasm -o stripe-embedded.wasm && wasm-tools component new stripe-embedded.wasm --adapt wasi_snapshot_preview1=adapters/wasi_snapshot_preview1.command.wasm -o stripe-component.wasm"
+    inputs:
+      - "stripe.wasm"
+      - "wit/**/*.wit"
+      - "adapters/wasi_snapshot_preview1.command.wasm"
+    outputs:
+      - "stripe-component.wasm"
+    deps:
+      - "~:build-go-wasm"
+
+  # Step 3: Copy the adapted component to the shared target directory
+  # The transpile script (scripts/transpile.mjs) looks for WASM files in target/wasm32-wasip2/release/
+  copy-to-target:
+    script: "cp stripe-component.wasm /target/wasm32-wasip2/release/stripe_go.wasm"
+    inputs:
+      - "stripe-component.wasm"
+    outputs:
+      - "/target/wasm32-wasip2/release/stripe_go.wasm"
+    deps:
+      - "~:adapt-component"
+
+  # Step 4: Compose the Go component with the Rust shell:unix/command shim
+  # Uses wac (not deprecated wasm-tools compose) for component composition.
+  # The Rust shim exports the WIT interface expected by the lazy module loader.
+  # NOTE: Composition is blocked by WASI version mismatch (Go adapter=0.2.6, Rust=0.2.9).
+  # For now, the Rust shim works standalone; composition will be enabled once versions align.
+  # compose:
+  #   script: "wac plug --plug stripe-component.wasm /target/wasm32-wasip2/release/stripe_module.wasm -o /target/wasm32-wasip2/release/stripe_module.wasm"
+  #   inputs:
+  #     - "stripe-component.wasm"
+  #     - "/target/wasm32-wasip2/release/stripe_module.wasm"
+  #   outputs:
+  #     - "/target/wasm32-wasip2/release/stripe_module.wasm"
+  #   deps:
+  #     - "~:adapt-component"
+  #     - "runtime:build-wasm"

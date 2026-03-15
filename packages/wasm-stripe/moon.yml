@@ -1,0 +1,26 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+tasks:
+  build:
+    deps:
+      - "wasm-loader:build"
+
+  transpile:
+    command: "node ../../scripts/transpile.mjs stripe-module"
+    inputs:
+      - "/target/wasm32-wasip2/release/stripe_go.wasm"
+      - "/scripts/transpile.mjs"
+    outputs:
+      - "wasm"
+    deps:
+      - "stripe-cli-wasm:copy-to-target"
+
+  transpile-sync:
+    command: "node ../../scripts/transpile.mjs stripe-module --sync"
+    inputs:
+      - "/target/wasm32-wasip2/release/stripe_go.wasm"
+      - "/scripts/transpile.mjs"
+    outputs:
+      - "wasm-sync"
+    deps:
+      - "stripe-cli-wasm:copy-to-target"

@@ -1,0 +1,23 @@
+// WIT interface for the HTTP bridge between Go WASM and browser fetch().
+// All types are high-level (string, list<u8>) so JCO handles the canonical ABI
+// lifting/lowering automatically. The Go side uses retptr-based //go:wasmimport
+// for functions returning string/list<u8>.
+
+package stripe:bridge@0.1.0;
+
+interface http-bridge {
+    /// Execute an HTTP request. Returns a response handle.
+    request: func(method: string, url: string, headers: string, body: list<u8>) -> u32;
+
+    /// Get the HTTP status code for a response.
+    response-status: func(handle: u32) -> u32;
+
+    /// Get response headers as a JSON string.
+    response-headers: func(handle: u32) -> string;
+
+    /// Read response body data. Returns empty list on EOF.
+    response-body-read: func(handle: u32, max-bytes: u32) -> list<u8>;
+
+    /// Close a response handle and free resources.
+    response-close: func(handle: u32);
+}

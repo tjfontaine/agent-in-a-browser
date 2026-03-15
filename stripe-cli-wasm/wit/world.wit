@@ -1,0 +1,5 @@
+package stripe:cli@0.1.0;
+
+world stripe-cli {
+    import stripe:bridge/http-bridge@0.1.0;
+}

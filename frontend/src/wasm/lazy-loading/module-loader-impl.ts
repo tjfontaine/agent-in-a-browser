@@ -659,6 +659,10 @@ function getModuleUrl(moduleName: string): string {
             return hasJSPI
                 ? `${pkgPrefix}/wasm-ratatui/wasm/ratatui-demo.js`
                 : `${pkgPrefix}/wasm-ratatui/wasm-sync/ratatui-demo.js`;
+        case 'stripe-module':
+            return hasJSPI
+                ? `${pkgPrefix}/wasm-stripe/wasm/stripe-module.js`
+                : `${pkgPrefix}/wasm-stripe/wasm-sync/stripe-module.js`;
         default:
             throw new Error(`No module URL for: ${moduleName}`);
     }

@@ -307,11 +307,42 @@ export const stderr = {
     getStderr: () => stderrStream
 };
 
-// Environment stub
+// Configurable CLI args/env/cwd for Go CLI components (e.g., stripe-go)
+// These are set by the adapter before calling run(), then cleared after.
+let configuredArgs: string[] | null = null;
+let configuredEnv: [string, string][] | null = null;
+let configuredCwd: string | null = null;
+
+/**
+ * Set CLI arguments for the next WASI CLI run() call.
+ * Used by Go CLI adapters that read args from wasi:cli/environment.
+ */
+export function setArguments(args: string[]): void { configuredArgs = args; }
+
+/**
+ * Set environment variables for the next WASI CLI run() call.
+ */
+export function setEnvironment(env: [string, string][]): void { configuredEnv = env; }
+
+/**
+ * Set initial CWD for the next WASI CLI run() call.
+ */
+export function setInitialCwd(cwd: string): void { configuredCwd = cwd; }
+
+/**
+ * Clear configured CLI state after a run() call completes.
+ */
+export function clearCliConfig(): void {
+    configuredArgs = null;
+    configuredEnv = null;
+    configuredCwd = null;
+}
+
+// Environment stub (uses configured values when set)
 export const environment = {
-    getEnvironment: () => [] as [string, string][],
-    getArguments: () => [] as string[],
-    initialCwd: () => '/',
+    getEnvironment: () => configuredEnv ?? ([] as [string, string][]),
+    getArguments: () => configuredArgs ?? ([] as string[]),
+    initialCwd: () => configuredCwd ?? '/',
 };
 
 // Exit stub

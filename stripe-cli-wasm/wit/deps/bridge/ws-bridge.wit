@@ -1,0 +1,20 @@
+// WIT interface for the WebSocket bridge between Go WASM and browser WebSocket.
+// Uses high-level types so JCO handles canonical ABI lifting/lowering.
+// The Go side uses retptr-based //go:wasmimport for functions returning
+// string/list<u8>.
+
+interface ws-bridge {
+    /// Open a WebSocket connection. Returns a handle (0 = failure).
+    connect: func(url: string) -> u32;
+
+    /// Read the next message. Returns empty list on EOF/close.
+    /// Message format: 4-byte LE message type + payload.
+    read: func(handle: u32, max-bytes: u32) -> list<u8>;
+
+    /// Write a message. Returns bytes written (0 = failure).
+    /// Message format: 4-byte LE message type + payload.
+    write: func(handle: u32, data: list<u8>) -> u32;
+
+    /// Close the WebSocket connection.
+    close: func(handle: u32);
+}

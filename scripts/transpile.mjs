@@ -181,6 +181,23 @@ const MODULES = {
         shims: SHIMS,
         exports: ['shell:unix/command@0.1.0#run'],
     },
+    'stripe-module': {
+        // Go-compiled Stripe CLI, adapted from wasip1 → wasip2 component model.
+        // Exports wasi:cli/run (standard CLI entry point), not shell:unix/command.
+        // The lazy loader wraps this with a JS adapter to provide the expected interface.
+        wasm: 'stripe_go.wasm',
+        jspiOut: `${PACKAGES}/wasm-stripe/wasm`,
+        syncOut: `${PACKAGES}/wasm-stripe/wasm-sync`,
+        shims: {
+            ...SHIMS,
+            'stripe:bridge/http-bridge': '@tjfontaine/wasi-shims/http-bridge-impl.js',
+        },
+        exports: ['wasi:cli/run@0.2.6#run'],
+        // Additional async imports beyond the standard WASI set
+        extraAsyncImports: [
+            'stripe:bridge/http-bridge@0.1.0#request',
+        ],
+    },
     'web-agent-tui': {
         wasm: 'web_agent_tui.wasm',
         jspiOut: `${FRONTEND}/src/wasm/web-agent-tui`,
@@ -266,6 +283,10 @@ function build(name, mod, syncMode) {
         // Detect WASI version from the WASM file and build ASYNC_IMPORTS with matching version
         const wasiVersion = detectWasiVersion(input);
         const asyncImports = buildAsyncImports(wasiVersion);
+        // Append any module-specific async imports (e.g., bridge functions)
+        if (mod.extraAsyncImports) {
+            asyncImports.push(...mod.extraAsyncImports);
+        }
         console.log(`📦 Detected WASI version: ${wasiVersion}`);
         for (const imp of asyncImports) args.push('--async-imports', `'${imp}'`);
         for (const exp of (mod.exports || [])) args.push('--async-exports', `'${exp}'`);

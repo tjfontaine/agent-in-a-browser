@@ -1,0 +1,26 @@
+[package]
+name = "stripe-module"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# WASI bindings
+wit-bindgen-rt.workspace = true
+
+[package.metadata.component]
+package = "shell:unix"
+
+[package.metadata.component.target]
+path = "wit"
+world = "stripe-module"
+
+[package.metadata.component.target.dependencies]
+"wasi:io" = { path = "../../wit/deps/io" }
+"wasi:filesystem" = { path = "../../wit/deps/filesystem" }
+"wasi:clocks" = { path = "../../wit/deps/clocks" }
+"wasi:cli" = { path = "../../wit/deps/cli" }
+"wasi:sockets" = { path = "../../wit/deps/sockets" }
+"wasi:random" = { path = "../../wit/deps/random" }

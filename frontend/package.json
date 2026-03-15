@@ -24,6 +24,7 @@
         "@tjfontaine/wasm-ratatui": "workspace:*",
         "@tjfontaine/wasm-sqlite": "workspace:*",
         "@tjfontaine/wasm-tsx": "workspace:*",
+        "@tjfontaine/wasm-stripe": "workspace:*",
         "@tjfontaine/wasm-vim": "workspace:*",
         "@tjfontaine/edge-agent-session": "workspace:*",
         "@tjfontaine/web-agent-core": "workspace:*",

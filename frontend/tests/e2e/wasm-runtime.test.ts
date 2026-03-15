@@ -455,3 +455,27 @@ test.describe('Git Commands', () => {
         expect(helpResult.output).toContain('commit');
     });
 });
+
+test.describe('WASM Stripe CLI (Go Component)', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/wasm-test.html');
+        await page.waitForFunction(() => {
+            return window.testHarness?.ready === true;
+        }, { timeout: 30000 });
+    });
+
+    test('stripe --help shows usage info', async ({ page }) => {
+        // Longer timeout for first load of 35MB Go WASM
+        test.setTimeout(120000);
+        const result = await shellEval(page, 'stripe --help');
+        // The Go CLI should output help text to stdout
+        expect(result.output).toContain('stripe');
+    });
+
+    test('stripe version returns version string', async ({ page }) => {
+        test.setTimeout(120000);
+        const result = await shellEval(page, 'stripe version');
+        // Should contain some version output (exact format depends on Go build)
+        expect(result.output.length).toBeGreaterThan(0);
+    });
+});

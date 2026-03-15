@@ -58,6 +58,12 @@
             "@tjfontaine/wasm-sqlite/*": [
                 "../packages/wasm-sqlite/src/*"
             ],
+            "@tjfontaine/wasm-stripe": [
+                "../packages/wasm-stripe/src/index.ts"
+            ],
+            "@tjfontaine/wasm-stripe/*": [
+                "../packages/wasm-stripe/src/*"
+            ],
             "@tjfontaine/wasm-tsx": [
                 "../packages/wasm-tsx/src/index.ts"
             ],
@@ -98,6 +104,9 @@
         },
         {
             "path": "../packages/wasm-sqlite"
+        },
+        {
+            "path": "../packages/wasm-stripe"
         },
         {
             "path": "../packages/wasm-tsx"

@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => ({
 
             '@tjfontaine/wasm-loader': path.resolve(__dirname, '../packages/wasm-loader/dist'),
             '@tjfontaine/wasm-vim': path.resolve(__dirname, '../packages/wasm-vim'),
+            '@tjfontaine/wasm-stripe': path.resolve(__dirname, '../packages/wasm-stripe'),
             // Use source directly for development (avoid needing `npm run build` for each change)
             '@tjfontaine/web-agent-core': path.resolve(__dirname, '../packages/web-agent-core/src'),
             // Enable packages outside frontend to resolve node polyfills
@@ -47,6 +48,8 @@ export default defineConfig(({ mode }) => ({
             '@tjfontaine/wasi-shims/opfs-filesystem-impl.js',
             '@tjfontaine/wasi-shims/wasi-http-impl.js',
             '@tjfontaine/wasi-shims/ghostty-cli-shim.js',
+            // Stripe bridge shims
+            '@tjfontaine/wasi-shims/http-bridge-impl.js',
         ],
     },
     server: {
@@ -224,6 +227,8 @@ export default defineConfig(({ mode }) => ({
                     '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
                     // iOS bridge stubs (native host APIs not available in browser)
                     '@tjfontaine/wasi-shims/ios-bridge-stub.js': '/wasi-shims/ios-bridge-stub.js',
+                    // Stripe bridge shims
+                    '@tjfontaine/wasi-shims/http-bridge-impl.js': '/wasi-shims/http-bridge-impl.js',
                     '@tjfontaine/wasm-loader': '/wasm-loader/index.js',
                 },
             },
@@ -304,6 +309,8 @@ export default defineConfig(({ mode }) => ({
                     '@tjfontaine/wasi-shims/random.js': '/wasi-shims/random.js',
                     // iOS bridge stubs (native host APIs not available in browser)
                     '@tjfontaine/wasi-shims/ios-bridge-stub.js': '/wasi-shims/ios-bridge-stub.js',
+                    // Stripe bridge shims
+                    '@tjfontaine/wasi-shims/http-bridge-impl.js': '/wasi-shims/http-bridge-impl.js',
                 },
             },
         },

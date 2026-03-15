@@ -38,6 +38,9 @@ importers:
       '@tjfontaine/wasm-sqlite':
         specifier: workspace:*
         version: link:../packages/wasm-sqlite
+      '@tjfontaine/wasm-stripe':
+        specifier: workspace:*
+        version: link:../packages/wasm-stripe
       '@tjfontaine/wasm-tsx':
         specifier: workspace:*
         version: link:../packages/wasm-tsx
@@ -197,6 +200,16 @@ importers:
         version: 5.9.3
 
   packages/wasm-sqlite:
+    dependencies:
+      '@tjfontaine/wasm-loader':
+        specifier: workspace:*
+        version: link:../wasm-loader
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/wasm-stripe:
     dependencies:
       '@tjfontaine/wasm-loader':
         specifier: workspace:*

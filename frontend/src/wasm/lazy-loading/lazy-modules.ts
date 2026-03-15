@@ -33,6 +33,7 @@ import { metadata as tsxMetadata } from '@tjfontaine/wasm-tsx';
 import { metadata as sqliteMetadata } from '@tjfontaine/wasm-sqlite';
 import { metadata as ratatuiMetadata } from '@tjfontaine/wasm-ratatui';
 import { metadata as vimMetadata } from '@tjfontaine/wasm-vim';
+import { metadata as stripeMetadata } from '@tjfontaine/wasm-stripe';
 
 // Static import for git-module (pure TS, not WASM - must be static for worker context)
 import * as gitModule from '../git/git-module.js';
@@ -41,6 +42,8 @@ import * as gitModule from '../git/git-module.js';
 type TsxEngineModule = typeof import('@tjfontaine/wasm-tsx/wasm/tsx-engine.js');
 type SqliteModule = typeof import('@tjfontaine/wasm-sqlite/wasm/sqlite-module.js');
 type _RatatuiDemoModule = typeof import('@tjfontaine/wasm-ratatui/wasm/ratatui-demo.js');
+// Note: StripeModule type will resolve after `moon run wasm-stripe:transpile`
+// type _StripeModule = typeof import('@tjfontaine/wasm-stripe/wasm/stripe-module.js');
 
 // Re-export types from wasm-loader for consumers
 export type { CommandModule, CommandHandle, InputStream, OutputStream, ExecEnv };
@@ -77,6 +80,7 @@ export function registerAllModules(): void {
     registerModule({ ...sqliteMetadata, loader: loadSqliteModule });
     registerModule({ ...ratatuiMetadata, loader: loadRatatuiDemo });
     registerModule({ ...vimMetadata, loader: loadEdtuiModule });
+    registerModule({ ...stripeMetadata, loader: loadStripeModule });
 
     _modulesRegistered = true;
     console.log('[LazyLoader] All modules registered');
@@ -99,6 +103,8 @@ export const LAZY_COMMANDS: Record<string, string> = {
     'vim': 'edtui-module',
     'vi': 'edtui-module',
     'edit': 'edtui-module',
+    // Stripe CLI
+    'stripe': 'stripe-module',
     // Interactive shell (uses main runtime's shell:unix/command export)
     'sh': 'brush-shell',
     'shell': 'brush-shell',
@@ -376,6 +382,124 @@ async function loadEdtuiModule(): Promise<CommandModule> {
 }
 
 /**
+ * Load the stripe-module (Stripe CLI)
+ *
+ * Go-compiled Stripe CLI, adapted from wasip1 to wasip2 component model.
+ * Unlike Rust modules that export shell:unix/command, the Go component exports
+ * wasi:cli/run (standard CLI entry point). We wrap it with a JS adapter that
+ * configures the WASI CLI shims (args, env, streams) before calling run().
+ */
+async function loadStripeModule(): Promise<CommandModule> {
+    console.log('[LazyLoader] Loading stripe-module (Go CLI)...');
+    const startTime = performance.now();
+
+    // Import the CLI shim configuration functions
+    const cliShim = await import('@tjfontaine/wasi-shims/ghostty-cli-shim.js');
+
+    // Dynamic import based on JSPI support
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let module: any;
+    if (hasJSPI) {
+        module = await import('@tjfontaine/wasm-stripe/wasm/stripe-module.js');
+    } else {
+        module = await import('@tjfontaine/wasm-stripe/wasm-sync/stripe-module.js');
+    }
+
+    // With --tla-compat, we must await $init before accessing exports
+    if ('$init' in module) {
+        await (module as { $init: Promise<void> }).$init;
+    }
+
+    const loadTime = performance.now() - startTime;
+    console.log(`[LazyLoader] stripe-module loaded in ${loadTime.toFixed(0)}ms`);
+
+    // The JCO-transpiled Go component exports `run` as a namespace containing `run()`.
+    // module.run.run() is the actual entry point (wasi:cli/run@0.2.6#run).
+    return createGoCliAdapter({ run: module.run.run.bind(module.run) }, cliShim);
+}
+
+/**
+ * Create an adapter that wraps a Go WASI CLI component (exporting wasi:cli/run)
+ * to match the shell:unix/command interface expected by the lazy module system.
+ *
+ * The Go component reads args/env from wasi:cli/environment and I/O from
+ * wasi:cli/stdin/stdout/stderr. We configure the ghostty-cli-shim before
+ * calling run() and clean up afterward.
+ */
+function createGoCliAdapter(
+    goModule: { run: () => void | Promise<void> },
+    cliShim: {
+        setArguments: (args: string[]) => void;
+        setEnvironment: (env: [string, string][]) => void;
+        setInitialCwd: (cwd: string) => void;
+        clearCliConfig: () => void;
+        setPipedStreams: (
+            stdoutWrite: ((contents: Uint8Array) => bigint) | null,
+            stderrWrite: ((contents: Uint8Array) => bigint) | null,
+        ) => void;
+        clearPipedStreams: () => void;
+    },
+): CommandModule {
+    return {
+        spawn(name, args, env, _stdin, stdout, stderr) {
+            console.log(`[GoCliAdapter] spawn: name=${name}, args=`, args);
+
+            // Configure the WASI CLI shims so the Go component sees the right args/env
+            cliShim.setArguments([name, ...args]);
+            cliShim.setEnvironment(env.vars);
+            cliShim.setInitialCwd(env.cwd);
+
+            // Route stdout/stderr to the lazy loader's output streams
+            cliShim.setPipedStreams(
+                (contents: Uint8Array) => {
+                    stdout.write(contents);
+                    return BigInt(contents.length);
+                },
+                (contents: Uint8Array) => {
+                    stderr.write(contents);
+                    return BigInt(contents.length);
+                },
+            );
+
+            // Run the Go CLI component and track completion
+            let exitCode: number | undefined;
+
+            const cleanup = () => {
+                cliShim.clearPipedStreams();
+                cliShim.clearCliConfig();
+            };
+
+            const extractExitCode = (err: unknown): number => {
+                if (err && typeof err === 'object' && 'exitError' in err) {
+                    return (err as { code?: number }).code ?? 1;
+                }
+                console.error('[GoCliAdapter] run() error:', err);
+                return 1;
+            };
+
+            const executionPromise = (async () => {
+                try {
+                    await goModule.run();
+                    exitCode = 0;
+                    return 0;
+                } catch (err: unknown) {
+                    exitCode = extractExitCode(err);
+                    return exitCode;
+                } finally {
+                    cleanup();
+                }
+            })();
+
+            return {
+                poll: () => exitCode,
+                resolve: () => executionPromise,
+            };
+        },
+        listCommands: () => ['stripe'],
+    };
+}
+
+/**
  * Load the brush-shell from the main MCP server (interactive shell)
  * 
  * The main runtime now exports shell:unix/command alongside wasi:http/incoming-handler.
@@ -451,6 +575,9 @@ export async function loadLazyModule(moduleName: string): Promise<CommandModule>
             break;
         case 'brush-shell':
             loadPromise = loadBrushShell();
+            break;
+        case 'stripe-module':
+            loadPromise = loadStripeModule();
             break;
         default:
             throw new Error(`Unknown lazy module: ${moduleName}`);
@@ -538,6 +665,8 @@ export async function initializeForSyncMode(): Promise<void> {
         'sqlite-module',
         'git-module',
         'edtui-module',   // Vim editor - now supports sync mode
+        // 'stripe-module' excluded: 35MB Go WASM is too large for eager preload.
+        // Stripe CLI loads on-demand even in sync mode.
         'brush-shell',    // Interactive shell - now supports sync mode
     ];
     await Promise.all(moduleNames.map(name =>

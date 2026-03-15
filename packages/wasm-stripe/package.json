@@ -1,0 +1,27 @@
+{
+    "name": "@tjfontaine/wasm-stripe",
+    "version": "0.1.0",
+    "description": "Stripe CLI WASM module for Edge Agent (Go → wasip1 → wasip2 component)",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./wasm/*": "./wasm/*",
+        "./wasm-sync/*": "./wasm-sync/*"
+    },
+    "files": ["dist", "wasm", "wasm-sync"],
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist wasm wasm-sync"
+    },
+    "dependencies": {
+        "@tjfontaine/wasm-loader": "workspace:*"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0"
+    }
+}
