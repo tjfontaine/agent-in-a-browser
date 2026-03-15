@@ -14,7 +14,7 @@ env:
 jobs:
   ci:
     name: Build and Test
-    runs-on: ubuntu-latest-8-cores
+    runs-on: [self-hosted, linux, x64, proxmox]
 
     steps:
       - uses: actions/checkout@v6
