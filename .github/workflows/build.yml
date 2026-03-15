@@ -24,22 +24,14 @@ jobs:
       - name: Checkout submodules
         run: git submodule update --init stripe-cli-wasm/stripe-cli
 
+      # Self-hosted runner: tools persist on disk, no need for GitHub cache API.
+      # Rust, Node, pnpm managed by Moon's proto toolchain.
+      # Go installed via actions/setup-go (no remote cache).
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
           components: rustfmt
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            runtime
-          cache-on-failure: true
-          # Don't cache ~/.cargo/bin — it causes cargo binstall to skip
-          # reinstalling tools (wit-deps, cargo-component, wasm-tools) because
-          # metadata (.crates.toml) is restored but binaries are pruned
-          cache-bin: "false"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -48,7 +40,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22.22.0"
-          cache: "pnpm"
 
       - name: Setup Moon
         uses: moonrepo/setup-toolchain@v0
@@ -57,14 +48,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
-          cache-dependency-path: stripe-cli-wasm/stripe-cli/go.sum
+          cache: false
 
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
       # Moon manages the full pipeline including Go→WASM build.
-      # Go build cache (GOCACHE) is persisted by actions/setup-go, making
-      # subsequent builds near-instant even though Moon re-runs build-go-wasm.
+      # On self-hosted runner, all build caches (Rust target/, GOCACHE, node_modules)
+      # persist on local disk between runs — no remote cache needed.
       - name: Build and Test
         timeout-minutes: 30
         run: |
