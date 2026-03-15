@@ -48,8 +48,8 @@ tasks:
       - "wasm-ratatui:transpile-sync"
       - "wasm-vim:transpile"
       - "wasm-vim:transpile-sync"
-      # wasm-stripe excluded from CI deps: Go WASM cross-compile too slow for shared runners.
-      # Run `moon run wasm-stripe:transpile wasm-stripe:transpile-sync` locally.
+      - "wasm-stripe:transpile"
+      - "wasm-stripe:transpile-sync"
       - "web-agent-core:transpile"
       - "web-agent-core:transpile-sync"
 
