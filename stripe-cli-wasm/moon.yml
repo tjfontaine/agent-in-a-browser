@@ -27,6 +27,7 @@ tasks:
   # The adapt step converts standard wasi_snapshot_preview1 imports to wasip2.
   adapt-component:
     script: "wasm-tools component embed wit/ --world stripe:cli/stripe-cli stripe.wasm -o stripe-embedded.wasm && wasm-tools component new stripe-embedded.wasm --adapt wasi_snapshot_preview1=adapters/wasi_snapshot_preview1.command.wasm -o stripe-component.wasm"
+    toolchain: rust
     inputs:
       - "stripe.wasm"
       - "wit/**/*.wit"
@@ -35,7 +36,6 @@ tasks:
       - "stripe-component.wasm"
     deps:
       - "~:build-go-wasm"
-      - "runtime:wit-deps"
 
   # Step 3: Copy the adapted component to the shared target directory
   # The transpile script (scripts/transpile.mjs) looks for WASM files in target/wasm32-wasip2/release/
